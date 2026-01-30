@@ -59,6 +59,7 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
       
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
+        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
         
         // Summarize last 50 leads including Notes
         const leadSummary = leads
@@ -90,10 +91,7 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
           Seja estratégico e direto.
         `;
 
-        const result = await model.generateContent({
-          // FIX: Upgraded model to 'gemini-3-pro-preview' for complex strategic reporting.
-          contents: prompt,
-        });
+        const result = await model.generateContent(prompt);
 
         setAiReport(result.response.text() || "Análise concluída, mas sem texto retornado.");
       } else {

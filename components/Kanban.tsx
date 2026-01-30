@@ -240,7 +240,7 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
         `;
         
         // FIX: Updated model from deprecated 'gemini-2.5-flash' to 'gemini-3-flash-preview' for basic text task.
-        const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
         const result = await model.generateContent(prompt );
         const response = { text: result.response.text() };
         setAiAdvice(response.text || "Sem sugestão gerada.");

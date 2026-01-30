@@ -95,6 +95,7 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, c
       
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
+        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
         
         // Summarize last 50 comments to avoid token limits
         const comments = npsData
@@ -122,10 +123,7 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, c
           Seja estratégico e direto.
         `;
 
-        const result = await model.generateContent({
-          // FIX: Upgraded model to 'gemini-3-pro-preview' for complex analysis and reporting.
-          contents: prompt,
-        });
+        const result = await model.generateContent(prompt);
 
         setAiReport(result.response.text() || "Análise concluída, mas sem texto retornado.");
       } else {

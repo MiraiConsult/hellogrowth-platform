@@ -201,6 +201,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
+        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
         const prompt = `
           Gere exatamente 5 perguntas estratégicas de acompanhamento para uma pesquisa NPS.
           NOME: "${newCampaignName}"
@@ -212,9 +213,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
           3. Use a descrição para criar contexto.
         `;
         
-        const result = await model.generateContent({
-          contents: prompt,
-        });
+        const result = await model.generateContent(prompt);
 
         if (result.response.text()) {
           // Remove potential markdown formatting if AI adds it

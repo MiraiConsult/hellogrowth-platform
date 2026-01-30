@@ -365,6 +365,7 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
       
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
+        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
         
         // Build context from data
         const context = `
@@ -391,10 +392,7 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
           Sugira ações concretas que podem ser tomadas imediatamente.
         `;
 
-        const result = await model.generateContent({
-// FIX: Replaced deprecated model 'gemini-2.5-flash' with 'gemini-3-flash-preview' for basic text tasks.
-          contents: prompt,
-        });
+        const result = await model.generateContent(prompt);
 
         setAiResponse(result.response.text() || "Não foi possível gerar uma resposta.");
       } else {

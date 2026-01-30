@@ -64,6 +64,7 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack })
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
+        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
         
         const leadsSummary = formLeads
           .map(l => `- ${l.name}: Status "${l.status}", Valor R$${l.value}`)
@@ -90,10 +91,7 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack })
           Seja conciso e focado em ROI.
         `;
 
-        const result = await model.generateContent({
-          // FIX: Upgraded model to 'gemini-3-pro-preview' for complex strategic reporting.
-          contents: prompt,
-        });
+        const result = await model.generateContent(prompt);
 
         setAiAnalysis(result.response.text() || "Não foi possível gerar a análise.");
       } else {
