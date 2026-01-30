@@ -359,7 +359,7 @@ const ValueDelivered: React.FC<ValueDeliveredProps> = ({ leads, npsData }) => {
       {/* Summary Box */}
       <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl shadow-sm border border-indigo-200 p-8">
         <div className="flex items-start gap-4">
-          <div className="w-16 h-16 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
+          <div className="w-16 h-16 bg-emerald-600 rounded-xl flex items-center justify-center flex-shrink-0">
             <TrendingUp size={32} className="text-white" />
           </div>
           <div className="flex-1">

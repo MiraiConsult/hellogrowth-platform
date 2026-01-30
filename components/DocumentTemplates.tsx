@@ -74,7 +74,7 @@ const DocumentTemplates = () => {
                 </div>
                 <div className="p-4 border-t border-gray-100 flex justify-end gap-2 bg-white rounded-b-xl">
                     <button onClick={() => setViewingDoc(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg font-medium">Fechar</button>
-                    <button className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-medium shadow-sm flex items-center gap-2">
+                    <button className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg font-medium shadow-sm flex items-center gap-2">
                         <Edit3 size={16} /> Editar Documento
                     </button>
                 </div>

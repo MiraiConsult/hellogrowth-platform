@@ -107,11 +107,11 @@ const Navigation: React.FC<NavigationProps> = ({
       type: 'group',
       color: 'purple',
       children: [
-        { id: 'intelligence-center', label: 'Controle Estratégico', icon: Lightbulb, requiredPlan: 'all', badge: 'IA' },
+        { id: 'intelligence-center', label: 'Estratégico', icon: Lightbulb, requiredPlan: 'all' },
         { id: 'digital-diagnostic', label: 'Minha Presença Digital', icon: Activity, requiredPlan: 'all' },
       ]
     },
-    { id: 'ai-chat', label: 'HelloIA', icon: MessageSquare, requiredPlan: 'all', badge: 'IA' },
+    { id: 'ai-chat', label: 'HelloIA', icon: MessageSquare, requiredPlan: 'all' },
     { id: 'database-export', label: 'Banco de Dados', icon: Database, requiredPlan: 'all' },
     { id: 'settings', label: 'Configurações', icon: Settings, requiredPlan: 'all' },
     { id: 'tutorial', label: 'Ajuda', icon: HelpCircle, requiredPlan: 'all' },

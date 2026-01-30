@@ -302,7 +302,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
           {/* STEP 4: REDIRECTING */}
           {step === 'redirecting' && (
              <div className="py-8">
-                 <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                 <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
                      <MapPin size={32} />
                  </div>
                  <h2 className="text-xl font-bold text-gray-900 mb-2">Muito Obrigado!</h2>
@@ -310,7 +310,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                      Ficamos felizes com sua nota! Você está sendo redirecionado para nos avaliar no Google...
                  </p>
                  <div className="mt-6 flex justify-center">
-                     <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                     <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin"></div>
                  </div>
              </div>
           )}

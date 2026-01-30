@@ -459,7 +459,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                        <button 
                           type="submit" 
                           disabled={isUpdating}
-                          className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+                          className="flex-1 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center justify-center gap-2"
                        >
                           {isUpdating ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
                           Salvar Alterações

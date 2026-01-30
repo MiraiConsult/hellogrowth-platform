@@ -336,7 +336,7 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack })
           {/* Backdrop */}
           <div className="flex-1 bg-black/20" onClick={() => setSelectedLead(null)} />
           {/* Slide-over Panel */}
-          <div className="w-full max-w-2xl bg-white shadow-2xl flex flex-col h-full animate-in slide-in-from-right duration-300 overflow-y-auto">
+          <div className="w-full bg-white shadow-2xl flex flex-col h-full animate-in fade-in duration-300 overflow-y-auto">
             <div className="p-6 border-b border-gray-100 flex justify-between items-start bg-gray-50 sticky top-0 z-10">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{selectedLead.name}</h2>

@@ -511,9 +511,9 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       />
       <main className={`flex-1 relative transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
         {currentUser.plan === 'trial' && daysLeft !== undefined && (
-          <div className="bg-indigo-600 text-white px-4 py-2 text-sm font-medium flex justify-between items-center sticky top-0 z-20">
+          <div className="bg-emerald-600 text-white px-4 py-2 text-sm font-medium flex justify-between items-center sticky top-0 z-20">
             <div className="flex items-center gap-2">
-              <span className="bg-indigo-500 px-2 py-0.5 rounded text-xs uppercase font-bold tracking-wider">Teste Grátis</span>
+              <span className="bg-emerald-500 px-2 py-0.5 rounded text-xs uppercase font-bold tracking-wider">Teste Grátis</span>
               <span>Você tem <strong>{daysLeft} dias restantes</strong>.</span>
             </div>
             <button onClick={() => setCurrentView('pricing')} className="bg-white text-indigo-600 px-3 py-1 rounded text-xs font-bold">Assinar Agora</button>

@@ -320,7 +320,7 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, c
           {/* Backdrop */}
           <div className="flex-1 bg-black/20" onClick={() => setSelectedResponse(null)} />
           {/* Slide-over Panel */}
-          <div className="w-full max-w-2xl bg-white shadow-2xl flex flex-col h-full animate-in slide-in-from-right duration-300">
+          <div className="w-full bg-white shadow-2xl flex flex-col h-full animate-in fade-in duration-300">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 sticky top-0 z-10 flex-shrink-0">
                   <div>
                       <h2 className="text-xl font-bold text-gray-900">{selectedResponse.customerName}</h2>
@@ -374,9 +374,9 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, c
                   </div>
 
                   {onUpdateNPSNote && (
-                    <div className="border border-blue-500 rounded-lg overflow-hidden shadow-sm bg-white flex flex-col h-36">
-                       <div className="bg-blue-50 px-4 py-2 border-b border-blue-100 flex justify-between items-center">
-                          <h3 className="font-bold text-blue-900 text-xs uppercase tracking-wider flex items-center gap-2">
+                    <div className="border border-emerald-500 rounded-lg overflow-hidden shadow-sm bg-white flex flex-col h-36">
+                       <div className="bg-emerald-50 px-4 py-2 border-b border-emerald-100 flex justify-between items-center">
+                          <h3 className="font-bold text-emerald-900 text-xs uppercase tracking-wider flex items-center gap-2">
                               <History size={14}/> Anotações Internas (CRM)
                           </h3>
                        </div>
@@ -396,7 +396,7 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, c
                            <div className="flex gap-2">
                                <input 
                                   type="text"
-                                  className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                                   placeholder="Nova anotação..."
                                   value={newNoteText}
                                   onChange={(e) => setNewNoteText(e.target.value)}
@@ -405,7 +405,7 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, c
                                <button 
                                   onClick={handleAddNote}
                                   disabled={isSavingNote || !newNoteText.trim()}
-                                  className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                  className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                                >
                                   {isSavingNote ? <Loader2 size={12} className="animate-spin"/> : <Plus size={12}/>}
                                   Add

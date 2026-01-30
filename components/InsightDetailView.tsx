@@ -706,8 +706,8 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
                   disabled={isSavingAction}
                   className={`w-full px-4 py-3 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-all duration-200 ${
                     selectedClient.actionStatus === 'contacted' 
-                      ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30 scale-[1.02]' 
-                      : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 active:scale-95'
+                      ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 scale-[1.02]' 
+                      : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 active:scale-95'
                   } ${isSavingAction ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <Phone size={18} />
@@ -771,8 +771,8 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
                   onClick={() => handlePriorityChange(selectedClient.id, 'low')}
                   className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
                     selectedClient.priority === 'low'
-                      ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
-                      : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
+                      ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                      : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700'
                   }`}
                 >
                   Baixa

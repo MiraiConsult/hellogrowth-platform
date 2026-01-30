@@ -630,7 +630,7 @@ const DashboardUnificado: React.FC<DashboardUnificadoProps> = ({
               {/* Oportunidades de Alto Valor */}
               <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-2xl border border-indigo-200 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="w-14 h-14 bg-indigo-600 rounded-xl flex items-center justify-center">
+                  <div className="w-14 h-14 bg-emerald-600 rounded-xl flex items-center justify-center">
                     <Zap size={28} className="text-white" />
                   </div>
                   <div className="flex items-center gap-1 text-indigo-700 text-sm font-medium bg-indigo-200/50 px-3 py-1 rounded-full">

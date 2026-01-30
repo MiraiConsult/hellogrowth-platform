@@ -182,11 +182,11 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
              </div>
              <ul className="space-y-4">
                <li className="flex gap-3 text-sm text-gray-700">
-                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1.5 flex-shrink-0"></span>
+                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0"></span>
                  <span>Análise completa do ciclo de vendas.</span>
                </li>
                <li className="flex gap-3 text-sm text-gray-700">
-                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1.5 flex-shrink-0"></span>
+                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0"></span>
                  <span>Identificação de gargalos e oportunidades.</span>
                </li>
              </ul>
@@ -194,7 +194,7 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
            <button 
              onClick={handleGlobalAnalysis}
              disabled={leads.length === 0}
-             className="w-full mt-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+             className="w-full mt-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium shadow-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
            >
              <Sparkles size={16} /> Analisar Oportunidades
            </button>
@@ -298,7 +298,7 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
           {/* Backdrop */}
           <div className="flex-1 bg-black/20" onClick={() => setSelectedLead(null)} />
           {/* Slide-over Panel */}
-          <div className="w-full max-w-2xl bg-white shadow-2xl flex flex-col h-full animate-in slide-in-from-right duration-300 overflow-y-auto">
+          <div className="w-full bg-white shadow-2xl flex flex-col h-full animate-in fade-in duration-300 overflow-y-auto">
             <div className="p-6 border-b border-gray-100 flex justify-between items-start bg-gray-50 sticky top-0 z-10">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{selectedLead.name}</h2>

@@ -423,7 +423,7 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
     switch (type) {
       case 'opportunity': return 'bg-green-50 border-green-200 text-green-700';
       case 'risk': return 'bg-red-50 border-red-200 text-red-700';
-      case 'sales': return 'bg-blue-50 border-blue-200 text-blue-700';
+      case 'sales': return 'bg-emerald-50 border-blue-200 text-emerald-700';
       case 'recovery': return 'bg-purple-50 border-purple-200 text-purple-700';
     }
   };
@@ -479,7 +479,7 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
               <button
                 onClick={() => setActiveFilter('sales')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                  activeFilter === 'sales' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                  activeFilter === 'sales' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                 }`}
               >
                 <DollarSign size={16} /> Vendas ({insights.filter(i => i.type === 'sales').length})

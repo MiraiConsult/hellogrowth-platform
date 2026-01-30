@@ -456,7 +456,7 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
           {/* Backdrop */}
           <div className="flex-1 bg-black/20" onClick={() => setSelectedLead(null)} />
           {/* Slide-over Panel */}
-          <div className="w-full max-w-2xl bg-white shadow-2xl flex flex-col h-full animate-in slide-in-from-right duration-300">
+          <div className="w-full bg-white shadow-2xl flex flex-col h-full animate-in fade-in duration-300">
             <div className="p-6 border-b border-gray-100 flex justify-between items-start bg-gray-50 sticky top-0 z-10">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">{selectedLead.name}</h2>
@@ -497,9 +497,9 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                   </div>
                   
                   {/* Internal Notes Section (History + Append) */}
-                  <div className="mt-6 border border-blue-500 rounded-lg overflow-hidden shadow-sm bg-white flex flex-col h-[280px]">
-                     <div className="bg-blue-50 px-4 py-2 border-b border-blue-100 flex justify-between items-center">
-                        <h3 className="font-bold text-blue-900 text-sm uppercase tracking-wider flex items-center gap-2">
+                  <div className="mt-6 border border-emerald-500 rounded-lg overflow-hidden shadow-sm bg-white flex flex-col h-[280px]">
+                     <div className="bg-emerald-50 px-4 py-2 border-b border-emerald-100 flex justify-between items-center">
+                        <h3 className="font-bold text-emerald-900 text-sm uppercase tracking-wider flex items-center gap-2">
                             <History size={14}/> Anotações Internas
                         </h3>
                      </div>
@@ -521,7 +521,7 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                          <div className="flex gap-2">
                              <input 
                                 type="text"
-                                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                                 placeholder="Digite uma nova anotação..."
                                 value={newNoteText}
                                 onChange={(e) => setNewNoteText(e.target.value)}
@@ -530,7 +530,7 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                              <button 
                                 onClick={handleAddNote}
                                 disabled={isSavingNote || !newNoteText.trim()}
-                                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                              >
                                 {isSavingNote ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>}
                                 Adicionar
