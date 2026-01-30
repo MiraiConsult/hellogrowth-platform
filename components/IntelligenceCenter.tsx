@@ -163,7 +163,7 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
 
     // === RISK INSIGHTS ===
 
-    // Detractors - FILTER ACTIVE ONLY
+    // Detratores (NPS <= 6) - FILTER ACTIVE ONLY
     const activeDetractors = npsData.filter(n => 
       n.status === 'Detrator' &&
       isClientActive(n.id, 'risk')
@@ -177,7 +177,7 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
       return daysSince > 7;
     });
     
-    // Total de riscos = detratores + leads parados (ATIVOS)
+    // Total de riscos = detratores (NPS <= 6) + leads parados (ATIVOS)
     const totalRisks = activeDetractors.length + stuckLeads.length;
     
     if (totalRisks > 0) {
@@ -185,9 +185,9 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
         id: 'risk-1',
         type: 'risk',
         priority: activeDetractors.length > 0 ? 'high' : 'medium',
-        title: `${totalRisks} clientes e leads precisam de atenção`,
+        title: `${totalRisks} clientes e leads em risco`,
         description: activeDetractors.length > 0 
-          ? `${activeDetractors.length} detratores + ${stuckLeads.length} leads parados há mais de 7 dias.`
+          ? `${activeDetractors.length} detratores (NPS ≤ 6) + ${stuckLeads.length} leads parados há mais de 7 dias.`
           : `${stuckLeads.length} leads parados há mais de 7 dias.`,
         metric: `${totalRisks} total`,
         actionLabel: 'Ver Riscos',
@@ -220,19 +220,19 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
 
     // === RECOVERY INSIGHTS ===
 
-    // Neutros e Detratores que podem ser recuperados - FILTER ACTIVE ONLY
+    // Apenas Neutros (NPS 7-8) que podem ser recuperados - FILTER ACTIVE ONLY
     const recoverableClients = npsData.filter(d => 
-      (d.status === 'Neutro' || d.status === 'Detrator') &&
+      d.status === 'Neutro' &&
       isClientActive(d.id, 'recovery')
     );
     if (recoverableClients.length > 0) {
       generatedInsights.push({
         id: 'recovery-1',
         type: 'recovery',
-        priority: recoverableClients.filter(c => c.status === 'Detrator').length > 0 ? 'high' : 'medium',
-        title: `${recoverableClients.length} clientes com potencial de recuperação`,
-        description: 'Estes clientes podem ser convertidos em promotores com atenção adequada.',
-        metric: `${recoverableClients.length} clientes`,
+        priority: 'medium',
+        title: `${recoverableClients.length} clientes neutros com potencial de recuperação`,
+        description: 'Clientes com NPS entre 7-8 que podem ser convertidos em promotores com atenção adequada.',
+        metric: `${recoverableClients.length} neutros`,
         actionLabel: 'Ver Clientes',
         actionTarget: 'recovery-detail',
         createdAt: now.toISOString()

@@ -20,7 +20,7 @@ const INSIGHT_CONFIGS = {
   risk: {
     title: 'Riscos',
     color: 'red',
-    description: 'Clientes e leads que precisam de atenção urgente'
+    description: 'Detratores (NPS ≤ 6) e leads parados que precisam de atenção urgente'
   },
   opportunity: {
     title: 'Oportunidades',
@@ -35,7 +35,7 @@ const INSIGHT_CONFIGS = {
   recovery: {
     title: 'Recuperação',
     color: 'purple',
-    description: 'Clientes que precisam de recuperação'
+    description: 'Clientes neutros (NPS 7-8) que podem virar promotores'
   }
 } as const;
 
@@ -294,8 +294,8 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
         analyzedClients.push(analysis);
       }
     } else if (insightType === 'recovery') {
-      // Neutros e Detratores
-      const needsRecovery = npsData.filter(n => n.status === 'Neutro' || n.status === 'Detrator');
+      // Apenas Neutros (NPS 7-8) - Detratores ficam em Riscos
+      const needsRecovery = npsData.filter(n => n.status === 'Neutro');
       for (const nps of needsRecovery) {
         const analysis = generateClientAnalysis(nps, 'nps', 'recovery');
         analyzedClients.push(analysis);
