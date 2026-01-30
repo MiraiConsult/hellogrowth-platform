@@ -1,6 +1,7 @@
 // ============================================
 // MESSAGE SUGGESTION ENGINE
 // Sistema inteligente de sugestões de mensagens
+// HUMANIZADO - Mensagens como se fossem de um funcionário real
 // ============================================
 
 export interface MessageSuggestion {
@@ -13,7 +14,7 @@ export interface MessageSuggestion {
   whatsappMessage: string;
   emailSubject: string;
   emailBody: string;
-  priority: number; // 1-5, onde 5 é mais prioritário
+  priority: number;
 }
 
 export interface ClientContext {
@@ -21,203 +22,307 @@ export interface ClientContext {
   email: string;
   phone?: string;
   type: 'lead' | 'nps';
-  
-  // NPS specific
   score?: number;
-  status?: string; // Promotor, Neutro, Detrator
+  status?: string;
   comment?: string;
-  
-  // Lead specific
-  leadStatus?: string; // Novo, Em Contato, Negociação, etc
+  leadStatus?: string;
   value?: number;
   lastInteraction?: string;
   daysSinceLastContact?: number;
   answers?: any;
-  
-  // Context
   insightType?: 'risk' | 'opportunity' | 'sales' | 'recovery';
   priority?: 'high' | 'medium' | 'low';
 }
 
 // ============================================
-// GERADOR DE SUGESTÕES POR CONTEXTO
+// HELPER: Extrair respostas do formulário
+// ============================================
+
+interface ExtractedAnswers {
+  mainInterest?: string;
+  painPoints?: string[];
+  expectations?: string;
+  positivePoints?: string[];
+  negativePoints?: string[];
+  suggestions?: string;
+  budget?: string;
+  timeline?: string;
+  allAnswers: { question: string; answer: string }[];
+}
+
+function extractAnswersFromData(answers: any): ExtractedAnswers {
+  const extracted: ExtractedAnswers = { allAnswers: [] };
+  
+  if (!answers || typeof answers !== 'object') return extracted;
+  
+  Object.entries(answers).forEach(([key, value]: [string, any]) => {
+    const question = value?.question || key;
+    let answer = '';
+    
+    if (typeof value === 'string') {
+      answer = value;
+    } else if (value?.value) {
+      answer = String(value.value);
+    } else if (value?.text) {
+      answer = String(value.text);
+    } else if (Array.isArray(value)) {
+      answer = value.map(v => v?.text || v?.value || v).join(', ');
+    } else if (typeof value === 'object' && value !== null) {
+      answer = value.answer || value.response || '';
+    }
+    
+    if (answer && answer !== 'undefined' && answer !== 'null') {
+      extracted.allAnswers.push({ question: String(question), answer });
+      
+      const questionLower = String(question).toLowerCase();
+      
+      if (questionLower.includes('interesse') || questionLower.includes('serviço') || 
+          questionLower.includes('produto') || questionLower.includes('procura')) {
+        extracted.mainInterest = answer;
+      }
+      
+      if (questionLower.includes('gostou') || questionLower.includes('positivo') ||
+          questionLower.includes('melhor') || questionLower.includes('destaque')) {
+        if (!extracted.positivePoints) extracted.positivePoints = [];
+        extracted.positivePoints.push(answer);
+      }
+      
+      if (questionLower.includes('problema') || questionLower.includes('negativo') ||
+          questionLower.includes('melhorar') || questionLower.includes('ruim')) {
+        if (!extracted.negativePoints) extracted.negativePoints = [];
+        extracted.negativePoints.push(answer);
+      }
+      
+      if (questionLower.includes('sugestão') || questionLower.includes('sugestao')) {
+        extracted.suggestions = answer;
+      }
+      
+      if (questionLower.includes('expectativa') || questionLower.includes('espera')) {
+        extracted.expectations = answer;
+      }
+      
+      if (questionLower.includes('orçamento') || questionLower.includes('valor')) {
+        extracted.budget = answer;
+      }
+      
+      if (questionLower.includes('prazo') || questionLower.includes('quando')) {
+        extracted.timeline = answer;
+      }
+    }
+  });
+  
+  return extracted;
+}
+
+// ============================================
+// GERADOR DE SUGESTÕES - MENSAGENS HUMANIZADAS
 // ============================================
 
 export class MessageSuggestionEngine {
   
-  /**
-   * Gera múltiplas sugestões de mensagens baseadas no contexto do cliente
-   */
   static generateSuggestions(context: ClientContext): MessageSuggestion[] {
     const suggestions: MessageSuggestion[] = [];
+    const extractedAnswers = extractAnswersFromData(context.answers);
     
-    // Determinar contexto principal
     if (context.type === 'nps') {
-      suggestions.push(...this.generateNPSSuggestions(context));
+      suggestions.push(...this.generateNPSSuggestions(context, extractedAnswers));
     } else if (context.type === 'lead') {
-      suggestions.push(...this.generateLeadSuggestions(context));
+      suggestions.push(...this.generateLeadSuggestions(context, extractedAnswers));
     }
     
-    // Ordenar por prioridade
     return suggestions.sort((a, b) => b.priority - a.priority);
   }
   
-  /**
-   * Sugestões para clientes NPS
-   */
-  private static generateNPSSuggestions(context: ClientContext): MessageSuggestion[] {
+  // ============================================
+  // SUGESTÕES PARA NPS - HUMANIZADAS
+  // ============================================
+  
+  private static generateNPSSuggestions(context: ClientContext, answers: ExtractedAnswers): MessageSuggestion[] {
     const suggestions: MessageSuggestion[] = [];
     const firstName = context.name.split(' ')[0];
     const score = context.score || 0;
     const comment = context.comment || '';
     
+    const hasPositive = answers.positivePoints && answers.positivePoints.length > 0;
+    const hasNegative = answers.negativePoints && answers.negativePoints.length > 0;
+    const hasSuggestion = !!answers.suggestions;
+    
+    const positiveText = hasPositive ? answers.positivePoints![0] : '';
+    const negativeText = hasNegative ? answers.negativePoints![0] : '';
+    
+    // ============================================
+    // DETRATOR (NPS 0-6)
+    // ============================================
     if (score <= 6) {
-      // DETRATOR - Foco em recuperação
       
-      // 1. Pedido de desculpas empático
+      // 1. Pedido de desculpas genuíno
       suggestions.push({
         id: 'detractor_apology',
         type: 'recovery',
-        title: 'Pedido de Desculpas Empático',
-        description: 'Demonstre empatia e assuma responsabilidade',
+        title: 'Pedido de Desculpas',
+        description: hasNegative ? `Sobre: ${negativeText.substring(0, 40)}...` : 'Demonstre empatia genuína',
         icon: '🙏',
         tone: 'empathetic',
         priority: 5,
-        whatsappMessage: `${firstName}, lamento muito que sua experiência conosco não tenha sido positiva. Isso não reflete o padrão que buscamos. Gostaria de entender melhor o que aconteceu para que possamos corrigir. Podemos conversar?`,
-        emailSubject: `${firstName}, pedimos desculpas pela experiência`,
-        emailBody: `Olá ${context.name},\n\nLamento profundamente que sua experiência conosco não tenha atendido suas expectativas (nota ${score}).\n\n${comment ? `Li seu comentário: "${comment}"\n\n` : ''}Assumo total responsabilidade e gostaria muito de entender em detalhes o que aconteceu. Sua satisfação é nossa prioridade máxima.\n\nPodemos agendar uma conversa para resolvermos isso?\n\nAtenciosamente,\nEquipe`
+        whatsappMessage: hasNegative 
+          ? `Oi ${firstName}, tudo bem? Vi sua avaliação e fiquei preocupado com o que você passou. Você comentou sobre "${negativeText.substring(0, 40)}..." e isso não deveria ter acontecido. Queria muito entender melhor e ver como posso resolver isso pra você. Posso te ligar?`
+          : `Oi ${firstName}, vi sua avaliação e percebi que a gente não conseguiu te atender como deveria. Fico chateado com isso porque a gente se esforça muito pra fazer um bom trabalho. Queria entender o que aconteceu pra gente poder melhorar. Pode me contar?`,
+        emailSubject: `${firstName}, preciso falar com você`,
+        emailBody: hasNegative
+          ? `Oi ${firstName},\n\nVi sua avaliação e confesso que fiquei preocupado. Você mencionou "${negativeText}" e isso me incomodou bastante.\n\n${comment ? `Li também seu comentário: "${comment}"\n\n` : ''}Não era pra ter sido assim. A gente trabalha todo dia pra oferecer o melhor e quando não consegue, dói.\n\nQueria muito conversar com você pra entender melhor o que aconteceu e ver como posso resolver. Você topa uma ligação rápida?\n\nAguardo seu retorno.\n\nAbraço`
+          : `Oi ${firstName},\n\nVi sua avaliação e percebi que não conseguimos te atender como você merecia.\n\n${comment ? `Seu comentário: "${comment}"\n\n` : ''}Fico chateado porque a gente se dedica muito e quando não dá certo, a gente quer entender o porquê.\n\nPosso te ligar pra gente conversar? Quero muito ouvir você e ver o que posso fazer.\n\nAbraço`
       });
       
-      // 2. Investigação do problema
+      // 2. Entender o problema
       suggestions.push({
-        id: 'detractor_investigation',
+        id: 'detractor_understand',
         type: 'recovery',
-        title: 'Investigação Detalhada',
-        description: 'Entenda profundamente o problema específico',
-        icon: '🔍',
+        title: 'Entender o Problema',
+        description: 'Pergunte com interesse genuíno',
+        icon: '💬',
+        tone: 'empathetic',
+        priority: 4,
+        whatsappMessage: `${firstName}, sei que sua experiência não foi boa e queria muito entender o que aconteceu. Às vezes a gente erra sem perceber e seu feedback ajuda demais. O que foi que deu errado?`,
+        emailSubject: `${firstName}, me ajuda a entender?`,
+        emailBody: `Oi ${firstName},\n\nVi que sua experiência não foi das melhores e isso me preocupa.\n\n${hasNegative ? `Você mencionou: "${negativeText}"\n\n` : ''}Queria entender melhor o que aconteceu. Às vezes a gente comete erros sem perceber e o feedback de vocês é o que nos ajuda a melhorar.\n\nPode me contar mais detalhes? O que você esperava que fosse diferente?\n\nAgradeço demais se puder me ajudar com isso.\n\nAbraço`
+      });
+      
+      // 3. Oferecer solução
+      suggestions.push({
+        id: 'detractor_solution',
+        type: 'recovery',
+        title: 'Oferecer Solução',
+        description: 'Proponha resolver o problema',
+        icon: '✅',
         tone: 'professional',
         priority: 4,
-        whatsappMessage: `${firstName}, vi que você avaliou sua experiência com nota ${score}. Para melhorarmos, preciso entender exatamente o que não funcionou. Você pode me contar mais sobre o que aconteceu?`,
-        emailSubject: `${firstName}, queremos entender o que aconteceu`,
-        emailBody: `Olá ${context.name},\n\nNotei sua avaliação (nota ${score}) e gostaria de entender melhor os pontos específicos que causaram insatisfação.\n\n${comment ? `Sobre: "${comment}"\n\n` : ''}Poderia me ajudar respondendo:\n\n• Qual foi o principal problema?\n• Em que momento isso aconteceu?\n• Como esperava que fosse?\n• O que podemos fazer para corrigir?\n\nSeu feedback detalhado é essencial para melhorarmos.\n\nAtenciosamente,\nEquipe`
+        whatsappMessage: hasNegative
+          ? `${firstName}, sobre o que você passou com "${negativeText.substring(0, 30)}...", quero propor uma solução. Posso [DESCREVER SOLUÇÃO]? Quero muito resolver isso pra você.`
+          : `${firstName}, quero resolver essa situação pra você. Posso oferecer [DESCREVER SOLUÇÃO]. O que você acha? Me diz o que seria justo.`,
+        emailSubject: `${firstName}, quero resolver isso`,
+        emailBody: `Oi ${firstName},\n\nPensei bastante no que aconteceu e quero propor uma solução.\n\n${hasNegative ? `Sobre "${negativeText}", ` : ''}o que acha de:\n\n• [SOLUÇÃO 1]\n• [SOLUÇÃO 2]\n\nSei que não vai apagar o que aconteceu, mas quero fazer o possível pra reconquistar sua confiança.\n\nMe diz o que você acha. Se tiver outra sugestão, estou aberto.\n\nAbraço`
       });
       
-      // 3. Oferta de compensação
-      suggestions.push({
-        id: 'detractor_compensation',
-        type: 'offer',
-        title: 'Oferta de Compensação',
-        description: 'Ofereça algo concreto para recuperar a confiança',
-        icon: '🎁',
-        tone: 'professional',
-        priority: 4,
-        whatsappMessage: `${firstName}, lamento pela experiência negativa (nota ${score}). Como forma de compensação e para reconquistar sua confiança, gostaria de oferecer [BENEFÍCIO ESPECÍFICO]. Podemos conversar sobre isso?`,
-        emailSubject: `${firstName}, queremos reconquistar sua confiança`,
-        emailBody: `Olá ${context.name},\n\nLamento profundamente pela experiência que resultou na nota ${score}.\n\n${comment ? `Sobre: "${comment}"\n\n` : ''}Como forma de compensação e para demonstrar nosso compromisso, gostaria de oferecer:\n\n• [DESCREVA O BENEFÍCIO/COMPENSAÇÃO]\n• [PRAZO DE VALIDADE]\n• [CONDIÇÕES, SE HOUVER]\n\nAlém disso, implementamos melhorias para que isso não se repita.\n\nPodemos conversar?\n\nAtenciosamente,\nEquipe`
-      });
+      // 4. Se tiver sugestão do cliente
+      if (hasSuggestion) {
+        suggestions.push({
+          id: 'detractor_suggestion_action',
+          type: 'recovery',
+          title: 'Agir na Sugestão',
+          description: `Sugestão: ${answers.suggestions!.substring(0, 40)}...`,
+          icon: '💡',
+          tone: 'professional',
+          priority: 5,
+          whatsappMessage: `${firstName}, li sua sugestão sobre "${answers.suggestions!.substring(0, 35)}..." e achei muito válida. Já passei pro time e vamos trabalhar nisso. Obrigado por nos ajudar a melhorar!`,
+          emailSubject: `${firstName}, sua sugestão foi ouvida`,
+          emailBody: `Oi ${firstName},\n\nLi sua sugestão:\n\n"${answers.suggestions}"\n\nAchei muito pertinente e já compartilhei com o time. É esse tipo de feedback que nos ajuda a evoluir.\n\nVamos trabalhar nisso e te mantenho informado do que mudar.\n\nMuito obrigado por dedicar seu tempo pra nos ajudar.\n\nAbraço`
+        });
+      }
       
-      // 4. Convite para nova experiência
-      suggestions.push({
-        id: 'detractor_retry',
-        type: 'recovery',
-        title: 'Convite para Nova Experiência',
-        description: 'Ofereça uma segunda chance com garantias',
-        icon: '🔄',
-        tone: 'enthusiastic',
-        priority: 3,
-        whatsappMessage: `${firstName}, sei que sua experiência não foi boa (nota ${score}), mas gostaria de te oferecer uma nova oportunidade. Fizemos melhorias e quero pessoalmente garantir que desta vez seja excepcional. Topas?`,
-        emailSubject: `${firstName}, uma nova oportunidade`,
-        emailBody: `Olá ${context.name},\n\nSei que sua experiência anterior não foi satisfatória (nota ${score}).\n\n${comment ? `Sobre: "${comment}"\n\n` : ''}Desde então, implementamos várias melhorias e gostaria de te oferecer uma nova experiência, desta vez com:\n\n• Acompanhamento personalizado\n• Garantia de satisfação\n• Atenção prioritária\n\nQuero pessoalmente garantir que você tenha uma experiência excepcional.\n\nPodemos tentar novamente?\n\nAtenciosamente,\nEquipe`
-      });
-      
+    // ============================================
+    // NEUTRO (NPS 7-8)
+    // ============================================
     } else if (score >= 7 && score <= 8) {
-      // NEUTRO/PASSIVO - Foco em melhorar experiência
       
-      // 1. Buscar feedback específico
+      // 1. Agradecer e perguntar o que faltou
       suggestions.push({
-        id: 'passive_feedback',
+        id: 'passive_what_missing',
         type: 'followup',
-        title: 'Buscar Feedback Específico',
-        description: 'Entenda o que falta para ser excelente',
+        title: 'O que Faltou?',
+        description: hasPositive ? `Gostou de: ${positiveText.substring(0, 40)}...` : 'Descubra o que falta pro 10',
         icon: '💬',
         tone: 'friendly',
-        priority: 4,
-        whatsappMessage: `Oi ${firstName}! Obrigado pela nota ${score}! Queremos ir além e tornar sua experiência perfeita. O que poderíamos fazer para merecer um 10?`,
-        emailSubject: `${firstName}, como podemos chegar ao 10?`,
-        emailBody: `Olá ${context.name},\n\nAgradecemos sua avaliação (nota ${score})!\n\n${comment ? `Sobre: "${comment}"\n\n` : ''}Queremos transformar sua experiência em algo excepcional. Poderia nos ajudar respondendo:\n\n• O que mais te agradou?\n• O que faltou para ser perfeito?\n• Há algo específico que gostaria de ver?\n\nSeu feedback nos ajuda a evoluir!\n\nAtenciosamente,\nEquipe`
+        priority: 5,
+        whatsappMessage: hasPositive
+          ? `Oi ${firstName}! Vi que você gostou de "${positiveText.substring(0, 30)}...", fico feliz! Mas me conta, o que faltou pra ser um 10? Quero muito saber como posso melhorar pra você.`
+          : `Oi ${firstName}! Obrigado pela avaliação! Fiquei curioso... o que faltou pra ser um 10? Quero muito saber como posso melhorar sua experiência.`,
+        emailSubject: `${firstName}, o que faltou?`,
+        emailBody: hasPositive
+          ? `Oi ${firstName},\n\nObrigado pela avaliação! Fico feliz que você gostou de "${positiveText}".\n\n${comment ? `Vi também seu comentário: "${comment}"\n\n` : ''}Mas fiquei curioso: o que faltou pra ser um 10?\n\nSua opinião é super importante pra gente. Qualquer detalhe ajuda!\n\nAbraço`
+          : `Oi ${firstName},\n\nObrigado pela avaliação!\n\n${comment ? `Li seu comentário: "${comment}"\n\n` : ''}Fiquei pensando... o que faltou pra ser um 10? Quero muito entender como posso melhorar sua experiência.\n\nPode me contar?\n\nAbraço`
       });
       
-      // 2. Oferta de upgrade
+      // 2. Oferecer algo a mais
       suggestions.push({
-        id: 'passive_upgrade',
+        id: 'passive_offer_more',
         type: 'offer',
-        title: 'Oferta de Upgrade',
-        description: 'Surpreenda com algo a mais',
-        icon: '⭐',
-        tone: 'enthusiastic',
-        priority: 3,
-        whatsappMessage: `${firstName}, vi sua nota ${score} e quero te surpreender! Preparei uma oferta especial para você experimentar [RECURSO/BENEFÍCIO PREMIUM]. Posso te contar mais?`,
-        emailSubject: `${firstName}, uma surpresa especial para você!`,
-        emailBody: `Olá ${context.name},\n\nObrigado pela nota ${score}! Queremos superar suas expectativas.\n\n${comment ? `Considerando: "${comment}"\n\n` : ''}Preparei algo especial:\n\n• [DESCREVA O UPGRADE/BENEFÍCIO]\n• [PRAZO/CONDIÇÕES]\n• [VALOR AGREGADO]\n\nQueremos que você experimente o melhor que temos a oferecer!\n\nInteresse?\n\nAtenciosamente,\nEquipe`
-      });
-      
-      // 3. Construção de relacionamento
-      suggestions.push({
-        id: 'passive_relationship',
-        type: 'relationship',
-        title: 'Construção de Relacionamento',
-        description: 'Aproxime-se e crie vínculo',
-        icon: '🤝',
+        title: 'Oferecer Algo a Mais',
+        description: 'Surpreenda o cliente',
+        icon: '🎁',
         tone: 'friendly',
-        priority: 3,
-        whatsappMessage: `${firstName}, obrigado pela nota ${score}! Gostaria de manter contato e compartilhar novidades e dicas exclusivas. Você se interessa?`,
-        emailSubject: `${firstName}, vamos nos conectar!`,
-        emailBody: `Olá ${context.name},\n\nAgradecemos sua avaliação (nota ${score})!\n\n${comment ? `Sobre: "${comment}"\n\n` : ''}Gostaríamos de manter você informado sobre:\n\n• Novidades e lançamentos\n• Dicas exclusivas\n• Ofertas especiais\n• Conteúdo relevante\n\nPodemos nos conectar?\n\nAtenciosamente,\nEquipe`
+        priority: 4,
+        whatsappMessage: `${firstName}, obrigado pelo feedback! Quero te surpreender... que tal [BENEFÍCIO]? É por nossa conta, pra agradecer sua confiança!`,
+        emailSubject: `${firstName}, tenho uma surpresa`,
+        emailBody: `Oi ${firstName},\n\nObrigado pela avaliação!\n\nQuero te agradecer de um jeito especial. Preparei [BENEFÍCIO] pra você, sem custo nenhum.\n\nÉ nossa forma de dizer obrigado pela confiança.\n\nO que acha?\n\nAbraço`
       });
       
+      // 3. Se tiver sugestão
+      if (hasSuggestion) {
+        suggestions.push({
+          id: 'passive_suggestion',
+          type: 'relationship',
+          title: 'Agradecer Sugestão',
+          description: `Sugestão: ${answers.suggestions!.substring(0, 40)}...`,
+          icon: '💡',
+          tone: 'friendly',
+          priority: 4,
+          whatsappMessage: `${firstName}, adorei sua sugestão sobre "${answers.suggestions!.substring(0, 30)}..."! Faz total sentido. Vou levar pro time, valeu demais!`,
+          emailSubject: `${firstName}, sua sugestão é ótima!`,
+          emailBody: `Oi ${firstName},\n\nLi sua sugestão:\n\n"${answers.suggestions}"\n\nAchei excelente! É exatamente esse tipo de ideia que nos ajuda a melhorar.\n\nJá anotei e vou discutir com o time. Obrigado por compartilhar!\n\nAbraço`
+        });
+      }
+      
+    // ============================================
+    // PROMOTOR (NPS 9-10)
+    // ============================================
     } else {
-      // PROMOTOR - Foco em fidelização e indicações
       
       // 1. Agradecimento caloroso
       suggestions.push({
         id: 'promoter_thanks',
         type: 'relationship',
         title: 'Agradecimento Caloroso',
-        description: 'Celebre o feedback positivo',
+        description: hasPositive ? `Destacou: ${positiveText.substring(0, 40)}...` : 'Agradeça de coração',
         icon: '🎉',
         tone: 'enthusiastic',
         priority: 5,
-        whatsappMessage: `${firstName}, muito obrigado pela nota ${score}! 🎉 Ficamos extremamente felizes em saber que você está satisfeito! Clientes como você são a razão do nosso trabalho!`,
-        emailSubject: `${firstName}, você é incrível! 🎉`,
-        emailBody: `Olá ${context.name},\n\nQue alegria receber sua nota ${score}! 🎉\n\n${comment ? `Adoramos ler: "${comment}"\n\n` : ''}Clientes como você são a razão pela qual fazemos o que fazemos. Seu feedback nos motiva a continuar melhorando cada dia.\n\nMuito obrigado por confiar em nós!\n\nAtenciosamente,\nEquipe`
+        whatsappMessage: hasPositive
+          ? `Oi ${firstName}! Que felicidade ver sua nota ${score}! E você ainda destacou "${positiveText.substring(0, 30)}..." - isso me deixa muito feliz! Obrigado de verdade, a gente se esforça muito e é muito bom saber que faz diferença. 💚`
+          : `Oi ${firstName}! Que alegria ver sua nota ${score}! Fico muito feliz em saber que conseguimos te atender bem. Obrigado de coração, isso significa muito pra gente! 💚`,
+        emailSubject: `${firstName}, muito obrigado! 💚`,
+        emailBody: hasPositive
+          ? `Oi ${firstName},\n\nQue felicidade receber sua avaliação!\n\nVocê destacou "${positiveText}" e isso me deixou muito feliz. A gente trabalha duro todo dia e saber que faz diferença é o melhor presente.\n\n${comment ? `Seu comentário: "${comment}" - guardei aqui!\n\n` : ''}Muito obrigado pela confiança. Conte sempre com a gente!\n\nUm abraço grande`
+          : `Oi ${firstName},\n\nQue alegria receber sua nota ${score}!\n\n${comment ? `Li seu comentário: "${comment}"\n\n` : ''}Fico muito feliz em saber que conseguimos te atender bem. É pra isso que a gente trabalha!\n\nMuito obrigado pela confiança.\n\nUm abraço grande`
       });
       
-      // 2. Pedido de indicação
+      // 2. Pedir indicação de forma natural
       suggestions.push({
         id: 'promoter_referral',
         type: 'sales',
         title: 'Pedido de Indicação',
-        description: 'Solicite indicações de forma natural',
+        description: 'Peça de forma natural',
         icon: '👥',
         tone: 'friendly',
         priority: 4,
-        whatsappMessage: `${firstName}, muito obrigado pela nota ${score}! 😊 Você conhece alguém que também poderia se beneficiar dos nossos serviços? Ficaríamos gratos por uma indicação!`,
-        emailSubject: `${firstName}, compartilhe a experiência!`,
-        emailBody: `Olá ${context.name},\n\nMuito obrigado pela nota ${score}!\n\n${comment ? `Adoramos: "${comment}"\n\n` : ''}Se você conhece alguém que também poderia se beneficiar dos nossos serviços, ficaríamos muito gratos por uma indicação.\n\nComo agradecimento, oferecemos [BENEFÍCIO PARA INDICADOR E INDICADO].\n\nCompartilhe a experiência!\n\nAtenciosamente,\nEquipe`
+        whatsappMessage: hasPositive
+          ? `${firstName}, fico muito feliz que você gostou! Se você conhecer alguém que também poderia gostar de "${positiveText.substring(0, 25)}...", pode indicar! Vou cuidar bem, prometo 😊`
+          : `${firstName}, que bom que você gostou! Se tiver algum amigo ou conhecido que também poderia se beneficiar, pode indicar! Vou tratar super bem, como fiz com você 😊`,
+        emailSubject: `${firstName}, conhece alguém?`,
+        emailBody: `Oi ${firstName},\n\nFico muito feliz com sua avaliação!\n\n${hasPositive ? `Você gostou de "${positiveText}" e ` : ''}se conhecer alguém que também poderia se beneficiar, ficarei muito grato por uma indicação.\n\nPode ser um amigo, familiar, colega... vou cuidar muito bem, como fiz com você!\n\nE se quiser, posso oferecer [BENEFÍCIO] pra você e pra pessoa que indicar.\n\nO que acha?\n\nAbraço`
       });
       
-      // 3. Avaliação no Google
+      // 3. Pedir avaliação no Google
       suggestions.push({
-        id: 'promoter_google_review',
+        id: 'promoter_google',
         type: 'relationship',
         title: 'Solicitar Avaliação Google',
-        description: 'Peça avaliação pública',
+        description: 'Peça de forma simpática',
         icon: '⭐',
         tone: 'friendly',
         priority: 4,
-        whatsappMessage: `${firstName}, muito obrigado pela nota ${score}! 😊 Você poderia nos ajudar deixando uma avaliação no Google? Isso ajuda outras pessoas a nos conhecerem! [LINK]`,
-        emailSubject: `${firstName}, compartilhe no Google!`,
-        emailBody: `Olá ${context.name},\n\nFicamos muito felizes com sua nota ${score}!\n\n${comment ? `Adoramos: "${comment}"\n\n` : ''}Você poderia nos ajudar compartilhando sua experiência no Google? Sua avaliação ajuda outras pessoas a nos conhecerem.\n\nClique aqui: [LINK DO GOOGLE BUSINESS]\n\nMuito obrigado!\n\nAtenciosamente,\nEquipe`
+        whatsappMessage: `${firstName}, posso te pedir um favor? Você poderia deixar essa avaliação lá no Google também? Ajuda muito a gente a ser encontrado por outras pessoas. É rapidinho! [LINK]`,
+        emailSubject: `${firstName}, um favorzinho?`,
+        emailBody: `Oi ${firstName},\n\nPosso te pedir um favor?\n\nSua avaliação foi incrível e ajudaria muito se você pudesse compartilhar no Google também. Isso ajuda outras pessoas a nos encontrarem.\n\nÉ bem rapidinho, só clicar aqui: [LINK DO GOOGLE]\n\nSe não puder, tudo bem! Já fico muito grato pela avaliação que você deu.\n\nAbraço`
       });
       
       // 4. Programa de fidelidade
@@ -225,154 +330,184 @@ export class MessageSuggestionEngine {
         id: 'promoter_loyalty',
         type: 'offer',
         title: 'Programa de Fidelidade',
-        description: 'Ofereça benefícios exclusivos',
+        description: 'Convide para benefícios',
         icon: '💎',
-        tone: 'professional',
+        tone: 'friendly',
         priority: 3,
-        whatsappMessage: `${firstName}, obrigado pela nota ${score}! Como cliente especial, gostaria de te convidar para nosso programa de benefícios exclusivos. Interesse?`,
-        emailSubject: `${firstName}, benefícios exclusivos para você!`,
-        emailBody: `Olá ${context.name},\n\nObrigado pela nota ${score}! Clientes como você merecem o melhor.\n\n${comment ? `Sobre: "${comment}"\n\n` : ''}Gostaríamos de te convidar para nosso programa de benefícios exclusivos:\n\n• [BENEFÍCIO 1]\n• [BENEFÍCIO 2]\n• [BENEFÍCIO 3]\n• Atendimento prioritário\n\nQuer fazer parte?\n\nAtenciosamente,\nEquipe`
+        whatsappMessage: `${firstName}, clientes especiais como você merecem tratamento especial! Quero te convidar pra ter alguns benefícios exclusivos. Posso te contar?`,
+        emailSubject: `${firstName}, você é especial`,
+        emailBody: `Oi ${firstName},\n\nClientes como você são raros e merecem um tratamento diferenciado.\n\nQuero te convidar pra fazer parte do nosso grupo de clientes especiais, com:\n\n• [BENEFÍCIO 1]\n• [BENEFÍCIO 2]\n• Atendimento prioritário\n\nO que acha? Topa?\n\nAbraço`
       });
     }
     
     return suggestions;
   }
   
-  /**
-   * Sugestões para leads
-   */
-  private static generateLeadSuggestions(context: ClientContext): MessageSuggestion[] {
+  // ============================================
+  // SUGESTÕES PARA LEADS - HUMANIZADAS
+  // ============================================
+  
+  private static generateLeadSuggestions(context: ClientContext, answers: ExtractedAnswers): MessageSuggestion[] {
     const suggestions: MessageSuggestion[] = [];
     const firstName = context.name.split(' ')[0];
     const value = context.value || 0;
     const days = context.daysSinceLastContact || 0;
     const status = context.leadStatus || '';
     
-    // Determinar contexto do lead
     const isHighValue = value >= 1000;
     const isStale = days > 7;
-    const isNegotiating = status === 'Negociação';
-    const isNew = status === 'Novo';
     
-    if (context.insightType === 'sales' || isNew) {
-      // VENDAS - Foco em conversão
+    const hasInterest = !!answers.mainInterest;
+    const hasBudget = !!answers.budget;
+    const hasTimeline = !!answers.timeline;
+    
+    const interestText = answers.mainInterest || '';
+    const budgetText = answers.budget || '';
+    const timelineText = answers.timeline || '';
+    
+    // ============================================
+    // VENDAS / LEADS NOVOS
+    // ============================================
+    if (context.insightType === 'sales' || status === 'Novo' || status === 'Em Contato') {
       
-      // 1. Apresentação de proposta
+      // 1. Primeiro contato / Follow-up
       suggestions.push({
-        id: 'sales_proposal',
-        type: 'sales',
-        title: 'Apresentação de Proposta',
-        description: 'Apresente solução personalizada',
-        icon: '📊',
-        tone: 'professional',
-        priority: 5,
-        whatsappMessage: `Olá ${firstName}! Analisei suas necessidades e preparei uma proposta personalizada ${isHighValue ? `para o projeto de R$ ${value.toLocaleString('pt-BR')}` : ''}. Podemos agendar uma apresentação?`,
-        emailSubject: `${firstName}, proposta personalizada pronta!`,
-        emailBody: `Olá ${context.name},\n\nAnalisei cuidadosamente suas necessidades e preparei uma proposta personalizada.\n\n${isHighValue ? `Para o projeto estimado em R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, ` : ''}A solução inclui:\n\n• [BENEFÍCIO 1]\n• [BENEFÍCIO 2]\n• [BENEFÍCIO 3]\n• ROI estimado: [VALOR]\n\nPodemos agendar uma apresentação?\n\nAtenciosamente,\nEquipe`
-      });
-      
-      // 2. Cases de sucesso
-      suggestions.push({
-        id: 'sales_case_study',
-        type: 'sales',
-        title: 'Compartilhar Cases de Sucesso',
-        description: 'Mostre resultados reais',
-        icon: '🏆',
-        tone: 'professional',
-        priority: 4,
-        whatsappMessage: `${firstName}, gostaria de compartilhar alguns cases de clientes similares que tiveram ótimos resultados. Posso te enviar?`,
-        emailSubject: `${firstName}, veja resultados reais`,
-        emailBody: `Olá ${context.name},\n\nPensei que você gostaria de conhecer casos de sucesso de clientes similares:\n\n**Case 1: [Cliente/Setor]**\n• Desafio: [Problema]\n• Solução: [O que fizemos]\n• Resultado: [Números]\n\n**Case 2: [Cliente/Setor]**\n• Desafio: [Problema]\n• Solução: [O que fizemos]\n• Resultado: [Números]\n\nPodemos conversar sobre como replicar esses resultados?\n\nAtenciosamente,\nEquipe`
-      });
-      
-      // 3. Senso de urgência
-      suggestions.push({
-        id: 'sales_urgency',
-        type: 'sales',
-        title: 'Criar Senso de Urgência',
-        description: 'Oferta com prazo limitado',
-        icon: '⏰',
-        tone: 'enthusiastic',
-        priority: 4,
-        whatsappMessage: `${firstName}, tenho uma oportunidade especial com condições diferenciadas, mas válida apenas até [DATA]. ${isHighValue ? `Para o projeto de R$ ${value.toLocaleString('pt-BR')}, ` : ''}Podemos conversar hoje?`,
-        emailSubject: `${firstName}, oportunidade por tempo limitado!`,
-        emailBody: `Olá ${context.name},\n\nTenho uma oportunidade especial para você:\n\n${isHighValue ? `Para o projeto de R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, ` : ''}Condições especiais:\n\n• [BENEFÍCIO/DESCONTO 1]\n• [BENEFÍCIO/DESCONTO 2]\n• [BENEFÍCIO/DESCONTO 3]\n\n⏰ Válido até: [DATA]\n\nVamos aproveitar?\n\nAtenciosamente,\nEquipe`
-      });
-      
-      // 4. Demonstração/Trial
-      suggestions.push({
-        id: 'sales_demo',
-        type: 'sales',
-        title: 'Oferecer Demonstração',
-        description: 'Deixe o cliente experimentar',
-        icon: '🎯',
-        tone: 'friendly',
-        priority: 3,
-        whatsappMessage: `${firstName}, que tal experimentar antes de decidir? Posso te oferecer uma demonstração/período de teste gratuito. Quando você tem disponibilidade?`,
-        emailSubject: `${firstName}, experimente gratuitamente!`,
-        emailBody: `Olá ${context.name},\n\nQue tal experimentar nossa solução antes de tomar a decisão?\n\nOfereço:\n\n• Demonstração personalizada (30min)\n• OU Período de teste gratuito ([X] dias)\n• Suporte completo durante o teste\n• Sem compromisso\n\nQuando você tem disponibilidade?\n\nAtenciosamente,\nEquipe`
-      });
-      
-    } else if (context.insightType === 'opportunity' || isNegotiating) {
-      // OPORTUNIDADE - Foco em fechar negócio
-      
-      // 1. Proposta final
-      suggestions.push({
-        id: 'opportunity_final_proposal',
+        id: 'sales_contact',
         type: 'sales',
         title: 'Proposta Final',
-        description: 'Apresente a melhor oferta',
+        description: hasInterest ? `Interesse: ${interestText.substring(0, 40)}...` : 'Apresente a melhor oferta',
         icon: '🎯',
         tone: 'professional',
         priority: 5,
-        whatsappMessage: `${firstName}, preparei uma proposta final ${isHighValue ? `para o projeto de R$ ${value.toLocaleString('pt-BR')}` : ''} com as melhores condições possíveis. Podemos fechar hoje?`,
-        emailSubject: `${firstName}, proposta final - melhores condições`,
-        emailBody: `Olá ${context.name},\n\nPreparei uma proposta final com as melhores condições:\n\n${isHighValue ? `**Valor do Projeto:** R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n` : ''}**Condições:**\n• [CONDIÇÃO DE PAGAMENTO]\n• [BENEFÍCIOS INCLUSOS]\n• [GARANTIAS]\n• [PRAZO DE ENTREGA]\n\n**Bônus se fecharmos hoje:**\n• [BÔNUS 1]\n• [BÔNUS 2]\n\nVamos fechar?\n\nAtenciosamente,\nEquipe`
+        whatsappMessage: hasInterest
+          ? `Oi ${firstName}! Vi que você tem interesse em "${interestText.substring(0, 30)}...". Preparei uma proposta bem bacana pra você. Posso te mandar?`
+          : `Oi ${firstName}! Tudo bem? Preparei uma proposta pensando no seu caso. Quando você tiver um tempinho, posso te apresentar?`,
+        emailSubject: `${firstName}, preparei algo pra você`,
+        emailBody: hasInterest
+          ? `Oi ${firstName},\n\nVi que você demonstrou interesse em "${interestText}".\n\n${hasTimeline ? `Você mencionou prazo de "${timelineText}", então ` : ''}Preparei uma proposta pensando exatamente no que você precisa.\n\n${isHighValue ? `Para o projeto de R$ ${value.toLocaleString('pt-BR')}, inclui:\n\n` : 'Inclui:\n\n'}• [ITEM 1]\n• [ITEM 2]\n• [ITEM 3]\n\nQuando você tiver um tempinho, posso te apresentar os detalhes?\n\nAbraço`
+          : `Oi ${firstName},\n\nTudo bem?\n\nPreparei uma proposta pensando no seu caso. Acho que vai gostar!\n\n${isHighValue ? `Para o projeto de R$ ${value.toLocaleString('pt-BR')}, inclui:\n\n` : 'Inclui:\n\n'}• [ITEM 1]\n• [ITEM 2]\n• [ITEM 3]\n\nPosso te apresentar?\n\nAbraço`
       });
       
-      // 2. Resolução de objeções
+      // 2. Resolver objeções
       suggestions.push({
-        id: 'opportunity_objections',
+        id: 'sales_objections',
         type: 'sales',
         title: 'Resolução de Objeções',
-        description: 'Antecipe e resolva dúvidas',
+        description: 'Antecipe dúvidas',
         icon: '💡',
         tone: 'professional',
         priority: 4,
-        whatsappMessage: `${firstName}, imagino que você possa ter algumas dúvidas antes de decidir. Posso esclarecer qualquer ponto? Estou aqui para ajudar!`,
-        emailSubject: `${firstName}, vamos esclarecer suas dúvidas?`,
-        emailBody: `Olá ${context.name},\n\nEntendo que uma decisão como essa requer análise cuidadosa.\n\nAs dúvidas mais comuns que nossos clientes têm:\n\n**1. Sobre o investimento:**\n[RESPOSTA]\n\n**2. Sobre o prazo:**\n[RESPOSTA]\n\n**3. Sobre os resultados:**\n[RESPOSTA]\n\n**4. Sobre o suporte:**\n[RESPOSTA]\n\nQue outras dúvidas você tem?\n\nAtenciosamente,\nEquipe`
+        whatsappMessage: `${firstName}, sei que decisões assim precisam de análise. Se tiver qualquer dúvida, pode me perguntar! Tô aqui pra ajudar, sem pressão.`,
+        emailSubject: `${firstName}, alguma dúvida?`,
+        emailBody: `Oi ${firstName},\n\nSei que uma decisão dessas precisa ser bem pensada.\n\n${hasInterest ? `Sobre "${interestText}", ` : ''}as dúvidas mais comuns são:\n\n**Sobre o investimento:**\n[RESPOSTA]\n\n**Sobre o prazo:**\n[RESPOSTA]\n\n**Sobre os resultados:**\n[RESPOSTA]\n\nSe tiver outras dúvidas, é só me falar! Tô aqui pra ajudar.\n\nAbraço`
       });
       
-    } else if (context.insightType === 'risk' || isStale) {
-      // RISCO - Foco em reativação
+      // 3. Se tiver prazo mencionado
+      if (hasTimeline) {
+        suggestions.push({
+          id: 'sales_timeline',
+          type: 'sales',
+          title: 'Urgência pelo Prazo',
+          description: `Prazo: ${timelineText.substring(0, 40)}...`,
+          icon: '⏰',
+          tone: 'professional',
+          priority: 5,
+          whatsappMessage: `${firstName}, você mencionou que precisa pra "${timelineText.substring(0, 25)}...". Pra gente conseguir entregar no prazo, seria bom começarmos logo. Vamos fechar?`,
+          emailSubject: `${firstName}, sobre o prazo`,
+          emailBody: `Oi ${firstName},\n\nLembrei que você mencionou o prazo de "${timelineText}".\n\nPra garantir que a gente consiga entregar tudo certinho dentro desse prazo, seria importante começarmos o quanto antes.\n\nO que acha de fecharmos essa semana?\n\nAbraço`
+        });
+      }
       
-      // 1. Reativação amigável
+    // ============================================
+    // LEADS PARADOS / RISCO
+    // ============================================
+    } else if (context.insightType === 'risk' || isStale) {
+      
+      // 1. Reativação leve
       suggestions.push({
         id: 'risk_reactivation',
         type: 'followup',
-        title: 'Reativação Amigável',
-        description: 'Retome o contato de forma leve',
+        title: 'Reativação',
+        description: `${days} dias sem contato`,
         icon: '👋',
         tone: 'friendly',
         priority: 5,
-        whatsappMessage: `Oi ${firstName}! Faz ${days} dias que conversamos. Ainda tem interesse ${isHighValue ? `no projeto de R$ ${value.toLocaleString('pt-BR')}` : 'na nossa solução'}? Como posso ajudar?`,
-        emailSubject: `${firstName}, vamos retomar?`,
-        emailBody: `Olá ${context.name},\n\nNotei que faz ${days} dias desde nossa última conversa.\n\n${isHighValue ? `Sobre o projeto de R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, ` : ''}Gostaria de saber:\n\n• Ainda tem interesse?\n• Surgiu alguma dúvida?\n• Posso ajudar de alguma forma?\n• Prefere que eu entre em contato em outro momento?\n\nEstou à disposição!\n\nAtenciosamente,\nEquipe`
+        whatsappMessage: hasInterest
+          ? `Oi ${firstName}! Faz um tempinho que a gente conversou sobre "${interestText.substring(0, 25)}...". Ainda tá pensando nisso? Qualquer coisa, tô por aqui!`
+          : `Oi ${firstName}! Sumiu! 😊 Tudo bem por aí? Lembrei de você e queria saber se ainda posso ajudar em algo.`,
+        emailSubject: `${firstName}, tudo bem?`,
+        emailBody: hasInterest
+          ? `Oi ${firstName},\n\nFaz um tempinho que a gente conversou sobre "${interestText}".\n\nQueria saber como você tá e se ainda posso ajudar de alguma forma.\n\nSe mudou de ideia, tudo bem! Mas se ainda tiver interesse, tô por aqui.\n\nAbraço`
+          : `Oi ${firstName},\n\nFaz ${days} dias que a gente conversou e queria saber como você tá.\n\nAinda posso ajudar em algo?\n\nSe não for mais o momento, sem problemas! Mas se precisar de qualquer coisa, é só chamar.\n\nAbraço`
       });
       
-      // 2. Oferta especial de reativação
+      // 2. Oferta especial
       suggestions.push({
-        id: 'risk_special_offer',
+        id: 'risk_offer',
         type: 'offer',
-        title: 'Oferta Especial de Reativação',
-        description: 'Incentive a retomada com benefício',
+        title: 'Oferta Especial',
+        description: 'Incentive a retomada',
         icon: '🎁',
-        tone: 'enthusiastic',
+        tone: 'friendly',
         priority: 4,
-        whatsappMessage: `${firstName}, preparei uma condição especial para você! ${isHighValue ? `Para o projeto de R$ ${value.toLocaleString('pt-BR')}, ` : ''}Gostaria de retomar nossa conversa?`,
-        emailSubject: `${firstName}, condição especial para você!`,
-        emailBody: `Olá ${context.name},\n\nPensando em você, preparei uma condição especial:\n\n${isHighValue ? `**Projeto:** R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n` : ''}**Oferta Especial:**\n• [BENEFÍCIO/DESCONTO 1]\n• [BENEFÍCIO/DESCONTO 2]\n• [PRAZO DIFERENCIADO]\n\n⏰ Válido até: [DATA]\n\nVamos retomar?\n\nAtenciosamente,\nEquipe`
+        whatsappMessage: hasInterest
+          ? `${firstName}, lembrei de você! Sobre "${interestText.substring(0, 20)}...", consegui uma condição especial. Quer saber?`
+          : `${firstName}, tava pensando em você e consegui uma condição especial. Quer saber mais?`,
+        emailSubject: `${firstName}, tenho uma novidade`,
+        emailBody: hasInterest
+          ? `Oi ${firstName},\n\nLembrei da nossa conversa sobre "${interestText}" e consegui uma condição especial pra você:\n\n• [BENEFÍCIO 1]\n• [BENEFÍCIO 2]\n\nMas é por tempo limitado. O que acha?\n\nAbraço`
+          : `Oi ${firstName},\n\nTava pensando em você e consegui uma condição especial:\n\n• [BENEFÍCIO 1]\n• [BENEFÍCIO 2]\n\nAchei que podia te interessar. O que acha?\n\nAbraço`
+      });
+      
+      // 3. Perguntar se desistiu
+      suggestions.push({
+        id: 'risk_check',
+        type: 'followup',
+        title: 'Verificar Interesse',
+        description: 'Pergunte com leveza',
+        icon: '🤔',
+        tone: 'friendly',
+        priority: 3,
+        whatsappMessage: `${firstName}, sei que a vida é corrida! Só queria saber se ainda faz sentido a gente conversar ou se você já resolveu de outra forma. Sem pressão!`,
+        emailSubject: `${firstName}, posso te perguntar uma coisa?`,
+        emailBody: `Oi ${firstName},\n\nSei que a vida é corrida e às vezes as prioridades mudam.\n\nQueria só saber: ainda faz sentido a gente conversar ou você já resolveu de outra forma?\n\nSem pressão nenhuma! Só pra eu saber se posso continuar te ajudando ou não.\n\nAbraço`
+      });
+      
+    // ============================================
+    // OPORTUNIDADES / NEGOCIAÇÃO
+    // ============================================
+    } else if (context.insightType === 'opportunity' || status === 'Negociação') {
+      
+      // 1. Proposta final
+      suggestions.push({
+        id: 'opportunity_close',
+        type: 'sales',
+        title: 'Fechar Negócio',
+        description: isHighValue ? `Valor: R$ ${value.toLocaleString('pt-BR')}` : 'Hora de fechar!',
+        icon: '🎯',
+        tone: 'professional',
+        priority: 5,
+        whatsappMessage: hasInterest
+          ? `${firstName}, sobre "${interestText.substring(0, 25)}...", preparei a proposta final com as melhores condições que consegui. Vamos fechar?`
+          : `${firstName}, preparei a proposta final pra você com as melhores condições. Vamos fechar?`,
+        emailSubject: `${firstName}, proposta final`,
+        emailBody: hasInterest
+          ? `Oi ${firstName},\n\nSobre "${interestText}", preparei a proposta final:\n\n${isHighValue ? `**Valor:** R$ ${value.toLocaleString('pt-BR')}\n\n` : ''}**Inclui:**\n• [ITEM 1]\n• [ITEM 2]\n• [ITEM 3]\n\n**Condições especiais:**\n• [CONDIÇÃO 1]\n• [CONDIÇÃO 2]\n\nÉ a melhor que consigo fazer. O que acha?\n\nAbraço`
+          : `Oi ${firstName},\n\nPreparei a proposta final pra você:\n\n${isHighValue ? `**Valor:** R$ ${value.toLocaleString('pt-BR')}\n\n` : ''}**Inclui:**\n• [ITEM 1]\n• [ITEM 2]\n• [ITEM 3]\n\n**Condições especiais:**\n• [CONDIÇÃO 1]\n• [CONDIÇÃO 2]\n\nVamos fechar?\n\nAbraço`
+      });
+      
+      // 2. Criar urgência
+      suggestions.push({
+        id: 'opportunity_urgency',
+        type: 'sales',
+        title: 'Criar Urgência',
+        description: 'Incentive a decisão',
+        icon: '⏰',
+        tone: 'professional',
+        priority: 4,
+        whatsappMessage: `${firstName}, as condições que te passei são válidas até [DATA]. Depois disso não consigo garantir. Vamos resolver essa semana?`,
+        emailSubject: `${firstName}, sobre as condições`,
+        emailBody: `Oi ${firstName},\n\nSó pra te avisar: as condições especiais que te passei são válidas até [DATA].\n\nDepois disso, infelizmente não consigo manter os mesmos valores.\n\nSe puder me dar um retorno até lá, agradeço!\n\nAbraço`
       });
     }
     
