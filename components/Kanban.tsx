@@ -193,7 +193,7 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
     if (!selectedLead) return;
     setIsGeneratingAdvice(true);
     try {
-      const apiKey = process.env.API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       const firstName = (selectedLead.name || '').split(' ')[0];
       
       if (apiKey) {

@@ -198,7 +198,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
     if (!newCampaignName) return;
     setIsGenerating(true);
     try {
-      const apiKey = process.env.API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
         const prompt = `

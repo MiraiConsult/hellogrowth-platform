@@ -31,7 +31,7 @@ const AIChat: React.FC<AIChatProps> = ({ leads, npsData, activePlan }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Use environment variable as per specific instructions
-  const apiKey = process.env.API_KEY || ''; 
+  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''; 
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

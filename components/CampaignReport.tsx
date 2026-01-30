@@ -83,7 +83,7 @@ const CampaignReport: React.FC<CampaignReportProps> = ({ campaignId, campaigns, 
     if (campaignResponses.length === 0) return;
     setIsAnalyzing(true);
     try {
-      const apiKey = process.env.API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
         const detailedFeedback = campaignResponses

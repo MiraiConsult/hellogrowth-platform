@@ -120,7 +120,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setGeneratingScriptId(optionId);
 
     try {
-      const apiKey = process.env.API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
@@ -158,7 +158,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setIsGenerating(true);
 
     try {
-      const apiKey = process.env.API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
