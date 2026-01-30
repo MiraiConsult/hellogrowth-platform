@@ -58,8 +58,20 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           throw new Error('Erro ao conectar com o banco de dados. Tente novamente mais tarde.');
         }
         
-        // SECURITY FIX: Use a generic error message for both user not found and wrong password
-        if (!data || (data.password && data.password !== password)) {
+        // SECURITY FIX: Validate user exists AND password matches
+        // If user doesn't exist, reject
+        if (!data) {
+            throw new Error('Email ou senha incorretos. Verifique suas credenciais.');
+        }
+        
+        // If user exists but has no password set, reject (security measure)
+        if (!data.password || data.password.trim() === '') {
+            console.error("User has no password set:", email);
+            throw new Error('Sua conta não possui senha configurada. Entre em contato com o suporte.');
+        }
+        
+        // If password doesn't match, reject
+        if (data.password !== password) {
             throw new Error('Email ou senha incorretos. Verifique suas credenciais.');
         }
         
@@ -67,7 +79,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           id: data.id,
           name: data.name,
           email: data.email,
-          password: data.password || '', 
+          password: data.password, 
           plan: data.plan,
           createdAt: data.created_at,
           companyName: data.company_name,
