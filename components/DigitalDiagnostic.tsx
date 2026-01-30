@@ -11,6 +11,9 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 import { supabase } from '@/lib/supabase';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// Google Places API Key - usando variável pública
+const GOOGLE_PLACES_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY || 'AIzaSyBsyDdAB-ZzDr9Grw0xpAfSUOPngM37Qnk';
+
 interface GooglePlaceData {
   name?: string;
   formatted_address?: string;
@@ -114,19 +117,70 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, 
   const latestDiagnostic = diagnostics[0];
   const previousDiagnostic = diagnostics[1];
 
-  // Fetch Google Place data
+  // Fetch Google Place data - CHAMADA DIRETA À API DO GOOGLE
   const fetchGooglePlaceData = async (placeId: string): Promise<GooglePlaceData | null> => {
     try {
-      // Use Google Places API via our backend
-      const response = await fetch(`/api/google-places?placeId=${placeId}`);
+      console.log('Fetching Google Place data for:', placeId);
+      
+      // Chamada direta à Places API (New) do Google
+      const url = `https://places.googleapis.com/v1/places/${placeId}`;
+      
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+        'X-Goog-FieldMask': 'id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,rating,userRatingCount,reviews,regularOpeningHours,photos,types,businessStatus,googleMapsUri'
+      };
+
+      console.log('Making request to Google Places API...');
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: headers
+      });
+
+      console.log('Response status:', response.status);
+
       if (!response.ok) {
-        throw new Error('Failed to fetch place data');
+        const errorData = await response.json();
+        console.error('Google Places API error:', errorData);
+        throw new Error(errorData.error?.message || 'Failed to fetch place data');
       }
+
       const data = await response.json();
-      return data.result || null;
+      console.log('Google Places API response:', data);
+
+      // Transform NEW API format to match old format for compatibility
+      const transformedResult: GooglePlaceData = {
+        name: data.displayName?.text || '',
+        formatted_address: data.formattedAddress || '',
+        formatted_phone_number: data.nationalPhoneNumber || '',
+        website: data.websiteUri || '',
+        rating: data.rating || 0,
+        user_ratings_total: data.userRatingCount || 0,
+        reviews: data.reviews?.map((review: any) => ({
+          author_name: review.authorAttribution?.displayName || 'Anônimo',
+          rating: review.rating || 0,
+          text: review.text?.text || '',
+          time: review.publishTime ? new Date(review.publishTime).getTime() / 1000 : 0,
+          relative_time_description: review.relativePublishTimeDescription || ''
+        })) || [],
+        opening_hours: data.regularOpeningHours ? {
+          open_now: data.regularOpeningHours.openNow || false,
+          weekday_text: data.regularOpeningHours.weekdayDescriptions || []
+        } : undefined,
+        photos: data.photos?.map((photo: any) => ({
+          photo_reference: photo.name || ''
+        })) || [],
+        types: data.types || [],
+        business_status: data.businessStatus || 'OPERATIONAL',
+        url: data.googleMapsUri || '',
+        price_level: 0
+      };
+
+      console.log('Transformed result:', transformedResult);
+      return transformedResult;
     } catch (error) {
       console.error('Error fetching Google Place data:', error);
-      // Return mock data for testing if API fails
       return null;
     }
   };
@@ -296,8 +350,8 @@ Forneça de 3 a 5 recomendações priorizadas.
     }
 
     return {
-      summary: `Seu negócio tem uma presença digital ${overallScore >= 70 ? 'boa' : overallScore >= 50 ? 'moderada' : 'que precisa de atenção'}. ${rating > 0 ? `Com nota ${rating} e ${reviewCount} avaliações` : 'Sem avaliações ainda'}, há oportunidades de melhoria para aumentar sua visibilidade online.`,
-      strengths: strengths.length > 0 ? strengths : ['Perfil criado no Google'],
+      summary: `${placeData.name || 'O negócio'} possui uma presença online ${overallScore >= 60 ? 'adequada' : 'que precisa de melhorias'}. ${rating > 0 ? `Com nota ${rating} e ${reviewCount} avaliações` : 'Sem avaliações registradas'}, há oportunidades de crescimento.`,
+      strengths: strengths.length > 0 ? strengths : ['Nome do negócio definido', 'Status operacional definido'],
       weaknesses: weaknesses.length > 0 ? weaknesses : ['Nenhum ponto crítico identificado'],
       recommendations,
       scores: {
@@ -321,9 +375,12 @@ Forneça de 3 a 5 recomendações priorizadas.
     try {
       // Step 1: Fetch Google Place data
       setAnalysisStep('Buscando dados do Google...');
+      console.log('Starting diagnostic for Place ID:', settings.placeId);
+      
       const placeData = await fetchGooglePlaceData(settings.placeId);
       
-      if (!placeData) {
+      if (!placeData || !placeData.name) {
+        console.log('No place data returned, using mock data');
         // Use mock data for demonstration
         const mockPlaceData: GooglePlaceData = {
           name: settings.companyName || 'Seu Negócio',
@@ -362,6 +419,8 @@ Forneça de 3 a 5 recomendações priorizadas.
         await fetchDiagnostics();
         return;
       }
+
+      console.log('Place data received:', placeData);
 
       // Step 2: Generate AI analysis
       setAnalysisStep('Analisando dados com IA...');
@@ -452,434 +511,344 @@ Forneça de 3 a 5 recomendações priorizadas.
   }
 
   return (
-    <div className="p-8 min-h-screen bg-gray-50">
+    <div className="p-6 min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="flex justify-between items-start mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Globe className="text-primary-600" />
-            Minha Presença Digital
-          </h1>
-          <p className="text-gray-500">Análise completa do seu perfil no Google Meu Negócio</p>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Globe className="text-primary-600" size={28} />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Minha Presença Digital</h1>
+            <p className="text-gray-500 text-sm">Análise completa do seu perfil no Google Meu Negócio</p>
+          </div>
         </div>
-        <div className="flex gap-3">
-          {diagnostics.length > 1 && (
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 flex items-center gap-2"
-            >
-              <History size={18} />
-              Histórico
-            </button>
-          )}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <History size={18} />
+            Histórico
+          </button>
           <button
             onClick={handleRunDiagnostic}
             disabled={isAnalyzing}
-            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
           >
-            {isAnalyzing ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
-            {isAnalyzing ? analysisStep || 'Analisando...' : 'Analisar Agora'}
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="animate-spin" size={18} />
+                {analysisStep}
+              </>
+            ) : (
+              <>
+                <RefreshCw size={18} />
+                Analisar Agora
+              </>
+            )}
           </button>
         </div>
       </div>
 
-      {/* Error Message */}
+      {/* Error message */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 flex items-center gap-2">
-          <AlertTriangle size={20} />
-          {error}
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+          <AlertTriangle className="text-red-500" size={20} />
+          <span className="text-red-700">{error}</span>
         </div>
       )}
 
-      {/* No Place ID Warning */}
+      {/* No Place ID configured */}
       {!settings.placeId && (
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-yellow-700">
-          <div className="flex items-start gap-3">
-            <AlertTriangle size={20} className="mt-0.5" />
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 mb-6">
+          <div className="flex items-start gap-4">
+            <AlertTriangle className="text-yellow-600 mt-1" size={24} />
             <div>
-              <h4 className="font-semibold">Configure seu Google Place ID</h4>
-              <p className="text-sm mt-1">
-                Para analisar sua presença digital, você precisa configurar o Place ID do seu negócio nas configurações.
-                O Place ID é um identificador único do Google que permite acessar informações do seu perfil.
+              <h3 className="font-semibold text-yellow-800 mb-2">Configure seu Google Place ID</h3>
+              <p className="text-yellow-700 mb-4">
+                Para analisar sua presença digital, você precisa configurar o Google Place ID nas configurações.
               </p>
               <a 
-                href="https://developers.google.com/maps/documentation/places/web-service/place-id" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-sm text-yellow-800 underline mt-2 inline-flex items-center gap-1"
+                href="#" 
+                onClick={(e) => { e.preventDefault(); /* navigate to settings */ }}
+                className="inline-flex items-center gap-2 text-yellow-700 hover:text-yellow-800 font-medium"
               >
-                Como encontrar meu Place ID <ExternalLink size={12} />
+                Ir para Configurações <ChevronRight size={16} />
               </a>
             </div>
           </div>
         </div>
       )}
 
-      {!latestDiagnostic || !aiAnalysis ? (
-        // Empty State
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-          <div className="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Activity size={32} className="text-primary-600" />
-          </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-2">Nenhum diagnóstico realizado</h3>
-          <p className="text-gray-500 mb-6 max-w-md mx-auto">
-            Clique em "Analisar Agora" para gerar seu primeiro diagnóstico de presença digital.
-            Vamos buscar os dados do seu perfil no Google e gerar recomendações personalizadas.
-          </p>
-          <button
-            onClick={handleRunDiagnostic}
-            disabled={isAnalyzing || !settings.placeId}
-            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isAnalyzing ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
-            {isAnalyzing ? analysisStep || 'Analisando...' : 'Iniciar Diagnóstico'}
-          </button>
-        </div>
-      ) : (
-        <>
-          {/* Google Profile Summary */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-4">
-                <div className="w-16 h-16 bg-primary-100 rounded-xl flex items-center justify-center">
-                  <Globe size={32} className="text-primary-600" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">{placeData?.name || settings.companyName}</h2>
-                  <p className="text-gray-600 text-sm mt-1">{placeData?.formatted_address || 'Endereço não disponível'}</p>
-                  <div className="flex items-center gap-4 mt-2">
-                    {placeData?.rating && (
-                      <div className="flex items-center gap-1">
-                        <Star size={16} className="text-yellow-500" fill="currentColor" />
-                        <span className="font-bold text-gray-900">{placeData.rating}</span>
-                        <span className="text-gray-500 text-sm">({placeData.user_ratings_total} avaliações)</span>
-                      </div>
-                    )}
-                    {placeData?.formatted_phone_number && (
-                      <div className="flex items-center gap-1 text-gray-600 text-sm">
-                        <Phone size={14} />
-                        {placeData.formatted_phone_number}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              {placeData?.url && (
-                <a 
-                  href={placeData.url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 flex items-center gap-2 text-sm"
-                >
-                  Ver no Google <ExternalLink size={14} />
-                </a>
-              )}
+      {/* Business Info Card */}
+      {placeData && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <div className="flex items-start gap-4">
+            <div className="w-16 h-16 bg-primary-100 rounded-xl flex items-center justify-center">
+              <Globe className="text-primary-600" size={32} />
             </div>
-          </div>
-
-          {/* AI Summary */}
-          <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-200 p-6 mb-8">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Sparkles size={20} className="text-purple-600" />
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-900 mb-2">Análise da IA</h3>
-                <p className="text-gray-700">{aiAnalysis.summary}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Score Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            {/* Overall Score */}
-            <div className={`p-6 rounded-xl shadow-sm border ${getScoreBg(aiAnalysis.scores.overall)}`}>
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Escore Geral</p>
-                  <h3 className={`text-4xl font-bold mt-2 ${getScoreColor(aiAnalysis.scores.overall)}`}>
-                    {aiAnalysis.scores.overall}
-                  </h3>
-                </div>
-                <div className={`p-2 rounded-lg ${trend === 'improving' ? 'bg-green-100 text-green-600' : trend === 'declining' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
-                  {trend === 'improving' ? <TrendingUp size={20} /> : trend === 'declining' ? <TrendingDown size={20} /> : <Minus size={20} />}
-                </div>
-              </div>
-              <p className="text-xs text-gray-500 mt-3">
-                {trend === 'improving' ? 'Em melhoria' : trend === 'declining' ? 'Em queda' : 'Estável'}
+            <div className="flex-1">
+              <h2 className="text-xl font-bold text-gray-800">{placeData.name || settings.companyName}</h2>
+              <p className="text-gray-500 flex items-center gap-2 mt-1">
+                <MapPin size={14} />
+                {placeData.formatted_address || 'Endereço não disponível'}
               </p>
-            </div>
-
-            {/* Reputation Score */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Reputação</p>
-                  <h3 className={`text-3xl font-bold mt-2 ${getScoreColor(aiAnalysis.scores.reputation)}`}>
-                    {aiAnalysis.scores.reputation}
-                  </h3>
-                </div>
-                <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
-                  <Star size={20} />
-                </div>
+              <div className="flex items-center gap-4 mt-2">
+                {placeData.rating && placeData.rating > 0 ? (
+                  <span className="flex items-center gap-1 text-yellow-600">
+                    <Star size={16} fill="currentColor" />
+                    {placeData.rating} ({placeData.user_ratings_total} avaliações)
+                  </span>
+                ) : (
+                  <span className="text-gray-400">Sem avaliações</span>
+                )}
+                {placeData.formatted_phone_number && (
+                  <span className="flex items-center gap-1 text-gray-600">
+                    <Phone size={14} />
+                    {placeData.formatted_phone_number}
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-gray-400 mt-3">Nota e avaliações no Google</p>
             </div>
+            {placeData.url && (
+              <a 
+                href={placeData.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                <ExternalLink size={16} />
+                Ver no Google
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
-            {/* Visibility Score */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Visibilidade</p>
-                  <h3 className={`text-3xl font-bold mt-2 ${getScoreColor(aiAnalysis.scores.visibility)}`}>
-                    {aiAnalysis.scores.visibility}
-                  </h3>
-                </div>
-                <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                  <Eye size={20} />
-                </div>
-              </div>
-              <p className="text-xs text-gray-400 mt-3">Fotos, horários e informações</p>
+      {/* AI Analysis Summary */}
+      {aiAnalysis && (
+        <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-100 p-6 mb-6">
+          <div className="flex items-start gap-3 mb-4">
+            <Sparkles className="text-purple-600" size={24} />
+            <div>
+              <h3 className="font-semibold text-purple-800">Análise da IA</h3>
+              <p className="text-gray-700 mt-1">{aiAnalysis.summary}</p>
             </div>
+          </div>
+        </div>
+      )}
 
-            {/* Engagement Score */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Engajamento</p>
-                  <h3 className={`text-3xl font-bold mt-2 ${getScoreColor(aiAnalysis.scores.engagement)}`}>
-                    {aiAnalysis.scores.engagement}
-                  </h3>
-                </div>
-                <div className="p-2 bg-teal-50 rounded-lg text-teal-600">
-                  <MessageSquare size={20} />
-                </div>
-              </div>
-              <p className="text-xs text-gray-400 mt-3">Interação com clientes</p>
+      {/* Score Cards */}
+      {aiAnalysis && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className={`rounded-xl border p-4 ${getScoreBg(aiAnalysis.scores.overall)}`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-600 text-sm font-medium">Escore Geral</span>
+              <Activity size={18} className="text-gray-400" />
+            </div>
+            <div className={`text-3xl font-bold ${getScoreColor(aiAnalysis.scores.overall)}`}>
+              {aiAnalysis.scores.overall}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              {aiAnalysis.scores.overall >= 80 ? 'Excelente' : aiAnalysis.scores.overall >= 60 ? 'Bom' : aiAnalysis.scores.overall >= 40 ? 'Regular' : 'Precisa melhorar'}
             </div>
           </div>
 
-          {/* Strengths and Weaknesses */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {/* Strengths */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <ThumbsUp size={20} className="text-green-600" />
-                Pontos Fortes
-              </h3>
-              <div className="space-y-3">
-                {aiAnalysis.strengths.map((strength, index) => (
-                  <div key={index} className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
-                    <CheckCircle size={18} className="text-green-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700 text-sm">{strength}</span>
-                  </div>
-                ))}
-              </div>
+          <div className={`rounded-xl border p-4 ${getScoreBg(aiAnalysis.scores.reputation)}`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-600 text-sm font-medium">Reputação</span>
+              <Star size={18} className="text-gray-400" />
             </div>
+            <div className={`text-3xl font-bold ${getScoreColor(aiAnalysis.scores.reputation)}`}>
+              {aiAnalysis.scores.reputation}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">Nota e avaliações no Google</div>
+          </div>
 
-            {/* Weaknesses */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <ThumbsDown size={20} className="text-red-600" />
-                Pontos a Melhorar
-              </h3>
-              <div className="space-y-3">
-                {aiAnalysis.weaknesses.map((weakness, index) => (
-                  <div key={index} className="flex items-start gap-3 p-3 bg-red-50 rounded-lg">
-                    <AlertTriangle size={18} className="text-red-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700 text-sm">{weakness}</span>
-                  </div>
-                ))}
-              </div>
+          <div className={`rounded-xl border p-4 ${getScoreBg(aiAnalysis.scores.visibility)}`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-600 text-sm font-medium">Visibilidade</span>
+              <Eye size={18} className="text-gray-400" />
+            </div>
+            <div className={`text-3xl font-bold ${getScoreColor(aiAnalysis.scores.visibility)}`}>
+              {aiAnalysis.scores.visibility}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">Fotos, horários e informações</div>
+          </div>
+
+          <div className={`rounded-xl border p-4 ${getScoreBg(aiAnalysis.scores.engagement)}`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-600 text-sm font-medium">Engajamento</span>
+              <MessageSquare size={18} className="text-gray-400" />
+            </div>
+            <div className={`text-3xl font-bold ${getScoreColor(aiAnalysis.scores.engagement)}`}>
+              {aiAnalysis.scores.engagement}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">Interação com clientes</div>
+          </div>
+        </div>
+      )}
+
+      {/* Strengths and Weaknesses */}
+      {aiAnalysis && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          {/* Strengths */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <ThumbsUp className="text-green-600" size={20} />
+              <h3 className="font-semibold text-gray-800">Pontos Fortes</h3>
+            </div>
+            <div className="space-y-3">
+              {aiAnalysis.strengths.map((strength, index) => (
+                <div key={index} className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+                  <CheckCircle className="text-green-600 mt-0.5" size={18} />
+                  <span className="text-gray-700">{strength}</span>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-            {/* Radar Chart */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Visão Geral</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={radarData}>
-                    <PolarGrid stroke="#e5e7eb" />
-                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12, fill: '#6b7280' }} />
-                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10 }} />
-                    <Radar name="Score" dataKey="value" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.3} strokeWidth={2} />
-                  </RadarChart>
-                </ResponsiveContainer>
+          {/* Weaknesses */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <ThumbsDown className="text-red-600" size={20} />
+              <h3 className="font-semibold text-gray-800">Pontos a Melhorar</h3>
+            </div>
+            <div className="space-y-3">
+              {aiAnalysis.weaknesses.map((weakness, index) => (
+                <div key={index} className="flex items-start gap-3 p-3 bg-red-50 rounded-lg">
+                  <AlertTriangle className="text-red-600 mt-0.5" size={18} />
+                  <span className="text-gray-700">{weakness}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Recommendations */}
+      {aiAnalysis && aiAnalysis.recommendations.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Lightbulb className="text-yellow-600" size={20} />
+            <h3 className="font-semibold text-gray-800">Recomendações</h3>
+          </div>
+          <div className="space-y-4">
+            {aiAnalysis.recommendations.map((rec, index) => (
+              <div key={index} className="border border-gray-100 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <div className={`px-2 py-1 rounded text-xs font-medium ${
+                    rec.priority === 'high' ? 'bg-red-100 text-red-700' :
+                    rec.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-blue-100 text-blue-700'
+                  }`}>
+                    {rec.priority === 'high' ? 'Alta' : rec.priority === 'medium' ? 'Média' : 'Baixa'}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-800">{rec.title}</h4>
+                    <p className="text-gray-600 text-sm mt-1">{rec.description}</p>
+                    <p className="text-green-600 text-sm mt-2 flex items-center gap-1">
+                      <Target size={14} />
+                      {rec.impact}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent Reviews */}
+      {placeData?.reviews && placeData.reviews.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <MessageSquare className="text-blue-600" size={20} />
+            <h3 className="font-semibold text-gray-800">Últimas Avaliações</h3>
+          </div>
+          <div className="space-y-4">
+            {placeData.reviews.slice(0, 5).map((review, index) => (
+              <div key={index} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-medium text-gray-800">{review.author_name}</span>
+                  <div className="flex items-center gap-1">
+                    {[...Array(5)].map((_, i) => (
+                      <Star 
+                        key={i} 
+                        size={14} 
+                        className={i < review.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-gray-400 text-sm">{review.relative_time_description}</span>
+                </div>
+                <p className="text-gray-600 text-sm">{review.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {showHistory && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowHistory(false)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-800">Histórico de Diagnósticos</h3>
+                <button onClick={() => setShowHistory(false)} className="text-gray-400 hover:text-gray-600">
+                  ✕
+                </button>
               </div>
             </div>
-
-            {/* Recommendations */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-2">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Lightbulb size={20} className="text-yellow-500" />
-                Recomendações de Melhoria
-              </h3>
-              {aiAnalysis.recommendations && aiAnalysis.recommendations.length > 0 ? (
-                <div className="space-y-3">
-                  {aiAnalysis.recommendations.map((rec, index) => (
-                    <div 
-                      key={index} 
-                      className={`p-4 rounded-lg border ${
-                        rec.priority === 'high' ? 'bg-red-50 border-red-200' : 
-                        rec.priority === 'medium' ? 'bg-yellow-50 border-yellow-200' : 
-                        'bg-gray-50 border-gray-200'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`p-1.5 rounded ${
-                          rec.priority === 'high' ? 'bg-red-100 text-red-600' : 
-                          rec.priority === 'medium' ? 'bg-yellow-100 text-yellow-600' : 
-                          'bg-gray-100 text-gray-600'
-                        }`}>
-                          {rec.priority === 'high' ? <AlertTriangle size={16} /> : <Target size={16} />}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-semibold text-gray-900 text-sm">{rec.title}</h4>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              rec.priority === 'high' ? 'bg-red-100 text-red-700' : 
-                              rec.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 
-                              'bg-gray-100 text-gray-700'
-                            }`}>
-                              {rec.priority === 'high' ? 'Alta' : rec.priority === 'medium' ? 'Média' : 'Baixa'}
-                            </span>
-                          </div>
-                          <p className="text-gray-600 text-sm mt-1">{rec.description}</p>
-                          <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-                            <TrendingUp size={12} /> {rec.impact}
-                          </p>
-                        </div>
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {diagnostics.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">Nenhum diagnóstico realizado ainda.</p>
+              ) : (
+                <div className="space-y-4">
+                  {diagnostics.map((diagnostic, index) => (
+                    <div key={diagnostic.id} className="border border-gray-100 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-gray-500">
+                          {new Date(diagnostic.created_at).toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: 'long',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                        {diagnostic.ai_analysis && (
+                          <span className={`px-2 py-1 rounded text-sm font-medium ${getScoreBg(diagnostic.ai_analysis.scores.overall)}`}>
+                            Score: {diagnostic.ai_analysis.scores.overall}
+                          </span>
+                        )}
                       </div>
+                      {diagnostic.ai_analysis && (
+                        <p className="text-gray-600 text-sm">{diagnostic.ai_analysis.summary}</p>
+                      )}
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <Award size={48} className="mx-auto text-green-500 mb-3" />
-                  <p className="text-gray-600">Parabéns! Seu perfil está bem otimizado.</p>
-                </div>
               )}
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Recent Reviews */}
-          {placeData?.reviews && placeData.reviews.length > 0 && (
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <MessageSquare size={20} className="text-blue-600" />
-                Últimas Avaliações do Google
-              </h3>
-              <div className="space-y-4">
-                {placeData.reviews.slice(0, 5).map((review, index) => (
-                  <div key={index} className="p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center text-gray-600 text-sm font-bold">
-                          {review.author_name.charAt(0)}
-                        </div>
-                        <span className="font-medium text-gray-900">{review.author_name}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {[...Array(5)].map((_, i) => (
-                          <Star 
-                            key={i} 
-                            size={14} 
-                            className={i < review.rating ? 'text-yellow-500' : 'text-gray-300'} 
-                            fill={i < review.rating ? 'currentColor' : 'none'}
-                          />
-                        ))}
-                        <span className="text-xs text-gray-500 ml-2">{review.relative_time_description}</span>
-                      </div>
-                    </div>
-                    <p className="text-gray-700 text-sm">{review.text || 'Sem comentário'}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Evolution Chart */}
-          {evolutionData.length > 1 && (
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Evolução ao Longo do Tempo</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={evolutionData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                    <XAxis dataKey="date" stroke="#9ca3af" axisLine={false} tickLine={false} />
-                    <YAxis domain={[0, 100]} stroke="#9ca3af" axisLine={false} tickLine={false} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    />
-                    <Line type="monotone" dataKey="overall" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4 }} name="Escore Geral" />
-                    <Line type="monotone" dataKey="reputation" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Reputação" />
-                    <Line type="monotone" dataKey="visibility" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} name="Visibilidade" />
-                    <Line type="monotone" dataKey="engagement" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} name="Engajamento" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-
-          {/* History Section */}
-          {showHistory && diagnostics.length > 1 && (
-            <div className="mt-8 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Histórico de Diagnósticos</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-                    <tr>
-                      <th className="px-4 py-3">Data</th>
-                      <th className="px-4 py-3">Geral</th>
-                      <th className="px-4 py-3">Reputação</th>
-                      <th className="px-4 py-3">Visibilidade</th>
-                      <th className="px-4 py-3">Engajamento</th>
-                      <th className="px-4 py-3">Variação</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {diagnostics.filter(d => d.ai_analysis).map((d, index) => {
-                      const prev = diagnostics.filter(dd => dd.ai_analysis)[index + 1];
-                      const diff = prev?.ai_analysis ? d.ai_analysis!.scores.overall - prev.ai_analysis.scores.overall : 0;
-                      return (
-                        <tr key={d.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm text-gray-900">
-                            {new Date(d.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </td>
-                          <td className={`px-4 py-3 text-sm font-bold ${getScoreColor(d.ai_analysis!.scores.overall)}`}>{d.ai_analysis!.scores.overall}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{d.ai_analysis!.scores.reputation}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{d.ai_analysis!.scores.visibility}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{d.ai_analysis!.scores.engagement}</td>
-                          <td className="px-4 py-3 text-sm">
-                            {prev?.ai_analysis && (
-                              <span className={`flex items-center gap-1 ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                                {diff > 0 ? <TrendingUp size={14} /> : diff < 0 ? <TrendingDown size={14} /> : <Minus size={14} />}
-                                {diff > 0 ? '+' : ''}{diff}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Last Analysis Date */}
-          <div className="mt-6 text-center text-sm text-gray-500">
-            Última análise: {new Date(latestDiagnostic.created_at).toLocaleDateString('pt-BR', { 
-              day: '2-digit', 
-              month: 'long', 
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </div>
-        </>
+      {/* No diagnostics yet */}
+      {!latestDiagnostic && !isAnalyzing && settings.placeId && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+          <Globe className="mx-auto text-gray-300 mb-4" size={48} />
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">Nenhum diagnóstico realizado</h3>
+          <p className="text-gray-500 mb-6">Clique em "Analisar Agora" para gerar seu primeiro diagnóstico de presença digital.</p>
+          <button
+            onClick={handleRunDiagnostic}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            <RefreshCw size={18} />
+            Analisar Agora
+          </button>
+        </div>
       )}
     </div>
   );
