@@ -474,8 +474,18 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   // --- RENDER ---
 
   if (currentView === 'public-survey') {
-    if (!publicCampaign && !loading) return <div className="p-8 text-center">Campanha não encontrada no banco de dados.</div>;
-    return publicCampaign ? (
+    if (loading || !publicCampaign) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Carregando pesquisa...</p>
+          </div>
+        </div>
+      );
+    }
+    if (!publicCampaign) return <div className="p-8 text-center">Campanha não encontrada no banco de dados.</div>;
+    return (
       <PublicSurvey 
         campaign={publicCampaign} 
         onClose={handleClosePublicView} 
@@ -484,19 +494,29 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         settings={publicSettings} 
         companyName={publicCompanyName}
       />
-    ) : <div className="p-8 text-center">Carregando...</div>;
+    );
   }
 
   if (currentView === 'public-form') {
-    return publicForm ? (
+    if (loading || !publicForm) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Carregando formulário...</p>
+          </div>
+        </div>
+      );
+    }
+    return (
       <PublicForm 
         form={publicForm} 
         onClose={handleClosePublicView} 
         onSubmit={handleFormSubmit} 
         isPreview={isPreviewMode} 
-        companyName={publicCompanyName} // Pass the name
+        companyName={publicCompanyName}
       />
-    ) : <div className="p-8 text-center">Carregando formulário...</div>;
+    );
   }
 
   return (

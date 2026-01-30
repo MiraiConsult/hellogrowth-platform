@@ -332,14 +332,12 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack })
 
       {/* Lead Details Panel */}
       {selectedLead && (
-        <div className="fixed inset-0 z-50 flex">
-          {/* Backdrop */}
-          <div className="flex-1 bg-black/20" onClick={() => setSelectedLead(null)} />
-          {/* Slide-over Panel */}
-          <div className="w-full bg-white shadow-2xl flex flex-col h-full animate-in fade-in duration-300 overflow-y-auto">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-start bg-gray-50 sticky top-0 z-10">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          {/* Full Screen Panel */}
+          <div className="w-full h-full bg-white shadow-2xl flex flex-col animate-in fade-in duration-300">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-start bg-gray-50 sticky top-0 z-10">
               <div>
-                <h2 className="text-xl font-bold text-gray-900">{selectedLead.name}</h2>
+                <h2 className="text-lg font-bold text-gray-900">{selectedLead.name}</h2>
                 <div className="flex items-center gap-2 mt-2">
                   <span className={`px-3 py-1 rounded-full text-sm font-bold ${
                      selectedLead.status === 'Novo' ? 'bg-blue-100 text-blue-700' :
@@ -359,7 +357,8 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack })
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-6 overflow-y-auto flex-1">
+              <div className="max-w-4xl mx-auto space-y-6">
               {/* Contact Info */}
               <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
                 <div className="flex items-center gap-3">
@@ -429,9 +428,10 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack })
                   <p>Detalhes das respostas não disponíveis para este lead antigo.</p>
                 </div>
               )}
+              </div>
             </div>
 
-            <div className="p-4 bg-gray-50 rounded-b-2xl border-t border-gray-100 text-right">
+            <div className="p-4 bg-gray-50 border-t border-gray-100 text-right flex-shrink-0">
               <button 
                 onClick={() => setSelectedLead(null)}
                 className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium"

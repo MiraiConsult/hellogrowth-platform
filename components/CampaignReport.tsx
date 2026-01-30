@@ -305,14 +305,12 @@ const CampaignReport: React.FC<CampaignReportProps> = ({ campaignId, campaigns, 
 
       {/* Response Details Panel */}
       {selectedResponse && (
-        <div className="fixed inset-0 z-50 flex print:hidden">
-          {/* Backdrop */}
-          <div className="flex-1 bg-black/20" onClick={() => setSelectedResponse(null)} />
-          {/* Slide-over Panel */}
-          <div className="w-full bg-white shadow-2xl flex flex-col h-full animate-in fade-in duration-300">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 sticky top-0 z-10 flex-shrink-0">
+        <div className="fixed inset-0 z-50 flex items-center justify-center print:hidden bg-black/30">
+          {/* Full Screen Panel */}
+          <div className="w-full h-full bg-white shadow-2xl flex flex-col animate-in fade-in duration-300">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 sticky top-0 z-10 flex-shrink-0">
                   <div>
-                      <h2 className="text-xl font-bold text-gray-900">{selectedResponse.customerName}</h2>
+                      <h2 className="text-lg font-bold text-gray-900">{selectedResponse.customerName}</h2>
                       <div className="flex items-center gap-2 mt-1">
                           <span className={`px-2 py-0.5 rounded text-white text-xs font-bold ${selectedResponse.score>=9?'bg-green-500':selectedResponse.score<=6?'bg-red-500':'bg-yellow-400'}`}>Score: {selectedResponse.score}</span>
                           <span className="text-xs text-gray-500">{selectedResponse.customerEmail}</span>
@@ -321,8 +319,8 @@ const CampaignReport: React.FC<CampaignReportProps> = ({ campaignId, campaigns, 
                   <button onClick={() => setSelectedResponse(null)} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X size={20}/></button>
               </div>
               
-              <div className="p-6 space-y-6 overflow-y-auto flex-1">
-                  
+              <div className="p-6 overflow-y-auto flex-1">
+                <div className="max-w-4xl mx-auto space-y-6">
                   {selectedResponse.answers && Array.isArray(selectedResponse.answers) && selectedResponse.answers.length > 0 && (
                     <div>
                       <h3 className="font-bold text-sm mb-3 text-gray-900 flex items-center gap-2">
@@ -406,8 +404,9 @@ const CampaignReport: React.FC<CampaignReportProps> = ({ campaignId, campaigns, 
                      </div>
                   </div>
 
+                </div>
               </div>
-              <div className="p-4 border-t bg-gray-50 rounded-b-2xl text-right flex-shrink-0">
+              <div className="p-4 border-t bg-gray-50 text-right flex-shrink-0">
                   <button onClick={() => setSelectedResponse(null)} className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 font-medium">Fechar</button>
               </div>
            </div>
