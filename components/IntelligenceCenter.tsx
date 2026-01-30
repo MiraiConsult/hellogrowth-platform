@@ -83,7 +83,7 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
     fetchActions();
   }, [userId]);
 
-  // Helper function to check if a client is completed or dismissed
+  // Helper function to check if a client is completed or dismissed for a specific insight type
   const isClientActive = (clientId: string, insightType: string): boolean => {
     const action = intelligenceActions.find(
       a => a.client_id === clientId && a.insight_type === insightType
@@ -91,8 +91,6 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
     return !action || (action.action_type !== 'completed' && action.action_type !== 'dismissed');
   };
 
-  // Pre-defined consultant questions
-  
   // Handle insight action click
   const handleInsightAction = (actionTarget: string, insightType?: InsightType) => {
     // Map insight types to detail view types
@@ -109,6 +107,12 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
       setShowDetailView(true);
     } else if (actionTarget === 'sales-detail') {
       setDetailViewType('sales');
+      setShowDetailView(true);
+    } else if (actionTarget === 'opportunity-detail') {
+      setDetailViewType('opportunity');
+      setShowDetailView(true);
+    } else if (actionTarget === 'recovery-detail') {
+      setDetailViewType('recovery');
       setShowDetailView(true);
     } else if (insightType && typeMap[insightType]) {
       setDetailViewType(typeMap[insightType]);
@@ -133,77 +137,36 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
     { id: '6', category: 'strategy', question: 'Existe correlação entre pré-venda e satisfação?', icon: 'brain' },
   ];
 
-  // Generate insights based on data - NOW WITH ACTIVE CLIENT FILTERING
+  // Generate insights based on data - WITH ACTIVE CLIENT FILTERING
   const insights = useMemo(() => {
     const generatedInsights: ActionInsight[] = [];
     const now = new Date();
 
     // === OPPORTUNITY INSIGHTS ===
     
-    // High-value leads in negotiation - FILTER ACTIVE ONLY
-    const highValueLeads = leads.filter(l => 
-      l.status === 'Negociação' && 
-      Number(l.value || 0) >= 1000 &&
-      isClientActive(l.id, 'opportunity')
-    );
-    if (highValueLeads.length > 0) {
-      generatedInsights.push({
-        id: 'opp-1',
-        type: 'opportunity',
-        priority: 'high',
-        title: `${highValueLeads.length} leads de alto valor em negociação`,
-        description: `Você tem leads totalizando R$ ${highValueLeads.reduce((acc, l) => acc + Number(l.value || 0), 0).toLocaleString('pt-BR')} prontos para fechar.`,
-        metric: `R$ ${highValueLeads.reduce((acc, l) => acc + Number(l.value || 0), 0).toLocaleString('pt-BR')}`,
-        actionLabel: 'Ver Leads',
-        actionTarget: 'kanban',
-        createdAt: now.toISOString()
-      });
-    }
-
     // Promoters that could be referrals - FILTER ACTIVE ONLY
-    const promoters = npsData.filter(n => 
+    const activePromoters = npsData.filter(n => 
       n.status === 'Promotor' &&
       isClientActive(n.id, 'opportunity')
     );
-    if (promoters.length >= 3) {
+    if (activePromoters.length > 0) {
       generatedInsights.push({
-        id: 'opp-2',
+        id: 'opp-1',
         type: 'opportunity',
-        priority: 'medium',
-        title: `${promoters.length} promotores podem indicar novos clientes`,
+        priority: activePromoters.length >= 5 ? 'high' : 'medium',
+        title: `${activePromoters.length} promotores podem indicar novos clientes`,
         description: 'Clientes satisfeitos são sua melhor fonte de indicações. Considere um programa de referência.',
-        metric: `${promoters.length} promotores`,
+        metric: `${activePromoters.length} promotores`,
         actionLabel: 'Ver Promotores',
-        actionTarget: 'nps',
-        createdAt: now.toISOString()
-      });
-    }
-
-    // Form with high conversion
-    const formSources = leads.reduce((acc, l) => {
-      acc[l.formSource] = (acc[l.formSource] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    
-    const topForm = Object.entries(formSources).sort((a, b) => b[1] - a[1])[0];
-    if (topForm && topForm[1] >= 5) {
-      generatedInsights.push({
-        id: 'opp-3',
-        type: 'opportunity',
-        priority: 'low',
-        title: `Formulário "${topForm[0]}" está gerando mais leads`,
-        description: `Este formulário gerou ${topForm[1]} leads. Considere replicar sua estratégia.`,
-        metric: `${topForm[1]} leads`,
-        actionLabel: 'Ver Formulário',
-        actionTarget: 'forms',
+        actionTarget: 'opportunity-detail',
         createdAt: now.toISOString()
       });
     }
 
     // === RISK INSIGHTS ===
 
-    // Detractors without contact - FILTER ACTIVE ONLY
-    const detractors = npsData.filter(n => 
+    // Detractors - FILTER ACTIVE ONLY
+    const activeDetractors = npsData.filter(n => 
       n.status === 'Detrator' &&
       isClientActive(n.id, 'risk')
     );
@@ -217,50 +180,20 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
     });
     
     // Total de riscos = detratores + leads parados (ATIVOS)
-    const totalRisks = detractors.length + stuckLeads.length;
+    const totalRisks = activeDetractors.length + stuckLeads.length;
     
-    if (detractors.length > 0) {
+    if (totalRisks > 0) {
       generatedInsights.push({
         id: 'risk-1',
         type: 'risk',
-        priority: 'high',
-        title: `${detractors.length} detratores precisam de atenção`,
-        description: 'Clientes insatisfeitos podem prejudicar sua reputação. Entre em contato imediatamente.',
-        metric: `${detractors.length} detratores`,
-        actionLabel: 'Ver Detratores',
-        actionTarget: 'customer-journey',
-        createdAt: now.toISOString()
-      });
-    }
-
-    if (stuckLeads.length > 0) {
-      generatedInsights.push({
-        id: 'risk-2',
-        type: 'risk',
-        priority: 'medium',
+        priority: activeDetractors.length > 0 ? 'high' : 'medium',
         title: `${totalRisks} clientes e leads precisam de atenção`,
-        description: `${detractors.length} detratores + ${stuckLeads.length} leads parados há mais de 7 dias.`,
+        description: activeDetractors.length > 0 
+          ? `${activeDetractors.length} detratores + ${stuckLeads.length} leads parados há mais de 7 dias.`
+          : `${stuckLeads.length} leads parados há mais de 7 dias.`,
         metric: `${totalRisks} total`,
         actionLabel: 'Ver Riscos',
         actionTarget: 'risk-detail',
-        createdAt: now.toISOString()
-      });
-    }
-
-    // Low NPS score
-    const npsScore = npsData.length > 0 
-      ? Math.round(((npsData.filter(n => n.score >= 9).length - npsData.filter(n => n.score <= 6).length) / npsData.length) * 100)
-      : 0;
-    if (npsScore < 50 && npsData.length >= 5) {
-      generatedInsights.push({
-        id: 'risk-3',
-        type: 'risk',
-        priority: 'high',
-        title: `NPS de ${npsScore} está abaixo do ideal`,
-        description: 'Um NPS abaixo de 50 indica problemas na experiência do cliente. Analise os feedbacks.',
-        metric: `NPS ${npsScore}`,
-        actionLabel: 'Ver Análise',
-        actionTarget: 'analytics',
         createdAt: now.toISOString()
       });
     }
@@ -269,95 +202,41 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
 
     // Leads qualificados prontos para fechamento - FILTER ACTIVE ONLY
     const qualifiedLeads = leads.filter(l => 
-      (l.status === 'Em Contato' || l.status === 'Negociação') &&
+      (l.status === 'Novo' || l.status === 'Em Contato' || l.status === 'Negociação') &&
       isClientActive(l.id, 'sales')
     );
     if (qualifiedLeads.length > 0) {
       const totalValue = qualifiedLeads.reduce((acc, l) => acc + Number(l.value || 0), 0);
       generatedInsights.push({
-        id: 'sales-0',
+        id: 'sales-1',
         type: 'sales',
         priority: 'high',
         title: `${qualifiedLeads.length} leads prontos para fechamento`,
         description: `Leads qualificados totalizando R$ ${totalValue.toLocaleString('pt-BR')}. Priorize o contato para fechar negócio.`,
-        metric: `${qualifiedLeads.length} leads`,
+        metric: `R$ ${totalValue.toLocaleString('pt-BR')}`,
         actionLabel: 'Ver Leads',
         actionTarget: 'sales-detail',
         createdAt: now.toISOString()
       });
     }
 
-    // Cross-sell opportunity based on NPS
-    const allPromoters = npsData.filter(n => n.status === 'Promotor');
-    const promoterEmails = new Set(allPromoters.map(p => p.customerEmail?.toLowerCase()));
-    const leadEmails = new Set(leads.map(l => l.email?.toLowerCase()));
-    const crossSellOpportunities = [...promoterEmails].filter(e => e && !leadEmails.has(e));
-    
-    if (crossSellOpportunities.length > 0) {
-      generatedInsights.push({
-        id: 'sales-1',
-        type: 'sales',
-        priority: 'medium',
-        title: `${crossSellOpportunities.length} promotores sem oportunidade ativa`,
-        description: 'Clientes satisfeitos que não estão no funil de vendas podem ter interesse em novos serviços.',
-        metric: `${crossSellOpportunities.length} clientes`,
-        actionLabel: 'Ver Clientes',
-        actionTarget: 'customer-journey',
-        createdAt: now.toISOString()
-      });
-    }
-
-    // Pipeline value
-    const pipelineValue = leads.filter(l => l.status !== 'Vendido' && l.status !== 'Perdido')
-      .reduce((acc, l) => acc + Number(l.value || 0), 0);
-    if (pipelineValue > 0) {
-      generatedInsights.push({
-        id: 'sales-2',
-        type: 'sales',
-        priority: 'low',
-        title: `R$ ${pipelineValue.toLocaleString('pt-BR')} em pipeline`,
-        description: 'Valor total das oportunidades em aberto no seu funil de vendas.',
-        metric: `R$ ${pipelineValue.toLocaleString('pt-BR')}`,
-        actionLabel: 'Ver Pipeline',
-        actionTarget: 'kanban',
-        createdAt: now.toISOString()
-      });
-    }
-
     // === RECOVERY INSIGHTS ===
 
-    // Detractors that could be recovered - FILTER ACTIVE ONLY
-    const recoverableDetractors = npsData.filter(d => 
-      d.score >= 4 && 
-      d.status === 'Detrator' &&
+    // Neutros e Detratores que podem ser recuperados - FILTER ACTIVE ONLY
+    const recoverableClients = npsData.filter(d => 
+      (d.status === 'Neutro' || d.status === 'Detrator') &&
       isClientActive(d.id, 'recovery')
     );
-    if (recoverableDetractors.length > 0) {
+    if (recoverableClients.length > 0) {
       generatedInsights.push({
         id: 'recovery-1',
         type: 'recovery',
-        priority: 'high',
-        title: `${recoverableDetractors.length} detratores com potencial de recuperação`,
-        description: 'Estes clientes deram notas entre 4-6 e podem ser convertidos com atenção adequada.',
-        metric: `${recoverableDetractors.length} clientes`,
+        priority: recoverableClients.filter(c => c.status === 'Detrator').length > 0 ? 'high' : 'medium',
+        title: `${recoverableClients.length} clientes com potencial de recuperação`,
+        description: 'Estes clientes podem ser convertidos em promotores com atenção adequada.',
+        metric: `${recoverableClients.length} clientes`,
         actionLabel: 'Ver Clientes',
-        actionTarget: 'customer-journey',
-        createdAt: now.toISOString()
-      });
-    }
-
-    // Lost leads that could be reactivated
-    const lostLeads = leads.filter(l => l.status === 'Perdido');
-    if (lostLeads.length >= 3) {
-      generatedInsights.push({
-        id: 'recovery-2',
-        type: 'recovery',
-        priority: 'low',
-        title: `${lostLeads.length} leads perdidos para reativar`,
-        description: 'Considere uma campanha de reativação para leads que não converteram.',
-        metric: `${lostLeads.length} leads`,
-        actionLabel: 'Ver Leads',
-        actionTarget: 'kanban',
+        actionTarget: 'recovery-detail',
         createdAt: now.toISOString()
       });
     }
@@ -471,7 +350,7 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
     switch (type) {
       case 'opportunity': return 'bg-green-50 border-green-200 text-green-700';
       case 'risk': return 'bg-red-50 border-red-200 text-red-700';
-      case 'sales': return 'bg-emerald-50 border-blue-200 text-emerald-700';
+      case 'sales': return 'bg-emerald-50 border-emerald-200 text-emerald-700';
       case 'recovery': return 'bg-purple-50 border-purple-200 text-purple-700';
     }
   };
