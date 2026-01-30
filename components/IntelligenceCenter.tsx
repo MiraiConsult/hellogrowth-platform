@@ -1,4 +1,4 @@
-
+'use client';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Lead, NPSResponse, InsightType } from '@/types';
 import InsightDetailView from '@/components/InsightDetailView';
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { supabase } from '@/lib/supabase';
 
 interface ActionInsight {
   id: string;
@@ -27,6 +28,13 @@ interface ConsultantQuestion {
   category: 'sales' | 'satisfaction' | 'strategy' | 'operations';
   question: string;
   icon: string;
+}
+
+interface IntelligenceAction {
+  id: string;
+  client_id: string;
+  insight_type: string;
+  action_type: string;
 }
 
 interface IntelligenceCenterProps {
@@ -52,6 +60,36 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
   const [selectedQuestion, setSelectedQuestion] = useState<ConsultantQuestion | null>(null);
   const [showDetailView, setShowDetailView] = useState(false);
   const [detailViewType, setDetailViewType] = useState<'risk' | 'opportunity' | 'sales' | 'recovery' | null>(null);
+  const [intelligenceActions, setIntelligenceActions] = useState<IntelligenceAction[]>([]);
+
+  // Fetch intelligence actions to filter completed/dismissed clients
+  useEffect(() => {
+    const fetchActions = async () => {
+      if (!supabase || !userId) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('intelligence_actions')
+          .select('id, client_id, insight_type, action_type')
+          .eq('user_id', userId);
+        
+        if (error) throw error;
+        setIntelligenceActions(data || []);
+      } catch (error) {
+        console.error('Error fetching intelligence actions:', error);
+      }
+    };
+    
+    fetchActions();
+  }, [userId]);
+
+  // Helper function to check if a client is completed or dismissed
+  const isClientActive = (clientId: string, insightType: string): boolean => {
+    const action = intelligenceActions.find(
+      a => a.client_id === clientId && a.insight_type === insightType
+    );
+    return !action || (action.action_type !== 'completed' && action.action_type !== 'dismissed');
+  };
 
   // Pre-defined consultant questions
   
@@ -95,25 +133,26 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
     { id: '6', category: 'strategy', question: 'Existe correlação entre pré-venda e satisfação?', icon: 'brain' },
   ];
 
-  // Generate insights based on data
+  // Generate insights based on data - NOW WITH ACTIVE CLIENT FILTERING
   const insights = useMemo(() => {
     const generatedInsights: ActionInsight[] = [];
     const now = new Date();
 
     // === OPPORTUNITY INSIGHTS ===
     
-    // High-value leads in negotiation
-    // FIX: Ensure l.value is treated as a number for comparison
-    const highValueLeads = leads.filter(l => l.status === 'Negociação' && Number(l.value || 0) >= 1000);
+    // High-value leads in negotiation - FILTER ACTIVE ONLY
+    const highValueLeads = leads.filter(l => 
+      l.status === 'Negociação' && 
+      Number(l.value || 0) >= 1000 &&
+      isClientActive(l.id, 'opportunity')
+    );
     if (highValueLeads.length > 0) {
       generatedInsights.push({
         id: 'opp-1',
         type: 'opportunity',
         priority: 'high',
         title: `${highValueLeads.length} leads de alto valor em negociação`,
-        // FIX: Ensure l.value is treated as a number for arithmetic operation
         description: `Você tem leads totalizando R$ ${highValueLeads.reduce((acc, l) => acc + Number(l.value || 0), 0).toLocaleString('pt-BR')} prontos para fechar.`,
-        // FIX: Ensure l.value is treated as a number for arithmetic operation
         metric: `R$ ${highValueLeads.reduce((acc, l) => acc + Number(l.value || 0), 0).toLocaleString('pt-BR')}`,
         actionLabel: 'Ver Leads',
         actionTarget: 'kanban',
@@ -121,8 +160,11 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
       });
     }
 
-    // Promoters that could be referrals
-    const promoters = npsData.filter(n => n.status === 'Promotor');
+    // Promoters that could be referrals - FILTER ACTIVE ONLY
+    const promoters = npsData.filter(n => 
+      n.status === 'Promotor' &&
+      isClientActive(n.id, 'opportunity')
+    );
     if (promoters.length >= 3) {
       generatedInsights.push({
         id: 'opp-2',
@@ -160,8 +202,23 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
 
     // === RISK INSIGHTS ===
 
-    // Detractors without contact
-    const detractors = npsData.filter(n => n.status === 'Detrator');
+    // Detractors without contact - FILTER ACTIVE ONLY
+    const detractors = npsData.filter(n => 
+      n.status === 'Detrator' &&
+      isClientActive(n.id, 'risk')
+    );
+    
+    // Leads stuck (any status, not just "Novo") - FILTER ACTIVE ONLY
+    const stuckLeads = leads.filter(l => {
+      if (l.status === 'Vendido' || l.status === 'Perdido') return false;
+      if (!isClientActive(l.id, 'risk')) return false;
+      const daysSince = Math.floor((now.getTime() - new Date(l.date).getTime()) / (1000 * 60 * 60 * 24));
+      return daysSince > 7;
+    });
+    
+    // Total de riscos = detratores + leads parados (ATIVOS)
+    const totalRisks = detractors.length + stuckLeads.length;
+    
     if (detractors.length > 0) {
       generatedInsights.push({
         id: 'risk-1',
@@ -176,17 +233,6 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
       });
     }
 
-    // Leads stuck (any status, not just "Novo")
-    const stuckLeads = leads.filter(l => {
-// FIX: The status 'Convertido' does not exist in the Lead type. The correct status is 'Vendido'.
-      if (l.status === 'Vendido' || l.status === 'Perdido') return false;
-      const daysSince = Math.floor((now.getTime() - new Date(l.date).getTime()) / (1000 * 60 * 60 * 24));
-      return daysSince > 7;
-    });
-    
-    // Total de riscos = detratores + leads parados
-    const totalRisks = detractors.length + stuckLeads.length;
-    
     if (stuckLeads.length > 0) {
       generatedInsights.push({
         id: 'risk-2',
@@ -221,11 +267,12 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
 
     // === SALES INSIGHTS ===
 
-    // Leads qualificados prontos para fechamento
-// FIX: The status 'Qualificado' does not exist in the Lead type. Using 'Em Contato' as a replacement to find qualified leads.
-    const qualifiedLeads = leads.filter(l => l.status === 'Em Contato' || l.status === 'Negociação');
+    // Leads qualificados prontos para fechamento - FILTER ACTIVE ONLY
+    const qualifiedLeads = leads.filter(l => 
+      (l.status === 'Em Contato' || l.status === 'Negociação') &&
+      isClientActive(l.id, 'sales')
+    );
     if (qualifiedLeads.length > 0) {
-      // FIX: Ensure l.value is treated as a number for arithmetic operation. This fixes errors on line 140.
       const totalValue = qualifiedLeads.reduce((acc, l) => acc + Number(l.value || 0), 0);
       generatedInsights.push({
         id: 'sales-0',
@@ -241,7 +288,8 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
     }
 
     // Cross-sell opportunity based on NPS
-    const promoterEmails = new Set(promoters.map(p => p.customerEmail?.toLowerCase()));
+    const allPromoters = npsData.filter(n => n.status === 'Promotor');
+    const promoterEmails = new Set(allPromoters.map(p => p.customerEmail?.toLowerCase()));
     const leadEmails = new Set(leads.map(l => l.email?.toLowerCase()));
     const crossSellOpportunities = [...promoterEmails].filter(e => e && !leadEmails.has(e));
     
@@ -261,7 +309,6 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
 
     // Pipeline value
     const pipelineValue = leads.filter(l => l.status !== 'Vendido' && l.status !== 'Perdido')
-      // FIX: Ensure l.value is treated as a number for arithmetic operation
       .reduce((acc, l) => acc + Number(l.value || 0), 0);
     if (pipelineValue > 0) {
       generatedInsights.push({
@@ -279,8 +326,12 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
 
     // === RECOVERY INSIGHTS ===
 
-    // Detractors that could be recovered
-    const recoverableDetractors = detractors.filter(d => d.score >= 4);
+    // Detractors that could be recovered - FILTER ACTIVE ONLY
+    const recoverableDetractors = npsData.filter(d => 
+      d.score >= 4 && 
+      d.status === 'Detrator' &&
+      isClientActive(d.id, 'recovery')
+    );
     if (recoverableDetractors.length > 0) {
       generatedInsights.push({
         id: 'recovery-1',
@@ -312,7 +363,7 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
     }
 
     return generatedInsights;
-  }, [leads, npsData]);
+  }, [leads, npsData, intelligenceActions]);
 
   // Filtered insights
   const filteredInsights = useMemo(() => {
@@ -332,7 +383,6 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
       }
       const data = monthlyData.get(month)!;
       data.leads++;
-      // FIX: Ensure l.value is treated as a number for arithmetic operation
       data.value += Number(l.value || 0);
     });
 
