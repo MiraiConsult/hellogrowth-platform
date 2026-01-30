@@ -1,59 +1,51 @@
-# Instruções de Deploy - Ajustes Estratégico HelloGrowth
+# Deploy - Minha Presença Digital + Remoção Jornada do Cliente
 
-## Arquivos Modificados
+## Alterações Realizadas
 
-Os seguintes arquivos foram atualizados com os 6 ajustes solicitados:
+### 1. Nova Tela "Minha Presença Digital"
+A tela foi completamente refeita para:
+- **Buscar dados reais do Google** via Google Places API
+- **Analisar com IA (Gemini)** para gerar insights personalizados
+- **Mostrar pontos fortes e fracos** do perfil
+- **Gerar recomendações específicas** de melhoria
+- **Exibir últimas avaliações** do Google
 
-1. **InsightDetailView.tsx** - Componente de detalhes do cliente
-2. **IntelligenceCenter.tsx** - Componente principal do Centro de Inteligência
+### 2. Remoção da "Jornada do Cliente"
+- Removida do menu de navegação
+- Removida do MainApp
+- Referências atualizadas no IntelligenceCenter
 
-## Ajustes Implementados
+## Arquivos para Deploy
 
-| # | Ajuste | Descrição |
-|---|--------|-----------|
-| 1 | Contagem desconsiderando concluídos | Os cards de insight agora mostram apenas clientes ativos (não concluídos/dispensados) |
-| 2 | Corrigir discrepância 9 vs 7 | A contagem está alinhada entre os componentes |
-| 3 | Reorganizar layout | Tela de detalhes mais compacta, mensagens na posição correta |
-| 4 | Coach IA nos detalhes | Botão "Coach de Vendas IA" agora aparece dentro da tela de detalhes |
-| 5 | Botão Salvar anotações | Botão explícito com exibição de data/hora da última atualização |
-| 6 | Histórico de interações | Nova seção que registra todas as atividades do cliente |
+### Pasta `components/` (substituir)
+- `DigitalDiagnostic.tsx` - Nova tela de presença digital
+- `Navigation.tsx` - Menu sem Jornada do Cliente
+- `MainApp.tsx` - Sem referência à CustomerJourney
+- `IntelligenceCenter.tsx` - Atualizado
 
-## Tabela Criada no Supabase
+### Pasta `app/api/google-places/` (criar)
+- `route.ts` - API para buscar dados do Google Places
 
-Uma nova tabela `interaction_history` foi criada automaticamente no banco de dados para armazenar o histórico de interações. Não é necessária nenhuma ação adicional.
+## Configuração
 
-## Passos para Deploy via GitHub Desktop
+O arquivo `.env.local` já está incluído com a chave do Google Places API configurada:
+```
+GOOGLE_PLACES_API_KEY=AIzaSyBsyDdAB-ZzDr9Grw0xpAfSUOPngM37Qnk
+```
 
-### 1. Abrir o repositório no GitHub Desktop
-- Abra o GitHub Desktop
-- Selecione o repositório `hellogrowth-platform`
+**Importante**: Substitua o `.env.local` existente pelo novo arquivo incluído neste pacote.
 
-### 2. Substituir os arquivos
-Copie os dois arquivos desta pasta para a pasta `components/` do seu repositório local:
-- `InsightDetailView.tsx` → `components/InsightDetailView.tsx`
-- `IntelligenceCenter.tsx` → `components/IntelligenceCenter.tsx`
+## Passos para Deploy
 
-### 3. Commit das alterações
-- No GitHub Desktop, você verá as alterações nos dois arquivos
-- Escreva uma mensagem de commit, por exemplo: "Ajustes na parte Estratégico - contagem, layout, Coach IA, histórico"
-- Clique em "Commit to main"
+1. Extraia os arquivos do ZIP
+2. Copie os arquivos `.tsx` para `components/`
+3. Crie a pasta `app/api/google-places/` e copie `route.ts`
+4. (Opcional) Adicione `GOOGLE_PLACES_API_KEY` no `.env.local`
+5. Faça commit e push no GitHub Desktop
+6. A Vercel fará o deploy automaticamente
 
-### 4. Push para o GitHub
-- Clique em "Push origin" para enviar as alterações
+## Notas
 
-### 5. Deploy automático na Vercel
-- A Vercel detectará automaticamente as alterações e fará o deploy
-- Aguarde alguns minutos e acesse: https://hellogrowth-platform1-mirai-consult.vercel.app
-
-## Verificação Pós-Deploy
-
-Após o deploy, verifique os seguintes pontos:
-
-1. **Centro de Inteligência** - Os cards devem mostrar apenas clientes ativos
-2. **Tela de Detalhes** - O botão "Coach de Vendas IA" deve aparecer no topo da coluna direita
-3. **Anotações** - Deve haver um botão "Salvar" e a data da última atualização
-4. **Histórico** - Clique em "Histórico de Interações" para expandir e ver as atividades registradas
-
-## Suporte
-
-Em caso de dúvidas ou problemas, entre em contato.
+- A tabela `digital_diagnostics` já foi atualizada no Supabase com os novos campos
+- Se não configurar a API do Google, o sistema ainda funciona com análise básica
+- O Gemini já está configurado e será usado para gerar análises

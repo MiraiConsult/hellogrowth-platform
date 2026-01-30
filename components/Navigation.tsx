@@ -17,7 +17,6 @@ import {
   Database, 
   Lightbulb, 
   Activity, 
-  Route,
   Sparkles,
   Crown,
   Brain
@@ -97,7 +96,6 @@ const Navigation: React.FC<NavigationProps> = ({
       children: [
         { id: 'nps', label: 'Pesquisas NPS', icon: Star, requiredPlan: 'rating' },
         { id: 'analytics', label: 'Análise Feedback', icon: BarChart3, requiredPlan: 'rating' },
-        { id: 'customer-journey', label: 'Jornada do Cliente', icon: Route, requiredPlan: 'rating' },
       ]
     },
     {

@@ -121,8 +121,6 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
       onNavigate('kanban');
     } else if (actionTarget === 'nps' || actionTarget === 'analytics') {
       onNavigate('nps-analytics');
-    } else if (actionTarget === 'customer-journey') {
-      onNavigate('customer-journey');
     } else if (actionTarget === 'forms') {
       onNavigate('form-list');
     }
@@ -583,8 +581,8 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h3 className="font-bold text-gray-900 mb-4">Ações Rápidas</h3>
             <div className="space-y-2">
-              <button onClick={() => onNavigate('customer-journey', { status: 'Detrator' })} className="w-full px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center justify-center gap-2">
-                <Phone size={18} /> Contatar Detratores
+              <button onClick={() => onNavigate('analytics')} className="w-full px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center justify-center gap-2">
+                <Phone size={18} /> Ver Detratores
               </button>
               <button onClick={() => onNavigate('nps-campaigns')} className="w-full px-4 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2">
                 <Mail size={18} /> Enviar Pesquisa NPS

@@ -20,7 +20,7 @@ import OnboardingTour from '@/components/OnboardingTour';
 import DatabaseExport from '@/components/DatabaseExport';
 // NEW IMPORTS FOR HELLO GROWTH 2.0
 import DigitalDiagnostic from '@/components/DigitalDiagnostic';
-import CustomerJourney from '@/components/CustomerJourney';
+// CustomerJourney removed
 import IntelligenceCenter from '@/components/IntelligenceCenter';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { mockSettings } from '@/services/mockData';
@@ -41,7 +41,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
   // Sempre inicia no dashboard, independente do plano
   const [currentView, setCurrentView] = useState('dashboard');
-  const [customerJourneyFilter, setCustomerJourneyFilter] = useState<any>(null);
+
   
   // View States
   const [previewCampaignId, setPreviewCampaignId] = useState<string | null>(null);
@@ -466,10 +466,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
      setIsPreviewMode(false);
   };
 
-  // --- Navigation helpers for new features ---
-  const handleNavigateToCustomerJourney = (email?: string) => {
-    setCurrentView('customer-journey');
-  };
+
 
   // --- RENDER ---
 
@@ -627,20 +624,11 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         )}
 
         {/* NEW VIEWS FOR HELLO GROWTH 2.0 */}
-        {currentView === 'customer-journey' && (
-          <CustomerJourney 
-            userId={currentUser.id}
-            npsData={npsData}
-            initialFilter={customerJourneyFilter}
-            onRefreshNPS={fetchData}
-          />
-        )}
-
         {currentView === 'intelligence-center' && (
           <IntelligenceCenter 
             leads={leads}
             npsData={npsData}
-            onNavigateToCustomer={handleNavigateToCustomerJourney}
+
             onNavigate={handleNavigateWithFilter}
             userId={currentUser.id}
           />
