@@ -20,42 +20,61 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const fields = [
-      'name',
-      'formatted_address',
-      'formatted_phone_number',
-      'website',
-      'rating',
-      'user_ratings_total',
-      'reviews',
-      'opening_hours',
-      'photos',
-      'types',
-      'business_status',
-      'url',
-      'price_level'
-    ].join(',');
+    // Use the NEW Places API (v1)
+    const url = `https://places.googleapis.com/v1/places/${placeId}`;
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask': 'id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,rating,userRatingCount,reviews,regularOpeningHours,photos,types,businessStatus,googleMapsUri'
+    };
 
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=${fields}&language=pt-BR&key=${apiKey}`
-    );
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: headers
+    });
 
     if (!response.ok) {
-      throw new Error('Failed to fetch from Google Places API');
+      const errorData = await response.json();
+      return NextResponse.json({
+        result: null,
+        status: 'ERROR',
+        message: errorData.error?.message || 'Failed to fetch place data'
+      }, { status: response.status });
     }
 
     const data = await response.json();
 
-    if (data.status !== 'OK') {
-      return NextResponse.json({
-        result: null,
-        status: data.status,
-        message: data.error_message || 'Error fetching place data'
-      });
-    }
+    // Transform NEW API format to match old format for compatibility
+    const transformedResult = {
+      name: data.displayName?.text || '',
+      formatted_address: data.formattedAddress || '',
+      formatted_phone_number: data.nationalPhoneNumber || '',
+      website: data.websiteUri || '',
+      rating: data.rating || 0,
+      user_ratings_total: data.userRatingCount || 0,
+      reviews: data.reviews?.map((review: any) => ({
+        author_name: review.authorAttribution?.displayName || 'Anônimo',
+        rating: review.rating || 0,
+        text: review.text?.text || '',
+        time: review.publishTime ? new Date(review.publishTime).getTime() / 1000 : 0,
+        relative_time_description: review.relativePublishTimeDescription || ''
+      })) || [],
+      opening_hours: data.regularOpeningHours ? {
+        open_now: data.regularOpeningHours.openNow || false,
+        weekday_text: data.regularOpeningHours.weekdayDescriptions || []
+      } : undefined,
+      photos: data.photos?.map((photo: any) => ({
+        photo_reference: photo.name || ''
+      })) || [],
+      types: data.types || [],
+      business_status: data.businessStatus || 'OPERATIONAL',
+      url: data.googleMapsUri || '',
+      price_level: 0 // Not available in new API
+    };
 
     return NextResponse.json({
-      result: data.result,
+      result: transformedResult,
       status: 'OK'
     });
 
