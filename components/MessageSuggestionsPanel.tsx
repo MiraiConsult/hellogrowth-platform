@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, Sparkles, MessageSquare, Mail, Phone, Send, Loader2, AlertCircle } from 'lucide-react';
-import { getMessageSuggestions, MessageSuggestion, ClientContext } from '@/components/MessageSuggestionEngine';
+import { Copy, Check, Sparkles, MessageSquare, Mail, Phone, Send, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { 
+  getMessageSuggestions, 
+  getAvailableMessageTypes, 
+  generateMessageSuggestion,
+  MessageSuggestion, 
+  ClientContext 
+} from '@/components/MessageSuggestionEngine';
 import { supabase } from '@/lib/supabase';
 
 interface MessageSuggestionsPanelProps {
@@ -24,19 +30,31 @@ interface MessageSuggestionsPanelProps {
   showSendButtons?: boolean;
 }
 
+interface MessageTypeOption {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  tone: string;
+  priority: number;
+}
+
 export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = ({ 
   client, 
   insightType, 
   onMessageSelect,
   showSendButtons = true 
 }) => {
-  const [suggestions, setSuggestions] = useState<MessageSuggestion[]>([]);
-  const [selectedSuggestion, setSelectedSuggestion] = useState<MessageSuggestion | null>(null);
+  const [messageTypes, setMessageTypes] = useState<MessageTypeOption[]>([]);
+  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
+  const [generatedMessage, setGeneratedMessage] = useState<MessageSuggestion | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isGmailConnected, setIsGmailConnected] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendSuccess, setSendSuccess] = useState(false);
+  const [clientContext, setClientContext] = useState<ClientContext | null>(null);
 
   useEffect(() => {
     // Calcular dias desde último contato
@@ -61,18 +79,60 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
       insightType,
     };
 
-    // Gerar sugestões
-    const generatedSuggestions = getMessageSuggestions(context);
-    setSuggestions(generatedSuggestions);
+    setClientContext(context);
+
+    // Obter tipos de mensagem disponíveis
+    const availableTypes = getAvailableMessageTypes(context);
+    setMessageTypes(availableTypes.map(t => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      icon: t.icon,
+      tone: t.tone,
+      priority: t.priority
+    })));
     
-    // Selecionar primeira sugestão por padrão
-    if (generatedSuggestions.length > 0) {
-      setSelectedSuggestion(generatedSuggestions[0]);
-      onMessageSelect?.(generatedSuggestions[0]);
+    // Selecionar primeiro tipo por padrão e gerar mensagem
+    if (availableTypes.length > 0) {
+      setSelectedTypeId(availableTypes[0].id);
+      generateMessage(context, availableTypes[0].id);
     }
 
     checkGmailConnection();
   }, [client, insightType]);
+
+  const generateMessage = async (context: ClientContext, typeId: string) => {
+    setIsGenerating(true);
+    setGeneratedMessage(null);
+    
+    try {
+      const message = await generateMessageSuggestion(context, typeId);
+      setGeneratedMessage(message);
+      onMessageSelect?.(message);
+    } catch (error) {
+      console.error('Erro ao gerar mensagem:', error);
+      // Fallback para mensagem básica
+      const fallbackSuggestions = getMessageSuggestions(context);
+      const fallback = fallbackSuggestions.find(s => s.id === typeId) || fallbackSuggestions[0];
+      setGeneratedMessage(fallback);
+      onMessageSelect?.(fallback);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleSelectType = async (typeId: string) => {
+    setSelectedTypeId(typeId);
+    if (clientContext) {
+      await generateMessage(clientContext, typeId);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (clientContext && selectedTypeId) {
+      await generateMessage(clientContext, selectedTypeId);
+    }
+  };
 
   const checkGmailConnection = async () => {
     try {
@@ -91,11 +151,6 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
     }
   };
 
-  const handleSelectSuggestion = (suggestion: MessageSuggestion) => {
-    setSelectedSuggestion(suggestion);
-    onMessageSelect?.(suggestion);
-  };
-
   const handleCopy = async (text: string, field: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -107,7 +162,7 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
   };
 
   const handleSendWhatsApp = () => {
-    if (!selectedSuggestion || !client.phone) {
+    if (!generatedMessage || !client.phone) {
       alert('Cliente não possui telefone cadastrado ou nenhuma mensagem selecionada.');
       return;
     }
@@ -116,12 +171,12 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
       alert('Telefone inválido.');
       return;
     }
-    const message = encodeURIComponent(selectedSuggestion.whatsappMessage);
+    const message = encodeURIComponent(generatedMessage.whatsappMessage);
     window.open(`https://wa.me/55${phone}?text=${message}`, '_blank');
   };
 
   const handleSendEmail = async () => {
-    if (!selectedSuggestion || !client.email) {
+    if (!generatedMessage || !client.email) {
       alert('Cliente não possui email cadastrado ou nenhuma mensagem selecionada.');
       return;
     }
@@ -137,8 +192,8 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             to: client.email,
-            subject: selectedSuggestion.emailSubject,
-            content: selectedSuggestion.emailBody
+            subject: generatedMessage.emailSubject,
+            content: generatedMessage.emailBody
           })
         });
 
@@ -155,8 +210,8 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
         setIsSendingEmail(false);
       }
     } else {
-      const subject = encodeURIComponent(selectedSuggestion.emailSubject);
-      const body = encodeURIComponent(selectedSuggestion.emailBody);
+      const subject = encodeURIComponent(generatedMessage.emailSubject);
+      const body = encodeURIComponent(generatedMessage.emailBody);
       window.open(`mailto:${client.email}?subject=${subject}&body=${body}`, '_blank');
     }
   };
@@ -183,25 +238,14 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
     }
   };
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'recovery': return 'text-red-700 bg-red-50 border-red-200';
-      case 'sales': return 'text-green-700 bg-green-50 border-green-200';
-      case 'relationship': return 'text-blue-700 bg-blue-50 border-blue-200';
-      case 'followup': return 'text-yellow-700 bg-yellow-50 border-yellow-200';
-      case 'offer': return 'text-purple-700 bg-purple-50 border-purple-200';
-      default: return 'text-gray-700 bg-gray-50 border-gray-200';
-    }
-  };
-
-  if (suggestions.length === 0) {
+  if (messageTypes.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center gap-2 mb-4">
           <Sparkles className="w-5 h-5 text-purple-600" />
           <h3 className="text-lg font-semibold text-gray-900">Sugestões de Mensagens IA</h3>
         </div>
-        <p className="text-gray-600">Carregando sugestões...</p>
+        <p className="text-gray-600">Carregando opções...</p>
       </div>
     );
   }
@@ -215,7 +259,7 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={handleSendWhatsApp}
-              disabled={!client.phone || !selectedSuggestion}
+              disabled={!client.phone || !generatedMessage || isGenerating}
               className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium transition-colors"
             >
               <Phone size={18} />
@@ -224,7 +268,7 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
             <div className="flex flex-col gap-1">
               <button
                 onClick={handleSendEmail}
-                disabled={!client.email || !selectedSuggestion || isSendingEmail}
+                disabled={!client.email || !generatedMessage || isSendingEmail || isGenerating}
                 className={`px-4 py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors ${
                   isGmailConnected 
                     ? 'bg-red-600 text-white hover:bg-red-700' 
@@ -245,7 +289,7 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="w-5 h-5 text-purple-600" />
         <h3 className="text-lg font-semibold text-gray-900">Sugestões de Mensagens IA</h3>
-        <span className="ml-auto text-sm text-gray-500">{suggestions.length} sugestões</span>
+        <span className="ml-auto text-sm text-gray-500">{messageTypes.length} sugestões</span>
       </div>
 
       {/* Tipos de Mensagem */}
@@ -254,28 +298,30 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
           Escolha o tipo de mensagem:
         </label>
         <div className="grid grid-cols-1 gap-2">
-          {suggestions.map((suggestion) => (
+          {messageTypes.map((type) => (
             <button
-              key={suggestion.id}
-              onClick={() => handleSelectSuggestion(suggestion)}
+              key={type.id}
+              onClick={() => handleSelectType(type.id)}
+              disabled={isGenerating}
               className={`
                 p-3 rounded-lg border-2 text-left transition-all
-                ${selectedSuggestion?.id === suggestion.id
-                  ? getTypeColor(suggestion.type) + ' border-current shadow-md'
+                ${selectedTypeId === type.id
+                  ? 'border-purple-500 bg-purple-50 shadow-md'
                   : 'border-gray-200 hover:border-gray-300 bg-white'
                 }
+                ${isGenerating ? 'opacity-50 cursor-wait' : ''}
               `}
             >
               <div className="flex items-start gap-3">
-                <span className="text-2xl">{suggestion.icon}</span>
+                <span className="text-2xl">{type.icon}</span>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-semibold text-gray-900">{suggestion.title}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${getToneColor(suggestion.tone)}`}>
-                      {getToneLabel(suggestion.tone)}
+                    <span className="font-semibold text-gray-900">{type.title}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${getToneColor(type.tone)}`}>
+                      {getToneLabel(type.tone)}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600">{suggestion.description}</p>
+                  <p className="text-sm text-gray-600">{type.description}</p>
                 </div>
               </div>
             </button>
@@ -283,9 +329,26 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
         </div>
       </div>
 
-      {/* Mensagens Geradas */}
-      {selectedSuggestion && (
+      {/* Mensagem Gerada */}
+      {isGenerating ? (
+        <div className="flex flex-col items-center justify-center py-8 gap-3">
+          <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+          <p className="text-gray-600 text-sm">Gerando mensagem personalizada com IA...</p>
+          <p className="text-gray-400 text-xs">Analisando respostas do cliente</p>
+        </div>
+      ) : generatedMessage ? (
         <div className="space-y-4">
+          {/* Botão Regenerar */}
+          <div className="flex justify-end">
+            <button
+              onClick={handleRegenerate}
+              className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-700 font-medium"
+            >
+              <RefreshCw size={14} />
+              Gerar nova versão
+            </button>
+          </div>
+
           {/* WhatsApp */}
           <div className="bg-green-50 rounded-lg p-4 border border-green-200">
             <div className="flex items-center justify-between mb-2">
@@ -294,23 +357,25 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
                 <span className="font-medium text-green-900">Mensagem WhatsApp</span>
               </div>
               <button
-                onClick={() => handleCopy(selectedSuggestion.whatsappMessage, 'whatsapp')}
-                className="flex items-center gap-1 px-3 py-1 text-sm text-green-700 hover:bg-green-100 rounded-lg transition-colors"
+                onClick={() => handleCopy(generatedMessage.whatsappMessage, 'whatsapp')}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-green-700 hover:bg-green-100 rounded transition-colors"
               >
                 {copiedField === 'whatsapp' ? (
                   <>
-                    <Check className="w-4 h-4" />
+                    <Check className="w-3 h-3" />
                     Copiado!
                   </>
                 ) : (
                   <>
-                    <Copy className="w-4 h-4" />
+                    <Copy className="w-3 h-3" />
                     Copiar
                   </>
                 )}
               </button>
             </div>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedSuggestion.whatsappMessage}</p>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+              {generatedMessage.whatsappMessage}
+            </p>
           </div>
 
           {/* Email */}
@@ -321,17 +386,17 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
                 <span className="font-medium text-blue-900">Email</span>
               </div>
               <button
-                onClick={() => handleCopy(`Assunto: ${selectedSuggestion.emailSubject}\n\n${selectedSuggestion.emailBody}`, 'email')}
-                className="flex items-center gap-1 px-3 py-1 text-sm text-blue-700 hover:bg-blue-100 rounded-lg transition-colors"
+                onClick={() => handleCopy(`Assunto: ${generatedMessage.emailSubject}\n\n${generatedMessage.emailBody}`, 'email')}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100 rounded transition-colors"
               >
                 {copiedField === 'email' ? (
                   <>
-                    <Check className="w-4 h-4" />
+                    <Check className="w-3 h-3" />
                     Copiado!
                   </>
                 ) : (
                   <>
-                    <Copy className="w-4 h-4" />
+                    <Copy className="w-3 h-3" />
                     Copiar
                   </>
                 )}
@@ -339,32 +404,19 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
             </div>
             <div className="space-y-2">
               <div>
-                <span className="text-xs font-medium text-blue-700">Assunto:</span>
-                <p className="text-sm text-gray-700 font-medium">{selectedSuggestion.emailSubject}</p>
+                <span className="text-xs text-blue-600 font-medium">Assunto:</span>
+                <p className="text-sm text-gray-900 font-medium">{generatedMessage.emailSubject}</p>
               </div>
               <div>
-                <span className="text-xs font-medium text-blue-700">Corpo:</span>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedSuggestion.emailBody}</p>
+                <span className="text-xs text-blue-600 font-medium">Corpo:</span>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mt-1">
+                  {generatedMessage.emailBody}
+                </p>
               </div>
             </div>
           </div>
-
-          {/* Dica */}
-          {!isGmailConnected && (
-            <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-orange-600 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-xs font-medium text-orange-900 mb-1">Gmail não conectado:</p>
-                  <p className="text-xs text-orange-700">
-                    Conecte seu Gmail nas configurações para enviar emails diretamente pela plataforma sem precisar copiar e colar.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 };
