@@ -139,6 +139,8 @@ interface ClientAnalysis {
   daysSinceAction?: number;
   notes?: string;
   notesLastSaved?: string;
+  originalAnswers?: any;
+  comment?: string;
 }
 
 // ============================================
@@ -352,7 +354,9 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
       lastActionDate,
       daysSinceAction,
       notes: clientAction?.notes,
-      notesLastSaved: clientAction?.updated_at
+      notesLastSaved: clientAction?.updated_at,
+      originalAnswers: isLead ? (data as Lead).answers : undefined,
+      comment: !isLead ? (data as NPSResponse).comment : undefined
     };
   };
 
@@ -446,10 +450,18 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
 
   const getResponses = (data: any, type: string): any[] => {
     if (type === 'lead') {
-      const answers = data.answers ? Object.values(data.answers).map((ans: any) => ({ question: ans.questionText || 'Pergunta', answer: ans.value })) : [];
+      const answers = data.answers ? Object.entries(data.answers).map(([key, ans]: [string, any]) => {
+        // Tenta obter o texto da pergunta de várias formas
+        const questionText = ans.questionText || ans.question || ans.label || key;
+        const answerValue = ans.value !== undefined ? ans.value : (ans.answer || ans.text || ans);
+        return { 
+          question: questionText, 
+          answer: answerValue 
+        };
+      }) : [];
       return [
         ...answers,
-        { question: 'Valor estimado', answer: `R$ ${data.value}` },
+        { question: 'Valor estimado', answer: `R$ ${data.value || 0}` },
         { question: 'Status', answer: data.status },
         { question: 'Notas', answer: data.notes || 'Sem notas' }
       ];
@@ -866,13 +878,13 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
                   type: selectedClient.type,
                   score: selectedClient.score,
                   status: selectedClient.status,
-                  comment: selectedClient.responses.find(r => 
+                  comment: selectedClient.comment || selectedClient.responses.find(r => 
                     typeof r.question === 'string' && r.question.toLowerCase().includes('comentário')
                   )?.answer,
                   leadStatus: selectedClient.type === 'lead' ? selectedClient.status : undefined,
                   value: selectedClient.value,
                   lastInteraction: selectedClient.lastInteraction,
-                  answers: selectedClient.responses
+                  answers: selectedClient.originalAnswers || selectedClient.responses
                 }}
                 insightType={insightType}
               />
