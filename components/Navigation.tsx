@@ -19,7 +19,8 @@ import {
   Activity, 
   Sparkles,
   Crown,
-  Brain
+  Brain,
+  Package
 } from 'lucide-react';
 import { PlanType } from '@/types';
 
@@ -85,6 +86,7 @@ const Navigation: React.FC<NavigationProps> = ({
         { id: 'kanban', label: 'Oportunidades', icon: Users, requiredPlan: 'client' },
         { id: 'sales-analytics', label: 'Análise de Vendas', icon: PieChart, requiredPlan: 'client' },
         { id: 'forms', label: 'Formulários', icon: CheckSquare, requiredPlan: 'client' },
+        { id: 'products', label: 'Produtos/Serviços', icon: Package, requiredPlan: 'client', isNew: true, badge: 'Novo' },
       ]
     },
     {
