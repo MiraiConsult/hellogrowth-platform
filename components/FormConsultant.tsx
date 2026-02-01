@@ -145,10 +145,14 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
     fetchProducts();
   }, [supabase, userId]);
 
-  // Auto-scroll chat
+  // Auto-scroll chat - rola para o final sempre que uma nova mensagem é adicionada
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatMessages, isTyping]);
 
   // Initialize chat with welcome message
   useEffect(() => {
@@ -830,8 +834,10 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
         renderCompleteScreen()
       ) : (
         <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full">
-          {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Chat Messages - Container com scroll estilo WhatsApp */}
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6">
+            <div className="min-h-full flex flex-col justify-end">
+            <div className="space-y-6">
             {chatMessages.map(renderMessage)}
             
             {isTyping && (
@@ -850,6 +856,8 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
             )}
             
             <div ref={chatEndRef} />
+            </div>
+            </div>
           </div>
 
           {/* Input Area */}
