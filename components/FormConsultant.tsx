@@ -833,30 +833,32 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
       ) : currentStep === 'complete' ? (
         renderCompleteScreen()
       ) : (
-        <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full">
-          {/* Chat Messages - Container com scroll estilo WhatsApp */}
-          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6">
-            <div className="min-h-full flex flex-col justify-end">
+        <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full overflow-hidden">
+          {/* Chat Messages - Container com scroll funcional */}
+          <div 
+            ref={chatContainerRef} 
+            className="flex-1 overflow-y-auto p-6"
+            style={{ maxHeight: 'calc(100vh - 280px)' }}
+          >
             <div className="space-y-6">
-            {chatMessages.map(renderMessage)}
-            
-            {isTyping && (
-              <div className="flex gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
-                  <Bot className="text-white" size={20} />
-                </div>
-                <div className="bg-white border border-slate-200 rounded-2xl p-4">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              {chatMessages.map(renderMessage)}
+              
+              {isTyping && (
+                <div className="flex gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center flex-shrink-0">
+                    <Bot className="text-white" size={20} />
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-            
-            <div ref={chatEndRef} />
-            </div>
+              )}
+              
+              <div ref={chatEndRef} />
             </div>
           </div>
 
