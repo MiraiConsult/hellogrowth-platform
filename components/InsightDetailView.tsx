@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useMemo } from 'react';
-import { Lead, NPSResponse } from '@/types';
+import { Lead, NPSResponse, Form } from '@/types';
 import { 
   ArrowLeft, AlertTriangle, TrendingUp, DollarSign, Heart,
   Phone, Mail, Calendar, MessageSquare, FileText, Sparkles,
@@ -168,6 +168,8 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
   const [interactionHistory, setInteractionHistory] = useState<InteractionHistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [forms, setForms] = useState<Form[]>([]);
+  const [questionMap, setQuestionMap] = useState<Record<string, string>>({});
 
   // Obter configuração e ícone - usando constantes estáticas
   const config = INSIGHT_CONFIGS[insightType] || INSIGHT_CONFIGS.risk;
@@ -179,10 +181,52 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
     fetchIntelligenceActions();
   }, [userId]);
 
+  // Fetch forms and build question map
+  useEffect(() => {
+    const fetchForms = async () => {
+      if (!supabase || !userId) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('forms')
+          .select('*')
+          .eq('user_id', userId);
+        
+        if (error) throw error;
+        
+        if (data) {
+          setForms(data);
+          
+          // Build question map: questionId -> questionText
+          const qMap: Record<string, string> = {};
+          data.forEach((form: any) => {
+            if (form.questions && Array.isArray(form.questions)) {
+              form.questions.forEach((q: any) => {
+                if (q.id && q.text) {
+                  qMap[q.id] = q.text;
+                  qMap[String(q.id)] = q.text;
+                }
+                if (q.id && q.label) {
+                  qMap[q.id] = q.label;
+                  qMap[String(q.id)] = q.label;
+                }
+              });
+            }
+          });
+          setQuestionMap(qMap);
+        }
+      } catch (error) {
+        console.error('Error fetching forms:', error);
+      }
+    };
+    
+    fetchForms();
+  }, [userId]);
+
   // Filter and analyze clients based on insight type
   useEffect(() => {
     analyzeClients();
-  }, [insightType, leads, npsData, intelligenceActions]);
+  }, [insightType, leads, npsData, intelligenceActions, questionMap]);
 
   const fetchIntelligenceActions = async () => {
     if (!supabase || !userId) return;
@@ -450,15 +494,53 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
 
   const getResponses = (data: any, type: string): any[] => {
     if (type === 'lead') {
-      const answers = data.answers ? Object.entries(data.answers).map(([key, ans]: [string, any]) => {
-        // Tenta obter o texto da pergunta de várias formas
-        const questionText = ans.questionText || ans.question || ans.label || key;
-        const answerValue = ans.value !== undefined ? ans.value : (ans.answer || ans.text || ans);
-        return { 
-          question: questionText, 
-          answer: answerValue 
-        };
-      }) : [];
+      const answers = data.answers ? Object.entries(data.answers)
+        .filter(([key]) => key !== '_internal_notes') // Filtrar notas internas
+        .map(([key, ans]: [string, any]) => {
+          // Primeiro tenta buscar no mapa de perguntas pelo ID
+          let questionText = questionMap[key] || questionMap[String(key)];
+          
+          // Se não encontrou no mapa, tenta extrair de outras formas
+          if (!questionText) {
+            if (typeof ans === 'object' && ans !== null) {
+              questionText = ans.questionText || ans.question || ans.label;
+            }
+          }
+          
+          // Se ainda não encontrou, usa um texto genérico ao invés do ID
+          if (!questionText || questionText === key) {
+            // Tenta identificar pelo tipo de resposta
+            const ansValue = typeof ans === 'object' ? (ans.value || ans.answer || ans.text) : ans;
+            if (typeof ansValue === 'string') {
+              if (ansValue.includes('R$') || ansValue.includes('6.000') || ansValue.includes('3.000')) {
+                questionText = 'Faixa de investimento';
+              } else if (ansValue.includes('meses') || ansValue.includes('semanas') || ansValue.includes('dias')) {
+                questionText = 'Prazo para iniciar';
+              } else if (ansValue.includes('laser') || ansValue.includes('gordura') || ansValue.includes('facial')) {
+                questionText = 'Área de interesse';
+              } else if (ansValue.includes('Solucionar') || ansValue.includes('questão') || ansValue.includes('objetivo')) {
+                questionText = 'Objetivo principal';
+              } else {
+                questionText = 'Resposta';
+              }
+            } else {
+              questionText = 'Resposta';
+            }
+          }
+          
+          // Extrai o valor da resposta
+          let answerValue: any;
+          if (typeof ans === 'object' && ans !== null) {
+            answerValue = ans.value !== undefined ? ans.value : (ans.answer || ans.text || JSON.stringify(ans));
+          } else {
+            answerValue = ans;
+          }
+          
+          return { 
+            question: questionText, 
+            answer: answerValue 
+          };
+        }) : [];
       return [
         ...answers,
         { question: 'Valor estimado', answer: `R$ ${data.value || 0}` },

@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot } from 'lucide-react';
+import FormConsultant from '@/components/FormConsultant';
+import { supabase } from '@/lib/supabase';
 import { Form, FormQuestion, FormOption, Lead, InitialField } from '@/types';
 import { getFormLink } from '@/lib/utils/getBaseUrl';
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -12,12 +14,14 @@ interface FormBuilderProps {
   onDeleteForm: (id: string) => void;
   onPreview?: (id: string) => void;
   onViewReport?: (id: string) => void;
-  setForms?: any; 
+  setForms?: any;
+  userId?: string;
 }
 
-const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport }) => {
-  const [view, setView] = useState<'list' | 'editor'>('list');
+const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId }) => {
+  const [view, setView] = useState<'list' | 'editor' | 'consultant'>('list');
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
+  const [showConsultant, setShowConsultant] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   
@@ -342,20 +346,27 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       }
   };
 
-  if (view === 'list') {
-    return (
+  const renderList = () => (
       <div className="p-8 min-h-screen bg-gray-50" onClick={() => setMenuOpenId(null)} style={{ colorScheme: 'light' }}>
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Formulários de Anamnese</h1>
             <p className="text-gray-500">Gerencie seus questionários de pré-venda</p>
           </div>
-          <button 
-            onClick={handleCreateNew}
-            className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 shadow-sm flex items-center gap-2"
-          >
-            <Plus size={18} /> Novo Formulário
-          </button>
+          <div className="flex gap-3">
+            <button 
+              onClick={handleCreateNew}
+              className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 shadow-sm flex items-center gap-2"
+            >
+              <Plus size={18} /> Manual
+            </button>
+            <button 
+              onClick={() => setShowConsultant(true)}
+              className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/30 shadow-sm flex items-center gap-2 transition-all"
+            >
+              <Bot size={18} /> Criar com IA
+            </button>
+          </div>
         </div>
 
         {/* Mini Dashboard */}
@@ -502,9 +513,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         )}
       </div>
     );
-  }
 
-  return (
+  const renderEditor = () => (
     <div className="p-8 min-h-screen bg-gray-50" style={{ colorScheme: 'light' }}>
        <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-8">
@@ -795,6 +805,46 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         </div>
        </div>
     </div>
+  );
+
+  // Handler para salvar formulário da consultoria
+  const handleConsultantSave = (formData: any) => {
+    const newForm: Form = {
+      id: Date.now().toString(),
+      name: formData.name,
+      description: formData.objective === 'qualify' ? 'Formulário de qualificação de leads' : formData.objective === 'feedback' ? 'Formulário de feedback' : 'Formulário personalizado',
+      questions: formData.questions.map((q: any) => ({
+        id: q.id,
+        text: q.text,
+        type: q.type || 'single',
+        options: q.options?.map((opt: string, i: number) => ({
+          id: `opt_${Date.now()}_${i}`,
+          label: opt,
+          value: 0,
+          linkedProduct: '',
+          script: ''
+        })) || []
+      })),
+      active: true,
+      responses: 0,
+      initialFields: formData.initial_fields || ['name', 'email', 'phone']
+    };
+    onSaveForm(newForm);
+  };
+
+  return (
+    <>
+      {view === 'list' && renderList()}
+      {view === 'editor' && renderEditor()}
+      {showConsultant && (
+        <FormConsultant
+          supabase={supabase}
+          userId={userId || ''}
+          onClose={() => setShowConsultant(false)}
+          onSaveForm={handleConsultantSave}
+        />
+      )}
+    </>
   );
 };
 

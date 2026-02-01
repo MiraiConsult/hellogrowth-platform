@@ -20,6 +20,7 @@ import OnboardingTour from '@/components/OnboardingTour';
 import DatabaseExport from '@/components/DatabaseExport';
 // NEW IMPORTS FOR HELLO GROWTH 2.0
 import DigitalDiagnostic from '@/components/DigitalDiagnostic';
+import ProductsManagement from '@/components/ProductsManagement';
 // CustomerJourney removed
 import IntelligenceCenter from '@/components/IntelligenceCenter';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
@@ -412,20 +413,98 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
   const handleFormSubmit = async (data: any) => {
     if (!supabase || !publicForm) return;
+    
+    const formUserId = (publicForm as any).user_id;
+    
+    // 1. Calcular valor base das respostas
     let opportunityValue = 0;
     Object.values(data.answers).forEach((ans: any) => {
         if (ans.optionSelected && ans.optionSelected.value) opportunityValue += ans.optionSelected.value;
     });
+
+    // 2. Buscar produtos do usuário para cruzamento com IA
+    let aiAnalysis = null;
+    try {
+      const { data: products } = await supabase
+        .from('products_services')
+        .select('*')
+        .eq('user_id', formUserId);
+
+      if (products && products.length > 0) {
+        // 3. Preparar contexto para análise da IA
+        const answersText = Object.entries(data.answers).map(([qId, ans]: [string, any]) => {
+          const question = publicForm.questions.find((q: any) => q.id === qId);
+          const answerValue = Array.isArray(ans.value) ? ans.value.join(', ') : ans.value;
+          return `Pergunta: ${question?.text || qId}\nResposta: ${answerValue}`;
+        }).join('\n\n');
+
+        const productsContext = products.map(p => 
+          `- ${p.name} (R$ ${p.value}): ${p.ai_persona || 'Sem perfil definido'}`
+        ).join('\n');
+
+        const prompt = `Você é um consultor de vendas. Analise as respostas do cliente e sugira o melhor produto/serviço.
+
+RESPOSTAS DO CLIENTE:
+${answersText}
+
+PRODUTOS/SERVIÇOS DISPONÍVEIS:
+${productsContext}
+
+Responda APENAS com JSON válido (sem markdown):
+{
+  "suggested_product": "Nome do produto mais adequado",
+  "suggested_value": 0,
+  "classification": "opportunity|risk|monitoring",
+  "confidence": 0.0,
+  "reasoning": "Explicação curta do porquê"
+}`;
+
+        const response = await fetch('/api/gemini', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+
+        if (response.ok) {
+          const aiData = await response.json();
+          try {
+            const cleanResponse = aiData.response.replace(/```json\n?|\n?```/g, '').trim();
+            aiAnalysis = JSON.parse(cleanResponse);
+            
+            // Atualizar valor se a IA sugeriu um produto
+            if (aiAnalysis.suggested_value > 0) {
+              opportunityValue = aiAnalysis.suggested_value;
+            }
+          } catch (e) {
+            console.error('Erro ao parsear resposta da IA:', e);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Erro na análise de IA:', error);
+    }
+
+    // 4. Determinar status baseado na análise
+    let status = 'Novo';
+    if (aiAnalysis) {
+      if (aiAnalysis.classification === 'opportunity') status = 'Qualificado';
+      else if (aiAnalysis.classification === 'risk') status = 'Risco';
+    }
+
+    // 5. Inserir lead com dados enriquecidos
     await supabase.from('leads').insert([{
         form_id: publicForm.id,
-        user_id: (publicForm as any).user_id,
+        user_id: formUserId,
         name: data.patient.name,
         email: data.patient.email,
         phone: data.patient.phone,
-        status: 'Novo',
+        status: status,
         value: opportunityValue,
         form_source: publicForm.name,
-        answers: data.answers
+        answers: {
+          ...data.answers,
+          _ai_analysis: aiAnalysis
+        }
     }]);
   };
 
@@ -571,7 +650,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
                 onSaveForm={handleSaveForm}
                 onDeleteForm={handleDeleteForm}
                 onPreview={handlePreviewForm} 
-                onViewReport={(id) => { setReportFormId(id); setCurrentView('form-report'); }} 
+                onViewReport={(id) => { setReportFormId(id); setCurrentView('form-report'); }}
+                userId={currentUser.id}
             />
         )}
         
@@ -639,6 +719,13 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
             userId={currentUser.id}
             settings={settings}
             npsData={npsData}
+          />
+        )}
+
+        {currentView === 'products' && (
+          <ProductsManagement 
+            supabase={supabase}
+            userId={currentUser.id}
           />
         )}
         
