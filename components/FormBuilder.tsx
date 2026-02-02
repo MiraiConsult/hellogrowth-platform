@@ -86,7 +86,14 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setEditingFormId(form.id);
     setCurrentFormName(form.name);
     setCurrentFormDescription(form.description || '');
-    setCurrentQuestions(form.questions.map(q => ({ ...q, type: normalizeQuestionType(q.type) })));
+    setCurrentQuestions(form.questions.map(q => ({ 
+      ...q, 
+      type: normalizeQuestionType(q.type), 
+      options: q.options?.map(opt => ({ 
+        ...opt, 
+        label: opt.label || opt.text || "" 
+      })) || [] 
+    })));
     setCurrentInitialFields(form.initialFields || []);
     setView('editor');
     setMenuOpenId(null);

@@ -649,7 +649,7 @@ Responda APENAS com JSON válido neste formato:
         type: q.type,
         options: q.options.map((opt, idx) => ({
           id: opt.id || `opt_${idx}`,
-          text: opt.text,
+          label: opt.text,
           value: 0
         })),
         required: true

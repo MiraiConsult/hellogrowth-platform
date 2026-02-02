@@ -11,6 +11,12 @@ interface PublicFormProps {
   companyName?: string; // Added prop
 }
 
+// Helper function to get option label - supports both 'label' and 'text' properties
+const getOptionLabel = (opt: any): string => {
+  if (typeof opt === 'string') return opt;
+  return opt.label || opt.text || '';
+};
+
 const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPreview = false, companyName }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
@@ -57,7 +63,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
         if (currentValues.includes(value)) {
           // Deselecting
           const newValues = currentValues.filter((v: string) => v !== value);
-          const newOptions = currentOptions.filter((o: any) => o.label !== value);
+          const newOptions = currentOptions.filter((o: any) => getOptionLabel(o) !== value);
           delete currentFollowUps[option.id];
           return {
             ...prev,
@@ -250,18 +256,19 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
                   {(currentQuestion.type === 'single' || currentQuestion.type === 'multiple') && currentQuestion.options && (
                     <div className="grid gap-3">
                       {currentQuestion.options?.map((opt) => {
+                         const optLabel = getOptionLabel(opt);
                          let isSelected = false;
                          if (currentQuestion.type === 'multiple') {
                             const currentValues = answers[currentQuestion.id]?.value || [];
-                            isSelected = Array.isArray(currentValues) && currentValues.includes(opt.label);
+                            isSelected = Array.isArray(currentValues) && currentValues.includes(optLabel);
                          } else {
-                            isSelected = answers[currentQuestion.id]?.value === opt.label;
+                            isSelected = answers[currentQuestion.id]?.value === optLabel;
                          }
                          
                          return (
                           <div key={opt.id}>
                             <button
-                              onClick={() => handleAnswer(currentQuestion.id, opt.label, opt)}
+                              onClick={() => handleAnswer(currentQuestion.id, optLabel, opt)}
                               className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-center justify-between group ${
                                 isSelected 
                                   ? 'border-primary-500 shadow-sm'
@@ -272,7 +279,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
                                   borderColor: isSelected ? '#10b981' : undefined
                               }}
                             >
-                              <span className="font-medium text-lg" style={{color: isSelected ? '#064e3b' : '#374151'}}>{opt.label}</span>
+                              <span className="font-medium text-lg" style={{color: isSelected ? '#064e3b' : '#374151'}}>{optLabel}</span>
                               <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
                                 isSelected ? 'border-white bg-primary-500 text-white' : 'border-gray-300 group-hover:border-primary-300'
                               }`}>
