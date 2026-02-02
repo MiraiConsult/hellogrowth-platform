@@ -21,6 +21,7 @@ import DatabaseExport from '@/components/DatabaseExport';
 // NEW IMPORTS FOR HELLO GROWTH 2.0
 import DigitalDiagnostic from '@/components/DigitalDiagnostic';
 import ProductsManagement from '@/components/ProductsManagement';
+import BusinessProfile from '@/components/BusinessProfile';
 // CustomerJourney removed
 import IntelligenceCenter from '@/components/IntelligenceCenter';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
@@ -719,6 +720,14 @@ Responda APENAS com JSON válido (sem markdown):
             userId={currentUser.id}
             settings={settings}
             npsData={npsData}
+          />
+        )}
+
+        {currentView === 'business-profile' && (
+          <BusinessProfile 
+            userId={currentUser.id}
+            supabase={supabase}
+            onProfileUpdate={fetchData}
           />
         )}
 

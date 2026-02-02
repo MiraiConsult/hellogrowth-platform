@@ -1,4 +1,4 @@
-// FormConsultant.tsx - Interface de Consultoria Full Screen para Criação de Formulários
+// FormConsultant.tsx - Consultor Inteligente de Formulários com Edição Completa
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
@@ -28,7 +28,10 @@ import {
   Building2,
   Users,
   Zap,
-  Heart
+  Heart,
+  ChevronDown,
+  ChevronUp,
+  Copy
 } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
@@ -42,13 +45,26 @@ interface Product {
   ai_strategy: string | null;
 }
 
+interface QuestionOption {
+  id: string;
+  text: string;
+}
+
 interface GeneratedQuestion {
   id: string;
   text: string;
-  type: 'multiple_choice' | 'text' | 'scale';
-  options?: string[];
+  type: 'single_choice' | 'multiple_choice' | 'text' | 'scale';
+  options: QuestionOption[];
   insight: string;
   linkedProducts?: string[];
+}
+
+interface IdentificationField {
+  id: string;
+  label: string;
+  type: 'text' | 'email' | 'phone';
+  enabled: boolean;
+  required: boolean;
 }
 
 interface FormConsultantProps {
@@ -65,6 +81,8 @@ type ConsultantStep =
   | 'target_audience' 
   | 'pain_points' 
   | 'objective' 
+  | 'tone'
+  | 'identification'
   | 'products' 
   | 'analysis' 
   | 'generation' 
@@ -87,11 +105,12 @@ interface BusinessContext {
   audienceCharacteristics: string;
   mainPainPoints: string[];
   desiredOutcome: string;
-  formObjective: 'qualify' | 'feedback' | 'custom';
+  formObjective: 'qualify' | 'custom';
   customObjective: string;
   productSelection: 'manual' | 'auto';
   selectedProducts: string[];
-  formTone: 'formal' | 'friendly' | 'professional';
+  formTone: 'formal' | 'informal' | 'direct' | 'friendly';
+  identificationFields: IdentificationField[];
 }
 
 const FormConsultant: React.FC<FormConsultantProps> = ({ 
@@ -101,12 +120,30 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   onSaveForm,
   existingForm 
 }) => {
-  // State Management
   const [currentStep, setCurrentStep] = useState<ConsultantStep>('welcome');
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [userInput, setUserInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [generatedQuestions, setGeneratedQuestions] = useState<GeneratedQuestion[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [formName, setFormName] = useState('');
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
+  const [showAddQuestion, setShowAddQuestion] = useState(false);
+  const [newQuestion, setNewQuestion] = useState<GeneratedQuestion>({
+    id: '',
+    text: '',
+    type: 'single_choice',
+    options: [{ id: 'opt_1', text: '' }],
+    insight: ''
+  });
   
-  // Business Context - Coletado durante a consultoria
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [businessProfile, setBusinessProfile] = useState<any>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+
   const [businessContext, setBusinessContext] = useState<BusinessContext>({
     businessType: '',
     businessDescription: '',
@@ -118,74 +155,96 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
     customObjective: '',
     productSelection: 'auto',
     selectedProducts: [],
-    formTone: 'professional'
+    formTone: 'friendly',
+    identificationFields: [
+      { id: 'name', label: 'Nome', type: 'text', enabled: true, required: true },
+      { id: 'email', label: 'E-mail', type: 'email', enabled: true, required: true },
+      { id: 'phone', label: 'Telefone', type: 'phone', enabled: true, required: false },
+    ]
   });
-  
-  // Form Configuration
-  const [formName, setFormName] = useState('');
-  
-  // Generated Content
-  const [generatedQuestions, setGeneratedQuestions] = useState<GeneratedQuestion[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState(0);
-  const [aiAnalysis, setAiAnalysis] = useState<string>('');
-  
-  // Chat Interface
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [userInput, setUserInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  
-  // Import
-  const [showImportModal, setShowImportModal] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch Products on Mount
+  // Scroll to bottom when messages change
   useEffect(() => {
-    fetchProducts();
-  }, [supabase, userId]);
-
-  // Auto-scroll chat - rola para o final sempre que uma nova mensagem é adicionada
-  const chatContainerRef = useRef<HTMLDivElement>(null);
-  
-  useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [chatMessages, isTyping]);
 
-  // Initialize chat with welcome message
+  // Fetch products and business profile on mount
   useEffect(() => {
-    if (currentStep === 'welcome' && chatMessages.length === 0) {
-      setTimeout(() => {
+    if (supabase && userId) {
+      fetchProducts();
+      fetchBusinessProfile();
+    }
+  }, [supabase, userId]);
+
+  const fetchBusinessProfile = async () => {
+    if (!supabase) return;
+    try {
+      const { data, error } = await supabase
+        .from('business_profile')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (!error && data) {
+        setBusinessProfile(data);
+        // Preencher o contexto automaticamente se o perfil existir
+        setBusinessContext(prev => ({
+          ...prev,
+          businessType: data.business_type || '',
+          businessDescription: data.business_description || '',
+          targetAudience: data.target_audience || '',
+          formTone: data.brand_tone || 'friendly'
+        }));
+      }
+      setProfileLoaded(true);
+    } catch (error) {
+      console.log('Perfil do negócio não encontrado');
+      setProfileLoaded(true);
+    }
+  };
+
+  // Initial welcome message - personalizado se tiver perfil
+  useEffect(() => {
+    if (chatMessages.length === 0 && profileLoaded) {
+      if (businessProfile?.company_name) {
+        addAssistantMessage(
+          `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.company_name}**.\n\n` +
+          `Como já conheço seu negócio, vou criar perguntas estratégicas baseadas no seu perfil.\n\n` +
+          `Vamos criar um formulário inteligente que transforma visitantes em oportunidades reais de venda?`,
+          [
+            { label: "Usar meu perfil e começar!", value: "start_with_profile", icon: Sparkles },
+            { label: "Quero informar novos dados", value: "start", icon: Edit3 }
+          ]
+        );
+      } else {
         addAssistantMessage(
           "Olá! 👋 Sou seu consultor de crescimento HelloGrowth.\n\n" +
           "Vou te guiar na criação de um formulário inteligente que transforma visitantes em oportunidades reais de venda.\n\n" +
           "Para criar perguntas que realmente convertem, preciso entender melhor o seu negócio. Vamos começar?",
-          [
-            { label: "Vamos começar!", value: "start", icon: Sparkles }
-          ]
+          [{ label: "Vamos começar!", value: "start", icon: Sparkles }]
         );
-      }, 500);
+      }
     }
-  }, []);
+  }, [profileLoaded, businessProfile]);
 
   const fetchProducts = async () => {
     if (!supabase) return;
-    setLoadingProducts(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
       const { data, error } = await supabase
         .from('products_services')
         .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+        .eq('user_id', user.id);
 
-      if (error) throw error;
-      setProducts(data || []);
+      if (!error && data) {
+        setProducts(data);
+      }
     } catch (error) {
       console.error('Erro ao buscar produtos:', error);
-    } finally {
-      setLoadingProducts(false);
     }
   };
 
@@ -193,7 +252,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
     setIsTyping(true);
     setTimeout(() => {
       setChatMessages(prev => [...prev, {
-        id: Date.now().toString(),
+        id: `msg_${Date.now()}`,
         role: 'assistant',
         content,
         timestamp: new Date(),
@@ -205,7 +264,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
 
   const addUserMessage = (content: string) => {
     setChatMessages(prev => [...prev, {
-      id: Date.now().toString(),
+      id: `msg_${Date.now()}`,
       role: 'user',
       content,
       timestamp: new Date()
@@ -215,46 +274,171 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const handleOptionClick = (value: string, label: string) => {
     addUserMessage(label);
     
-    switch (currentStep) {
-      case 'welcome':
-        if (value === 'start') {
-          setCurrentStep('business_type');
-          setTimeout(() => {
-            addAssistantMessage(
-              "Excelente! Para começar, me conta: **qual é o tipo do seu negócio?**\n\n" +
-              "Pode ser uma clínica, loja, consultoria, agência, restaurante... Descreva brevemente o que você faz."
-            );
-          }, 300);
-        }
+    switch (value) {
+      case 'start':
+        setCurrentStep('business_type');
+        setTimeout(() => {
+          addAssistantMessage(
+            "Excelente! Para começar, me conta: **qual é o tipo do seu negócio?**\n\n" +
+            "Pode ser uma clínica, loja, consultoria, agência, restaurante... Descreva brevemente o que você faz."
+          );
+        }, 500);
         break;
-        
-      case 'objective':
-        setBusinessContext(prev => ({ ...prev, formObjective: value as any }));
+
+      case 'start_with_profile':
+        // Pular direto para objetivo, já que temos o perfil
+        setCurrentStep('objective');
+        setTimeout(() => {
+          const profileSummary = businessProfile ? 
+            `\n\n📊 **Seu perfil:**\n` +
+            `• Negócio: ${businessProfile.business_type || 'Não informado'}\n` +
+            `• Público: ${businessProfile.target_audience?.substring(0, 100) || 'Não informado'}...\n` +
+            `• Tom: ${businessProfile.brand_tone || 'amigável'}` : '';
+          
+          addAssistantMessage(
+            `Perfeito! Vou usar as informações do seu perfil para criar perguntas estratégicas.${profileSummary}\n\n` +
+            "**Qual é o objetivo principal deste formulário?**",
+            [
+              { label: "🎯 Qualificar Leads - Identificar quem está pronto para comprar", value: "qualify" },
+              { label: "✨ Outro Objetivo - Tenho algo específico em mente", value: "custom" }
+            ]
+          );
+        }, 500);
+        break;
+
+      case 'qualify':
+        setBusinessContext(prev => ({ ...prev, formObjective: 'qualify' }));
+        setCurrentStep('tone');
+        setTimeout(() => {
+          addAssistantMessage(
+            "Perfeito! Vamos criar perguntas que identificam quem está pronto para comprar.\n\n" +
+            "**Qual tom você prefere para as perguntas?**",
+            [
+              { label: "🎯 Direto - Objetivo e sem rodeios", value: "tone_direct" },
+              { label: "😊 Informal - Descontraído e amigável", value: "tone_informal" },
+              { label: "👔 Formal - Profissional e corporativo", value: "tone_formal" },
+              { label: "💚 Amigável - Acolhedor e empático", value: "tone_friendly" }
+            ]
+          );
+        }, 500);
+        break;
+
+      case 'custom':
+        setBusinessContext(prev => ({ ...prev, formObjective: 'custom' }));
+        setCurrentStep('tone');
+        setTimeout(() => {
+          addAssistantMessage(
+            "Entendi! Me conta mais sobre o objetivo específico que você tem em mente.\n\n" +
+            "**Qual tom você prefere para as perguntas?**",
+            [
+              { label: "🎯 Direto - Objetivo e sem rodeios", value: "tone_direct" },
+              { label: "😊 Informal - Descontraído e amigável", value: "tone_informal" },
+              { label: "👔 Formal - Profissional e corporativo", value: "tone_formal" },
+              { label: "💚 Amigável - Acolhedor e empático", value: "tone_friendly" }
+            ]
+          );
+        }, 500);
+        break;
+
+      case 'tone_direct':
+      case 'tone_informal':
+      case 'tone_formal':
+      case 'tone_friendly':
+        const toneMap: Record<string, 'formal' | 'informal' | 'direct' | 'friendly'> = {
+          'tone_direct': 'direct',
+          'tone_informal': 'informal',
+          'tone_formal': 'formal',
+          'tone_friendly': 'friendly'
+        };
+        setBusinessContext(prev => ({ ...prev, formTone: toneMap[value] }));
+        setCurrentStep('identification');
+        setTimeout(() => {
+          addAssistantMessage(
+            "Ótimo! Agora vamos definir **quais informações você quer coletar do cliente** no início do formulário.\n\n" +
+            "Por padrão, coletamos Nome, E-mail e Telefone. Você pode personalizar isso na próxima tela.",
+            [
+              { label: "Usar padrão (Nome, E-mail, Telefone)", value: "id_default" },
+              { label: "Personalizar campos", value: "id_custom" }
+            ]
+          );
+        }, 500);
+        break;
+
+      case 'id_default':
         setCurrentStep('products');
         setTimeout(() => {
           addAssistantMessage(
             "Ótima escolha! Agora vamos definir como vincular seus produtos às perguntas.\n\n" +
             "Você prefere:",
             [
-              { label: "🤖 Deixar a IA decidir - Eu analiso e sugiro o melhor produto", value: "auto" },
-              { label: "📦 Escolher manualmente - Seleciono os produtos", value: "manual" }
+              { label: "🤖 Deixar a IA decidir - Eu analiso as respostas e sugiro o melhor produto", value: "products_auto" },
+              { label: "📦 Escolher manualmente - Você seleciona quais produtos quer destacar", value: "products_manual" }
             ]
           );
-        }, 300);
+        }, 500);
         break;
-        
-      case 'products':
-        setBusinessContext(prev => ({ ...prev, productSelection: value as any }));
-        if (value === 'manual' && products.length > 0) {
+
+      case 'id_custom':
+        // Will show identification customization in review
+        setCurrentStep('products');
+        setTimeout(() => {
+          addAssistantMessage(
+            "Você poderá personalizar os campos de identificação na tela de revisão.\n\n" +
+            "Agora vamos definir como vincular seus produtos às perguntas.\n\n" +
+            "Você prefere:",
+            [
+              { label: "🤖 Deixar a IA decidir - Eu analiso as respostas e sugiro o melhor produto", value: "products_auto" },
+              { label: "📦 Escolher manualmente - Você seleciona quais produtos quer destacar", value: "products_manual" }
+            ]
+          );
+        }, 500);
+        break;
+
+      case 'products_auto':
+        setBusinessContext(prev => ({ ...prev, productSelection: 'auto' }));
+        setCurrentStep('analysis');
+        setTimeout(() => {
+          addAssistantMessage(
+            "Excelente! Agora vou criar perguntas estratégicas baseadas no seu objetivo e produtos.\n\n" +
+            "⏳ Isso pode levar alguns segundos enquanto analiso a melhor abordagem..."
+          );
+          runAIAnalysis();
+        }, 500);
+        break;
+
+      case 'products_manual':
+        setBusinessContext(prev => ({ ...prev, productSelection: 'manual' }));
+        if (products.length === 0) {
           setTimeout(() => {
             addAssistantMessage(
-              "Perfeito! Selecione os produtos que você quer destacar neste formulário:"
+              "Você ainda não tem produtos cadastrados. Vou gerar as perguntas baseadas no contexto do seu negócio.\n\n" +
+              "⏳ Isso pode levar alguns segundos..."
             );
-          }, 300);
+            setCurrentStep('analysis');
+            runAIAnalysis();
+          }, 500);
         } else {
-          setCurrentStep('analysis');
-          runAIAnalysis();
+          setTimeout(() => {
+            addAssistantMessage(
+              "Selecione os produtos que você quer destacar neste formulário:"
+            );
+          }, 500);
         }
+        break;
+
+      case 'confirm_products':
+        setCurrentStep('analysis');
+        setTimeout(() => {
+          addAssistantMessage(
+            "Perfeito! Agora vou criar perguntas estratégicas para esses produtos.\n\n" +
+            "⏳ Isso pode levar alguns segundos..."
+          );
+          runAIAnalysis();
+        }, 500);
+        break;
+
+      case 'retry':
+        handleRetry();
         break;
     }
   };
@@ -265,49 +449,57 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
     const input = userInput.trim();
     addUserMessage(input);
     setUserInput('');
-    
+
     switch (currentStep) {
       case 'business_type':
-        setBusinessContext(prev => ({ ...prev, businessType: input, businessDescription: input }));
+        setBusinessContext(prev => ({ 
+          ...prev, 
+          businessType: input,
+          businessDescription: input 
+        }));
         setCurrentStep('target_audience');
         setTimeout(() => {
           addAssistantMessage(
             `Entendi! Você trabalha com **${input}**.\n\n` +
             "Agora me conta: **quem é o seu cliente ideal?**\n\n" +
-            "Descreva o perfil de quem você quer atrair (idade, gênero, interesses, comportamento, poder aquisitivo...)."
+            "Descreva o perfil do seu público-alvo (idade, gênero, comportamento, o que buscam...)."
           );
-        }, 300);
+        }, 500);
         break;
-        
+
       case 'target_audience':
-        setBusinessContext(prev => ({ ...prev, targetAudience: input, audienceCharacteristics: input }));
+        setBusinessContext(prev => ({ 
+          ...prev, 
+          targetAudience: input,
+          audienceCharacteristics: input 
+        }));
         setCurrentStep('pain_points');
         setTimeout(() => {
           addAssistantMessage(
-            `Perfeito! Seu público-alvo é: **${input}**.\n\n` +
-            "Agora a pergunta mais importante: **quais são as principais dores, medos ou desejos desse público?**\n\n" +
-            "Liste os problemas que eles querem resolver ou os resultados que buscam. Quanto mais detalhes, melhor!"
+            "Ótimo! Agora a parte mais importante:\n\n" +
+            "**Quais são as principais dores ou desejos do seu cliente?**\n\n" +
+            "O que eles querem resolver? O que os motiva a procurar você?"
           );
-        }, 300);
+        }, 500);
         break;
-        
+
       case 'pain_points':
-        setBusinessContext(prev => ({ ...prev, mainPainPoints: [input], desiredOutcome: input }));
+        setBusinessContext(prev => ({ 
+          ...prev, 
+          mainPainPoints: [input],
+          desiredOutcome: input 
+        }));
         setCurrentStep('objective');
         setTimeout(() => {
           addAssistantMessage(
             "Excelente! Agora eu já tenho uma visão clara do seu negócio.\n\n" +
             "**Qual é o objetivo principal deste formulário?**",
             [
-              { label: "🎯 Qualificar Leads - Identificar quem está pronto para comprar", value: "qualify" },
-              { label: "💬 Coletar Feedback - Entender a satisfação dos clientes", value: "feedback" },
-              { label: "✨ Outro Objetivo - Tenho algo específico em mente", value: "custom" }
+              { label: "🎯 Qualificar Leads - Identificar quem está pronto para comprar", value: "qualify", icon: Target },
+              { label: "✨ Outro Objetivo - Tenho algo específico em mente", value: "custom", icon: Sparkles }
             ]
           );
-        }, 300);
-        break;
-        
-      default:
+        }, 500);
         break;
     }
   };
@@ -315,143 +507,55 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const runAIAnalysis = async () => {
     setIsGenerating(true);
     setGenerationProgress(0);
-    
+    setCurrentStep('generation');
+
     const progressInterval = setInterval(() => {
       setGenerationProgress(prev => {
-        if (prev >= 40) {
+        if (prev >= 90) {
           clearInterval(progressInterval);
-          return 40;
+          return prev;
         }
-        return prev + 5;
+        return prev + Math.random() * 15;
       });
-    }, 200);
+    }, 500);
 
     try {
-      const analysisPrompt = `Você é um consultor de vendas especialista em perguntas indiretas.
+      const selectedProductNames = products
+        .filter(p => businessContext.selectedProducts.includes(p.id))
+        .map(p => `${p.name} (R$ ${p.value})`);
+
+      const toneDescriptions: Record<string, string> = {
+        'direct': 'direto e objetivo, sem rodeios',
+        'informal': 'descontraído e amigável, como uma conversa casual',
+        'formal': 'profissional e corporativo, com linguagem técnica',
+        'friendly': 'acolhedor e empático, focado em criar conexão'
+      };
+
+      const prompt = `Você é um especialista em criação de formulários de qualificação de leads. Crie 5 perguntas estratégicas para um formulário.
 
 CONTEXTO DO NEGÓCIO:
-- Tipo de Negócio: ${businessContext.businessType}
-- Descrição: ${businessContext.businessDescription}
-- Público-Alvo: ${businessContext.targetAudience}
-- Características do Público: ${businessContext.audienceCharacteristics}
-- Dores e Desejos: ${businessContext.mainPainPoints.join(', ')}
-- Objetivo do Formulário: ${businessContext.formObjective === 'qualify' ? 'Qualificar leads' : businessContext.formObjective === 'feedback' ? 'Coletar feedback' : businessContext.customObjective}
-
-PRODUTOS/SERVIÇOS DISPONÍVEIS:
-${products.map(p => `- ${p.name} (R$ ${p.value}): ${p.ai_persona || 'Sem perfil definido'}`).join('\n') || 'Nenhum produto cadastrado'}
-
-Faça uma análise estratégica em 3 partes:
-1. DESEJO CENTRAL: Qual é o desejo mais profundo desse público?
-2. DORES RECORRENTES: Quais são os medos e frustrações mais comuns?
-3. ESTRATÉGIA DE PERGUNTAS: Como vamos usar perguntas indiretas para identificar oportunidades?
-
-Responda de forma clara e direta, em português brasileiro.`;
-
-      const response = await fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: analysisPrompt })
-      });
-
-      clearInterval(progressInterval);
-
-      if (!response.ok) {
-        throw new Error('Erro na API');
-      }
-
-      const data = await response.json();
-      setAiAnalysis(data.response);
-      setGenerationProgress(50);
-      
-      setTimeout(() => {
-        addAssistantMessage(
-          "📊 **Análise Estratégica Concluída!**\n\n" +
-          "Baseado no que você me contou, identifiquei:\n\n" +
-          data.response.substring(0, 500) + "...\n\n" +
-          "Agora vou criar as perguntas indiretas perfeitas para o seu formulário!"
-        );
-        
-        setTimeout(() => {
-          setCurrentStep('generation');
-          generateQuestions();
-        }, 2000);
-      }, 500);
-
-    } catch (error) {
-      clearInterval(progressInterval);
-      console.error('Erro na análise:', error);
-      setIsGenerating(false);
-      addAssistantMessage(
-        "😅 Ops! Tive um problema na análise. Vou tentar gerar as perguntas diretamente...",
-        [{ label: "Tentar novamente", value: "retry" }]
-      );
-    }
-  };
-
-  const generateQuestions = async () => {
-    setIsGenerating(true);
-    setGenerationProgress(60);
-
-    const progressInterval = setInterval(() => {
-      setGenerationProgress(prev => {
-        if (prev >= 95) {
-          clearInterval(progressInterval);
-          return 95;
-        }
-        return prev + 5;
-      });
-    }, 300);
-
-    try {
-      const selectedProductsData = businessContext.productSelection === 'manual' 
-        ? products.filter(p => businessContext.selectedProducts.includes(p.id))
-        : products;
-
-      const productContext = selectedProductsData.map(p => 
-        `- ${p.name} (R$ ${p.value}): ${p.ai_description || 'Sem descrição'} | Perfil: ${p.ai_persona || 'Não definido'}`
-      ).join('\n');
-
-      const prompt = `Você é um especialista em vendas consultivas e formulários de conversão de alta performance.
-
-CONTEXTO COMPLETO DO NEGÓCIO:
 - Tipo: ${businessContext.businessType}
-- Público-Alvo: ${businessContext.targetAudience} - ${businessContext.audienceCharacteristics}
-- Dores e Desejos: ${businessContext.mainPainPoints.join(', ')}
-- Objetivo: ${businessContext.formObjective === 'qualify' ? 'Qualificar leads e identificar quem está pronto para comprar' : businessContext.formObjective === 'feedback' ? 'Coletar feedback e entender satisfação' : businessContext.customObjective}
+- Público-alvo: ${businessContext.targetAudience}
+- Dores/Desejos: ${businessContext.mainPainPoints.join(', ')}
+- Objetivo: ${businessContext.formObjective === 'qualify' ? 'Qualificar leads para venda' : businessContext.customObjective}
+- Tom: ${toneDescriptions[businessContext.formTone]}
+${selectedProductNames.length > 0 ? `- Produtos em foco: ${selectedProductNames.join(', ')}` : ''}
 
-PRODUTOS/SERVIÇOS:
-${productContext || 'Nenhum produto cadastrado - crie perguntas genéricas de qualificação'}
+REGRAS:
+1. Crie perguntas INDIRETAS que não pareçam um interrogatório de vendas
+2. Cada pergunta deve revelar algo sobre a intenção de compra do cliente
+3. Use o tom especificado (${businessContext.formTone})
+4. Varie os tipos: single_choice (escolha única), multiple_choice (múltipla escolha), text (texto livre)
+5. Para perguntas de escolha, forneça 3-5 opções relevantes
 
-ANÁLISE PRÉVIA:
-${aiAnalysis || 'Não disponível'}
-
-REGRAS OBRIGATÓRIAS:
-1. Crie EXATAMENTE 6 perguntas
-2. As perguntas devem ser INDIRETAS - NUNCA pergunte diretamente sobre compra ou preço
-3. Cada pergunta deve parecer uma conversa natural, não um interrogatório
-4. Use linguagem ${businessContext.formTone === 'formal' ? 'formal e profissional' : businessContext.formTone === 'friendly' ? 'amigável e descontraída' : 'profissional mas acessível'}
-5. Cada pergunta deve ter um INSIGHT estratégico explicando o que a resposta revela sobre o cliente
-6. Misture tipos: 4 múltipla escolha, 1 escala (1-10), 1 texto livre
-7. As opções de múltipla escolha devem ter 3-4 alternativas
-
-Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
+Responda APENAS com JSON válido neste formato:
 {
   "questions": [
     {
       "text": "Texto da pergunta",
-      "type": "multiple_choice",
+      "type": "single_choice",
       "options": ["Opção 1", "Opção 2", "Opção 3"],
-      "insight": "O que esta resposta revela sobre o cliente"
-    },
-    {
-      "text": "De 1 a 10, como você avalia...",
-      "type": "scale",
-      "insight": "O que o número revela"
-    },
-    {
-      "text": "Pergunta aberta...",
-      "type": "text",
-      "insight": "O que a resposta livre revela"
+      "insight": "O que essa resposta revela sobre o cliente"
     }
   ]
 }`;
@@ -459,9 +563,9 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const response = await fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
         signal: controller.signal
       });
@@ -469,33 +573,29 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
       clearTimeout(timeoutId);
       clearInterval(progressInterval);
 
-      if (!response.ok) throw new Error('Erro na API');
+      if (!response.ok) throw new Error("Erro na API");
 
       const data = await response.json();
       let parsed;
-      
+
       try {
         const cleanResponse = data.response
-          .replace(/```json\n?/g, '')
-          .replace(/\n?```/g, '')
+          .replace(/```json\n?|\n?```/g, "")
           .trim();
         parsed = JSON.parse(cleanResponse);
-      } catch (parseError) {
-        console.error('Erro ao parsear JSON:', parseError);
-        throw new Error('Resposta da IA inválida');
+      } catch {
+        throw new Error("Resposta da IA inválida");
       }
 
-      if (!parsed.questions || !Array.isArray(parsed.questions)) {
-        throw new Error('Formato de resposta inválido');
-      }
-
-      const questions: GeneratedQuestion[] = parsed.questions.map((q: any, index: number) => ({
-        id: `q_${Date.now()}_${index}`,
+      const questions: GeneratedQuestion[] = parsed.questions.map((q: any, idx: number) => ({
+        id: `q_${Date.now()}_${idx}`,
         text: q.text,
-        type: q.type || 'multiple_choice',
-        options: q.options,
-        insight: q.insight,
-        linkedProducts: businessContext.selectedProducts
+        type: q.type || 'single_choice',
+        options: (q.options || []).map((opt: string, optIdx: number) => ({
+          id: `opt_${idx}_${optIdx}`,
+          text: opt
+        })),
+        insight: q.insight || ''
       }));
 
       setGeneratedQuestions(questions);
@@ -505,9 +605,9 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
         setCurrentStep('review');
         setIsGenerating(false);
         addAssistantMessage(
-          "🎉 **Pronto!** Criei 6 perguntas estratégicas para o seu formulário.\n\n" +
-          "Cada pergunta foi pensada para extrair informações valiosas sem parecer um interrogatório de vendas.\n\n" +
-          "Você pode editar, reordenar ou remover qualquer uma delas. Quando estiver satisfeito, vamos para a personalização final!"
+          "🎉 **Pronto!** Criei as perguntas estratégicas para o seu formulário.\n\n" +
+          "Você pode **editar** o texto das perguntas, **modificar** as opções de resposta, **mudar o tipo** (única, múltipla ou texto), **adicionar** novas perguntas ou **remover** as que não quiser.\n\n" +
+          "Quando estiver satisfeito, clique em Salvar!"
         );
       }, 500);
 
@@ -541,13 +641,15 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
   const handleSaveForm = async () => {
     const formData = {
       name: formName || `Formulário ${new Date().toLocaleDateString('pt-BR')}`,
+      description: businessContext.businessDescription,
+      identification_fields: businessContext.identificationFields.filter(f => f.enabled),
       questions: generatedQuestions.map(q => ({
         id: q.id,
         text: q.text,
         type: q.type,
-        options: q.options?.map((opt, idx) => ({
-          id: `opt_${idx}`,
-          text: opt,
+        options: q.options.map((opt, idx) => ({
+          id: opt.id || `opt_${idx}`,
+          text: opt.text,
           value: 0
         })),
         required: true
@@ -569,14 +671,111 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
     );
   };
 
+  // Question editing functions
   const handleRemoveQuestion = (id: string) => {
     setGeneratedQuestions(prev => prev.filter(q => q.id !== id));
   };
 
-  const handleEditQuestion = (id: string, newText: string) => {
+  const handleEditQuestion = (id: string, field: keyof GeneratedQuestion, value: any) => {
     setGeneratedQuestions(prev => prev.map(q => 
-      q.id === id ? { ...q, text: newText } : q
+      q.id === id ? { ...q, [field]: value } : q
     ));
+  };
+
+  const handleAddOption = (questionId: string) => {
+    setGeneratedQuestions(prev => prev.map(q => {
+      if (q.id === questionId) {
+        return {
+          ...q,
+          options: [...q.options, { id: `opt_${Date.now()}`, text: '' }]
+        };
+      }
+      return q;
+    }));
+  };
+
+  const handleRemoveOption = (questionId: string, optionId: string) => {
+    setGeneratedQuestions(prev => prev.map(q => {
+      if (q.id === questionId) {
+        return {
+          ...q,
+          options: q.options.filter(opt => opt.id !== optionId)
+        };
+      }
+      return q;
+    }));
+  };
+
+  const handleEditOption = (questionId: string, optionId: string, newText: string) => {
+    setGeneratedQuestions(prev => prev.map(q => {
+      if (q.id === questionId) {
+        return {
+          ...q,
+          options: q.options.map(opt => 
+            opt.id === optionId ? { ...opt, text: newText } : opt
+          )
+        };
+      }
+      return q;
+    }));
+  };
+
+  const handleAddNewQuestion = () => {
+    const newQ: GeneratedQuestion = {
+      id: `q_${Date.now()}`,
+      text: newQuestion.text,
+      type: newQuestion.type,
+      options: newQuestion.type === 'text' ? [] : newQuestion.options.filter(o => o.text.trim()),
+      insight: newQuestion.insight || 'Pergunta personalizada'
+    };
+    setGeneratedQuestions(prev => [...prev, newQ]);
+    setShowAddQuestion(false);
+    setNewQuestion({
+      id: '',
+      text: '',
+      type: 'single_choice',
+      options: [{ id: 'opt_1', text: '' }],
+      insight: ''
+    });
+  };
+
+  const handleChangeQuestionType = (questionId: string, newType: GeneratedQuestion['type']) => {
+    setGeneratedQuestions(prev => prev.map(q => {
+      if (q.id === questionId) {
+        if (newType === 'text') {
+          return { ...q, type: newType, options: [] };
+        } else if (q.options.length === 0) {
+          return { 
+            ...q, 
+            type: newType, 
+            options: [
+              { id: `opt_${Date.now()}_1`, text: 'Opção 1' },
+              { id: `opt_${Date.now()}_2`, text: 'Opção 2' }
+            ] 
+          };
+        }
+        return { ...q, type: newType };
+      }
+      return q;
+    }));
+  };
+
+  const handleToggleIdentificationField = (fieldId: string) => {
+    setBusinessContext(prev => ({
+      ...prev,
+      identificationFields: prev.identificationFields.map(f =>
+        f.id === fieldId ? { ...f, enabled: !f.enabled } : f
+      )
+    }));
+  };
+
+  const handleToggleFieldRequired = (fieldId: string) => {
+    setBusinessContext(prev => ({
+      ...prev,
+      identificationFields: prev.identificationFields.map(f =>
+        f.id === fieldId ? { ...f, required: !f.required } : f
+      )
+    }));
   };
 
   // Render Progress Bar
@@ -590,7 +789,7 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
     ];
 
     const getStepIndex = () => {
-      if (['welcome', 'business_type', 'target_audience', 'pain_points', 'objective', 'products'].includes(currentStep)) return 0;
+      if (['welcome', 'business_type', 'target_audience', 'pain_points', 'objective', 'tone', 'identification', 'products'].includes(currentStep)) return 0;
       if (currentStep === 'analysis') return 1;
       if (currentStep === 'generation') return 2;
       if (['review', 'customize'].includes(currentStep)) return 3;
@@ -647,7 +846,6 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
             <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
           </div>
           
-          {/* Options Buttons */}
           {isAssistant && message.options && message.options.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {message.options.map((option, idx) => (
@@ -688,57 +886,127 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
             style={{ width: `${generationProgress}%` }}
           />
         </div>
-        <p className="text-sm text-slate-400">{generationProgress}% concluído</p>
+        <p className="text-sm text-slate-400">{Math.round(generationProgress)}% concluído</p>
       </div>
     </div>
   );
 
-  // Render Review Screen
+  // Render Review Screen with full editing capabilities
   const renderReviewScreen = () => (
     <div className="flex-1 overflow-y-auto p-6">
-      <div className="max-w-3xl mx-auto">
-        <h2 className="text-2xl font-bold text-slate-800 mb-2">Revise suas perguntas</h2>
-        <p className="text-slate-500 mb-6">Edite, reordene ou remova as perguntas conforme necessário</p>
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-2xl font-bold text-slate-800 mb-2">Revise e edite suas perguntas</h2>
+        <p className="text-slate-500 mb-6">Você pode editar textos, modificar opções, mudar tipos e adicionar novas perguntas</p>
         
-        <div className="space-y-4 mb-8">
+        {/* Identification Fields Section */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+          <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+            <Users size={20} className="text-emerald-500" />
+            Campos de Identificação
+          </h3>
+          <p className="text-sm text-slate-500 mb-4">Defina quais informações coletar do cliente no início do formulário</p>
+          <div className="space-y-3">
+            {businessContext.identificationFields.map(field => (
+              <div key={field.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={field.enabled}
+                    onChange={() => handleToggleIdentificationField(field.id)}
+                    className="w-5 h-5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                  />
+                  <span className={field.enabled ? 'text-slate-800' : 'text-slate-400'}>{field.label}</span>
+                </div>
+                {field.enabled && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={field.required}
+                      onChange={() => handleToggleFieldRequired(field.id)}
+                      className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                    />
+                    <span className="text-slate-600">Obrigatório</span>
+                  </label>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Questions Section */}
+        <div className="space-y-4 mb-6">
           {generatedQuestions.map((question, index) => (
             <div key={question.id} className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition-all">
               <div className="flex items-start gap-4">
                 <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0">
                   {index + 1}
                 </div>
-                <div className="flex-1">
-                  <input
-                    type="text"
+                <div className="flex-1 space-y-4">
+                  {/* Question Text */}
+                  <textarea
                     value={question.text}
-                    onChange={(e) => handleEditQuestion(question.id, e.target.value)}
-                    className="w-full text-lg font-medium text-slate-800 bg-transparent border-none focus:outline-none focus:ring-0"
+                    onChange={(e) => handleEditQuestion(question.id, 'text', e.target.value)}
+                    className="w-full text-lg font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-lg p-3 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-none"
+                    rows={2}
                   />
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      question.type === 'multiple_choice' ? 'bg-blue-100 text-blue-600' :
-                      question.type === 'scale' ? 'bg-purple-100 text-purple-600' :
-                      'bg-amber-100 text-amber-600'
-                    }`}>
-                      {question.type === 'multiple_choice' ? 'Múltipla Escolha' :
-                       question.type === 'scale' ? 'Escala 1-10' : 'Texto Livre'}
-                    </span>
+                  
+                  {/* Question Type Selector */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-slate-500">Tipo:</span>
+                    <select
+                      value={question.type}
+                      onChange={(e) => handleChangeQuestionType(question.id, e.target.value as GeneratedQuestion['type'])}
+                      className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    >
+                      <option value="single_choice">Escolha Única</option>
+                      <option value="multiple_choice">Múltipla Escolha</option>
+                      <option value="text">Texto Livre</option>
+                      <option value="scale">Escala 1-10</option>
+                    </select>
                   </div>
-                  {question.options && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {question.options.map((opt, idx) => (
-                        <span key={idx} className="text-sm bg-slate-100 text-slate-600 px-3 py-1 rounded-lg">
-                          {opt}
-                        </span>
+                  
+                  {/* Options (for choice types) */}
+                  {(question.type === 'single_choice' || question.type === 'multiple_choice') && (
+                    <div className="space-y-2">
+                      <span className="text-sm text-slate-500">Opções de resposta:</span>
+                      {question.options.map((opt, optIdx) => (
+                        <div key={opt.id} className="flex items-center gap-2">
+                          <span className="text-slate-400 text-sm w-6">{optIdx + 1}.</span>
+                          <input
+                            type="text"
+                            value={opt.text}
+                            onChange={(e) => handleEditOption(question.id, opt.id, e.target.value)}
+                            placeholder="Digite a opção..."
+                            className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                          />
+                          {question.options.length > 1 && (
+                            <button
+                              onClick={() => handleRemoveOption(question.id, opt.id)}
+                              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
                       ))}
+                      <button
+                        onClick={() => handleAddOption(question.id)}
+                        className="flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700 mt-2"
+                      >
+                        <Plus size={16} />
+                        Adicionar opção
+                      </button>
                     </div>
                   )}
-                  <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  
+                  {/* Insight */}
+                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
                     <p className="text-xs text-amber-700">
                       <strong>💡 Insight:</strong> {question.insight}
                     </p>
                   </div>
                 </div>
+                
                 <button
                   onClick={() => handleRemoveQuestion(question.id)}
                   className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
@@ -750,8 +1018,114 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
           ))}
         </div>
 
+        {/* Add New Question Button */}
+        {!showAddQuestion ? (
+          <button
+            onClick={() => setShowAddQuestion(true)}
+            className="w-full py-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-emerald-400 hover:text-emerald-600 transition-all flex items-center justify-center gap-2"
+          >
+            <Plus size={20} />
+            Adicionar Nova Pergunta
+          </button>
+        ) : (
+          <div className="bg-white rounded-xl border border-emerald-200 p-5 mb-6">
+            <h4 className="font-semibold text-slate-800 mb-4">Nova Pergunta</h4>
+            <div className="space-y-4">
+              <textarea
+                value={newQuestion.text}
+                onChange={(e) => setNewQuestion(prev => ({ ...prev, text: e.target.value }))}
+                placeholder="Digite o texto da pergunta..."
+                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-none"
+                rows={2}
+              />
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-500">Tipo:</span>
+                <select
+                  value={newQuestion.type}
+                  onChange={(e) => {
+                    const type = e.target.value as GeneratedQuestion['type'];
+                    setNewQuestion(prev => ({
+                      ...prev,
+                      type,
+                      options: type === 'text' ? [] : [{ id: 'opt_1', text: '' }]
+                    }));
+                  }}
+                  className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                >
+                  <option value="single_choice">Escolha Única</option>
+                  <option value="multiple_choice">Múltipla Escolha</option>
+                  <option value="text">Texto Livre</option>
+                  <option value="scale">Escala 1-10</option>
+                </select>
+              </div>
+              
+              {(newQuestion.type === 'single_choice' || newQuestion.type === 'multiple_choice') && (
+                <div className="space-y-2">
+                  <span className="text-sm text-slate-500">Opções:</span>
+                  {newQuestion.options.map((opt, idx) => (
+                    <div key={opt.id} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={opt.text}
+                        onChange={(e) => {
+                          const newOptions = [...newQuestion.options];
+                          newOptions[idx] = { ...newOptions[idx], text: e.target.value };
+                          setNewQuestion(prev => ({ ...prev, options: newOptions }));
+                        }}
+                        placeholder={`Opção ${idx + 1}`}
+                        className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      />
+                      {newQuestion.options.length > 1 && (
+                        <button
+                          onClick={() => {
+                            setNewQuestion(prev => ({
+                              ...prev,
+                              options: prev.options.filter((_, i) => i !== idx)
+                            }));
+                          }}
+                          className="p-2 text-slate-400 hover:text-red-500"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => {
+                      setNewQuestion(prev => ({
+                        ...prev,
+                        options: [...prev.options, { id: `opt_${Date.now()}`, text: '' }]
+                      }));
+                    }}
+                    className="flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700"
+                  >
+                    <Plus size={16} />
+                    Adicionar opção
+                  </button>
+                </div>
+              )}
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowAddQuestion(false)}
+                  className="flex-1 py-3 border border-slate-300 rounded-lg hover:bg-slate-50 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleAddNewQuestion}
+                  disabled={!newQuestion.text.trim()}
+                  className="flex-1 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Adicionar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Form Name Input */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6 mt-6">
           <label className="block text-sm font-medium text-slate-600 mb-2">Nome do Formulário</label>
           <input
             type="text"
@@ -834,7 +1208,7 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
         renderCompleteScreen()
       ) : (
         <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full overflow-hidden">
-          {/* Chat Messages - Container com scroll funcional */}
+          {/* Chat Messages */}
           <div 
             ref={chatContainerRef} 
             className="flex-1 overflow-y-auto p-6"
@@ -901,7 +1275,7 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
                     className={`p-4 rounded-xl border-2 text-left transition-all ${
                       businessContext.selectedProducts.includes(product.id)
                         ? 'border-emerald-500 bg-emerald-50'
-                        : 'border-slate-200 hover:border-emerald-300'
+                        : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <p className="font-medium text-slate-800">{product.name}</p>
@@ -909,16 +1283,14 @@ Responda APENAS com um JSON válido neste formato (sem markdown, sem crases):
                   </button>
                 ))}
               </div>
-              <button
-                onClick={() => {
-                  setCurrentStep('analysis');
-                  runAIAnalysis();
-                }}
-                disabled={businessContext.selectedProducts.length === 0}
-                className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-semibold disabled:opacity-50 transition-all"
-              >
-                Continuar com {businessContext.selectedProducts.length} produto(s) selecionado(s)
-              </button>
+              {businessContext.selectedProducts.length > 0 && (
+                <button
+                  onClick={() => handleOptionClick('confirm_products', `${businessContext.selectedProducts.length} produtos selecionados`)}
+                  className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
+                >
+                  Confirmar Seleção ({businessContext.selectedProducts.length} produtos)
+                </button>
+              )}
             </div>
           )}
         </div>

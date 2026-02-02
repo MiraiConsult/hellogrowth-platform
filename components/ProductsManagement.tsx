@@ -53,22 +53,39 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   const [importError, setImportError] = useState<string | null>(null);
   const [generatingAI, setGeneratingAI] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Obter o ID do usuário autenticado do Supabase Auth
   useEffect(() => {
-    if (supabase && userId) {
+    const getAuthUser = async () => {
+      if (!supabase) return;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setAuthUserId(user.id);
+        }
+      } catch (error) {
+        console.error('Erro ao obter usuário autenticado:', error);
+      }
+    };
+    getAuthUser();
+  }, [supabase]);
+
+  useEffect(() => {
+    if (supabase && authUserId) {
       fetchProducts();
     }
-  }, [supabase, userId]);
+  }, [supabase, authUserId]);
 
   const fetchProducts = async () => {
-    if (!supabase) return;
+    if (!supabase || !authUserId) return;
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('products_services')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', authUserId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -96,7 +113,6 @@ Valor: R$ ${productValue.toFixed(2)}
 
 Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
 {
-  
   "description": "Uma descrição comercial atraente do produto em 2-3 frases",
   "persona": "Perfil detalhado do cliente ideal para este produto (características demográficas, comportamentais e psicográficas)",
   "strategy": "Estratégia de venda: gatilhos emocionais, objeções comuns e como superá-las, melhor abordagem de fechamento"
@@ -114,7 +130,6 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
       let insights;
 
       try {
-        // Tenta fazer parse do JSON da resposta
         const cleanResponse = data.response
           .replace(/```json\n?|\n?```/g, "")
           .trim();
@@ -123,7 +138,6 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
         throw new Error("Resposta da IA inválida");
       }
 
-      // Atualiza no banco de dados
       const { error } = await supabase!
         .from("products_services")
         .update({
@@ -135,7 +149,6 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
 
       if (error) throw error;
 
-      // Atualiza estado local
       setProducts((prev) =>
         prev.map((p) =>
           p.id === productId
@@ -159,34 +172,42 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
   };
 
   const handleAddProduct = async () => {
-    if (!newProduct.name || !newProduct.value || !supabase) return;
+    if (!newProduct.name || !newProduct.value || !supabase || !authUserId) return;
 
     setSaving(true);
     try {
       const { data, error } = await supabase
         .from("products_services")
         .insert({
-          user_id: userId,
+          user_id: authUserId,
           name: newProduct.name,
           value: parseFloat(newProduct.value.replace(",", ".")),
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Erro detalhado:", error);
+        throw error;
+      }
 
       setProducts((prev) => [data, ...prev]);
       setNewProduct({ name: "", value: "" });
       setShowAddModal(false);
       showNotification("success", "Produto adicionado com sucesso!");
 
-      // Gera insights automaticamente
       if (data) {
         generateAIInsights(data.id, data.name, data.value);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao adicionar produto:", error);
-      showNotification("error", "Erro ao adicionar produto");
+      if (error.code === '23503') {
+        showNotification("error", "Erro de permissão. Faça login novamente.");
+      } else if (error.code === '23505') {
+        showNotification("error", "Produto já existe com este nome.");
+      } else {
+        showNotification("error", `Erro ao adicionar produto: ${error.message || 'Erro desconhecido'}`);
+      }
     } finally {
       setSaving(false);
     }
@@ -255,7 +276,6 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        // Valida estrutura
         if (jsonData.length === 0) {
           setImportError("A planilha está vazia");
           return;
@@ -286,7 +306,6 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
           return;
         }
 
-        // Normaliza dados
         const normalizedData = jsonData
           .map((row: any) => ({
             name:
@@ -327,12 +346,12 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
   };
 
   const handleImportConfirm = async () => {
-    if (!supabase || importData.length === 0) return;
+    if (!supabase || importData.length === 0 || !authUserId) return;
 
     setSaving(true);
     try {
       const productsToInsert = importData.map((item) => ({
-        user_id: userId,
+        user_id: authUserId,
         name: item.name,
         value: item.value,
       }));
@@ -345,14 +364,11 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
       if (error) throw error;
 
       setProducts((prev) => [...(data || []), ...prev]);
-      setShowImportModal(false);
       setImportData([]);
-      showNotification(
-        "success",
-        `${data?.length || 0} produtos importados com sucesso!`
-      );
+      setShowImportModal(false);
+      showNotification("success", `${data?.length || 0} produtos importados com sucesso!`);
 
-      // Gera insights para cada produto importado
+      // Gerar insights para cada produto importado
       if (data) {
         for (const product of data) {
           await generateAIInsights(product.id, product.name, product.value);
@@ -366,16 +382,33 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
     }
   };
 
-  const handleExportTemplate = () => {
+  const downloadTemplate = () => {
     const template = [
-      { Nome: "Exemplo de Produto 1", Valor: 100.0 },
-      { Nome: "Exemplo de Serviço 2", Valor: 250.5 },
+      { Nome: "Exemplo Produto 1", Valor: 100.00 },
+      { Nome: "Exemplo Produto 2", Valor: 250.50 },
     ];
-
     const ws = XLSX.utils.json_to_sheet(template);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Produtos");
-    XLSX.writeFile(wb, "template_produtos_hellogrowth.xlsx");
+    XLSX.writeFile(wb, "template_produtos.xlsx");
+  };
+
+  const exportProducts = () => {
+    if (products.length === 0) {
+      showNotification("error", "Nenhum produto para exportar");
+      return;
+    }
+    const exportData = products.map((p) => ({
+      Nome: p.name,
+      Valor: p.value,
+      Descrição: p.ai_description || "",
+      Persona: p.ai_persona || "",
+      Estratégia: p.ai_strategy || "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Produtos");
+    XLSX.writeFile(wb, "meus_produtos.xlsx");
   };
 
   const filteredProducts = products.filter((p) =>
@@ -385,77 +418,69 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-              <Package className="text-white" size={24} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-800">
-                Produtos e Serviços
-              </h1>
-              <p className="text-slate-500 text-sm">
-                Gerencie seu catálogo e deixe a IA criar estratégias de venda
-              </p>
-            </div>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg">
+            <Package className="text-white" size={28} />
           </div>
-          <div className="flex gap-3">
-            <button
-              onClick={handleExportTemplate}
-              className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all"
-            >
-              <Download size={18} />
-              <span className="hidden sm:inline">Baixar Template</span>
-            </button>
-            <label className="flex items-center gap-2 px-4 py-2 text-blue-600 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-all cursor-pointer">
-              <Upload size={18} />
-              <span className="hidden sm:inline">Importar Excel</span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-            </label>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:shadow-lg hover:shadow-emerald-500/30 transition-all"
-            >
-              <Plus size={18} />
-              <span className="hidden sm:inline">Novo Produto</span>
-            </button>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">Produtos e Serviços</h1>
+            <p className="text-slate-500">Gerencie seu catálogo e deixe a IA criar estratégias de venda</p>
           </div>
         </div>
-
-        {importError && (
-          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700">
-            <AlertCircle size={20} />
-            <span>{importError}</span>
-            <button onClick={() => setImportError(null)} className="ml-auto">
-              <X size={18} />
-            </button>
-          </div>
-        )}
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={downloadTemplate}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            <Download size={18} />
+            Baixar Template
+          </button>
+          <label className="flex items-center gap-2 px-4 py-2 border border-emerald-500 text-emerald-600 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer">
+            <Upload size={18} />
+            Importar Excel
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+          </label>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 transition-colors shadow-md"
+          >
+            <Plus size={18} />
+            Novo Produto
+          </button>
+        </div>
       </div>
 
       {/* Search */}
       <div className="mb-6">
-        <div className="relative">
-          <Search
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-            size={20}
-          />
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input
             type="text"
             placeholder="Buscar produtos..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+            className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
           />
         </div>
       </div>
+
+      {/* Import Error */}
+      {importError && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
+          <AlertCircle className="text-red-500" size={20} />
+          <span className="text-red-700">{importError}</span>
+          <button onClick={() => setImportError(null)} className="ml-auto">
+            <X size={18} className="text-red-500" />
+          </button>
+        </div>
+      )}
 
       {/* Products Grid */}
       {loading ? (
@@ -463,17 +488,15 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
           <Loader2 className="animate-spin text-emerald-500" size={40} />
         </div>
       ) : filteredProducts.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
-          <Package className="mx-auto text-slate-300 mb-4" size={64} />
-          <h3 className="text-xl font-semibold text-slate-600 mb-2">
-            Nenhum produto cadastrado
-          </h3>
-          <p className="text-slate-400 mb-6">
-            Comece adicionando seus produtos ou importe uma planilha
-          </p>
+        <div className="text-center py-20">
+          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
+            <Package className="text-slate-400" size={40} />
+          </div>
+          <h3 className="text-xl font-semibold text-slate-700 mb-2">Nenhum produto cadastrado</h3>
+          <p className="text-slate-500 mb-6">Adicione seus produtos para a IA criar estratégias de venda personalizadas</p>
           <button
             onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:shadow-lg transition-all"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-colors shadow-lg"
           >
             <Plus size={20} />
             Adicionar Primeiro Produto
@@ -484,150 +507,178 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
           {filteredProducts.map((product) => (
             <div
               key={product.id}
-              className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg hover:border-emerald-200 transition-all group"
+              className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-lg transition-shadow"
             >
-              <div className="p-5">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-lg text-slate-800 mb-1">
-                      {product.name}
-                    </h3>
-                    <p className="text-2xl font-bold text-emerald-600">
-                      R${" "}
-                      {product.value.toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                      })}
-                    </p>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="font-semibold text-lg text-slate-800">{product.name}</h3>
+                  <p className="text-2xl font-bold text-emerald-600">
+                    R$ {(typeof product.value === 'number' ? product.value : parseFloat(String(product.value)) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEditingProduct(product)}
+                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    <Edit3 size={18} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteProduct(product.id)}
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {product.ai_description ? (
+                <div className="space-y-3">
+                  <div className="p-3 bg-slate-50 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-600 mb-1">
+                      <Eye size={14} />
+                      Descrição
+                    </div>
+                    <p className="text-sm text-slate-700">{String(product.ai_description || '')}</p>
                   </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => setEditingProduct(product)}
-                      className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
-                    >
-                      <Edit3 size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteProduct(product.id)}
-                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm font-medium text-blue-600 mb-1">
+                      <Target size={14} />
+                      Cliente Ideal
+                    </div>
+                    <p className="text-sm text-slate-700">{String(product.ai_persona || '')}</p>
+                  </div>
+                  <div className="p-3 bg-amber-50 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm font-medium text-amber-600 mb-1">
+                      <MessageSquare size={14} />
+                      Estratégia
+                    </div>
+                    <p className="text-sm text-slate-700">{String(product.ai_strategy || '')}</p>
                   </div>
                 </div>
-
-                {product.ai_description ? (
-                  <div className="space-y-3">
-                    <div>
-                      <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                        Descrição (IA)
-                      </h4>
-                      <p className="text-sm text-slate-600">
-                        {product.ai_description}
-                      </p>
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                        Perfil do Cliente (IA)
-                      </h4>
-                      <p className="text-sm text-slate-600">
-                        {product.ai_persona}
-                      </p>
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                        Estratégia de Venda (IA)
-                      </h4>
-                      <p className="text-sm text-slate-600">
-                        {product.ai_strategy}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <button
-                      onClick={() =>
-                        generateAIInsights(
-                          product.id,
-                          product.name,
-                          product.value
-                        )
-                      }
-                      disabled={generatingAI === product.id}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-md transition-all"
-                    >
-                      {generatingAI === product.id ? (
-                        <Loader2 className="animate-spin" size={18} />
-                      ) : (
-                        <Sparkles size={18} />
-                      )}
+              ) : (
+                <button
+                  onClick={() => generateAIInsights(product.id, product.name, product.value)}
+                  disabled={generatingAI === product.id}
+                  className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl hover:from-purple-600 hover:to-pink-600 transition-colors disabled:opacity-50"
+                >
+                  {generatingAI === product.id ? (
+                    <>
+                      <Loader2 className="animate-spin" size={18} />
+                      Gerando insights...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={18} />
                       Gerar Insights com IA
-                    </button>
-                  </div>
-                )}
-              </div>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {/* Add/Edit Modal */}
-      {(showAddModal || editingProduct) && (
+      {/* Add Product Modal */}
+      {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-8 shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-slate-800">
-                {editingProduct ? "Editar Produto" : "Adicionar Novo Produto"}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowAddModal(false);
-                  setEditingProduct(null);
-                }}
-                className="p-2 text-slate-400 hover:text-slate-600"
-              >
-                <X />
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-slate-800">Adicionar Novo Produto</h2>
+              <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-slate-100 rounded-lg">
+                <X size={20} />
               </button>
             </div>
-            <div className="space-y-4 mb-8">
-              <input
-                type="text"
-                placeholder="Nome do Produto/Serviço"
-                value={editingProduct ? editingProduct.name : newProduct.name}
-                onChange={(e) =>
-                  editingProduct
-                    ? setEditingProduct({ ...editingProduct, name: e.target.value })
-                    : setNewProduct({ ...newProduct, name: e.target.value })
-                }
-                className="w-full p-4 border-2 border-slate-200 rounded-xl text-lg"
-              />
-              <input
-                type="text"
-                placeholder="Valor (Ex: 1200,00)"
-                value={editingProduct ? editingProduct.value : newProduct.value}
-                onChange={(e) =>
-                  editingProduct
-                    ? setEditingProduct({
-                        ...editingProduct,
-                        value: parseFloat(e.target.value.replace(",", ".") || "0"),
-                      })
-                    : setNewProduct({ ...newProduct, value: e.target.value })
-                }
-                className="w-full p-4 border-2 border-slate-200 rounded-xl text-lg"
-              />
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nome do Produto/Serviço</label>
+                <input
+                  type="text"
+                  value={newProduct.name}
+                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                  placeholder="Ex: Botox, Consultoria, Lavagem..."
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Valor (R$)</label>
+                <input
+                  type="text"
+                  value={newProduct.value}
+                  onChange={(e) => setNewProduct({ ...newProduct, value: e.target.value })}
+                  placeholder="Ex: 1000 ou 1000,00"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+              <button
+                onClick={handleAddProduct}
+                disabled={saving || !newProduct.name || !newProduct.value}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-colors disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="animate-spin" size={18} />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} />
+                    Salvar Produto
+                  </>
+                )}
+              </button>
             </div>
-            <button
-              onClick={editingProduct ? handleUpdateProduct : handleAddProduct}
-              disabled={saving}
-              className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-semibold text-lg flex items-center justify-center gap-3 disabled:opacity-50"
-            >
-              {saving ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <>
-                  <Save size={20} /> {editingProduct ? "Salvar Alterações" : "Salvar Produto"}
-                </>
-              )}
-            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {editingProduct && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-slate-800">Editar Produto</h2>
+              <button onClick={() => setEditingProduct(null)} className="p-2 hover:bg-slate-100 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nome do Produto/Serviço</label>
+                <input
+                  type="text"
+                  value={editingProduct.name}
+                  onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Valor (R$)</label>
+                <input
+                  type="number"
+                  value={editingProduct.value}
+                  onChange={(e) => setEditingProduct({ ...editingProduct, value: parseFloat(e.target.value) })}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setEditingProduct(null)}
+                  className="flex-1 px-4 py-3 border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUpdateProduct}
+                  disabled={saving}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-colors disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                  Salvar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -635,81 +686,77 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
       {/* Import Modal */}
       {showImportModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl p-8 shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-slate-800">
-                Confirmar Importação
-              </h2>
-              <button
-                onClick={() => setShowImportModal(false)}
-                className="p-2 text-slate-400 hover:text-slate-600"
-              >
-                <X />
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-slate-800">Confirmar Importação</h2>
+              <button onClick={() => { setShowImportModal(false); setImportData([]); }} className="p-2 hover:bg-slate-100 rounded-lg">
+                <X size={20} />
               </button>
             </div>
-            <p className="text-slate-500 mb-4">
-              Encontramos {importData.length} produtos para importar. A IA irá gerar
-              insights para cada um após a importação.
+            <p className="text-slate-600 mb-4">
+              {importData.length} produtos encontrados na planilha. Confirme para importar:
             </p>
-            <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-xl p-4 mb-6">
-              <table className="w-full text-left">
-                <thead>
+            <div className="border border-slate-200 rounded-xl overflow-hidden mb-6">
+              <table className="w-full">
+                <thead className="bg-slate-50">
                   <tr>
-                    <th className="p-2 text-sm font-semibold text-slate-600">
-                      Nome
-                    </th>
-                    <th className="p-2 text-sm font-semibold text-slate-600">
-                      Valor
-                    </th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">Nome</th>
+                    <th className="text-right px-4 py-3 text-sm font-medium text-slate-600">Valor</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {importData.map((item, index) => (
-                    <tr key={index} className="border-t border-slate-100">
-                      <td className="p-2">{item.name}</td>
-                      <td className="p-2">
-                        R${" "}
-                        {item.value.toLocaleString("pt-BR", {
-                          minimumFractionDigits: 2,
-                        })}
+                  {importData.slice(0, 10).map((item, idx) => (
+                    <tr key={idx} className="border-t border-slate-100">
+                      <td className="px-4 py-3 text-slate-800">{item.name}</td>
+                      <td className="px-4 py-3 text-right text-emerald-600 font-medium">
+                        R$ {(typeof item.value === 'number' ? item.value : parseFloat(String(item.value)) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-            <button
-              onClick={handleImportConfirm}
-              disabled={saving}
-              className="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-semibold text-lg flex items-center justify-center gap-3 disabled:opacity-50"
-            >
-              {saving ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <>
-                  <CheckCircle size={20} /> Confirmar e Importar
-                </>
+              {importData.length > 10 && (
+                <div className="px-4 py-3 bg-slate-50 text-center text-sm text-slate-500">
+                  ... e mais {importData.length - 10} produtos
+                </div>
               )}
-            </button>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowImportModal(false); setImportData([]); }}
+                className="flex-1 px-4 py-3 border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleImportConfirm}
+                disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-colors disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="animate-spin" size={18} />
+                    Importando...
+                  </>
+                ) : (
+                  <>
+                    <FileSpreadsheet size={18} />
+                    Confirmar Importação
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* Notification */}
       {notification && (
-        <div
-          className={`fixed bottom-8 right-8 p-4 rounded-xl shadow-2xl flex items-center gap-3 text-white animate-in slide-in-from-bottom-4 ${
-            notification.type === "success"
-              ? "bg-gradient-to-r from-emerald-500 to-teal-500"
-              : "bg-gradient-to-r from-red-500 to-pink-500"
-          }`}
-        >
-          {notification.type === "success" ? (
-            <CheckCircle size={24} />
-          ) : (
-            <AlertCircle size={24} />
-          )}
-          <span className="font-medium">{notification.message}</span>
+        <div className={`fixed bottom-6 right-6 flex items-center gap-3 px-6 py-4 rounded-xl shadow-lg z-50 ${
+          notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {notification.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+          {notification.message}
         </div>
       )}
     </div>

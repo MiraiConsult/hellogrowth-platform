@@ -113,6 +113,7 @@ const Navigation: React.FC<NavigationProps> = ({
     },
     { id: 'ai-chat', label: 'HelloIA', icon: MessageSquare, requiredPlan: 'all' },
     { id: 'database-export', label: 'Banco de Dados', icon: Database, requiredPlan: 'all' },
+    { id: 'business-profile', label: 'Perfil do Negócio', icon: Brain, requiredPlan: 'all', isNew: true, badge: 'Novo' },
     { id: 'settings', label: 'Configurações', icon: Settings, requiredPlan: 'all' },
     { id: 'tutorial', label: 'Ajuda', icon: HelpCircle, requiredPlan: 'all' },
   ];
