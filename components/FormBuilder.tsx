@@ -822,26 +822,70 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   );
 
   // Handler para salvar formulário da consultoria
+  // CORREÇÃO: Processa corretamente os campos iniciais e opções
   const handleConsultantSave = (formData: any) => {
+    // Converter identification_fields para o formato correto de initialFields
+    let initialFieldsFormatted: any[] = [];
+    
+    if (formData.identification_fields && Array.isArray(formData.identification_fields)) {
+      initialFieldsFormatted = formData.identification_fields.map((f: any) => {
+        // Se já é um objeto com a estrutura correta
+        if (typeof f === 'object' && f.id) {
+          return {
+            field: f.id,
+            label: f.label || f.id,
+            placeholder: f.placeholder || '',
+            required: f.required !== false,
+            enabled: f.enabled !== false
+          };
+        }
+        // Se é uma string simples
+        if (typeof f === 'string') {
+          const fieldMap: Record<string, any> = {
+            'name': { field: 'name', label: 'Nome Completo', placeholder: 'Seu nome', required: true, enabled: true },
+            'email': { field: 'email', label: 'Email', placeholder: 'seu@email.com', required: true, enabled: true },
+            'phone': { field: 'phone', label: 'Telefone / WhatsApp', placeholder: '(00) 00000-0000', required: false, enabled: true }
+          };
+          return fieldMap[f] || { field: f, label: f, placeholder: '', required: false, enabled: true };
+        }
+        return f;
+      });
+    } else {
+      // Padrão se não houver campos
+      initialFieldsFormatted = [
+        { field: 'name', label: 'Nome Completo', placeholder: 'Seu nome', required: true, enabled: true },
+        { field: 'email', label: 'Email', placeholder: 'seu@email.com', required: true, enabled: true },
+        { field: 'phone', label: 'Telefone / WhatsApp', placeholder: '(00) 00000-0000', required: false, enabled: true }
+      ];
+    }
+
     const newForm: Form = {
       id: Date.now().toString(),
       name: formData.name,
-      description: formData.objective === 'qualify' ? 'Formulário de qualificação de leads' : formData.objective === 'feedback' ? 'Formulário de feedback' : 'Formulário personalizado',
+      description: formData.description || (formData.objective === 'qualify' ? 'Formulário de qualificação de leads' : formData.objective === 'feedback' ? 'Formulário de feedback' : 'Formulário personalizado'),
       questions: formData.questions.map((q: any) => ({
         id: q.id,
         text: q.text,
         type: normalizeQuestionType(q.type || 'single'),
         options: q.options?.map((opt: any, i: number) => ({
-          id: `opt_${Date.now()}_${i}`,
-          label: typeof opt === "string" ? opt : (typeof opt.text === "string" ? opt.text : (typeof opt.label === "string" ? opt.label : (opt.label?.text || opt.text?.text || "Opção"))),
-          value: 0,
-          linkedProduct: '',
-          script: ''
+          id: opt.id || `opt_${Date.now()}_${i}`,
+          // CORREÇÃO: Extrai o texto corretamente de qualquer formato
+          label: typeof opt === 'string' 
+            ? opt 
+            : (typeof opt.text === 'string' 
+              ? opt.text 
+              : (typeof opt.label === 'string' 
+                ? opt.label 
+                : (opt.label?.text || opt.text?.text || 'Opção'))),
+          value: opt.value || 0,
+          linkedProduct: opt.linkedProduct || '',
+          script: opt.script || ''
         })) || []
       })),
       active: true,
       responses: 0,
-      initialFields: formData.initial_fields || ['name', 'email', 'phone']
+      // CORREÇÃO: Usa o formato correto de initialFields
+      initialFields: initialFieldsFormatted
     };
     onSaveForm(newForm);
   };

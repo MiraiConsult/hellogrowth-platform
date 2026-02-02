@@ -385,7 +385,7 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack })
                     <h3 className="text-sm font-bold text-gray-900 uppercase">Respostas do Formulário</h3>
                   </div>
                   <div className="space-y-3">
-                    {Object.entries(selectedLead.answers).map(([questionId, answerData]: [string, any]) => (
+                    {Object.entries(selectedLead.answers).filter(([questionId]) => questionId !== '_ai_analysis').map(([questionId, answerData]: [string, any]) => (
                       <div key={questionId} className="border border-gray-200 rounded-lg p-4 bg-white">
                         <p className="text-xs text-gray-500 font-semibold mb-1.5">{getQuestionText(questionId)}</p>
                         <div className="flex justify-between items-start">
