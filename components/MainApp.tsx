@@ -443,7 +443,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           `- ${p.name} (R$ ${p.value}): ${p.ai_persona || 'Sem perfil definido'}`
         ).join('\n');
 
-        const prompt = `Você é um consultor de vendas. Analise as respostas do cliente e sugira o melhor produto/serviço.
+        const prompt = `Você é um consultor de vendas especializado. Analise as respostas do cliente e forneça uma análise completa de oportunidade de venda.
 
 RESPOSTAS DO CLIENTE:
 ${answersText}
@@ -451,13 +451,30 @@ ${answersText}
 PRODUTOS/SERVIÇOS DISPONÍVEIS:
 ${productsContext}
 
+Analise profundamente as respostas e forneça:
+1. O produto/serviço mais adequado
+2. Valor estimado da oportunidade
+3. Nível de qualificação (alta, média, baixa)
+4. Insights específicos sobre o cliente
+5. Script de abordagem personalizado
+
 Responda APENAS com JSON válido (sem markdown):
 {
   "suggested_product": "Nome do produto mais adequado",
   "suggested_value": 0,
   "classification": "opportunity|risk|monitoring",
-  "confidence": 0.0,
-  "reasoning": "Explicação curta do porquê"
+  "confidence": 0.85,
+  "reasoning": "Explicação detalhada do porquê este produto é ideal",
+  "client_insights": [
+    "Insight 1 sobre o cliente",
+    "Insight 2 sobre necessidades",
+    "Insight 3 sobre urgência"
+  ],
+  "sales_script": "Script de abordagem curto e direto: O cliente [observação], então sugiro focar em [produto/serviço] porque pode gerar [benefício].",
+  "next_steps": [
+    "Ação 1 recomendada",
+    "Ação 2 recomendada"
+  ]
 }`;
 
         const response = await fetch('/api/gemini', {
@@ -478,19 +495,39 @@ Responda APENAS com JSON válido (sem markdown):
             }
           } catch (e) {
             console.error('Erro ao parsear resposta da IA:', e);
+            // Se falhar, criar análise básica
+            aiAnalysis = {
+              suggested_product: products[0]?.name || 'Produto não identificado',
+              suggested_value: opportunityValue || 0,
+              classification: opportunityValue > 0 ? 'opportunity' : 'monitoring',
+              confidence: 0.5,
+              reasoning: 'Análise automática baseada nas respostas fornecidas.',
+              client_insights: ['Cliente demonstrou interesse nos serviços'],
+              sales_script: 'Entre em contato para entender melhor as necessidades do cliente.',
+              next_steps: ['Fazer contato inicial', 'Agendar reunião']
+            };
           }
         }
+      } else {
+        // Sem produtos cadastrados - criar análise básica
+        aiAnalysis = {
+          suggested_product: 'Cadastre produtos para análise automática',
+          suggested_value: opportunityValue || 0,
+          classification: 'monitoring',
+          confidence: 0.3,
+          reasoning: 'Nenhum produto cadastrado para análise. Cadastre produtos na seção Produtos/Serviços.',
+          client_insights: ['Lead capturado aguardando análise'],
+          sales_script: 'Entre em contato para qualificar o lead.',
+          next_steps: ['Cadastrar produtos', 'Fazer contato inicial']
+        };
       }
     } catch (error) {
       console.error('Erro na análise de IA:', error);
     }
 
-    // 4. Determinar status baseado na análise
-    let status = 'Novo';
-    if (aiAnalysis) {
-      if (aiAnalysis.classification === 'opportunity') status = 'Qualificado';
-      else if (aiAnalysis.classification === 'risk') status = 'Risco';
-    }
+    // 4. CORREÇÃO: Sempre usar status "Novo" para aparecer no Kanban
+    // A análise de IA fica salva no campo _ai_analysis para consulta
+    const status = 'Novo';
 
     // 5. Inserir lead com dados enriquecidos
     await supabase.from('leads').insert([{

@@ -377,6 +377,96 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack })
                 </div>
               </div>
 
+              {/* AI Analysis Section */}
+              {selectedLead.answers?._ai_analysis && (
+                <div className="bg-gradient-to-br from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Sparkles size={20} className="text-purple-600" />
+                    <h3 className="text-lg font-bold text-purple-900">Análise de Oportunidade (IA)</h3>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {/* Produto Sugerido e Valor */}
+                    <div className="bg-white rounded-lg p-4 border border-purple-100">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="text-xs text-gray-500 font-semibold uppercase">Produto Recomendado</p>
+                          <p className="text-lg font-bold text-gray-900">{selectedLead.answers._ai_analysis.suggested_product}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500 font-semibold uppercase">Valor Estimado</p>
+                          <p className="text-2xl font-bold text-green-600">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedLead.answers._ai_analysis.suggested_value || 0)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 mt-3">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          selectedLead.answers._ai_analysis.classification === 'opportunity' ? 'bg-green-100 text-green-700' :
+                          selectedLead.answers._ai_analysis.classification === 'risk' ? 'bg-red-100 text-red-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {selectedLead.answers._ai_analysis.classification === 'opportunity' ? '✅ Alta Oportunidade' :
+                           selectedLead.answers._ai_analysis.classification === 'risk' ? '⚠️ Risco' :
+                           '🔍 Monitorar'}
+                        </span>
+                        <span className="text-xs text-gray-600">
+                          Confiança: {Math.round((selectedLead.answers._ai_analysis.confidence || 0) * 100)}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Raciocínio */}
+                    <div className="bg-white rounded-lg p-4 border border-purple-100">
+                      <p className="text-xs text-gray-500 font-semibold uppercase mb-2">🧠 Raciocínio da IA</p>
+                      <p className="text-gray-700 leading-relaxed">{selectedLead.answers._ai_analysis.reasoning}</p>
+                    </div>
+
+                    {/* Insights do Cliente */}
+                    {selectedLead.answers._ai_analysis.client_insights && selectedLead.answers._ai_analysis.client_insights.length > 0 && (
+                      <div className="bg-white rounded-lg p-4 border border-purple-100">
+                        <p className="text-xs text-gray-500 font-semibold uppercase mb-3">💡 Insights do Cliente</p>
+                        <ul className="space-y-2">
+                          {selectedLead.answers._ai_analysis.client_insights.map((insight: string, idx: number) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="text-purple-500 mt-1">•</span>
+                              <span className="text-gray-700">{insight}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Script de Vendas */}
+                    {selectedLead.answers._ai_analysis.sales_script && (
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border-2 border-green-200">
+                        <p className="text-xs text-green-700 font-semibold uppercase mb-2 flex items-center gap-1">
+                          <Target size={14} /> Script de Abordagem
+                        </p>
+                        <p className="text-gray-800 font-medium italic leading-relaxed">
+                          "{selectedLead.answers._ai_analysis.sales_script}"
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Próximos Passos */}
+                    {selectedLead.answers._ai_analysis.next_steps && selectedLead.answers._ai_analysis.next_steps.length > 0 && (
+                      <div className="bg-white rounded-lg p-4 border border-purple-100">
+                        <p className="text-xs text-gray-500 font-semibold uppercase mb-3">✅ Próximos Passos Recomendados</p>
+                        <ol className="space-y-2">
+                          {selectedLead.answers._ai_analysis.next_steps.map((step: string, idx: number) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="bg-purple-100 text-purple-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{idx + 1}</span>
+                              <span className="text-gray-700">{step}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Form Answers */}
               {selectedLead.answers && Object.keys(selectedLead.answers).length > 0 && (
                 <div>
