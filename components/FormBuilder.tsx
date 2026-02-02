@@ -831,9 +831,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         id: q.id,
         text: q.text,
         type: normalizeQuestionType(q.type || 'single'),
-        options: q.options?.map((opt: string, i: number) => ({
+        options: q.options?.map((opt: any, i: number) => ({
           id: `opt_${Date.now()}_${i}`,
-          label: opt,
+          label: typeof opt === 'string' ? opt : (opt.text || opt.label || 'Opção '),
           value: 0,
           linkedProduct: '',
           script: ''
