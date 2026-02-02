@@ -1,10 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+import { supabase } from '@/lib/supabase';
 import {
   Building2,
   Users,
@@ -69,12 +66,10 @@ const BUSINESS_TYPES = [
 ];
 
 export default function BusinessProfile({ userId }: BusinessProfileProps) {
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [activeSection, setActiveSection] = useState<'basic' | 'persona' | 'integrations'>('basic');
-  const [authUserId, setAuthUserId] = useState<string | null>(null);
   
   const [profile, setProfile] = useState<BusinessProfileData>({
     user_id: userId,
@@ -127,12 +122,6 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        // Obter o ID do usuário autenticado
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          setAuthUserId(user.id);
-        }
-
         const { data, error } = await supabase
           .from('business_profile')
           .select('*')
@@ -150,7 +139,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
     };
 
     loadProfile();
-  }, [userId, supabase]);
+  }, [userId]);
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -158,8 +147,8 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
   };
 
   const handleSave = async () => {
-    if (!authUserId) {
-      showNotification('error', 'Usuário não autenticado');
+    if (!userId) {
+      showNotification('error', 'Usuário não identificado');
       return;
     }
 
@@ -167,7 +156,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
     try {
       const updatedProfile = {
         ...profile,
-        user_id: authUserId,
+        user_id: userId,
         onboarding_score: currentScore,
         updated_at: new Date().toISOString()
       };
@@ -175,7 +164,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
       const { data: existing } = await supabase
         .from('business_profile')
         .select('id')
-        .eq('user_id', authUserId)
+        .eq('user_id', userId)
         .single();
 
       let result;
@@ -183,7 +172,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
         result = await supabase
           .from('business_profile')
           .update(updatedProfile)
-          .eq('user_id', authUserId);
+          .eq('user_id', userId);
       } else {
         result = await supabase
           .from('business_profile')
