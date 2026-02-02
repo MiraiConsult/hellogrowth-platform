@@ -8,13 +8,31 @@ interface PublicFormProps {
   onClose: () => void;
   onSubmit: (answers: any) => void;
   isPreview?: boolean;
-  companyName?: string; // Added prop
+  companyName?: string;
 }
 
-// Helper function to get option label - supports both 'label' and 'text' properties
+// CORREÇÃO: Helper function que extrai o texto da opção independente do formato
+// Suporta: string, {label: string}, {text: string}, {label: {text: string}}
 const getOptionLabel = (opt: any): string => {
+  if (!opt) return '';
   if (typeof opt === 'string') return opt;
-  return opt.label || opt.text || '';
+  
+  // Se label é um objeto com text (caso do bug)
+  if (opt.label && typeof opt.label === 'object' && opt.label.text) {
+    return opt.label.text;
+  }
+  
+  // Se label é string
+  if (opt.label && typeof opt.label === 'string') {
+    return opt.label;
+  }
+  
+  // Se text é string
+  if (opt.text && typeof opt.text === 'string') {
+    return opt.text;
+  }
+  
+  return '';
 };
 
 const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPreview = false, companyName }) => {
@@ -22,11 +40,9 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [isCompleted, setIsCompleted] = useState(false);
 
-  // Identify patient
   const [patientData, setPatientData] = useState({ name: '', email: '', phone: '' });
   const [showIntro, setShowIntro] = useState(true);
 
-  // Get initial fields configuration or use defaults
   const initialFields: InitialField[] = form.initialFields || [
     { field: 'name', label: 'Nome Completo', placeholder: 'Seu nome', required: true, enabled: true },
     { field: 'email', label: 'Email', placeholder: 'seu@email.com', required: true, enabled: true },
@@ -39,7 +55,6 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   const companyInitial = displayCompanyName.charAt(0).toUpperCase();
 
   const handleStart = () => {
-    // Check if all required fields are filled
     const allRequiredFilled = enabledFields
       .filter(f => f.required)
       .every(f => patientData[f.field].trim() !== '');
@@ -61,10 +76,9 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
         const currentFollowUps = currentAnswer.followUps || {};
 
         if (currentValues.includes(value)) {
-          // Deselecting
           const newValues = currentValues.filter((v: string) => v !== value);
           const newOptions = currentOptions.filter((o: any) => getOptionLabel(o) !== value);
-          delete currentFollowUps[option.id];
+          delete currentFollowUps[option?.id];
           return {
             ...prev,
             [questionId]: {
@@ -74,7 +88,6 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
             }
           };
         } else {
-          // Selecting
           const newFollowUps = { ...currentFollowUps };
           if (option?.followUpLabel !== undefined) {
               newFollowUps[option.id] = '';
@@ -90,7 +103,6 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
         }
       }
 
-      // Single choice
       return {
         ...prev,
         [questionId]: {
@@ -160,7 +172,6 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col relative" style={{ colorScheme: 'light' }}>
-      {/* Header Banner */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold">
@@ -173,7 +184,6 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
         </div>
       </div>
 
-      {/* Preview Banner */}
       {isPreview && (
         <div className="absolute top-4 left-4 z-50">
              <button onClick={onClose} className="px-4 py-2 bg-white text-gray-700 shadow-md rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-gray-100 border border-gray-200">
@@ -182,7 +192,6 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
         </div>
       )}
 
-      {/* Progress Bar */}
       {!showIntro && (
         <div className="w-full bg-gray-200 h-1">
           <div 
@@ -253,12 +262,12 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
                     />
                   )}
 
-                  {(currentQuestion.type === 'single' || currentQuestion.type === 'multiple') && currentQuestion.options && (
+                  {(currentQuestion.type === 'single' || currentQuestion.type === 'multiple' || currentQuestion.type === 'single_choice' || currentQuestion.type === 'multiple_choice') && currentQuestion.options && (
                     <div className="grid gap-3">
                       {currentQuestion.options?.map((opt) => {
                          const optLabel = getOptionLabel(opt);
                          let isSelected = false;
-                         if (currentQuestion.type === 'multiple') {
+                         if (currentQuestion.type === 'multiple' || currentQuestion.type === 'multiple_choice') {
                             const currentValues = answers[currentQuestion.id]?.value || [];
                             isSelected = Array.isArray(currentValues) && currentValues.includes(optLabel);
                          } else {
@@ -328,7 +337,6 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
         </div>
       </div>
       
-      {/* Footer Branding */}
       <div className="py-6 text-center text-gray-400 text-xs">
         <p>Powered by HelloGrowth</p>
       </div>

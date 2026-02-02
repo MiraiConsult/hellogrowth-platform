@@ -86,14 +86,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setEditingFormId(form.id);
     setCurrentFormName(form.name);
     setCurrentFormDescription(form.description || '');
-    setCurrentQuestions(form.questions.map(q => ({ 
-      ...q, 
-      type: normalizeQuestionType(q.type), 
-      options: q.options?.map(opt => ({ 
-        ...opt, 
-        label: opt.label || opt.text || "" 
-      })) || [] 
-    })));
+    setCurrentQuestions(form.questions.map(q => ({ ...q, type: normalizeQuestionType(q.type), options: q.options?.map(opt => ({ ...opt, label: typeof opt.label === "object" && opt.label?.text ? opt.label.text : (opt.label || opt.text || "") })) || [] })));
     setCurrentInitialFields(form.initialFields || []);
     setView('editor');
     setMenuOpenId(null);
@@ -840,7 +833,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         type: normalizeQuestionType(q.type || 'single'),
         options: q.options?.map((opt: any, i: number) => ({
           id: `opt_${Date.now()}_${i}`,
-          label: typeof opt === 'string' ? opt : (opt.text || opt.label || 'Opção '),
+          label: typeof opt === "string" ? opt : (typeof opt.text === "string" ? opt.text : (typeof opt.label === "string" ? opt.label : (opt.label?.text || opt.text?.text || "Opção"))),
           value: 0,
           linkedProduct: '',
           script: ''
