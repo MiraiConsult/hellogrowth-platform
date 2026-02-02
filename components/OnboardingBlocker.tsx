@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 import {
   Lock,
   Sparkles,
@@ -39,7 +42,7 @@ export default function OnboardingBlocker({
   onNavigate,
   children
 }: OnboardingBlockerProps) {
-  const supabase = createClientComponentClient();
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
   const [status, setStatus] = useState<OnboardingStatus>({
     hasBusinessProfile: false,
     hasPlaceId: false,

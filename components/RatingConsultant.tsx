@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 import {
   X,
   Sparkles,
@@ -57,7 +60,7 @@ interface RatingConsultantProps {
 }
 
 export default function RatingConsultant({ userId, onClose, onSave }: RatingConsultantProps) {
-  const supabase = createClientComponentClient();
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   
