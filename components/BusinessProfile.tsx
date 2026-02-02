@@ -69,7 +69,7 @@ const BUSINESS_TYPES = [
 ];
 
 export default function BusinessProfile({ userId }: BusinessProfileProps) {
-  const supabase = createClientComponentClient();
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
