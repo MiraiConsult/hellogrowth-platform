@@ -53,39 +53,23 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   const [importError, setImportError] = useState<string | null>(null);
   const [generatingAI, setGeneratingAI] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [authUserId, setAuthUserId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Obter o ID do usuário autenticado do Supabase Auth
+  // Usar o userId passado como prop diretamente (autenticação customizada)
   useEffect(() => {
-    const getAuthUser = async () => {
-      if (!supabase) return;
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          setAuthUserId(user.id);
-        }
-      } catch (error) {
-        console.error('Erro ao obter usuário autenticado:', error);
-      }
-    };
-    getAuthUser();
-  }, [supabase]);
-
-  useEffect(() => {
-    if (supabase && authUserId) {
+    if (supabase && userId) {
       fetchProducts();
     }
-  }, [supabase, authUserId]);
+  }, [supabase, userId]);
 
   const fetchProducts = async () => {
-    if (!supabase || !authUserId) return;
+    if (!supabase || !userId) return;
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('products_services')
         .select('*')
-        .eq('user_id', authUserId)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -172,14 +156,14 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
   };
 
   const handleAddProduct = async () => {
-    if (!newProduct.name || !newProduct.value || !supabase || !authUserId) return;
+    if (!newProduct.name || !newProduct.value || !supabase || !userId) return;
 
     setSaving(true);
     try {
       const { data, error } = await supabase
         .from("products_services")
         .insert({
-          user_id: authUserId,
+          user_id: userId,
           name: newProduct.name,
           value: parseFloat(newProduct.value.replace(",", ".")),
         })
@@ -346,12 +330,12 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
   };
 
   const handleImportConfirm = async () => {
-    if (!supabase || importData.length === 0 || !authUserId) return;
+    if (!supabase || importData.length === 0 || !userId) return;
 
     setSaving(true);
     try {
       const productsToInsert = importData.map((item) => ({
-        user_id: authUserId,
+        user_id: userId,
         name: item.name,
         value: item.value,
       }));
@@ -418,9 +402,9 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg">
+      <div className="mb-8">
+        <div className="flex items-center gap-4 mb-2">
+          <div className="p-3 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-2xl shadow-lg">
             <Package className="text-white" size={28} />
           </div>
           <div>
@@ -428,75 +412,70 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
             <p className="text-slate-500">Gerencie seu catálogo e deixe a IA criar estratégias de venda</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={downloadTemplate}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            <Download size={18} />
-            Baixar Template
-          </button>
-          <label className="flex items-center gap-2 px-4 py-2 border border-emerald-500 text-emerald-600 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer">
-            <Upload size={18} />
-            Importar Excel
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-          </label>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 transition-colors shadow-md"
-          >
-            <Plus size={18} />
-            Novo Produto
-          </button>
-        </div>
       </div>
 
-      {/* Search */}
-      <div className="mb-6">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+      {/* Actions Bar */}
+      <div className="flex flex-wrap items-center gap-4 mb-6">
+        <button
+          onClick={downloadTemplate}
+          className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+        >
+          <Download size={18} />
+          Baixar Template
+        </button>
+        <label className="flex items-center gap-2 px-4 py-2 text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer">
+          <Upload size={18} />
+          Importar Excel
           <input
-            type="text"
-            placeholder="Buscar produtos..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFileUpload}
+            className="hidden"
           />
-        </div>
+        </label>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-colors shadow-lg shadow-emerald-500/25"
+        >
+          <Plus size={18} />
+          Novo Produto
+        </button>
       </div>
 
       {/* Import Error */}
       {importError && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-          <AlertCircle className="text-red-500" size={20} />
-          <span className="text-red-700">{importError}</span>
-          <button onClick={() => setImportError(null)} className="ml-auto">
-            <X size={18} className="text-red-500" />
-          </button>
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700">
+          <AlertCircle size={20} />
+          {importError}
         </div>
       )}
 
+      {/* Search */}
+      <div className="relative mb-6">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+        <input
+          type="text"
+          placeholder="Buscar produtos..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pl-12 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+        />
+      </div>
+
       {/* Products Grid */}
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="animate-spin text-emerald-500" size={40} />
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="animate-spin text-emerald-500" size={32} />
         </div>
       ) : filteredProducts.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
-            <Package className="text-slate-400" size={40} />
-          </div>
-          <h3 className="text-xl font-semibold text-slate-700 mb-2">Nenhum produto cadastrado</h3>
-          <p className="text-slate-500 mb-6">Adicione seus produtos para a IA criar estratégias de venda personalizadas</p>
+        <div className="text-center py-12 bg-slate-50 rounded-2xl">
+          <Package className="mx-auto text-slate-300 mb-4" size={48} />
+          <h3 className="text-lg font-medium text-slate-600 mb-2">Nenhum produto cadastrado</h3>
+          <p className="text-slate-500 mb-4">Comece adicionando seus produtos e serviços</p>
           <button
             onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-colors shadow-lg"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors"
           >
             <Plus size={20} />
             Adicionar Primeiro Produto
