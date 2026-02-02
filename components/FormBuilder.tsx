@@ -18,6 +18,19 @@ interface FormBuilderProps {
   userId?: string;
 }
 
+// Helper function to convert question types from FormConsultant format to FormBuilder/PublicForm format
+const normalizeQuestionType = (type: string): 'text' | 'single' | 'multiple' => {
+  const typeMap: Record<string, 'text' | 'single' | 'multiple'> = {
+    'single_choice': 'single',
+    'multiple_choice': 'multiple',
+    'text': 'text',
+    'scale': 'single', // Scale can be treated as single choice
+    'single': 'single',
+    'multiple': 'multiple'
+  };
+  return typeMap[type] || 'text';
+};
+
 const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId }) => {
   const [view, setView] = useState<'list' | 'editor' | 'consultant'>('list');
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
@@ -43,14 +56,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   
   const totalResponses = useMemo(() => {
     if (leads && leads.length > 0) {
-       // Filter leads that are NOT manual (i.e. likely from a form)
        return leads.filter(l => l.formSource !== 'Manual').length;
     }
-    // Fallback to sum of form.responses if leads not provided or empty
     return forms.reduce((acc, curr) => acc + (curr.responses || 0), 0);
   }, [leads, forms]);
 
-  // Helper for per-form count
   const getResponseCount = (form: Form) => {
       if (leads && leads.length > 0) {
           return leads.filter(l => l.formId === form.id || (l.formSource === form.name)).length;
@@ -72,7 +82,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setEditingFormId(form.id);
     setCurrentFormName(form.name);
     setCurrentFormDescription(form.description || '');
-    setCurrentQuestions(form.questions);
+    // Normalize question types when loading for editing
+    setCurrentQuestions(form.questions.map(q => ({
+      ...q,
+      type: normalizeQuestionType(q.type)
+    })));
     setCurrentInitialFields(form.initialFields || []);
     setView('editor');
     setMenuOpenId(null);
@@ -110,33 +124,23 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
 
     const newQuestions = [...currentQuestions];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    
-    // Swap elements
     [newQuestions[index], newQuestions[targetIndex]] = [newQuestions[targetIndex], newQuestions[index]];
-    
     setCurrentQuestions(newQuestions);
   };
 
-  // Generate a single script for a specific option
   const handleGenerateScript = async (questionId: string, optionId: string, questionText: string, optionLabel: string) => {
     if (!questionText || !optionLabel) return;
-    
     setGeneratingScriptId(optionId);
 
     try {
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
         const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
         const prompt = `Crie uma ÚNICA frase curta (máximo 15 palavras) para um vendedor usar com um cliente que respondeu "${optionLabel}" à pergunta "${questionText}". Retorne APENAS a frase, sem aspas, numeração ou qualquer outro texto.`;
         const result = await model.generateContent(prompt);
-        const response = result.response;
-        
         let script = result.response.text()?.trim() || '';
-        // Remove potential markdown, quotes, and numbering
         script = script.replace(/\*|"/g, '').replace(/^\d+\.\s*/, '').trim();
-
         if (script) updateOption(questionId, optionId, 'script', script);
       } else {
         throw new Error("No API Key");
@@ -158,12 +162,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
 
   const handleAiSuggest = async () => {
     if (!currentFormName) return;
-    
     setIsGenerating(true);
 
     try {
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
         const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
@@ -196,7 +198,6 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
             })) || []
           }));
           
-          // Remove empty questions (like the default Question 1) before adding AI suggestions
           setCurrentQuestions(prev => {
              const nonEmpty = prev.filter(q => q.text.trim() !== '');
              return [...nonEmpty, ...mapped];
@@ -207,11 +208,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       throw new Error("AI Failed");
 
     } catch (error) {
-      // ROBUST FALLBACK (Prioritizing Choice Questions)
       const suggestions: FormQuestion[] = [];
-      const ctx = (currentFormName + ' ' + currentFormDescription).toLowerCase();
-      
-      // 1. Urgency (Single Choice)
       suggestions.push({ 
           id: Date.now() + '1', 
           text: 'Qual o seu nível de urgência para iniciar?', 
@@ -222,8 +219,6 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
               {id: 'o3', label: 'Apenas pesquisando', value: 0, script: 'Nutrir com conteúdo.'}
           ] 
       });
-
-      // 2. Budget (Single Choice)
       suggestions.push({ 
           id: Date.now() + '2', 
           text: 'Qual seu orçamento estimado para o projeto?', 
@@ -234,48 +229,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
               {id: 'o6', label: 'Acima de R$ 5.000', value: 200, script: 'Oferecer consultoria VIP.'}
           ] 
       });
-
-      // 3. Needs (Multiple Choice) - Context Aware
-      if (ctx.includes('site') || ctx.includes('web') || ctx.includes('marketing')) {
-          suggestions.push({
-              id: Date.now() + '3',
-              text: 'Quais serviços você precisa?',
-              type: 'multiple',
-              options: [
-                  {id: 'o7', label: 'Criação de Site', value: 100, script: ''},
-                  {id: 'o8', label: 'Gestão de Redes Sociais', value: 50, script: ''},
-                  {id: 'o9', label: 'Tráfego Pago', value: 80, script: ''}
-              ]
-          });
-      } else if (ctx.includes('saúde') || ctx.includes('clinica') || ctx.includes('estética')) {
-           suggestions.push({
-              id: Date.now() + '3',
-              text: 'Quais procedimentos você tem interesse?',
-              type: 'multiple',
-              options: [
-                  {id: 'o10', label: 'Avaliação Geral', value: 0, script: ''},
-                  {id: 'o11', label: 'Tratamento Específico', value: 100, script: ''},
-                  {id: 'o12', label: 'Estética', value: 150, script: ''}
-              ]
-          });
-      } else {
-           suggestions.push({
-              id: Date.now() + '3',
-              text: 'Como conheceu nossa empresa?',
-              type: 'single',
-              options: [
-                  {id: 'o13', label: 'Google', value: 0, script: ''},
-                  {id: 'o14', label: 'Indicação', value: 20, script: ''},
-                  {id: 'o15', label: 'Instagram', value: 0, script: ''}
-              ]
-          });
-      }
-
-      // Remove empty questions in fallback too
-      setCurrentQuestions(prev => {
-         const nonEmpty = prev.filter(q => q.text.trim() !== '');
-         return [...nonEmpty, ...suggestions];
-      });
+      setCurrentQuestions(prev => [...prev.filter(q => q.text.trim() !== ''), ...suggestions]);
     } finally {
       setIsGenerating(false);
     }
@@ -293,27 +247,20 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setCurrentQuestions(currentQuestions.map(q => q.id === id ? { ...q, [field]: value } : q));
   };
 
-  const addOption = (questionId: string) => {
-    setCurrentQuestions(currentQuestions.map(q => {
-        if (q.id === questionId) {
-            const newOption: FormOption = { 
-                id: Date.now().toString() + Math.random().toString().slice(2,5), 
-                label: '', 
-                value: 0, 
-                script: undefined, // Default to undefined
-                linkedProduct: ''
-            };
-            return { 
-                ...q, 
-                options: [...(q.options || []), newOption] 
-            };
-        }
-        return q;
-    }));
+  const addOption = (qId: string) => {
+    setCurrentQuestions(currentQuestions.map(q => 
+      q.id === qId 
+        ? { ...q, options: [...(q.options || []), { id: Date.now().toString(), label: '', value: 0, linkedProduct: '', script: '' }] } 
+        : q
+    ));
   };
 
   const updateOption = (qId: string, oId: string, field: keyof FormOption, value: any) => {
-    setCurrentQuestions(currentQuestions.map(q => q.id === qId ? { ...q, options: q.options?.map(o => o.id === oId ? { ...o, [field]: value } : o) } : q));
+    setCurrentQuestions(currentQuestions.map(q => 
+      q.id === qId 
+        ? { ...q, options: q.options?.map(o => o.id === oId ? { ...o, [field]: value } : o) } 
+        : q
+    ));
   };
 
   const removeOption = (qId: string, oId: string) => {
@@ -321,9 +268,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   };
 
   const handleSave = () => {
-    // Prepare the form object
     const formToSave: Form = {
-        id: editingFormId || Date.now().toString(), // If new, ID will be replaced by DB ID later, but OK for optimistic
+        id: editingFormId || Date.now().toString(),
         name: currentFormName,
         description: currentFormDescription,
         questions: currentQuestions,
@@ -332,8 +278,6 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         createdAt: new Date().toISOString(),
         initialFields: currentInitialFields.length > 0 ? currentInitialFields : undefined
     };
-
-    // Trigger Parent Handler for DB Save
     onSaveForm(formToSave);
     setView('list');
   };
@@ -346,165 +290,137 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       }
   };
 
+  // Render List View
   const renderList = () => (
-      <div className="p-8 min-h-screen bg-gray-50" onClick={() => setMenuOpenId(null)} style={{ colorScheme: 'light' }}>
-        <div className="flex justify-between items-center mb-6">
+    <div className="p-8 min-h-screen bg-gray-50" style={{ colorScheme: 'light' }}>
+      <div className="max-w-6xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Formulários de Anamnese</h1>
-            <p className="text-gray-500">Gerencie seus questionários de pré-venda</p>
+            <h1 className="text-2xl font-bold text-gray-900">Formulários</h1>
+            <p className="text-gray-500">Crie e gerencie seus formulários de captação de leads.</p>
           </div>
           <div className="flex gap-3">
-            <button 
-              onClick={handleCreateNew}
-              className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 shadow-sm flex items-center gap-2"
-            >
-              <Plus size={18} /> Manual
+            <button onClick={handleCreateNew} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center gap-2 font-medium">
+              <Plus size={18} /> Criar Manualmente
             </button>
-            <button 
-              onClick={() => setShowConsultant(true)}
-              className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/30 shadow-sm flex items-center gap-2 transition-all"
-            >
+            <button onClick={() => setShowConsultant(true)} className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:opacity-90 flex items-center gap-2 font-medium shadow-md">
               <Bot size={18} /> Criar com IA
             </button>
           </div>
         </div>
 
-        {/* Mini Dashboard */}
-        <div className="grid grid-cols-2 gap-4 mb-8">
-             <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
-                 <div className="p-3 bg-blue-50 text-blue-600 rounded-lg"><CheckSquare size={24}/></div>
-                 <div>
-                     <p className="text-sm text-gray-500 font-medium">Formulários Ativos</p>
-                     <h3 className="text-2xl font-bold text-gray-800">{activeFormsCount}</h3>
-                 </div>
-             </div>
-             <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
-                 <div className="p-3 bg-green-50 text-green-600 rounded-lg"><Users size={24}/></div>
-                 <div>
-                     <p className="text-sm text-gray-500 font-medium">Total de Respostas (Leads)</p>
-                     <h3 className="text-2xl font-bold text-gray-800">{totalResponses}</h3>
-                 </div>
-             </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {forms.map(form => (
-            <div key={form.id} className={`bg-white p-6 rounded-xl border shadow-sm transition-all relative ${form.active ? 'border-gray-200' : 'border-gray-200 opacity-75 bg-gray-50'}`}>
-               <div className="flex justify-between items-start mb-4">
-                 <div className={`p-3 rounded-lg ${form.active ? 'bg-primary-50 text-primary-600' : 'bg-gray-200 text-gray-500'}`}>
-                   <CheckSquare size={24} />
-                 </div>
-                 <div className="relative">
-                   <button 
-                     onClick={(e) => {
-                       e.stopPropagation();
-                       setMenuOpenId(menuOpenId === form.id ? null : form.id);
-                     }} 
-                     className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-                   >
-                     <MoreVertical size={18} />
-                   </button>
-                   
-                   {menuOpenId === form.id && (
-                      <div className="absolute right-0 top-10 bg-white rounded-lg shadow-xl border border-gray-100 w-48 z-20 py-1 animate-in fade-in zoom-in-95 duration-100">
-                        <button onClick={() => handleEdit(form)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                          <Edit3 size={14} /> Editar
-                        </button>
-                        <button onClick={() => handleToggleStatus(form)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                          {form.active ? <Pause size={14} /> : <Play size={14} />} 
-                          {form.active ? 'Pausar' : 'Ativar'}
-                        </button>
-                        <div className="h-px bg-gray-100 my-1"></div>
-                        <button onClick={() => handleDelete(form.id)} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
-                          <Trash2 size={14} /> Excluir
-                        </button>
-                      </div>
-                   )}
-                 </div>
-               </div>
-               <h3 className="text-lg font-bold text-gray-900 mb-1">{form.name}</h3>
-               <p className="text-sm text-gray-500 mb-4 line-clamp-2">{form.description || 'Sem descrição definida.'}</p>
-               
-               <div className="flex items-center gap-2 mb-4">
-                 <span className={`text-xs px-2 py-0.5 rounded-full border ${form.active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                    {form.active ? 'Ativo' : 'Pausado'}
-                 </span>
-                 <span className="text-xs text-gray-400">{form.questions.length} perguntas • {getResponseCount(form)} respostas</span>
-               </div>
-               
-               <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
-                 <button 
-                    onClick={() => handleCopyLink(form.id)}
-                    className={`text-sm font-medium flex items-center gap-1 transition-colors ${copiedId === form.id ? 'text-green-600' : 'text-gray-500 hover:text-primary-600'}`}
-                 >
-                   {copiedId === form.id ? <Check size={16} /> : <Share2 size={16} />}
-                   {copiedId === form.id ? 'Copiado' : 'Link'}
-                 </button>
-                 <div className="flex items-center gap-2">
-                   <button 
-                     onClick={() => handleOpenQr(form.id, form.name)} 
-                     className="text-sm text-gray-500 hover:text-primary-600 font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-50"
-                     title="QR Code"
-                   >
-                     <QrCode size={16} />
-                   </button>
-                   {onPreview && (
-                     <button 
-                       onClick={() => onPreview(form.id)} 
-                       className="text-sm text-gray-500 hover:text-primary-600 font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-50"
-                       title="Visualizar"
-                     >
-                       <Eye size={16} />
-                     </button>
-                   )}
-                   {onViewReport && (
-                     <button 
-                       onClick={() => onViewReport(form.id)} 
-                       className="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-primary-50"
-                       title="Relatório"
-                     >
-                       <BarChart3 size={16} />
-                     </button>
-                   )}
-                 </div>
-               </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-blue-100 rounded-lg"><CheckSquare className="text-blue-600" size={24} /></div>
+              <div>
+                <p className="text-sm text-gray-500">Formulários Ativos</p>
+                <p className="text-2xl font-bold text-gray-900">{activeFormsCount}</p>
+              </div>
             </div>
-          ))}
-          <button onClick={handleCreateNew} className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-primary-400 hover:text-primary-500 hover:bg-primary-50 transition-all min-h-[200px]">
-             <Plus size={32} className="mb-2" />
-             <span className="font-medium">Criar novo formulário</span>
-          </button>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-green-100 rounded-lg"><Users className="text-green-600" size={24} /></div>
+              <div>
+                <p className="text-sm text-gray-500">Total de Respostas</p>
+                <p className="text-2xl font-bold text-gray-900">{totalResponses}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-purple-100 rounded-lg"><TrendingUp className="text-purple-600" size={24} /></div>
+              <div>
+                <p className="text-sm text-gray-500">Taxa de Conversão</p>
+                <p className="text-2xl font-bold text-gray-900">{totalResponses > 0 ? `${((totalResponses / (forms.length || 1)) * 10).toFixed(0)}%` : '0%'}</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* QR Code Modal */}
-        {qrModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full text-center relative animate-in zoom-in-95">
-                    <button 
-                        onClick={() => setQrModalOpen(false)} 
-                        className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1 rounded-full transition-colors"
-                    >
-                        <X size={20}/>
-                    </button>
-                    <h3 className="font-bold text-lg text-gray-900 mb-1">QR Code do Formulário</h3>
-                    <p className="text-sm text-gray-500 mb-6 truncate px-4">{currentQrName}</p>
-                    
-                    <div className="bg-white p-2 border border-gray-200 rounded-xl inline-block mb-6 shadow-sm">
-                        <img 
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(currentQrUrl)}`} 
-                            alt="QR Code" 
-                            className="w-48 h-48"
-                        />
+        {forms.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckSquare className="text-gray-400" size={32} />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhum formulário criado</h3>
+            <p className="text-gray-500 mb-6">Crie seu primeiro formulário para começar a capturar leads qualificados.</p>
+            <button onClick={() => setShowConsultant(true)} className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:opacity-90 flex items-center gap-2 font-medium mx-auto shadow-md">
+              <Bot size={18} /> Criar com IA
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {forms.map(form => (
+              <div key={form.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow group">
+                <div className="p-5">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 truncate">{form.name}</h3>
+                      <p className="text-sm text-gray-500 truncate">{form.questions.length} perguntas</p>
                     </div>
-                    
+                    <div className="relative">
+                      <button onClick={() => setMenuOpenId(menuOpenId === form.id ? null : form.id)} className="p-1.5 hover:bg-gray-100 rounded-full transition-colors">
+                        <MoreVertical size={18} className="text-gray-400" />
+                      </button>
+                      {menuOpenId === form.id && (
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                          <button onClick={() => handleEdit(form)} className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                            <Edit size={16} /> Editar
+                          </button>
+                          <button onClick={() => handleToggleStatus(form)} className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                            {form.active ? <><Pause size={16} /> Pausar</> : <><Play size={16} /> Ativar</>}
+                          </button>
+                          <button onClick={() => onPreview && onPreview(form.id)} className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                            <Eye size={16} /> Visualizar
+                          </button>
+                          <button onClick={() => onViewReport && onViewReport(form.id)} className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                            <BarChart3 size={16} /> Ver Relatório
+                          </button>
+                          <hr className="my-1" />
+                          <button onClick={() => handleDelete(form.id)} className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+                            <Trash2 size={16} /> Excluir
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${form.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {form.active ? 'Ativo' : 'Pausado'}
+                    </span>
+                    <span className="text-xs text-gray-400">{getResponseCount(form)} respostas</span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={() => handleCopyLink(form.id)} className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 transition-all ${copiedId === form.id ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                      {copiedId === form.id ? <><Check size={16} /> Copiado!</> : <><Share2 size={16} /> Copiar Link</>}
+                    </button>
+                    <button onClick={() => handleOpenQr(form.id, form.name)} className="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors" title="Gerar QR Code">
+                      <QrCode size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {qrModalOpen && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
+                    <button onClick={() => setQrModalOpen(false)} className="absolute top-4 right-4 p-1 hover:bg-gray-100 rounded-full transition-colors">
+                        <X size={20} className="text-gray-500" />
+                    </button>
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">QR Code do Formulário</h3>
+                    <p className="text-sm text-gray-500 mb-4">{currentQrName}</p>
+                    <div className="bg-gray-100 rounded-xl p-4 flex items-center justify-center mb-4">
+                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(currentQrUrl)}`} alt="QR Code" className="w-48 h-48" />
+                    </div>
                     <div className="flex justify-center">
-                        <a 
-                            href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(currentQrUrl)}`} 
-                            download="qrcode.png" 
-                            target="_blank" 
-                            rel="noreferrer" 
-                            className="flex items-center gap-2 px-6 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium shadow-sm transition-colors"
-                        >
+                        <a href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(currentQrUrl)}`} download="qrcode.png" target="_blank" rel="noreferrer" className="flex items-center gap-2 px-6 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium shadow-sm transition-colors">
                             <Download size={18}/> Baixar Imagem
                         </a>
                     </div>
@@ -529,16 +445,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
             </div>
           </div>
           <div className="flex gap-2">
-            <button 
-              onClick={handleHeaderPreview}
-              className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
-            >
+            <button onClick={handleHeaderPreview} className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2">
               <Eye size={18} /> Visualizar
             </button>
-            <button 
-              onClick={handleSave}
-              className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 shadow-sm font-medium"
-            >
+            <button onClick={handleSave} className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 shadow-sm font-medium">
               Salvar Formulário
             </button>
           </div>
@@ -546,82 +456,44 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
 
         <div className="space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <InitialFieldsConfig 
-              initialFields={currentInitialFields}
-              onChange={setCurrentInitialFields}
-            />
+            <InitialFieldsConfig initialFields={currentInitialFields} onChange={setCurrentInitialFields} />
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Formulário</label>
-                <input 
-                  type="text" 
-                  value={currentFormName}
-                  onChange={(e) => setCurrentFormName(e.target.value)}
-                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 p-2 border bg-white text-gray-900" 
-                  style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                  placeholder="Ex: Anamnese Inicial"
-                />
+                <input type="text" value={currentFormName} onChange={(e) => setCurrentFormName(e.target.value)} className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 p-2 border bg-white text-gray-900" style={{ backgroundColor: '#ffffff', color: '#111827' }} placeholder="Ex: Anamnese Inicial" />
              </div>
              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Descrição (Contexto para IA)</label>
-                <textarea 
-                  value={currentFormDescription}
-                  onChange={(e) => setCurrentFormDescription(e.target.value)}
-                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 p-2 border bg-white text-gray-900" 
-                  style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                  placeholder="Ex: Formulário para qualificar clientes de alto padrão interessados em implantes..."
-                  rows={3}
-                />
+                <textarea value={currentFormDescription} onChange={(e) => setCurrentFormDescription(e.target.value)} className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 p-2 border bg-white text-gray-900" style={{ backgroundColor: '#ffffff', color: '#111827' }} placeholder="Ex: Formulário para qualificar clientes de alto padrão interessados em implantes..." rows={3} />
              </div>
           </div>
 
           <div className="flex justify-between items-center">
              <h2 className="text-lg font-bold text-gray-800">Perguntas</h2>
-             <button 
-                onClick={handleAiSuggest}
-                disabled={!currentFormName || isGenerating}
-                className="text-xs bg-purple-100 text-purple-700 px-3 py-2 rounded-full flex items-center gap-2 font-bold hover:bg-purple-200 transition-colors disabled:opacity-50"
-            >
+             <button onClick={handleAiSuggest} disabled={!currentFormName || isGenerating} className="text-xs bg-purple-100 text-purple-700 px-3 py-2 rounded-full flex items-center gap-2 font-bold hover:bg-purple-200 transition-colors disabled:opacity-50">
                 {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                 {isGenerating ? 'Gerando Perguntas...' : 'Sugerir Perguntas com IA'}
             </button>
           </div>
 
           {currentQuestions.map((q, index) => (
-             <div 
-               key={q.id} 
-               className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all"
-             >
+             <div key={q.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all">
                 <div className="p-6">
                    <div className="flex justify-between items-start mb-4">
                         <span className="text-xs font-bold text-primary-600 uppercase bg-primary-50 px-2 py-1 rounded">
                            PERGUNTA {index + 1} {q.text && `- ${q.text}`}
                         </span>
                         <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => handleMoveQuestion(index, 'up')}
-                                disabled={index === 0}
-                                className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-600 rounded-full disabled:opacity-30 disabled:cursor-not-allowed"
-                                title="Mover para cima"
-                            >
+                            <button onClick={() => handleMoveQuestion(index, 'up')} disabled={index === 0} className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-600 rounded-full disabled:opacity-30 disabled:cursor-not-allowed" title="Mover para cima">
                                 <ArrowUp size={18} />
                             </button>
-                            <button
-                                onClick={() => handleMoveQuestion(index, 'down')}
-                                disabled={index === currentQuestions.length - 1}
-                                className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-600 rounded-full disabled:opacity-30 disabled:cursor-not-allowed"
-                                title="Mover para baixo"
-                            >
+                            <button onClick={() => handleMoveQuestion(index, 'down')} disabled={index === currentQuestions.length - 1} className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-600 rounded-full disabled:opacity-30 disabled:cursor-not-allowed" title="Mover para baixo">
                                 <ArrowDown size={18} />
                             </button>
                             <div className="h-5 w-px bg-gray-200 mx-1"></div>
-                            <button 
-                                onClick={() => removeQuestion(q.id)} 
-                                className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-500 rounded-full transition-colors"
-                                title="Excluir pergunta"
-                            >
+                            <button onClick={() => removeQuestion(q.id)} className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-500 rounded-full transition-colors" title="Excluir pergunta">
                                 <Trash2 size={18} />
                             </button>
                         </div>
@@ -629,23 +501,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                    
                    <div className="space-y-4 mb-4">
                       <div>
-                        <input 
-                          type="text" 
-                          value={q.text} 
-                          onChange={(e) => updateQuestion(q.id, 'text', e.target.value)}
-                          placeholder="Digite a pergunta aqui..."
-                          className="w-full bg-white border border-gray-200 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all" 
-                          style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                        />
+                        <input type="text" value={q.text} onChange={(e) => updateQuestion(q.id, 'text', e.target.value)} placeholder="Digite a pergunta aqui..." className="w-full bg-white border border-gray-200 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all" style={{ backgroundColor: '#ffffff', color: '#111827' }} />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de Resposta</label>
-                        <select 
-                          value={q.type}
-                          onChange={(e) => updateQuestion(q.id, 'type', e.target.value as FormQuestion['type'])}
-                          className="w-full bg-white border border-gray-200 rounded-lg p-3 text-gray-700 focus:ring-2 focus:ring-primary-500"
-                          style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                        >
+                        <select value={q.type} onChange={(e) => updateQuestion(q.id, 'type', e.target.value as FormQuestion['type'])} className="w-full bg-white border border-gray-200 rounded-lg p-3 text-gray-700 focus:ring-2 focus:ring-primary-500" style={{ backgroundColor: '#ffffff', color: '#111827' }}>
                           <option value="text">Texto Livre</option>
                           <option value="single">Única Escolha</option>
                           <option value="multiple">Múltipla Escolha</option>
@@ -659,37 +519,20 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                        
                        {q.options?.map((opt) => (
                          <div key={opt.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200 relative group">
-                           <button 
-                             onClick={() => removeOption(q.id, opt.id)}
-                             className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                           >
+                           <button onClick={() => removeOption(q.id, opt.id)} className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
                              <Trash2 size={14} />
                            </button>
                            
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                              <div>
                                <label className="block text-xs font-medium text-gray-500 mb-1">Rótulo da Opção</label>
-                               <input 
-                                  type="text" 
-                                  value={opt.label}
-                                  onChange={(e) => updateOption(q.id, opt.id, 'label', e.target.value)}
-                                  placeholder="Ex: Sim, tenho dor"
-                                  className="w-full rounded border-gray-300 p-2 text-sm bg-white text-gray-900"
-                                  style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                               />
+                               <input type="text" value={opt.label} onChange={(e) => updateOption(q.id, opt.id, 'label', e.target.value)} placeholder="Ex: Sim, tenho dor" className="w-full rounded border-gray-300 p-2 text-sm bg-white text-gray-900" style={{ backgroundColor: '#ffffff', color: '#111827' }} />
                              </div>
                              <div>
                                <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
                                  <DollarSign size={12} /> Valor de Oportunidade (R$)
                                </label>
-                               <input 
-                                  type="number" 
-                                  value={opt.value}
-                                  onChange={(e) => updateOption(q.id, opt.id, 'value', parseFloat(e.target.value))}
-                                  placeholder="0.00"
-                                  className="w-full rounded border-gray-300 p-2 text-sm text-green-700 font-medium bg-white"
-                                  style={{ backgroundColor: '#ffffff' }}
-                               />
+                               <input type="number" value={opt.value} onChange={(e) => updateOption(q.id, opt.id, 'value', parseFloat(e.target.value))} placeholder="0.00" className="w-full rounded border-gray-300 p-2 text-sm text-green-700 font-medium bg-white" style={{ backgroundColor: '#ffffff' }} />
                              </div>
                            </div>
                            
@@ -698,27 +541,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                                <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
                                  <Package size={12} /> Produto/Serviço Sugerido
                                </label>
-                               <input 
-                                  type="text" 
-                                  value={opt.linkedProduct || ''}
-                                  onChange={(e) => updateOption(q.id, opt.id, 'linkedProduct', e.target.value)}
-                                  placeholder="Ex: Limpeza Dental"
-                                  className="w-full rounded border-gray-300 p-2 text-sm bg-white text-gray-900"
-                                  style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                               />
+                               <input type="text" value={opt.linkedProduct || ''} onChange={(e) => updateOption(q.id, opt.id, 'linkedProduct', e.target.value)} placeholder="Ex: Limpeza Dental" className="w-full rounded border-gray-300 p-2 text-sm bg-white text-gray-900" style={{ backgroundColor: '#ffffff', color: '#111827' }} />
                              </div>
                              <div>
                                 <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    id={`script-check-${opt.id}`}
-                                    checked={opt.script !== undefined}
-                                    onChange={(e) => {
-                                      const newValue = e.target.checked ? '' : undefined;
-                                      updateOption(q.id, opt.id, 'script', newValue);
-                                    }}
-                                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                                  />
+                                  <input type="checkbox" id={`script-check-${opt.id}`} checked={opt.script !== undefined} onChange={(e) => { const newValue = e.target.checked ? '' : undefined; updateOption(q.id, opt.id, 'script', newValue); }} className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
                                   <label htmlFor={`script-check-${opt.id}`} className="flex items-center gap-1 text-xs font-medium text-gray-500 cursor-pointer">
                                     <MessageSquare size={12} /> Script de Vendas (IA)
                                   </label>
@@ -727,21 +554,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                                 {opt.script !== undefined && (
                                   <div className="mt-2">
                                     <div className="relative">
-                                      <input 
-                                         type="text" 
-                                         value={opt.script || ''}
-                                         onChange={(e) => updateOption(q.id, opt.id, 'script', e.target.value)}
-                                         placeholder="O que o vendedor deve falar..."
-                                         className="w-full rounded border-gray-300 p-2 text-sm italic text-gray-600 pr-8 bg-white"
-                                         style={{ backgroundColor: '#ffffff' }}
-                                         autoFocus
-                                      />
-                                      <button 
-                                         onClick={() => handleGenerateScript(q.id, opt.id, q.text, opt.label)}
-                                         disabled={generatingScriptId === opt.id || !q.text || !opt.label}
-                                         className="absolute right-2 top-1/2 -translate-y-1/2 text-purple-500 hover:text-purple-700 disabled:opacity-50"
-                                         title="Gerar script com IA"
-                                      >
+                                      <input type="text" value={opt.script || ''} onChange={(e) => updateOption(q.id, opt.id, 'script', e.target.value)} placeholder="O que o vendedor deve falar..." className="w-full rounded border-gray-300 p-2 text-sm italic text-gray-600 pr-8 bg-white" style={{ backgroundColor: '#ffffff' }} autoFocus />
+                                      <button onClick={() => handleGenerateScript(q.id, opt.id, q.text, opt.label)} disabled={generatingScriptId === opt.id || !q.text || !opt.label} className="absolute right-2 top-1/2 -translate-y-1/2 text-purple-500 hover:text-purple-700 disabled:opacity-50" title="Gerar script com IA">
                                          {generatingScriptId === opt.id ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
                                       </button>
                                     </div>
@@ -753,41 +567,21 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
 
                            <div className="mt-3 space-y-2">
                                 <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    id={`followup-check-${opt.id}`}
-                                    checked={opt.followUpLabel !== undefined}
-                                    onChange={(e) => {
-                                      const newValue = e.target.checked ? '' : undefined;
-                                      updateOption(q.id, opt.id, 'followUpLabel', newValue);
-                                    }}
-                                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                                  />
+                                  <input type="checkbox" id={`followup-check-${opt.id}`} checked={opt.followUpLabel !== undefined} onChange={(e) => { const newValue = e.target.checked ? '' : undefined; updateOption(q.id, opt.id, 'followUpLabel', newValue); }} className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
                                   <label htmlFor={`followup-check-${opt.id}`} className="flex items-center gap-1 text-xs font-medium text-gray-500 cursor-pointer">
                                     <MessageSquare size={12} /> Campo de texto de seguimento (Opcional)
                                   </label>
                                 </div>
                                 {opt.followUpLabel !== undefined && (
                                   <div className="pl-6">
-                                    <input
-                                      type="text"
-                                      value={opt.followUpLabel || ''}
-                                      onChange={(e) => updateOption(q.id, opt.id, 'followUpLabel', e.target.value)}
-                                      placeholder="Ex: Se sim, qual?"
-                                      className="w-full rounded border-gray-300 p-2 text-sm bg-white text-gray-900 placeholder-gray-400"
-                                      style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                                      autoFocus
-                                    />
+                                    <input type="text" value={opt.followUpLabel || ''} onChange={(e) => updateOption(q.id, opt.id, 'followUpLabel', e.target.value)} placeholder="Ex: Se sim, qual?" className="w-full rounded border-gray-300 p-2 text-sm bg-white text-gray-900 placeholder-gray-400" style={{ backgroundColor: '#ffffff', color: '#111827' }} autoFocus />
                                   </div>
                                 )}
                            </div>
                          </div>
                        ))}
                        
-                       <button 
-                         onClick={() => addOption(q.id)}
-                         className="text-sm text-primary-600 font-medium hover:text-primary-700 flex items-center gap-1 px-2 py-1 rounded hover:bg-primary-50 w-fit"
-                       >
+                       <button onClick={() => addOption(q.id)} className="text-sm text-primary-600 font-medium hover:text-primary-700 flex items-center gap-1 px-2 py-1 rounded hover:bg-primary-50 w-fit">
                          <Plus size={14} /> Adicionar Alternativa
                        </button>
                      </div>
@@ -796,10 +590,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
              </div>
           ))}
 
-          <button 
-            onClick={addQuestion}
-            className="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-primary-400 hover:text-primary-600 hover:bg-primary-50 transition-all flex items-center justify-center gap-2"
-          >
+          <button onClick={addQuestion} className="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-primary-400 hover:text-primary-600 hover:bg-primary-50 transition-all flex items-center justify-center gap-2">
             <Plus size={20} /> Adicionar Nova Pergunta
           </button>
         </div>
@@ -807,29 +598,50 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     </div>
   );
 
-  // Handler para salvar formulário da consultoria
+  // Handler para salvar formulário da consultoria - CORRIGIDO
   const handleConsultantSave = (formData: any) => {
     const newForm: Form = {
       id: Date.now().toString(),
       name: formData.name,
-      description: formData.objective === 'qualify' ? 'Formulário de qualificação de leads' : formData.objective === 'feedback' ? 'Formulário de feedback' : 'Formulário personalizado',
+      description: formData.description || (formData.objective === 'qualify' ? 'Formulário de qualificação de leads' : formData.objective === 'feedback' ? 'Formulário de feedback' : 'Formulário personalizado'),
       questions: formData.questions.map((q: any) => ({
         id: q.id,
         text: q.text,
-        type: q.type || 'single',
-        options: q.options?.map((opt: string, i: number) => ({
-          id: `opt_${Date.now()}_${i}`,
-          label: opt,
-          value: 0,
-          linkedProduct: '',
-          script: ''
-        })) || []
+        // CORREÇÃO: Converter tipos do FormConsultant para tipos do PublicForm
+        type: normalizeQuestionType(q.type),
+        options: q.options?.map((opt: any, i: number) => {
+          // Se opt é string (formato antigo), converter para objeto
+          if (typeof opt === 'string') {
+            return {
+              id: `opt_${Date.now()}_${i}`,
+              label: opt,
+              value: 0,
+              linkedProduct: '',
+              script: ''
+            };
+          }
+          // Se opt já é objeto, manter estrutura
+          return {
+            id: opt.id || `opt_${Date.now()}_${i}`,
+            label: opt.text || opt.label || '',
+            value: opt.value || 0,
+            linkedProduct: opt.linkedProduct || '',
+            script: opt.script || ''
+          };
+        }) || []
       })),
       active: true,
       responses: 0,
-      initialFields: formData.initial_fields || ['name', 'email', 'phone']
+      initialFields: formData.identification_fields?.map((f: any) => ({
+        field: f.type === 'email' ? 'email' : f.type === 'phone' ? 'phone' : 'name',
+        label: f.label,
+        placeholder: '',
+        required: f.required,
+        enabled: f.enabled
+      })) || undefined
     };
     onSaveForm(newForm);
+    setShowConsultant(false);
   };
 
   return (
