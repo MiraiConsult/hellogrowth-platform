@@ -147,6 +147,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [businessProfile, setBusinessProfile] = useState<any>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [initialMessageSent, setInitialMessageSent] = useState(false);
 
   const [businessContext, setBusinessContext] = useState<BusinessContext>({
     businessType: '',
@@ -211,7 +212,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
 
     // Initial welcome message - personalizado se tiver perfil ou modo de edição
   useEffect(() => {
-    if (chatMessages.length === 0 && profileLoaded) {
+    if (chatMessages.length === 0 && profileLoaded && !initialMessageSent) {
+      setInitialMessageSent(true);
       if (existingForm) {
         // Modo de edição
         addAssistantMessage(
@@ -528,6 +530,63 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
             "⏳ Isso pode levar alguns segundos..."
           );
           runAIAnalysis();
+        }, 500);
+        break;
+
+      case 'edit_tone':
+        setCurrentStep('tone');
+        setTimeout(() => {
+          addAssistantMessage(
+            "Perfeito! Vamos mudar o tom das perguntas.\n\n" +
+            "**Qual tom você prefere para o formulário?**",
+            [
+              { label: "🎯 Direto - Objetivo e sem rodeios", value: "tone_direct" },
+              { label: "😊 Informal - Descontraído e amigável", value: "tone_informal" },
+              { label: "👔 Formal - Profissional e corporativo", value: "tone_formal" },
+              { label: "💚 Amigável - Acolhedor e empático", value: "tone_friendly" }
+            ]
+          );
+        }, 500);
+        break;
+
+      case 'edit_questions':
+        setCurrentStep('review');
+        setTimeout(() => {
+          addAssistantMessage(
+            "Perfeito! Vou te levar para a tela de revisão onde você pode editar manualmente cada pergunta e alternativa.\n\n" +
+            "✅ Clique no botão 'Próximo' abaixo para ir para a tela de edição."
+          );
+        }, 500);
+        break;
+
+      case 'edit_full':
+        // Resetar contexto e começar do zero
+        setBusinessContext({
+          businessType: '',
+          businessDescription: '',
+          targetAudience: '',
+          audienceCharacteristics: '',
+          mainPainPoints: [],
+          desiredOutcome: '',
+          formObjective: 'qualify',
+          customObjective: '',
+          productSelection: 'auto',
+          selectedProducts: [],
+          formTone: 'friendly',
+          identificationFields: [
+            { id: 'name', label: 'Nome', type: 'text', enabled: true, required: true },
+            { id: 'email', label: 'E-mail', type: 'email', enabled: true, required: true },
+            { id: 'phone', label: 'Telefone', type: 'phone', enabled: true, required: false },
+          ]
+        });
+        setGeneratedQuestions([]);
+        setCurrentStep('business_type');
+        setTimeout(() => {
+          addAssistantMessage(
+            "Ok! Vamos começar do zero.\n\n" +
+            "**Qual é o tipo do seu negócio?**\n\n" +
+            "Pode ser uma clínica, loja, consultoria, agência, restaurante... Descreva brevemente o que você faz."
+          );
         }, 500);
         break;
 

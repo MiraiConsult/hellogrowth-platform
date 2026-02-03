@@ -96,6 +96,7 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   const [importError, setImportError] = useState<string | null>(null);
   const [generatingAI, setGeneratingAI] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [editingField, setEditingField] = useState<{ productId: string; field: 'description' | 'persona' | 'strategy' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -463,51 +464,117 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
               {selectedProduct.ai_description ? (
                 <>
                   <div className="bg-slate-50 rounded-xl p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Eye size={18} className="text-slate-600" />
-                      <h3 className="font-semibold text-slate-800">Descrição Comercial</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Eye size={18} className="text-slate-600" />
+                        <h3 className="font-semibold text-slate-800">Descrição Comercial</h3>
+                      </div>
+                      {editingField?.productId === selectedProduct.id && editingField?.field === 'description' ? (
+                        <button
+                          onClick={() => {
+                            setEditingField(null);
+                            supabase!.from("products_services").update({ ai_description: selectedProduct.ai_description }).eq("id", selectedProduct.id);
+                          }}
+                          className="flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm"
+                        >
+                          <Save size={14} />
+                          Salvar
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setEditingField({ productId: selectedProduct.id, field: 'description' })}
+                          className="flex items-center gap-1 px-3 py-1 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors text-sm"
+                        >
+                          <Edit3 size={14} />
+                          Editar
+                        </button>
+                      )}
                     </div>
-                    <textarea
-                      value={String(selectedProduct.ai_description || '')}
-                      onChange={(e) => {
-                        const newValue = e.target.value;
-                        setSelectedProduct({ ...selectedProduct, ai_description: newValue });
-                        supabase!.from("products_services").update({ ai_description: newValue }).eq("id", selectedProduct.id);
-                      }}
-                      className="w-full text-slate-700 leading-relaxed bg-white border border-slate-200 rounded-lg p-3 min-h-[80px] focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
+                    {editingField?.productId === selectedProduct.id && editingField?.field === 'description' ? (
+                      <textarea
+                        value={String(selectedProduct.ai_description || '')}
+                        onChange={(e) => setSelectedProduct({ ...selectedProduct, ai_description: e.target.value })}
+                        className="w-full text-slate-700 leading-relaxed bg-white border border-slate-200 rounded-lg p-3 min-h-[80px] focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    ) : (
+                      <p className="text-slate-700 leading-relaxed">{String(selectedProduct.ai_description || '')}</p>
+                    )}
                   </div>
 
                   <div className="bg-blue-50 rounded-xl p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Target size={18} className="text-blue-600" />
-                      <h3 className="font-semibold text-blue-800">Cliente Ideal</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Target size={18} className="text-blue-600" />
+                        <h3 className="font-semibold text-blue-800">Cliente Ideal</h3>
+                      </div>
+                      {editingField?.productId === selectedProduct.id && editingField?.field === 'persona' ? (
+                        <button
+                          onClick={() => {
+                            setEditingField(null);
+                            supabase!.from("products_services").update({ ai_persona: selectedProduct.ai_persona }).eq("id", selectedProduct.id);
+                          }}
+                          className="flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm"
+                        >
+                          <Save size={14} />
+                          Salvar
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setEditingField({ productId: selectedProduct.id, field: 'persona' })}
+                          className="flex items-center gap-1 px-3 py-1 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors text-sm"
+                        >
+                          <Edit3 size={14} />
+                          Editar
+                        </button>
+                      )}
                     </div>
-                    <textarea
-                      value={formatPersona(parseJsonField(selectedProduct.ai_persona)) || String(selectedProduct.ai_persona || '')}
-                      onChange={(e) => {
-                        const newValue = e.target.value;
-                        setSelectedProduct({ ...selectedProduct, ai_persona: newValue });
-                        supabase!.from("products_services").update({ ai_persona: newValue }).eq("id", selectedProduct.id);
-                      }}
-                      className="w-full text-slate-700 leading-relaxed bg-white border border-slate-200 rounded-lg p-3 min-h-[100px] focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    {editingField?.productId === selectedProduct.id && editingField?.field === 'persona' ? (
+                      <textarea
+                        value={formatPersona(parseJsonField(selectedProduct.ai_persona)) || String(selectedProduct.ai_persona || '')}
+                        onChange={(e) => setSelectedProduct({ ...selectedProduct, ai_persona: e.target.value })}
+                        className="w-full text-slate-700 leading-relaxed bg-white border border-slate-200 rounded-lg p-3 min-h-[100px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    ) : (
+                      <p className="text-slate-700 leading-relaxed">{formatPersona(parseJsonField(selectedProduct.ai_persona)) || String(selectedProduct.ai_persona || '')}</p>
+                    )}
                   </div>
 
                   <div className="bg-amber-50 rounded-xl p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <MessageSquare size={18} className="text-amber-600" />
-                      <h3 className="font-semibold text-amber-800">Estratégia de Venda</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare size={18} className="text-amber-600" />
+                        <h3 className="font-semibold text-amber-800">Estratégia de Venda</h3>
+                      </div>
+                      {editingField?.productId === selectedProduct.id && editingField?.field === 'strategy' ? (
+                        <button
+                          onClick={() => {
+                            setEditingField(null);
+                            supabase!.from("products_services").update({ ai_strategy: selectedProduct.ai_strategy }).eq("id", selectedProduct.id);
+                          }}
+                          className="flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm"
+                        >
+                          <Save size={14} />
+                          Salvar
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setEditingField({ productId: selectedProduct.id, field: 'strategy' })}
+                          className="flex items-center gap-1 px-3 py-1 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors text-sm"
+                        >
+                          <Edit3 size={14} />
+                          Editar
+                        </button>
+                      )}
                     </div>
-                    <textarea
-                      value={formatStrategy(parseJsonField(selectedProduct.ai_strategy)) || String(selectedProduct.ai_strategy || '')}
-                      onChange={(e) => {
-                        const newValue = e.target.value;
-                        setSelectedProduct({ ...selectedProduct, ai_strategy: newValue });
-                        supabase!.from("products_services").update({ ai_strategy: newValue }).eq("id", selectedProduct.id);
-                      }}
-                      className="w-full text-slate-700 leading-relaxed bg-white border border-slate-200 rounded-lg p-3 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
+                    {editingField?.productId === selectedProduct.id && editingField?.field === 'strategy' ? (
+                      <textarea
+                        value={formatStrategy(parseJsonField(selectedProduct.ai_strategy)) || String(selectedProduct.ai_strategy || '')}
+                        onChange={(e) => setSelectedProduct({ ...selectedProduct, ai_strategy: e.target.value })}
+                        className="w-full text-slate-700 leading-relaxed bg-white border border-slate-200 rounded-lg p-3 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    ) : (
+                      <p className="text-slate-700 leading-relaxed">{formatStrategy(parseJsonField(selectedProduct.ai_strategy)) || String(selectedProduct.ai_strategy || '')}</p>
+                    )}
                   </div>
 
                   <button onClick={() => generateAIInsights(selectedProduct.id, selectedProduct.name, selectedProduct.value)} disabled={generatingAI === selectedProduct.id} className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-purple-200 text-purple-600 rounded-xl hover:bg-purple-50 transition-colors disabled:opacity-50">
