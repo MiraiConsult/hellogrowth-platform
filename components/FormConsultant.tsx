@@ -275,8 +275,10 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
     }]);
   };
 
-  const handleOptionClick = (value: string, label: string) => {
-    addUserMessage(label);
+  const handleOptionClick = (value: string, label: string, skipUserMessage = false) => {
+    if (!skipUserMessage) {
+      addUserMessage(label);
+    }
     
     switch (value) {
       case 'start':
@@ -469,12 +471,12 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
 
     // Processar objetivo customizado
     if (currentStep === 'custom_objective') {
-      handleOptionClick('custom_objective_input', input);
+      handleOptionClick('custom_objective_input', input, true);
       return;
     }
 
     if (currentStep === 'custom_objective_detail') {
-      handleOptionClick('custom_objective_detail_input', input);
+      handleOptionClick('custom_objective_detail_input', input, true);
       return;
     }
 
@@ -1148,6 +1150,43 @@ Responda APENAS com JSON válido neste formato:
                   Adicionar
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recommended Products Section */}
+        {products.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6 mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                <Package size={20} className="text-emerald-500" />
+                Produtos Recomendados
+              </h3>
+              {businessContext.selectedProducts.length !== products.filter(p => businessContext.selectedProducts.includes(p.id)).length && (
+                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full">Editado</span>
+              )}
+            </div>
+            <p className="text-sm text-slate-500 mb-4">Selecione os produtos que podem ser oferecidos com base nas respostas</p>
+            <div className="grid grid-cols-2 gap-3">
+              {products.map(product => (
+                <button
+                  key={product.id}
+                  onClick={() => {
+                    const newSelected = businessContext.selectedProducts.includes(product.id)
+                      ? businessContext.selectedProducts.filter(id => id !== product.id)
+                      : [...businessContext.selectedProducts, product.id];
+                    setBusinessContext(prev => ({ ...prev, selectedProducts: newSelected }));
+                  }}
+                  className={`p-4 rounded-xl border-2 text-left transition-all ${
+                    businessContext.selectedProducts.includes(product.id)
+                      ? 'border-emerald-500 bg-emerald-50'
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <p className="font-medium text-slate-800">{product.name}</p>
+                  <p className="text-sm text-emerald-600">R$ {product.value.toLocaleString('pt-BR')}</p>
+                </button>
+              ))}
             </div>
           </div>
         )}

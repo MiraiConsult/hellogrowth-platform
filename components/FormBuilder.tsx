@@ -369,16 +369,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
           </div>
           <div className="flex gap-3">
             <button 
-              onClick={handleCreateNew}
-              className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 shadow-sm flex items-center gap-2"
-            >
-              <Plus size={18} /> Manual
-            </button>
-            <button 
               onClick={() => setShowConsultant(true)}
               className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/30 shadow-sm flex items-center gap-2 transition-all"
             >
-              <Bot size={18} /> Criar com IA
+              <Plus size={18} /> Novo Formulário
             </button>
           </div>
         </div>
@@ -421,7 +415,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                    
                    {menuOpenId === form.id && (
                       <div className="absolute right-0 top-10 bg-white rounded-lg shadow-xl border border-gray-100 w-48 z-20 py-1 animate-in fade-in zoom-in-95 duration-100">
-                        <button onClick={() => handleEdit(form)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                        <button onClick={() => {
+                          setEditingFormId(form.id);
+                          setShowConsultant(true);
+                          setMenuOpenId(null);
+                        }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                           <Edit3 size={14} /> Editar
                         </button>
                         <button onClick={() => handleToggleStatus(form)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
