@@ -149,6 +149,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [businessProfile, setBusinessProfile] = useState<any>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [initialMessageSent, setInitialMessageSent] = useState(false);
+  const [isEditingTone, setIsEditingTone] = useState(false); // Modo de edição de tom (reescrever perguntas existentes)
   
   // Estabilizar existingForm para evitar re-renders
   const stableExistingForm = useMemo(() => existingForm, [existingForm?.id]);
@@ -156,17 +157,32 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   // Carregar perguntas existentes quando em modo de edição
   useEffect(() => {
     if (stableExistingForm && stableExistingForm.questions) {
-      const loadedQuestions: GeneratedQuestion[] = stableExistingForm.questions.map((q: any) => ({
-        id: q.id || `q_${Date.now()}_${Math.random()}`,
-        text: q.text || '',
-        type: q.type || 'single_choice',
-        options: (q.options || []).map((opt: any, idx: number) => ({
-          id: opt.id || `opt_${idx}`,
-          text: opt.label || opt.text || ''
-        })),
-        insight: q.insight || '',
-        linkedProducts: q.linkedProducts || []
-      }));
+      const loadedQuestions: GeneratedQuestion[] = stableExistingForm.questions.map((q: any, qIdx: number) => {
+        // Processar opções - pode vir como array de strings ou array de objetos
+        let processedOptions: QuestionOption[] = [];
+        if (q.options && Array.isArray(q.options)) {
+          processedOptions = q.options.map((opt: any, idx: number) => {
+            // Se opt é string, converter para objeto
+            if (typeof opt === 'string') {
+              return { id: `opt_${qIdx}_${idx}`, text: opt };
+            }
+            // Se opt é objeto, extrair texto
+            return {
+              id: opt.id || `opt_${qIdx}_${idx}`,
+              text: opt.label || opt.text || opt.value || ''
+            };
+          });
+        }
+        
+        return {
+          id: q.id || `q_${Date.now()}_${qIdx}`,
+          text: q.text || q.question || '',
+          type: q.type || 'single_choice',
+          options: processedOptions,
+          insight: q.insight || q.ai_insight || 'Pergunta do formulário',
+          linkedProducts: q.linkedProducts || q.linked_products || []
+        };
+      });
       setGeneratedQuestions(loadedQuestions);
       setFormName(stableExistingForm.name || '');
       
@@ -255,8 +271,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
           `O que você gostaria de fazer?`,
           [
             { label: "🎨 Alterar o tom das perguntas", value: "edit_tone" },
-            { label: "✏️ Alterar perguntas e alternativas manualmente", value: "edit_questions" },
-            { label: "🔄 Mudar toda a ideia do formulário", value: "edit_full" }
+            { label: "✏️ Alterar perguntas e alternativas manualmente", value: "edit_questions" }
           ]
         );
       } else if (businessProfile?.company_name) {
@@ -507,16 +522,18 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
         break;
 
       case 'edit_tone':
+        setIsEditingTone(true); // Ativar modo de edição de tom
         setCurrentStep('tone');
         setTimeout(() => {
           addAssistantMessage(
-            "Perfeito! Vamos mudar o tom das perguntas.\n\n" +
-            "**Qual tom você prefere para o formulário?**",
+            "Perfeito! Vou **reescrever as perguntas existentes** com o novo tom que você escolher.\n\n" +
+            "As perguntas e alternativas continuarão as mesmas, apenas a forma de perguntar vai mudar.\n\n" +
+            "**Qual tom você prefere?**",
             [
-              { label: "🎯 Direto - Objetivo e sem rodeios", value: "tone_direct" },
-              { label: "😊 Informal - Descontraído e amigável", value: "tone_informal" },
-              { label: "👔 Formal - Profissional e corporativo", value: "tone_formal" },
-              { label: "💚 Amigável - Acolhedor e empático", value: "tone_friendly" }
+              { label: "🎯 Direto - Objetivo e sem rodeios", value: "rewrite_tone_direct" },
+              { label: "😊 Informal - Descontraído e amigável", value: "rewrite_tone_informal" },
+              { label: "👔 Formal - Profissional e corporativo", value: "rewrite_tone_formal" },
+              { label: "💚 Amigável - Acolhedor e empático", value: "rewrite_tone_friendly" }
             ]
           );
         }, 500);
@@ -529,6 +546,28 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
             "Perfeito! Vou te levar para a tela de revisão onde você pode editar manualmente cada pergunta e alternativa.\n\n" +
             "✅ Clique no botão 'Próximo' abaixo para ir para a tela de edição."
           );
+        }, 500);
+        break;
+
+      case 'rewrite_tone_direct':
+      case 'rewrite_tone_informal':
+      case 'rewrite_tone_formal':
+      case 'rewrite_tone_friendly':
+        const rewriteToneMap: Record<string, 'formal' | 'informal' | 'direct' | 'friendly'> = {
+          'rewrite_tone_direct': 'direct',
+          'rewrite_tone_informal': 'informal',
+          'rewrite_tone_formal': 'formal',
+          'rewrite_tone_friendly': 'friendly'
+        };
+        const newTone = rewriteToneMap[value];
+        setBusinessContext(prev => ({ ...prev, formTone: newTone }));
+        setCurrentStep('analysis');
+        setTimeout(() => {
+          addAssistantMessage(
+            `✅ Vou reescrever suas ${generatedQuestions.length} perguntas com tom **${newTone === 'direct' ? 'direto' : newTone === 'informal' ? 'informal' : newTone === 'formal' ? 'formal' : 'amigável'}**.\n\n` +
+            "⏳ Isso pode levar alguns segundos..."
+          );
+          rewriteQuestionsWithTone(newTone);
         }, 500);
         break;
 
@@ -573,10 +612,9 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
     if (!userInput.trim()) return;
     
     const input = userInput.trim();
-    addUserMessage(input);
     setUserInput('');
 
-    // Processar objetivo customizado
+    // Processar objetivo customizado - não adiciona mensagem aqui pois handleOptionClick já faz isso
     if (currentStep === 'custom_objective') {
       handleOptionClick('custom_objective_input', input);
       return;
@@ -586,6 +624,9 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       handleOptionClick('custom_objective_detail_input', input);
       return;
     }
+
+    // Para outros casos, adiciona a mensagem do usuário
+    addUserMessage(input);
 
     switch (currentStep) {
       case 'business_type':
@@ -638,6 +679,120 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
           );
         }, 500);
         break;
+    }
+  };
+
+  // Função para reescrever perguntas existentes com novo tom
+  const rewriteQuestionsWithTone = async (tone: 'formal' | 'informal' | 'direct' | 'friendly') => {
+    setIsGenerating(true);
+    setGenerationProgress(0);
+    setCurrentStep('generation');
+
+    const progressInterval = setInterval(() => {
+      setGenerationProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          return prev;
+        }
+        return prev + Math.random() * 15;
+      });
+    }, 500);
+
+    try {
+      const toneDescriptions: Record<string, string> = {
+        'direct': 'direto e objetivo, sem rodeios',
+        'informal': 'descontraído e amigável, como uma conversa casual',
+        'formal': 'profissional e corporativo, com linguagem técnica',
+        'friendly': 'acolhedor e empático, focado em criar conexão'
+      };
+
+      const questionsToRewrite = generatedQuestions.map(q => ({
+        text: q.text,
+        options: q.options.map(o => o.text)
+      }));
+
+      const prompt = `Você é um especialista em copywriting. Reescreva as perguntas abaixo mantendo o MESMO SIGNIFICADO e AS MESMAS OPÇÕES, apenas mudando o tom para: ${toneDescriptions[tone]}.
+
+PERGUNTAS ORIGINAIS:
+${JSON.stringify(questionsToRewrite, null, 2)}
+
+IMPORTANTE:
+- Mantenha EXATAMENTE as mesmas opções de resposta, apenas reescreva o texto
+- Não adicione nem remova opções
+- Não mude o significado das perguntas
+- Apenas ajuste o tom da linguagem
+
+Responda APENAS com um JSON válido no formato:
+{
+  "questions": [
+    {
+      "text": "Pergunta reescrita",
+      "options": ["Opção 1 reescrita", "Opção 2 reescrita", ...]
+    }
+  ]
+}`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      clearInterval(progressInterval);
+
+      if (!response.ok) throw new Error('Erro na API');
+
+      const data = await response.json();
+      let parsed;
+      try {
+        const cleanedResponse = data.response.replace(/```json\n?|```\n?/g, '').trim();
+        parsed = JSON.parse(cleanedResponse);
+      } catch {
+        throw new Error('Erro ao processar resposta');
+      }
+
+      // Atualizar perguntas mantendo IDs e insights originais
+      const rewrittenQuestions = generatedQuestions.map((q, idx) => {
+        const rewritten = parsed.questions[idx];
+        if (!rewritten) return q;
+        
+        return {
+          ...q,
+          text: rewritten.text || q.text,
+          options: q.options.map((opt, optIdx) => ({
+            ...opt,
+            text: rewritten.options?.[optIdx] || opt.text
+          }))
+        };
+      });
+
+      setGeneratedQuestions(rewrittenQuestions);
+      setGenerationProgress(100);
+      setIsEditingTone(false);
+      
+      setTimeout(() => {
+        setCurrentStep('review');
+        setIsGenerating(false);
+        addAssistantMessage(
+          "🎉 **Pronto!** Reescrevi todas as perguntas com o novo tom.\n\n" +
+          "Você pode revisar e ajustar o que quiser antes de salvar."
+        );
+      }, 500);
+
+    } catch (error) {
+      clearInterval(progressInterval);
+      setIsGenerating(false);
+      setIsEditingTone(false);
+      setCurrentStep('review');
+      addAssistantMessage(
+        "❌ Houve um erro ao reescrever as perguntas. As perguntas originais foram mantidas.\n\n" +
+        "Você pode editar manualmente na tela de revisão."
+      );
     }
   };
 
