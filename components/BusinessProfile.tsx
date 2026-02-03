@@ -356,16 +356,13 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Tipo de Negócio *
               </label>
-              <select
+              <input
+                type="text"
                 value={profile.business_type}
                 onChange={(e) => setProfile({ ...profile, business_type: e.target.value })}
+                placeholder="Ex: Loja de Roupas, Consultoria Empresarial, Salão de Beleza..."
                 className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              >
-                <option value="">Selecione o tipo...</option>
-                {BUSINESS_TYPES.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
+              />
             </div>
           </div>
 

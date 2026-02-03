@@ -327,7 +327,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
 
       case 'custom_objective_input':
         setBusinessContext(prev => ({ ...prev, customObjective: userInput, formObjective: 'qualify' }));
-        setCurrentStep('tone');
+        setCurrentStep('custom_objective_detail');
         setTimeout(() => {
           addAssistantMessage(
             `Então você deseja: "${userInput}". \n\n` +
@@ -347,17 +347,38 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
             "Perfeito! Agora vamos definir o tom das perguntas.\n\n" +
             "**Qual tom você prefere para o formulário?**",
             [
-              { label: "😊 Amigável - Conversa natural e próxima", value: "friendly" },
-              { label: "💼 Profissional - Sério e direto ao ponto", value: "professional" }
+              { label: "🎯 Direto - Objetivo e sem rodeios", value: "tone_direct" },
+              { label: "😊 Informal - Descontraído e amigável", value: "tone_informal" },
+              { label: "👔 Formal - Profissional e corporativo", value: "tone_formal" },
+              { label: "💚 Amigável - Acolhedor e empático", value: "tone_friendly" }
             ]
           );
         }, 500);
         break;
 
       case 'add_more_objective':
+        setCurrentStep('custom_objective_detail');
         setTimeout(() => {
           addAssistantMessage(
             "Claro! Me conte o que mais você gostaria de adicionar ao objetivo do formulário:"
+          );
+        }, 500);
+        break;
+
+      case 'custom_objective_detail_input':
+        setBusinessContext(prev => ({ 
+          ...prev, 
+          customObjective: prev.customObjective + ' ' + userInput
+        }));
+        setCurrentStep('custom_objective_detail');
+        setTimeout(() => {
+          addAssistantMessage(
+            `Perfeito! Agora seu objetivo é: "${businessContext.customObjective} ${userInput}". \n\n` +
+            "**Está bom assim ou quer ajustar mais alguma coisa?**",
+            [
+              { label: "✅ Sim, está perfeito!", value: "confirm_objective" },
+              { label: "📝 Quero adicionar mais", value: "add_more_objective" }
+            ]
           );
         }, 500);
         break;
@@ -370,8 +391,10 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
             "Perfeito! Agora vamos definir o tom das perguntas.\n\n" +
             "**Qual tom você prefere para o formulário?**",
             [
-              { label: "😊 Amigável - Conversa natural e próxima", value: "friendly" },
-              { label: "💼 Profissional - Sério e direto ao ponto", value: "professional" }
+              { label: "🎯 Direto - Objetivo e sem rodeios", value: "tone_direct" },
+              { label: "😊 Informal - Descontraído e amigável", value: "tone_informal" },
+              { label: "👔 Formal - Profissional e corporativo", value: "tone_formal" },
+              { label: "💚 Amigável - Acolhedor e empático", value: "tone_friendly" }
             ]
           );
         }, 500);
