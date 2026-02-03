@@ -241,18 +241,14 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
         );
       } else {
         addAssistantMessage(
-          "Olá! 👋 Sou seu consultor de crescimento HelloGrowth.
-
-" +
-          "Vou te guiar na criação de um formulário inteligente que transforma visitantes em oportunidades reais de venda.
-
-" +
+          "Olá! 👋 Sou seu consultor de crescimento HelloGrowth.\n\n" +
+          "Vou te guiar na criação de um formulário inteligente que transforma visitantes em oportunidades reais de venda.\n\n" +
           "Para criar perguntas que realmente convertem, preciso entender melhor o seu negócio. Vamos começar?",
           [{ label: "Vamos começar!", value: "start", icon: Sparkles }]
         );
       }
     }
-  }, [profileLoaded, businessProfile, existingForm]);ile]);
+  }, [profileLoaded, businessProfile, existingForm]);
 
   const fetchProducts = async () => {
     if (!supabase) return;
