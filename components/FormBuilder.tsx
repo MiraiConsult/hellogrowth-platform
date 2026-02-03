@@ -482,7 +482,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                </div>
             </div>
           ))}
-          <button onClick={handleCreateNew} className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-primary-400 hover:text-primary-500 hover:bg-primary-50 transition-all min-h-[200px]">
+          <button onClick={() => setShowConsultant(true)} className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-primary-400 hover:text-primary-500 hover:bg-primary-50 transition-all min-h-[200px]">
              <Plus size={32} className="mb-2" />
              <span className="font-medium">Criar novo formulário</span>
           </button>
@@ -896,8 +896,12 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         <FormConsultant
           supabase={supabase}
           userId={userId || ''}
-          onClose={() => setShowConsultant(false)}
+          onClose={() => {
+            setShowConsultant(false);
+            setEditingFormId(null);
+          }}
           onSaveForm={handleConsultantSave}
+          existingForm={editingFormId ? forms.find(f => f.id === editingFormId) : undefined}
         />
       )}
     </>

@@ -467,7 +467,15 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
                       <Eye size={18} className="text-slate-600" />
                       <h3 className="font-semibold text-slate-800">Descrição Comercial</h3>
                     </div>
-                    <p className="text-slate-700 leading-relaxed">{String(selectedProduct.ai_description || '')}</p>
+                    <textarea
+                      value={String(selectedProduct.ai_description || '')}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setSelectedProduct({ ...selectedProduct, ai_description: newValue });
+                        supabase!.from("products_services").update({ ai_description: newValue }).eq("id", selectedProduct.id);
+                      }}
+                      className="w-full text-slate-700 leading-relaxed bg-white border border-slate-200 rounded-lg p-3 min-h-[80px] focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
                   </div>
 
                   <div className="bg-blue-50 rounded-xl p-5">
@@ -475,9 +483,15 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
                       <Target size={18} className="text-blue-600" />
                       <h3 className="font-semibold text-blue-800">Cliente Ideal</h3>
                     </div>
-                    <p className="text-slate-700 leading-relaxed">
-                      {formatPersona(parseJsonField(selectedProduct.ai_persona)) || String(selectedProduct.ai_persona || '')}
-                    </p>
+                    <textarea
+                      value={formatPersona(parseJsonField(selectedProduct.ai_persona)) || String(selectedProduct.ai_persona || '')}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setSelectedProduct({ ...selectedProduct, ai_persona: newValue });
+                        supabase!.from("products_services").update({ ai_persona: newValue }).eq("id", selectedProduct.id);
+                      }}
+                      className="w-full text-slate-700 leading-relaxed bg-white border border-slate-200 rounded-lg p-3 min-h-[100px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
 
                   <div className="bg-amber-50 rounded-xl p-5">
@@ -485,9 +499,15 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
                       <MessageSquare size={18} className="text-amber-600" />
                       <h3 className="font-semibold text-amber-800">Estratégia de Venda</h3>
                     </div>
-                    <p className="text-slate-700 leading-relaxed">
-                      {formatStrategy(parseJsonField(selectedProduct.ai_strategy)) || String(selectedProduct.ai_strategy || '')}
-                    </p>
+                    <textarea
+                      value={formatStrategy(parseJsonField(selectedProduct.ai_strategy)) || String(selectedProduct.ai_strategy || '')}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setSelectedProduct({ ...selectedProduct, ai_strategy: newValue });
+                        supabase!.from("products_services").update({ ai_strategy: newValue }).eq("id", selectedProduct.id);
+                      }}
+                      className="w-full text-slate-700 leading-relaxed bg-white border border-slate-200 rounded-lg p-3 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
                   </div>
 
                   <button onClick={() => generateAIInsights(selectedProduct.id, selectedProduct.name, selectedProduct.value)} disabled={generatingAI === selectedProduct.id} className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-purple-200 text-purple-600 rounded-xl hover:bg-purple-50 transition-colors disabled:opacity-50">

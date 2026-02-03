@@ -209,13 +209,30 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
     }
   };
 
-  // Initial welcome message - personalizado se tiver perfil
+    // Initial welcome message - personalizado se tiver perfil ou modo de edição
   useEffect(() => {
     if (chatMessages.length === 0 && profileLoaded) {
-      if (businessProfile?.company_name) {
+      if (existingForm) {
+        // Modo de edição
         addAssistantMessage(
-          `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.company_name}**.\n\n` +
-          `Como já conheço seu negócio, vou criar perguntas estratégicas baseadas no seu perfil.\n\n` +
+          `Olá! 👋 Você está editando o formulário **${existingForm.name || 'Sem título'}**.
+
+` +
+          `O que você gostaria de fazer?`,
+          [
+            { label: "🎨 Alterar o tom das perguntas", value: "edit_tone" },
+            { label: "✏️ Alterar perguntas e alternativas manualmente", value: "edit_questions" },
+            { label: "🔄 Mudar toda a ideia do formulário", value: "edit_full" }
+          ]
+        );
+      } else if (businessProfile?.company_name) {
+        addAssistantMessage(
+          `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.company_name}**.
+
+` +
+          `Como já conheço seu negócio, vou criar perguntas estratégicas baseadas no seu perfil.
+
+` +
           `Vamos criar um formulário inteligente que transforma visitantes em oportunidades reais de venda?`,
           [
             { label: "Usar meu perfil e começar!", value: "start_with_profile", icon: Sparkles },
@@ -224,14 +241,18 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
         );
       } else {
         addAssistantMessage(
-          "Olá! 👋 Sou seu consultor de crescimento HelloGrowth.\n\n" +
-          "Vou te guiar na criação de um formulário inteligente que transforma visitantes em oportunidades reais de venda.\n\n" +
+          "Olá! 👋 Sou seu consultor de crescimento HelloGrowth.
+
+" +
+          "Vou te guiar na criação de um formulário inteligente que transforma visitantes em oportunidades reais de venda.
+
+" +
           "Para criar perguntas que realmente convertem, preciso entender melhor o seu negócio. Vamos começar?",
           [{ label: "Vamos começar!", value: "start", icon: Sparkles }]
         );
       }
     }
-  }, [profileLoaded, businessProfile]);
+  }, [profileLoaded, businessProfile, existingForm]);ile]);
 
   const fetchProducts = async () => {
     if (!supabase) return;
@@ -275,10 +296,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
     }]);
   };
 
-  const handleOptionClick = (value: string, label: string, skipUserMessage = false) => {
-    if (!skipUserMessage) {
-      addUserMessage(label);
-    }
+  const handleOptionClick = (value: string, label: string) => {
+    addUserMessage(label);
     
     switch (value) {
       case 'start':
@@ -311,22 +330,59 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
         break;
 
       case 'custom_objective_input':
-        setBusinessContext(prev => ({ ...prev, customObjective: userInput }));
-        setCurrentStep('objective');
+        setBusinessContext(prev => ({ ...prev, customObjective: userInput, formObjective: 'qualify' }));
+        setCurrentStep('tone');
         setTimeout(() => {
           addAssistantMessage(
-            `Ótimo! Vou criar perguntas focadas em: "${userInput}"\n\n` +
-            "**Agora, qual tipo de qualificação você prefere?**",
+            `Então você deseja: "${userInput}". \n\n` +
+            "**Seria isso ou quer adicionar mais alguma coisa?**",
             [
-              { label: "🎯 Qualificar Leads - Identificar quem está pronto para comprar", value: "qualify" },
-              { label: "📋 Coleta de Informações - Entender melhor o cliente", value: "collect_info" }
+              { label: "✅ Sim, é isso mesmo!", value: "confirm_objective" },
+              { label: "📝 Quero adicionar mais informações", value: "add_more_objective" }
             ]
+          );
+        }, 500);
+        break;
+
+      case 'confirm_objective':
+        setCurrentStep('tone');
+        setTimeout(() => {
+          addAssistantMessage(
+            "Perfeito! Agora vamos definir o tom das perguntas.\n\n" +
+            "**Qual tom você prefere para o formulário?**",
+            [
+              { label: "😊 Amigável - Conversa natural e próxima", value: "friendly" },
+              { label: "💼 Profissional - Sério e direto ao ponto", value: "professional" }
+            ]
+          );
+        }, 500);
+        break;
+
+      case 'add_more_objective':
+        setTimeout(() => {
+          addAssistantMessage(
+            "Claro! Me conte o que mais você gostaria de adicionar ao objetivo do formulário:"
           );
         }, 500);
         break;
 
       case 'qualify':
         setBusinessContext(prev => ({ ...prev, formObjective: 'qualify' }));
+        setCurrentStep('tone');
+        setTimeout(() => {
+          addAssistantMessage(
+            "Perfeito! Agora vamos definir o tom das perguntas.\n\n" +
+            "**Qual tom você prefere para o formulário?**",
+            [
+              { label: "😊 Amigável - Conversa natural e próxima", value: "friendly" },
+              { label: "💼 Profissional - Sério e direto ao ponto", value: "professional" }
+            ]
+          );
+        }, 500);
+        break;
+
+      case 'collect_info':
+        setBusinessContext(prev => ({ ...prev, formObjective: 'collect_info' }));
         setCurrentStep('tone');
         setTimeout(() => {
           addAssistantMessage(
@@ -471,12 +527,12 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
 
     // Processar objetivo customizado
     if (currentStep === 'custom_objective') {
-      handleOptionClick('custom_objective_input', input, true);
+      handleOptionClick('custom_objective_input', input);
       return;
     }
 
     if (currentStep === 'custom_objective_detail') {
-      handleOptionClick('custom_objective_detail_input', input, true);
+      handleOptionClick('custom_objective_detail_input', input);
       return;
     }
 
@@ -1150,43 +1206,6 @@ Responda APENAS com JSON válido neste formato:
                   Adicionar
                 </button>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Recommended Products Section */}
-        {products.length > 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6 mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                <Package size={20} className="text-emerald-500" />
-                Produtos Recomendados
-              </h3>
-              {businessContext.selectedProducts.length !== products.filter(p => businessContext.selectedProducts.includes(p.id)).length && (
-                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full">Editado</span>
-              )}
-            </div>
-            <p className="text-sm text-slate-500 mb-4">Selecione os produtos que podem ser oferecidos com base nas respostas</p>
-            <div className="grid grid-cols-2 gap-3">
-              {products.map(product => (
-                <button
-                  key={product.id}
-                  onClick={() => {
-                    const newSelected = businessContext.selectedProducts.includes(product.id)
-                      ? businessContext.selectedProducts.filter(id => id !== product.id)
-                      : [...businessContext.selectedProducts, product.id];
-                    setBusinessContext(prev => ({ ...prev, selectedProducts: newSelected }));
-                  }}
-                  className={`p-4 rounded-xl border-2 text-left transition-all ${
-                    businessContext.selectedProducts.includes(product.id)
-                      ? 'border-emerald-500 bg-emerald-50'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <p className="font-medium text-slate-800">{product.name}</p>
-                  <p className="text-sm text-emerald-600">R$ {product.value.toLocaleString('pt-BR')}</p>
-                </button>
-              ))}
             </div>
           </div>
         )}
