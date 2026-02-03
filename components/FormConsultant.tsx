@@ -467,6 +467,17 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
     addUserMessage(input);
     setUserInput('');
 
+    // Processar objetivo customizado
+    if (currentStep === 'custom_objective') {
+      handleOptionClick('custom_objective_input', input);
+      return;
+    }
+
+    if (currentStep === 'custom_objective_detail') {
+      handleOptionClick('custom_objective_detail_input', input);
+      return;
+    }
+
     switch (currentStep) {
       case 'business_type':
         setBusinessContext(prev => ({ 
@@ -1254,7 +1265,7 @@ Responda APENAS com JSON válido neste formato:
           </div>
 
           {/* Input Area */}
-          {['business_type', 'target_audience', 'pain_points'].includes(currentStep) && (
+          {['business_type', 'target_audience', 'pain_points', 'custom_objective', 'custom_objective_detail'].includes(currentStep) && (
             <div className="p-6 bg-white border-t border-slate-200">
               <div className="flex gap-3">
                 <input
