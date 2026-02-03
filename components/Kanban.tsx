@@ -6,6 +6,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Pie, Cell, PieChart as RechartsPieChart } from 'recharts';
+import MessageSuggestionsPanel from './MessageSuggestionsPanel';
 
 interface KanbanProps {
   leads: Lead[];
