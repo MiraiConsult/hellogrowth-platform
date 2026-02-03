@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Lead, Form } from '@/types';
-import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History } from 'lucide-react';
+import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Pie, Cell, PieChart as RechartsPieChart } from 'recharts';
 
 interface KanbanProps {
   leads: Lead[];
@@ -48,6 +49,9 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [isGeneratingAdvice, setIsGeneratingAdvice] = useState(false);
+  
+  // Dashboard State
+  const [showDashboard, setShowDashboard] = useState(false);
   
   // Notes State
   const [newNoteText, setNewNoteText] = useState('');
@@ -288,6 +292,13 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
         </div>
         <div className="flex gap-3 relative">
           <button 
+            onClick={() => setShowDashboard(!showDashboard)}
+            className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${showDashboard ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+          >
+            <BarChart3 size={18} /> Dashboard
+          </button>
+          
+          <button 
             onClick={() => setIsFilterOpen(!isFilterOpen)}
             className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${isFilterOpen ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
@@ -347,9 +358,121 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
         </div>
       </div>
 
-      <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
-        <div className="flex gap-6 h-full min-w-max">
-          {columns.map((col) => {
+      {/* Dashboard View */}
+      {showDashboard ? (
+        <div className="flex-1 overflow-y-auto pb-4">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Metrics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-500 text-sm font-medium">Total de Leads</span>
+                  <User className="text-gray-400" size={20} />
+                </div>
+                <p className="text-3xl font-bold text-gray-900">{leads.length}</p>
+              </div>
+              
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-500 text-sm font-medium">Volume Total</span>
+                  <DollarSign className="text-green-500" size={20} />
+                </div>
+                <p className="text-3xl font-bold text-green-600">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 }).format(leads.reduce((acc, curr) => acc + curr.value, 0))}
+                </p>
+              </div>
+              
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-500 text-sm font-medium">Taxa de Conversão</span>
+                  <TrendingUp className="text-blue-500" size={20} />
+                </div>
+                <p className="text-3xl font-bold text-blue-600">
+                  {leads.length > 0 ? ((leads.filter(l => l.status === 'Vendido').length / leads.length) * 100).toFixed(1) : 0}%
+                </p>
+              </div>
+              
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-500 text-sm font-medium">Valor Perdido</span>
+                  <X className="text-red-500" size={20} />
+                </div>
+                <p className="text-3xl font-bold text-red-600">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 }).format(leads.filter(l => l.status === 'Perdido').reduce((acc, curr) => acc + curr.value, 0))}
+                </p>
+              </div>
+            </div>
+
+            {/* Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Status Distribution Pie Chart */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <PieChart size={20} className="text-purple-600" />
+                  Distribuição por Status
+                </h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <RechartsPieChart>
+                    <Pie
+                      data={[
+                        { name: 'Novo', value: leads.filter(l => l.status === 'Novo').length, fill: '#E5E7EB' },
+                        { name: 'Em Contato', value: leads.filter(l => l.status === 'Em Contato').length, fill: '#DBEAFE' },
+                        { name: 'Negociação', value: leads.filter(l => l.status === 'Negociação').length, fill: '#F3E8FF' },
+                        { name: 'Vendido', value: leads.filter(l => l.status === 'Vendido').length, fill: '#DCFCE7' },
+                        { name: 'Perdido', value: leads.filter(l => l.status === 'Perdido').length, fill: '#FEE2E2' },
+                      ].filter(d => d.value > 0)}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      label={(entry) => `${entry.name}: ${entry.value}`}
+                    >
+                      {[
+                        { name: 'Novo', value: leads.filter(l => l.status === 'Novo').length, fill: '#9CA3AF' },
+                        { name: 'Em Contato', value: leads.filter(l => l.status === 'Em Contato').length, fill: '#3B82F6' },
+                        { name: 'Negociação', value: leads.filter(l => l.status === 'Negociação').length, fill: '#A855F7' },
+                        { name: 'Vendido', value: leads.filter(l => l.status === 'Vendido').length, fill: '#22C55E' },
+                        { name: 'Perdido', value: leads.filter(l => l.status === 'Perdido').length, fill: '#EF4444' },
+                      ].filter(d => d.value > 0).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </RechartsPieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Value by Status Bar Chart */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <BarChart3 size={20} className="text-blue-600" />
+                  Valor por Status
+                </h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={[
+                    { name: 'Novo', value: leads.filter(l => l.status === 'Novo').reduce((acc, l) => acc + l.value, 0) },
+                    { name: 'Em Contato', value: leads.filter(l => l.status === 'Em Contato').reduce((acc, l) => acc + l.value, 0) },
+                    { name: 'Negociação', value: leads.filter(l => l.status === 'Negociação').reduce((acc, l) => acc + l.value, 0) },
+                    { name: 'Vendido', value: leads.filter(l => l.status === 'Vendido').reduce((acc, l) => acc + l.value, 0) },
+                    { name: 'Perdido', value: leads.filter(l => l.status === 'Perdido').reduce((acc, l) => acc + l.value, 0) },
+                  ]}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip formatter={(value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value as number)} />
+                    <Bar dataKey="value" fill="#3B82F6" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Kanban View */
+        <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
+          <div className="flex gap-6 h-full min-w-max">
+            {columns.map((col) => {
             const columnLeads = filteredLeads.filter((l) => l.status === col);
             const columnTotal = columnLeads.reduce((acc, l) => acc + l.value, 0);
             
@@ -418,8 +541,9 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
               </div>
             );
           })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* New Opportunity Modal */}
       {isCreateModalOpen && (

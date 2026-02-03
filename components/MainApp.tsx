@@ -677,9 +677,6 @@ Responda APENAS com JSON válido (sem markdown):
             />
         )}
         
-        {currentView === 'sales-analytics' && (
-            <OpportunityAnalysis leads={leads} forms={forms} />
-        )}
         
         {currentView === 'forms' && (
             <FormBuilder 
