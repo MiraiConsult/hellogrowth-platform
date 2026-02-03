@@ -157,32 +157,54 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   // Carregar perguntas existentes quando em modo de edição
   useEffect(() => {
     if (stableExistingForm && stableExistingForm.questions) {
+      console.log('Carregando perguntas existentes:', JSON.stringify(stableExistingForm.questions, null, 2));
+      
+      // Mapear tipos do banco para tipos do componente
+      const typeMap: Record<string, GeneratedQuestion['type']> = {
+        'single': 'single_choice',
+        'single_choice': 'single_choice',
+        'multiple': 'multiple_choice',
+        'multiple_choice': 'multiple_choice',
+        'text': 'text',
+        'scale': 'scale'
+      };
+      
       const loadedQuestions: GeneratedQuestion[] = stableExistingForm.questions.map((q: any, qIdx: number) => {
         // Processar opções - pode vir como array de strings ou array de objetos
         let processedOptions: QuestionOption[] = [];
-        if (q.options && Array.isArray(q.options)) {
+        if (q.options && Array.isArray(q.options) && q.options.length > 0) {
           processedOptions = q.options.map((opt: any, idx: number) => {
             // Se opt é string, converter para objeto
             if (typeof opt === 'string') {
               return { id: `opt_${qIdx}_${idx}`, text: opt };
             }
-            // Se opt é objeto, extrair texto
+            // Se opt é objeto, extrair texto - PRIORIZAR label (formato do banco)
+            const optText = typeof opt.label === 'string' && opt.label.trim() 
+              ? opt.label 
+              : (typeof opt.text === 'string' && opt.text.trim() ? opt.text : '');
             return {
-              id: opt.id || `opt_${qIdx}_${idx}`,
-              text: opt.label || opt.text || opt.value || ''
+              id: opt.id ? String(opt.id) : `opt_${qIdx}_${idx}`,
+              text: optText
             };
-          });
+          }).filter((opt: QuestionOption) => opt.text.trim() !== ''); // Remover opções vazias
         }
         
+        // Mapear tipo do banco para tipo do componente
+        const mappedType = typeMap[q.type] || 'single_choice';
+        
+        console.log(`Pergunta ${qIdx + 1}: tipo=${q.type} -> ${mappedType}, opções=`, processedOptions);
+        
         return {
-          id: q.id || `q_${Date.now()}_${qIdx}`,
+          id: q.id ? String(q.id) : `q_${Date.now()}_${qIdx}`,
           text: q.text || q.question || '',
-          type: q.type || 'single_choice',
+          type: mappedType,
           options: processedOptions,
           insight: q.insight || q.ai_insight || 'Pergunta do formulário',
           linkedProducts: q.linkedProducts || q.linked_products || []
         };
       });
+      
+      console.log('Perguntas carregadas:', loadedQuestions);
       setGeneratedQuestions(loadedQuestions);
       setFormName(stableExistingForm.name || '');
       
@@ -1257,14 +1279,16 @@ Responda APENAS com JSON válido neste formato:
                       className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                     >
                       <option value="single_choice">Escolha Única</option>
+                      <option value="single">Escolha Única</option>
                       <option value="multiple_choice">Múltipla Escolha</option>
+                      <option value="multiple">Múltipla Escolha</option>
                       <option value="text">Texto Livre</option>
                       <option value="scale">Escala 1-10</option>
                     </select>
                   </div>
                   
                   {/* Options (for choice types) */}
-                  {(question.type === 'single_choice' || question.type === 'multiple_choice') && (
+                  {(question.type === 'single_choice' || question.type === 'multiple_choice' || question.type === 'single' || question.type === 'multiple') && question.options && question.options.length > 0 && (
                     <div className="space-y-2">
                       <span className="text-sm text-slate-500">Opções de resposta:</span>
                       {question.options.map((opt, optIdx) => (
