@@ -81,9 +81,13 @@ type ConsultantStep =
   | 'target_audience' 
   | 'pain_points' 
   | 'objective' 
+  | 'custom_objective'
+  | 'custom_objective_detail'
   | 'tone'
   | 'identification'
+  | 'identification_custom'
   | 'products' 
+  | 'manual_mode'
   | 'analysis' 
   | 'generation' 
   | 'review' 
@@ -286,8 +290,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
         break;
 
       case 'start_with_profile':
-        // Pular direto para objetivo, já que temos o perfil
-        setCurrentStep('objective');
+        // Primeiro pedir o objetivo específico deste formulário
+        setCurrentStep('custom_objective');
         setTimeout(() => {
           const profileSummary = businessProfile ? 
             `\n\n📊 **Seu perfil:**\n` +
@@ -297,10 +301,23 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
           
           addAssistantMessage(
             `Perfeito! Vou usar as informações do seu perfil para criar perguntas estratégicas.${profileSummary}\n\n` +
-            "**Qual é o objetivo principal deste formulário?**",
+            "**Antes de começar, me conte: qual é o objetivo ESPECÍFICO deste formulário?**\n\n" +
+            "Por exemplo: 'Qualificar leads para harmonização facial', 'Captar interessados em consultoria empresarial', etc.\n\n" +
+            "💡 Quanto mais específico, melhor serão as perguntas!"
+          );
+        }, 500);
+        break;
+
+      case 'custom_objective_input':
+        setBusinessContext(prev => ({ ...prev, customObjective: userInput }));
+        setCurrentStep('objective');
+        setTimeout(() => {
+          addAssistantMessage(
+            `Ótimo! Vou criar perguntas focadas em: "${userInput}"\n\n` +
+            "**Agora, qual tipo de qualificação você prefere?**",
             [
               { label: "🎯 Qualificar Leads - Identificar quem está pronto para comprar", value: "qualify" },
-              { label: "✨ Outro Objetivo - Tenho algo específico em mente", value: "custom" }
+              { label: "📋 Coleta de Informações - Entender melhor o cliente", value: "collect_info" }
             ]
           );
         }, 500);
