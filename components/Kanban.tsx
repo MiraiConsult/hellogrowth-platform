@@ -599,159 +599,74 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">
-              <div className="max-w-5xl mx-auto">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                <div className="space-y-4">
-                  <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wider mb-2">Dados de Contato</h3>
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
-                    <div className="p-2 bg-white rounded text-gray-500"><Mail size={18} /></div>
-                    <div>
-                      <p className="text-xs text-gray-500">Email</p>
-                      <p className="font-medium text-gray-800 text-sm">{selectedLead.email || 'Não informado'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
-                    <div className="p-2 bg-white rounded text-gray-500"><Phone size={18} /></div>
-                    <div>
-                      <p className="text-xs text-gray-500">Telefone</p>
-                      <p className="font-medium text-gray-800 text-sm">{selectedLead.phone || 'Não informado'}</p>
-                    </div>
-                  </div>
-                  
-                  {/* Internal Notes Section (History + Append) */}
-                  <div className="mt-6 border border-emerald-500 rounded-lg overflow-hidden shadow-sm bg-white flex flex-col h-[280px]">
-                     <div className="bg-emerald-50 px-4 py-2 border-b border-emerald-100 flex justify-between items-center">
-                        <h3 className="font-bold text-emerald-900 text-sm uppercase tracking-wider flex items-center gap-2">
-                            <History size={14}/> Anotações Internas
-                        </h3>
-                     </div>
-                     
-                     {/* History Area */}
-                     <div className="flex-1 bg-gray-50 p-4 overflow-y-auto text-sm border-b border-gray-200">
-                         {selectedLead.notes ? (
-                             <div className="whitespace-pre-wrap text-gray-700 font-mono text-xs">
-                                 {selectedLead.notes}
-                             </div>
-                         ) : (
-                             <div className="text-gray-400 italic text-center mt-8">Nenhuma anotação registrada.</div>
-                         )}
-                         <div ref={notesEndRef} />
-                     </div>
-
-                     {/* New Note Input */}
-                     <div className="p-3 bg-white">
-                         <div className="flex gap-2">
-                             <input 
-                                type="text"
-                                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                placeholder="Digite uma nova anotação..."
-                                value={newNoteText}
-                                onChange={(e) => setNewNoteText(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAddNote()}
-                             />
-                             <button 
-                                onClick={handleAddNote}
-                                disabled={isSavingNote || !newNoteText.trim()}
-                                className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                             >
-                                {isSavingNote ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>}
-                                Adicionar
-                             </button>
-                         </div>
-                     </div>
+              <div className="max-w-4xl mx-auto space-y-6">
+              
+              {/* Email and Value Section */}
+              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white p-2 rounded-lg text-gray-500"><Mail size={18} /></div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-semibold">Email</p>
+                    <p className="text-sm text-gray-800">{selectedLead.email || 'Não informado'}</p>
                   </div>
                 </div>
-                
-                <div className="space-y-4">
-                  <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wider mb-2">Detalhes da Oportunidade</h3>
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
-                    <div className="p-2 bg-white rounded text-green-600"><DollarSign size={18} /></div>
-                    <div>
-                      <p className="text-xs text-gray-500">Valor da Oportunidade</p>
-                      <p className="font-bold text-green-700 text-lg">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedLead.value)}
-                      </p>
-                    </div>
+                <div className="flex items-center gap-3">
+                  <div className="bg-white p-2 rounded-lg text-green-600"><DollarSign size={18} /></div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-semibold">Valor</p>
+                    <p className="text-sm font-bold text-green-700">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedLead.value)}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
-                    <div className="p-2 bg-white rounded text-gray-500"><Calendar size={18} /></div>
-                    <div>
-                      <p className="text-xs text-gray-500">Data de Entrada</p>
-                      <p className="font-medium text-gray-800 text-sm">
-                        {/* SAFE DATE PARSING */}
-                        {new Date(selectedLead.date || Date.now()).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                      </p>
-                    </div>
-                  </div>
-                  
-                   <div className="border border-purple-100 rounded-xl overflow-hidden mt-4">
-                    <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-3 text-white flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                        <Sparkles size={16} className="text-yellow-300" />
-                        <h3 className="font-bold text-sm">Coach de Vendas IA</h3>
-                    </div>
-                    {!aiAdvice && (
-                        <button 
-                        onClick={handleGenerateAdvice}
-                        disabled={isGeneratingAdvice}
-                        className="px-3 py-1 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded text-xs font-medium transition-colors flex items-center gap-1 disabled:opacity-50"
-                        >
-                        {isGeneratingAdvice ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                        {isGeneratingAdvice ? 'Criando...' : 'Gerar Mensagem'}
-                        </button>
-                    )}
-                    </div>
-                    <div className="bg-purple-50 p-4 min-h-[100px] text-sm">
-                    {aiAdvice ? (
-                        <div className="prose prose-sm prose-purple max-w-none animate-in fade-in duration-500">
-                        <ReactMarkdown>{aiAdvice}</ReactMarkdown>
-                        </div>
-                    ) : (
-                        <div className="text-center text-gray-400 italic">
-                         Gere uma mensagem personalizada para o cliente baseada nas respostas do formulário.
-                        </div>
-                    )}
-                    </div>
-                </div>
                 </div>
               </div>
 
+              {/* AI Message Suggestions with Send Buttons */}
+              <MessageSuggestionsPanel
+                client={{
+                  id: selectedLead.id,
+                  name: selectedLead.name,
+                  email: selectedLead.email,
+                  phone: selectedLead.phone,
+                  type: 'lead',
+                  leadStatus: selectedLead.status,
+                  value: selectedLead.value,
+                  daysSinceLastContact: Math.floor((Date.now() - new Date(selectedLead.date).getTime()) / (1000 * 60 * 60 * 24)),
+                  answers: selectedLead.answers
+                }}
+                insightType={selectedLead.status === 'Vendido' ? 'opportunity' : selectedLead.status === 'Perdido' ? 'recovery' : 'sales'}
+                showSendButtons={true}
+              />
+
               {/* Form Answers Section */}
               {selectedLead.answers && Object.keys(selectedLead.answers).length > 0 && (
-                <div className="border border-gray-200 rounded-xl overflow-hidden mt-6">
-                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                    <h3 className="font-bold text-gray-700 text-sm flex items-center gap-2">
-                      <FileText size={16} className="text-primary-600" /> 
-                      Respostas do Formulário
-                    </h3>
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText size={18} className="text-gray-400" />
+                    <h3 className="text-sm font-bold text-gray-900 uppercase">Respostas do Formulário</h3>
                   </div>
-                  <div className="p-4 space-y-4 bg-white grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-3">
                     {Object.entries(selectedLead.answers).map(([questionId, answerData]: [string, any]) => (
-                      <div key={questionId} className="bg-white border border-gray-200 rounded-lg p-3">
-                        <p className="text-xs text-gray-500 font-semibold mb-1">
-                          {getQuestionText(selectedLead, questionId)}
-                        </p>
+                      <div key={questionId} className="border border-gray-200 rounded-lg p-4 bg-white">
+                        <p className="text-xs text-gray-500 font-semibold mb-1.5">{getQuestionText(selectedLead, questionId)}</p>
                         <div className="flex justify-between items-start">
-                          <p className="text-gray-900 font-medium text-sm break-words pr-2">
-                              {Array.isArray(answerData.value) ? answerData.value.join(', ') : answerData.value}
-                          </p>
+                          <p className="text-gray-900 font-medium text-base">{Array.isArray(answerData.value) ? answerData.value.join(', ') : answerData.value}</p>
                           {answerData.optionSelected?.value > 0 && (
-                            <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-100 flex-shrink-0">
+                            <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100">
                               + R$ {answerData.optionSelected.value}
                             </span>
                           )}
                         </div>
-                        
                         {answerData.followUps && Object.values(answerData.followUps).some(text => text) && (
                           <div className="mt-2 pt-2 border-t border-gray-100">
-                          {Object.entries(answerData.followUps).map(([optId, text]) => 
-                            text ? (
-                              <div key={optId}>
-                                <p className="text-xs text-gray-500 italic">Informação adicional:</p>
-                                <p className="text-gray-800 text-sm pl-2 border-l-2 border-gray-200 mt-1">{text as string}</p>
-                              </div>
-                            ) : null
-                          )}
+                            {Object.entries(answerData.followUps).map(([optId, text]) => 
+                              text ? (
+                                <div key={optId}>
+                                  <p className="text-xs text-gray-500 font-medium italic">Informação adicional:</p>
+                                  <p className="text-sm text-gray-800 font-medium pl-2 border-l-2 border-gray-200 mt-1">{text as string}</p>
+                                </div>
+                              ) : null
+                            )}
                           </div>
                         )}
 
@@ -764,18 +679,12 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
               </div>
             </div>
             
-            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 flex-shrink-0">
-              <button onClick={() => setSelectedLead(null)} className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 font-medium transition-colors">
-                Fechar
-              </button>
+            <div className="p-4 bg-gray-50 border-t border-gray-100 text-right flex-shrink-0">
               <button 
-                onClick={handleContactClick}
-                disabled={!selectedLead.phone}
-                className={`px-6 py-2 text-white rounded-lg font-medium shadow-sm flex items-center gap-2 transition-colors ${
-                    !selectedLead.phone ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary-600 hover:bg-primary-700'
-                }`}
+                onClick={() => setSelectedLead(null)}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium"
               >
-                Entrar em Contato <ArrowRight size={16} />
+                Fechar
               </button>
             </div>
 
