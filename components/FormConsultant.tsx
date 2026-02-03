@@ -1,5 +1,5 @@
 // FormConsultant.tsx - Consultor Inteligente de Formulários com Edição Completa
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   X, 
   ArrowRight, 
@@ -109,8 +109,9 @@ interface BusinessContext {
   audienceCharacteristics: string;
   mainPainPoints: string[];
   desiredOutcome: string;
-  formObjective: 'qualify' | 'custom';
+  formObjective: 'qualify' | 'diagnose' | 'segment' | 'custom';
   customObjective: string;
+  qualificationCriteria: string; // Novo campo: critérios de qualificação
   productSelection: 'manual' | 'auto';
   selectedProducts: string[];
   formTone: 'formal' | 'informal' | 'direct' | 'friendly';
@@ -148,6 +149,36 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [businessProfile, setBusinessProfile] = useState<any>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [initialMessageSent, setInitialMessageSent] = useState(false);
+  
+  // Estabilizar existingForm para evitar re-renders
+  const stableExistingForm = useMemo(() => existingForm, [existingForm?.id]);
+  
+  // Carregar perguntas existentes quando em modo de edição
+  useEffect(() => {
+    if (stableExistingForm && stableExistingForm.questions) {
+      const loadedQuestions: GeneratedQuestion[] = stableExistingForm.questions.map((q: any) => ({
+        id: q.id || `q_${Date.now()}_${Math.random()}`,
+        text: q.text || '',
+        type: q.type || 'single_choice',
+        options: (q.options || []).map((opt: any, idx: number) => ({
+          id: opt.id || `opt_${idx}`,
+          text: opt.label || opt.text || ''
+        })),
+        insight: q.insight || '',
+        linkedProducts: q.linkedProducts || []
+      }));
+      setGeneratedQuestions(loadedQuestions);
+      setFormName(stableExistingForm.name || '');
+      
+      // Carregar contexto se existir
+      if (stableExistingForm.ai_context?.businessContext) {
+        setBusinessContext(prev => ({
+          ...prev,
+          ...stableExistingForm.ai_context.businessContext
+        }));
+      }
+    }
+  }, [stableExistingForm]);
 
   const [businessContext, setBusinessContext] = useState<BusinessContext>({
     businessType: '',
@@ -158,6 +189,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
     desiredOutcome: '',
     formObjective: 'qualify',
     customObjective: '',
+    qualificationCriteria: '', // Novo campo inicializado
     productSelection: 'auto',
     selectedProducts: [],
     formTone: 'friendly',
@@ -214,10 +246,10 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   useEffect(() => {
     if (chatMessages.length === 0 && profileLoaded && !initialMessageSent) {
       setInitialMessageSent(true);
-      if (existingForm) {
+      if (stableExistingForm) {
         // Modo de edição
         addAssistantMessage(
-          `Olá! 👋 Você está editando o formulário **${existingForm.name || 'Sem título'}**.
+          `Olá! 👋 Você está editando o formulário **${stableExistingForm.name || 'Sem título'}**.
 
 ` +
           `O que você gostaria de fazer?`,
@@ -250,7 +282,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
         );
       }
     }
-  }, [profileLoaded, businessProfile, existingForm]);
+  }, [profileLoaded, businessProfile, stableExistingForm, chatMessages.length, initialMessageSent]);
 
   const fetchProducts = async () => {
     if (!supabase) return;
@@ -368,20 +400,18 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
         break;
 
       case 'custom_objective_detail_input':
+        // Agora salva em qualificationCriteria ao invés de concatenar no objetivo
         setBusinessContext(prev => ({ 
           ...prev, 
-          customObjective: prev.customObjective + ' ' + userInput
+          qualificationCriteria: userInput
         }));
-        setCurrentStep('custom_objective_detail');
+        setCurrentStep('analysis');
         setTimeout(() => {
           addAssistantMessage(
-            `Perfeito! Agora seu objetivo é: "${businessContext.customObjective} ${userInput}". \n\n` +
-            "**Está bom assim ou quer ajustar mais alguma coisa?**",
-            [
-              { label: "✅ Sim, está perfeito!", value: "confirm_objective" },
-              { label: "📝 Quero adicionar mais", value: "add_more_objective" }
-            ]
+            "🚀 **Perfeito! Agora vou criar perguntas estratégicas que capturam exatamente essas informações.**\n\n" +
+            "⏳ Isso pode levar alguns segundos enquanto analiso a melhor abordagem..."
           );
+          runAIAnalysis();
         }, 500);
         break;
 
@@ -447,80 +477,23 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
           'tone_friendly': 'friendly'
         };
         setBusinessContext(prev => ({ ...prev, formTone: toneMap[value] }));
-        setCurrentStep('identification');
+        setCurrentStep('custom_objective_detail');
         setTimeout(() => {
           addAssistantMessage(
-            "Ótimo! Agora vamos definir **quais informações você quer coletar do cliente** no início do formulário.\n\n" +
-            "Por padrão, coletamos Nome, E-mail e Telefone. Você pode personalizar isso na próxima tela.",
-            [
-              { label: "Usar padrão (Nome, E-mail, Telefone)", value: "id_default" },
-              { label: "Personalizar campos", value: "id_custom" }
-            ]
+            "🎯 **Agora a parte mais importante para criar um formulário realmente inteligente!**\n\n" +
+            "Para que este formulário seja perfeito, quais informações são **indispensáveis** para você decidir se este é um bom cliente?\n\n" +
+            "💡 **Exemplos:**\n" +
+            "\u2022 Poder aquisitório (quanto pode gastar)\n" +
+            "\u2022 Urgência (quando precisa do serviço)\n" +
+            "\u2022 Problema específico que quer resolver\n" +
+            "\u2022 Experiência anterior com produtos similares\n" +
+            "\u2022 Expectativas de resultado\n\n" +
+            "Quanto mais específico você for, mais assertivas serão as perguntas! 🚀"
           );
         }, 500);
         break;
 
-      case 'id_default':
-        setCurrentStep('products');
-        setTimeout(() => {
-          addAssistantMessage(
-            "Ótima escolha! Agora vamos definir como vincular seus produtos às perguntas.\n\n" +
-            "Você prefere:",
-            [
-              { label: "🤖 Deixar a IA decidir - Eu analiso as respostas e sugiro o melhor produto", value: "products_auto" },
-              { label: "📦 Escolher manualmente - Você seleciona quais produtos quer destacar", value: "products_manual" }
-            ]
-          );
-        }, 500);
-        break;
 
-      case 'id_custom':
-        // Will show identification customization in review
-        setCurrentStep('products');
-        setTimeout(() => {
-          addAssistantMessage(
-            "Você poderá personalizar os campos de identificação na tela de revisão.\n\n" +
-            "Agora vamos definir como vincular seus produtos às perguntas.\n\n" +
-            "Você prefere:",
-            [
-              { label: "🤖 Deixar a IA decidir - Eu analiso as respostas e sugiro o melhor produto", value: "products_auto" },
-              { label: "📦 Escolher manualmente - Você seleciona quais produtos quer destacar", value: "products_manual" }
-            ]
-          );
-        }, 500);
-        break;
-
-      case 'products_auto':
-        setBusinessContext(prev => ({ ...prev, productSelection: 'auto' }));
-        setCurrentStep('analysis');
-        setTimeout(() => {
-          addAssistantMessage(
-            "Excelente! Agora vou criar perguntas estratégicas baseadas no seu objetivo e produtos.\n\n" +
-            "⏳ Isso pode levar alguns segundos enquanto analiso a melhor abordagem..."
-          );
-          runAIAnalysis();
-        }, 500);
-        break;
-
-      case 'products_manual':
-        setBusinessContext(prev => ({ ...prev, productSelection: 'manual' }));
-        if (products.length === 0) {
-          setTimeout(() => {
-            addAssistantMessage(
-              "Você ainda não tem produtos cadastrados. Vou gerar as perguntas baseadas no contexto do seu negócio.\n\n" +
-              "⏳ Isso pode levar alguns segundos..."
-            );
-            setCurrentStep('analysis');
-            runAIAnalysis();
-          }, 500);
-        } else {
-          setTimeout(() => {
-            addAssistantMessage(
-              "Selecione os produtos que você quer destacar neste formulário:"
-            );
-          }, 500);
-        }
-        break;
 
       case 'confirm_products':
         setCurrentStep('analysis');
@@ -705,12 +678,18 @@ CONTEXTO DO NEGÓCIO:
 - Tom: ${toneDescriptions[businessContext.formTone]}
 ${selectedProductNames.length > 0 ? `- Produtos em foco: ${selectedProductNames.join(', ')}` : ''}
 
+🎯 CRITÉRIOS DE QUALIFICAÇÃO (PRIORIDADE MÁXIMA):
+${businessContext.qualificationCriteria ? businessContext.qualificationCriteria : 'Não especificado'}
+
 REGRAS:
-1. Crie perguntas INDIRETAS que não pareçam um interrogatório de vendas
-2. Cada pergunta deve revelar algo sobre a intenção de compra do cliente
-3. Use o tom especificado (${businessContext.formTone})
-4. Varie os tipos: single_choice (escolha única), multiple_choice (múltipla escolha), text (texto livre)
-5. Para perguntas de escolha, forneça 3-5 opções relevantes
+1. **OBRIGATÓRIO**: Crie perguntas que capturem TODAS as informações dos CRITÉRIOS DE QUALIFICAÇÃO acima
+2. As perguntas devem ser INDIRETAS e naturais, não pareçam um interrogatório de vendas
+3. Cada pergunta deve revelar algo sobre a intenção de compra e qualificação do cliente
+4. Use o tom especificado (${businessContext.formTone})
+5. Varie os tipos: single_choice (escolha única), multiple_choice (múltipla escolha), text (texto livre)
+6. Para perguntas de escolha, forneça 3-5 opções relevantes
+7. Se os critérios mencionam "poder aquisitório" ou "quanto pode gastar", CRIE uma pergunta de faixa de preço
+8. Se os critérios mencionam "urgência" ou "prazo", CRIE uma pergunta sobre timeline
 
 Responda APENAS com JSON válido neste formato:
 {
@@ -804,6 +783,7 @@ Responda APENAS com JSON válido neste formato:
 
   const handleSaveForm = async () => {
     const formData = {
+      ...(stableExistingForm?.id && { id: stableExistingForm.id }), // Mantém ID se for edição
       name: formName || `Formulário ${new Date().toLocaleDateString('pt-BR')}`,
       description: businessContext.businessDescription,
       identification_fields: businessContext.identificationFields.filter(f => f.enabled),
@@ -818,9 +798,8 @@ Responda APENAS com JSON válido neste formato:
         })),
         required: true
       })),
-      settings: {
-        tone: businessContext.formTone,
-        objective: businessContext.formObjective,
+      ai_context: {
+        products: products,
         businessContext: businessContext
       },
       status: 'active'
