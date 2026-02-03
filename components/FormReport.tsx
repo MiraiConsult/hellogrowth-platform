@@ -1,21 +1,39 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Form, Lead } from '@/types';
-import { ArrowLeft, Users, DollarSign, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, Target, Filter, X, Mail, Phone, FileText } from 'lucide-react';
+import { ArrowLeft, Users, DollarSign, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, Target, Filter, X, Mail, Phone, FileText, Edit2, Plus, Trash2, Check, AlertCircle } from 'lucide-react';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from 'react-markdown';
+
+interface Product {
+  id: string;
+  name: string;
+  value: number;
+  description?: string;
+}
 
 interface FormReportProps {
   formId: string;
   forms: Form[];
   leads: Lead[];
   onBack: () => void;
+  supabase?: SupabaseClient;
+  userId?: string;
+  onLeadUpdate?: (leadId: string, updatedData: any) => void;
 }
 
-const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack }) => {
+const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, supabase, userId, onLeadUpdate }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  
+  // Estados para edição de produtos recomendados
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isEditingProducts, setIsEditingProducts] = useState(false);
+  const [editedProducts, setEditedProducts] = useState<{id: string; name: string; value: number}[]>([]);
+  const [wasManuallyEdited, setWasManuallyEdited] = useState(false);
+  const [isSavingProducts, setIsSavingProducts] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
   // 1. Get Form Data
@@ -54,6 +72,102 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack })
     { name: 'Vendido', value: statusCounts['Vendido'] || 0, color: '#059669' },
     { name: 'Perdido', value: statusCounts['Perdido'] || 0, color: '#ef4444' },
   ].filter(d => d.value > 0);
+
+  // Carregar produtos disponíveis
+  useEffect(() => {
+    const fetchProducts = async () => {
+      if (!supabase || !userId) return;
+      try {
+        const { data, error } = await supabase
+          .from('products_services')
+          .select('id, name, value, description')
+          .eq('user_id', userId);
+        if (data && !error) {
+          setProducts(data);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar produtos:', err);
+      }
+    };
+    fetchProducts();
+  }, [supabase, userId]);
+
+  // Inicializar produtos editados quando seleciona um lead
+  useEffect(() => {
+    if (selectedLead?.answers?._ai_analysis) {
+      const analysis = selectedLead.answers._ai_analysis;
+      // Verificar se já foi editado manualmente
+      setWasManuallyEdited(analysis.manually_edited || false);
+      // Carregar produtos recomendados (pode ser um ou múltiplos)
+      if (analysis.recommended_products && Array.isArray(analysis.recommended_products)) {
+        setEditedProducts(analysis.recommended_products);
+      } else if (analysis.suggested_product) {
+        setEditedProducts([{
+          id: 'original',
+          name: analysis.suggested_product,
+          value: analysis.suggested_value || 0
+        }]);
+      } else {
+        setEditedProducts([]);
+      }
+    }
+  }, [selectedLead]);
+
+  // Funções de edição de produtos
+  const handleAddProduct = (product: Product) => {
+    if (!editedProducts.find(p => p.id === product.id)) {
+      setEditedProducts([...editedProducts, { id: product.id, name: product.name, value: product.value }]);
+    }
+  };
+
+  const handleRemoveProduct = (productId: string) => {
+    setEditedProducts(editedProducts.filter(p => p.id !== productId));
+  };
+
+  const handleSaveProductEdits = async () => {
+    if (!selectedLead || !supabase) return;
+    setIsSavingProducts(true);
+    try {
+      const totalValue = editedProducts.reduce((sum, p) => sum + p.value, 0);
+      const updatedAnalysis = {
+        ...selectedLead.answers._ai_analysis,
+        recommended_products: editedProducts,
+        suggested_product: editedProducts.map(p => p.name).join(', '),
+        suggested_value: totalValue,
+        manually_edited: true,
+        edited_at: new Date().toISOString()
+      };
+
+      const updatedAnswers = {
+        ...selectedLead.answers,
+        _ai_analysis: updatedAnalysis
+      };
+
+      const { error } = await supabase
+        .from('leads')
+        .update({ answers: updatedAnswers, value: totalValue })
+        .eq('id', selectedLead.id);
+
+      if (!error) {
+        setWasManuallyEdited(true);
+        setIsEditingProducts(false);
+        // Atualizar lead local
+        if (onLeadUpdate) {
+          onLeadUpdate(selectedLead.id, { answers: updatedAnswers, value: totalValue });
+        }
+        // Atualizar selectedLead
+        setSelectedLead({
+          ...selectedLead,
+          answers: updatedAnswers,
+          value: totalValue
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao salvar edições:', err);
+    } finally {
+      setIsSavingProducts(false);
+    }
+  };
 
   // 4. AI Analysis Handler
   const handleAnalyzeLeads = async () => {
@@ -386,34 +500,162 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack })
                   </div>
                   
                   <div className="space-y-4">
-                    {/* Produto Sugerido e Valor */}
+                    {/* Produto Sugerido e Valor - EDITÁVEL */}
                     <div className="bg-white rounded-lg p-4 border border-purple-100">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <p className="text-xs text-gray-500 font-semibold uppercase">Produto Recomendado</p>
-                          <p className="text-lg font-bold text-gray-900">{selectedLead.answers._ai_analysis.suggested_product}</p>
+                      {/* Cabeçalho com botão de editar */}
+                      <div className="flex justify-between items-center mb-3">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-gray-500 font-semibold uppercase">Produtos Recomendados</p>
+                          {wasManuallyEdited && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
+                              <AlertCircle size={12} />
+                              Editado manualmente
+                            </span>
+                          )}
                         </div>
-                        <div className="text-right">
-                          <p className="text-xs text-gray-500 font-semibold uppercase">Valor Estimado</p>
-                          <p className="text-2xl font-bold text-green-600">
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedLead.answers._ai_analysis.suggested_value || 0)}
-                          </p>
+                        {!isEditingProducts ? (
+                          <button
+                            onClick={() => setIsEditingProducts(true)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-purple-600 hover:bg-purple-50 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            <Edit2 size={14} />
+                            Editar
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setIsEditingProducts(false);
+                                // Resetar para valores originais
+                                if (selectedLead?.answers?._ai_analysis?.recommended_products) {
+                                  setEditedProducts(selectedLead.answers._ai_analysis.recommended_products);
+                                }
+                              }}
+                              className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={handleSaveProductEdits}
+                              disabled={isSavingProducts}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white hover:bg-purple-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                            >
+                              {isSavingProducts ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                              Salvar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Modo Visualização */}
+                      {!isEditingProducts && (
+                        <>
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <p className="text-lg font-bold text-gray-900">
+                                {editedProducts.length > 0 
+                                  ? editedProducts.map(p => p.name).join(', ')
+                                  : selectedLead.answers._ai_analysis.suggested_product
+                                }
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-gray-500 font-semibold uppercase">Valor Estimado</p>
+                              <p className="text-2xl font-bold text-green-600">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                  editedProducts.length > 0 
+                                    ? editedProducts.reduce((sum, p) => sum + p.value, 0)
+                                    : selectedLead.answers._ai_analysis.suggested_value || 0
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 mt-3">
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                              selectedLead.answers._ai_analysis.classification === 'opportunity' ? 'bg-green-100 text-green-700' :
+                              selectedLead.answers._ai_analysis.classification === 'risk' ? 'bg-red-100 text-red-700' :
+                              'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {selectedLead.answers._ai_analysis.classification === 'opportunity' ? '✅ Alta Oportunidade' :
+                               selectedLead.answers._ai_analysis.classification === 'risk' ? '⚠️ Risco' :
+                               '🔍 Monitorar'}
+                            </span>
+                            <span className="text-xs text-gray-600">
+                              Confiança: {Math.round((selectedLead.answers._ai_analysis.confidence || 0) * 100)}%
+                            </span>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Modo Edição */}
+                      {isEditingProducts && (
+                        <div className="space-y-4">
+                          {/* Produtos selecionados */}
+                          <div>
+                            <p className="text-sm font-medium text-gray-700 mb-2">Produtos selecionados:</p>
+                            {editedProducts.length === 0 ? (
+                              <p className="text-sm text-gray-400 italic">Nenhum produto selecionado</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {editedProducts.map((product) => (
+                                  <div key={product.id} className="flex items-center justify-between bg-purple-50 p-3 rounded-lg border border-purple-200">
+                                    <div>
+                                      <p className="font-medium text-gray-900">{product.name}</p>
+                                      <p className="text-sm text-green-600 font-bold">
+                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.value)}
+                                      </p>
+                                    </div>
+                                    <button
+                                      onClick={() => handleRemoveProduct(product.id)}
+                                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Adicionar produtos */}
+                          <div>
+                            <p className="text-sm font-medium text-gray-700 mb-2">Adicionar produto:</p>
+                            {products.length === 0 ? (
+                              <p className="text-sm text-gray-400 italic">Nenhum produto cadastrado. Cadastre produtos em "Produtos e Serviços".</p>
+                            ) : (
+                              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                                {products.filter(p => !editedProducts.find(ep => ep.id === p.id)).map((product) => (
+                                  <button
+                                    key={product.id}
+                                    onClick={() => handleAddProduct(product)}
+                                    className="flex items-center gap-2 p-2 text-left border border-gray-200 rounded-lg hover:border-purple-300 hover:bg-purple-50 transition-colors"
+                                  >
+                                    <Plus size={14} className="text-purple-500 flex-shrink-0" />
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium text-gray-900 truncate">{product.name}</p>
+                                      <p className="text-xs text-green-600">
+                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.value)}
+                                      </p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Total */}
+                          <div className="pt-3 border-t border-gray-200">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm font-medium text-gray-700">Valor Total:</span>
+                              <span className="text-xl font-bold text-green-600">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                  editedProducts.reduce((sum, p) => sum + p.value, 0)
+                                )}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 mt-3">
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          selectedLead.answers._ai_analysis.classification === 'opportunity' ? 'bg-green-100 text-green-700' :
-                          selectedLead.answers._ai_analysis.classification === 'risk' ? 'bg-red-100 text-red-700' :
-                          'bg-yellow-100 text-yellow-700'
-                        }`}>
-                          {selectedLead.answers._ai_analysis.classification === 'opportunity' ? '✅ Alta Oportunidade' :
-                           selectedLead.answers._ai_analysis.classification === 'risk' ? '⚠️ Risco' :
-                           '🔍 Monitorar'}
-                        </span>
-                        <span className="text-xs text-gray-600">
-                          Confiança: {Math.round((selectedLead.answers._ai_analysis.confidence || 0) * 100)}%
-                        </span>
-                      </div>
+                      )}
                     </div>
 
                     {/* Raciocínio */}

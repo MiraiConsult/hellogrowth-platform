@@ -727,7 +727,12 @@ Responda APENAS com JSON válido (sem markdown):
                 formId={reportFormId} 
                 forms={forms} 
                 leads={leads} 
-                onBack={() => setCurrentView('forms')} 
+                onBack={() => setCurrentView('forms')}
+                supabase={supabase || undefined}
+                userId={currentUser.id}
+                onLeadUpdate={(leadId, updatedData) => {
+                  setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updatedData } : l));
+                }}
             />
         )}
 
