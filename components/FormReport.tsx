@@ -76,17 +76,28 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
   // Carregar produtos disponíveis
   useEffect(() => {
     const fetchProducts = async () => {
-      if (!supabase || !userId) return;
+      if (!supabase || !userId) {
+        console.log('FormReport: supabase ou userId não disponível', { supabase: !!supabase, userId });
+        return;
+      }
       try {
+        console.log('FormReport: Carregando produtos para userId:', userId);
         const { data, error } = await supabase
           .from('products_services')
           .select('id, name, value, description')
           .eq('user_id', userId);
-        if (data && !error) {
+        
+        if (error) {
+          console.error('FormReport: Erro ao carregar produtos:', error);
+          return;
+        }
+        
+        if (data) {
+          console.log('FormReport: Produtos carregados:', data.length, data);
           setProducts(data);
         }
       } catch (err) {
-        console.error('Erro ao carregar produtos:', err);
+        console.error('FormReport: Exceção ao carregar produtos:', err);
       }
     };
     fetchProducts();
