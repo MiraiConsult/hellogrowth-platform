@@ -11,7 +11,6 @@ interface Product {
   id: string;
   name: string;
   value: number;
-  description?: string;
 }
 
 interface FormReportProps {
@@ -84,7 +83,7 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
         console.log('FormReport: Carregando produtos para userId:', userId);
         const { data, error } = await supabase
           .from('products_services')
-          .select('id, name, value, description')
+          .select('id, name, value')
           .eq('user_id', userId);
         
         if (error) {
