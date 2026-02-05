@@ -55,8 +55,26 @@ const TeamManagement: React.FC = () => {
   }, []);
 
   const getAuthToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token;
+    try {
+      // Tentar pegar sessão primeiro
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        return session.access_token;
+      }
+      
+      // Se não tiver sessão, tentar pegar usuário diretamente
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Pegar nova sessão
+        const { data: { session: newSession } } = await supabase.auth.getSession();
+        return newSession?.access_token;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Erro ao obter token:', error);
+      return null;
+    }
   };
 
   const loadData = async () => {
