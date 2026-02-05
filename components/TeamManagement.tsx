@@ -54,61 +54,41 @@ const TeamManagement: React.FC = () => {
     loadData();
   }, []);
 
+  const getAuthToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token;
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
       
-      // Buscar usuário autenticado
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      
-      if (!authUser) {
-        console.error('Usuário não autenticado');
+      const token = await getAuthToken();
+      if (!token) {
+        console.error('Token não encontrado');
         setLoading(false);
         return;
       }
 
-      // Buscar ID do usuário na tabela users (pública)
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', authUser.email)
-        .single();
+      // Chamar API para buscar membros e convites
+      const response = await fetch('/api/team/members', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
 
-      if (userError || !userData) {
-        console.error('Erro ao buscar usuário na tabela users:', userError);
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Erro ao carregar dados:', error);
         setLoading(false);
         return;
       }
 
-      const userId = userData.id;
-      setCurrentUserId(userId);
+      const data = await response.json();
+      setMembers(data.members || []);
+      setInvites(data.invites || []);
+      setCurrentUserId(data.userId);
 
-      // Buscar membros da equipe usando o ID correto
-      const { data: membersData, error: membersError } = await supabase
-        .from('team_members')
-        .select('*')
-        .eq('owner_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (membersError) {
-        console.error('Erro ao carregar membros:', membersError);
-      } else {
-        setMembers(membersData || []);
-      }
-
-      // Buscar convites pendentes
-      const { data: invitesData, error: invitesError } = await supabase
-        .from('team_invites')
-        .select('*')
-        .eq('owner_id', userId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
-
-      if (invitesError) {
-        console.error('Erro ao carregar convites:', invitesError);
-      } else {
-        setInvites(invitesData || []);
-      }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
@@ -118,39 +98,34 @@ const TeamManagement: React.FC = () => {
 
   const handleInvite = async () => {
     try {
-      if (!currentUserId) {
-        alert('Erro: Usuário não identificado');
+      const token = await getAuthToken();
+      if (!token) {
+        alert('Erro: Não autenticado');
         return;
       }
 
-      // Gerar token único
-      const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
-      
-      // Criar convite no banco
-      const { data, error } = await supabase
-        .from('team_invites')
-        .insert({
-          owner_id: currentUserId,
-          email: inviteForm.email,
+      // Chamar API para criar convite
+      const response = await fetch('/api/team/invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
           name: inviteForm.name,
-          role: inviteForm.role,
-          token: token,
-          status: 'pending',
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 dias
+          email: inviteForm.email,
+          role: inviteForm.role
         })
-        .select()
-        .single();
+      });
 
-      if (error) {
-        console.error('Erro ao criar convite:', error);
-        alert('Erro ao criar convite: ' + error.message);
+      if (!response.ok) {
+        const error = await response.json();
+        alert('Erro ao criar convite: ' + error.error);
         return;
       }
 
-      // Gerar link de convite
-      const baseUrl = window.location.origin;
-      const link = `${baseUrl}/accept-invite?token=${token}`;
-      setInviteLink(link);
+      const data = await response.json();
+      setInviteLink(data.inviteLink);
       
       // Recarregar lista de convites
       await loadData();
@@ -167,33 +142,35 @@ const TeamManagement: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSuspend = async (memberId: string) => {
-    if (!confirm('Deseja realmente suspender este membro?')) return;
-
-    const { error } = await supabase
-      .from('team_members')
-      .update({ status: 'suspended' })
-      .eq('id', memberId);
-
-    if (error) {
-      alert('Erro ao suspender membro');
-    } else {
-      await loadData();
-    }
-  };
-
   const handleRemove = async (memberId: string) => {
     if (!confirm('Deseja realmente remover este membro? Esta ação não pode ser desfeita.')) return;
 
-    const { error } = await supabase
-      .from('team_members')
-      .delete()
-      .eq('id', memberId);
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        alert('Erro: Não autenticado');
+        return;
+      }
 
-    if (error) {
-      alert('Erro ao remover membro');
-    } else {
+      const response = await fetch('/api/team/remove', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ memberId })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        alert('Erro ao remover membro: ' + error.error);
+        return;
+      }
+
       await loadData();
+    } catch (error) {
+      console.error('Erro ao remover membro:', error);
+      alert('Erro ao remover membro');
     }
   };
 
