@@ -80,3 +80,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { inviteId } = body;
+
+    if (!inviteId) {
+      return NextResponse.json({ error: 'inviteId não fornecido' }, { status: 400 });
+    }
+
+    console.log('Deletando convite:', inviteId);
+
+    const { error } = await supabaseAdmin
+      .from('team_invites')
+      .delete()
+      .eq('id', inviteId);
+
+    if (error) {
+      console.error('Erro ao deletar convite:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+
+  } catch (error: any) {
+    console.error('Erro ao deletar convite:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

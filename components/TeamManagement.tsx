@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Users, Mail, Shield, Trash2, UserPlus, Copy, Check, AlertCircle } from 'lucide-react';
+import { Users, Mail, Shield, Trash2, UserPlus, Copy, Check, AlertCircle, Link, Edit2, X } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 
 interface TeamManagementProps {
@@ -36,6 +36,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   
   const [inviteForm, setInviteForm] = useState({
     name: '',
@@ -43,7 +44,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => 
     role: 'viewer' as 'admin' | 'manager' | 'member' | 'viewer'
   });
 
-  const roleLabels = {
+  const roleLabels: Record<string, string> = {
     admin: 'Admin (Você)',
     manager: 'Gerente - Gerenciar leads, formulários e produtos',
     member: 'Membro - Gerenciar leads e enviar mensagens',
@@ -62,7 +63,6 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => 
       
       console.log('Loading team data for userId:', userId);
 
-      // Chamar API para buscar membros e convites usando userId diretamente
       const response = await fetch(`/api/team/members?userId=${encodeURIComponent(userId)}`);
 
       if (!response.ok) {
@@ -91,7 +91,6 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => 
         return;
       }
 
-      // Chamar API para criar convite
       const response = await fetch('/api/team/invite', {
         method: 'POST',
         headers: {
@@ -114,7 +113,6 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => 
       const data = await response.json();
       setInviteLink(data.inviteLink);
       
-      // Recarregar lista de convites
       await loadData();
       
     } catch (error) {
@@ -127,6 +125,14 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => 
     navigator.clipboard.writeText(inviteLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyInviteLinkById = (invite: TeamInvite) => {
+    const baseUrl = window.location.origin;
+    const link = `${baseUrl}/accept-invite?token=${invite.token}`;
+    navigator.clipboard.writeText(link);
+    setCopiedInviteId(invite.id);
+    setTimeout(() => setCopiedInviteId(null), 2000);
   };
 
   const handleRemove = async (memberId: string) => {
@@ -151,6 +157,31 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => 
     } catch (error) {
       console.error('Erro ao remover membro:', error);
       alert('Erro ao remover membro');
+    }
+  };
+
+  const handleDeleteInvite = async (inviteId: string) => {
+    if (!confirm('Deseja realmente cancelar este convite?')) return;
+
+    try {
+      const response = await fetch('/api/team/invite', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ inviteId })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        alert('Erro ao cancelar convite: ' + error.error);
+        return;
+      }
+
+      await loadData();
+    } catch (error) {
+      console.error('Erro ao cancelar convite:', error);
+      alert('Erro ao cancelar convite');
     }
   };
 
@@ -210,12 +241,32 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => 
                     <p className="font-medium text-slate-800">{invite.name}</p>
                     <p className="text-sm text-slate-600">{invite.email}</p>
                     <p className="text-xs text-slate-500 mt-1">
-                      Enviado em {new Date(invite.created_at).toLocaleDateString('pt-BR')}
+                      {roleLabels[invite.role] || invite.role} • Enviado em {new Date(invite.created_at).toLocaleDateString('pt-BR')}
                     </p>
                   </div>
-                  <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm">
-                    Pendente
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => copyInviteLinkById(invite)}
+                      className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Copiar link do convite"
+                    >
+                      {copiedInviteId === invite.id ? (
+                        <Check size={18} className="text-green-500" />
+                      ) : (
+                        <Link size={18} />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteInvite(invite.id)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Cancelar convite"
+                    >
+                      <X size={18} />
+                    </button>
+                    <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm">
+                      Pendente
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -249,7 +300,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => 
                       <p className="font-medium text-slate-800">{member.name}</p>
                       <p className="text-sm text-slate-600">{member.email}</p>
                       <p className="text-xs text-slate-500 mt-1">
-                        {roleLabels[member.role]}
+                        {roleLabels[member.role] || member.role}
                       </p>
                     </div>
                   </div>

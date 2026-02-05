@@ -2,14 +2,15 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 
 // Componente interno que usa useSearchParams
 function AcceptInviteContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
   const [inviteData, setInviteData] = useState<any>(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -27,27 +28,16 @@ function AcceptInviteContent() {
 
   const loadInvite = async (token: string) => {
     try {
-      const { data, error } = await supabase
-        .from('team_invites')
-        .select('*, users!team_invites_owner_id_fkey(business_name)')
-        .eq('token', token)
-        .eq('status', 'pending')
-        .single();
+      const response = await fetch(`/api/team/accept?token=${encodeURIComponent(token)}`);
+      const data = await response.json();
 
-      if (error || !data) {
-        setError('Convite não encontrado ou já foi aceito');
+      if (!response.ok) {
+        setError(data.error || 'Convite não encontrado ou já foi aceito');
         setLoading(false);
         return;
       }
 
-      // Verificar se expirou
-      if (new Date(data.expires_at) < new Date()) {
-        setError('Este convite expirou');
-        setLoading(false);
-        return;
-      }
-
-      setInviteData(data);
+      setInviteData(data.invite);
       setLoading(false);
     } catch (err) {
       console.error('Erro ao carregar convite:', err);
@@ -67,63 +57,70 @@ function AcceptInviteContent() {
       return;
     }
 
-    setLoading(true);
+    setSubmitting(true);
     setError('');
 
     try {
-      // 1. Criar usuário no Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: inviteData.email,
-        password: newPassword,
+      const token = searchParams.get('token');
+      
+      const response = await fetch('/api/team/accept', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          token,
+          password: newPassword
+        })
       });
 
-      if (authError) {
-        throw authError;
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Erro ao aceitar convite');
+        setSubmitting(false);
+        return;
       }
 
-      // 2. Criar membro da equipe
-      const { error: memberError } = await supabase
-        .from('team_members')
-        .insert({
-          user_id: authData.user!.id,
-          owner_id: inviteData.owner_id,
-          email: inviteData.email,
-          name: inviteData.name,
-          role: inviteData.role,
-          status: 'active',
-        });
+      setSuccess(true);
+      
+      // Redirecionar para login após 3 segundos
+      setTimeout(() => {
+        router.push('/');
+      }, 3000);
 
-      if (memberError) {
-        throw memberError;
-      }
-
-      // 3. Atualizar status do convite
-      await supabase
-        .from('team_invites')
-        .update({ status: 'accepted' })
-        .eq('id', inviteData.id);
-
-      // 4. Fazer login automático
-      await supabase.auth.signInWithPassword({
-        email: inviteData.email,
-        password: newPassword,
-      });
-
-      // 5. Redirecionar para a plataforma
-      router.push('/');
     } catch (err: any) {
       console.error('Erro ao aceitar convite:', err);
       setError(err.message || 'Erro ao aceitar convite');
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Carregando convite...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Conta Criada!</h1>
+          <p className="text-gray-600 mb-6">
+            Sua conta foi criada com sucesso. Você será redirecionado para o login...
+          </p>
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600 mx-auto"></div>
         </div>
       </div>
     );
@@ -131,7 +128,7 @@ function AcceptInviteContent() {
 
   if (error && !inviteData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,7 +139,7 @@ function AcceptInviteContent() {
           <p className="text-gray-600 mb-6">{error}</p>
           <button
             onClick={() => router.push('/')}
-            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
           >
             Voltar para Login
           </button>
@@ -151,19 +148,29 @@ function AcceptInviteContent() {
     );
   }
 
+  const getRoleLabel = (role: string) => {
+    const labels: Record<string, string> = {
+      admin: 'Administrador',
+      manager: 'Gerente',
+      member: 'Membro',
+      viewer: 'Visualizador'
+    };
+    return labels[role] || role;
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full">
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Aceitar Convite</h1>
           <p className="text-gray-600">
             Você foi convidado para se juntar à equipe de{' '}
-            <span className="font-semibold">{inviteData?.users?.business_name}</span>
+            <span className="font-semibold">{inviteData?.owner_company_name || 'HelloGrowth'}</span>
           </p>
         </div>
 
@@ -198,7 +205,7 @@ function AcceptInviteContent() {
             </label>
             <input
               type="text"
-              value={inviteData?.role === 'admin' ? 'Administrador' : inviteData?.role === 'manager' ? 'Gerente' : inviteData?.role === 'member' ? 'Membro' : 'Visualizador'}
+              value={getRoleLabel(inviteData?.role)}
               disabled
               className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
             />
@@ -213,7 +220,7 @@ function AcceptInviteContent() {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="Mínimo 6 caracteres"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
 
@@ -226,7 +233,7 @@ function AcceptInviteContent() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Digite a senha novamente"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
         </div>
@@ -239,10 +246,10 @@ function AcceptInviteContent() {
 
         <button
           onClick={handleAccept}
-          disabled={loading || !newPassword || !confirmPassword}
-          className="w-full py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
+          disabled={submitting || !newPassword || !confirmPassword}
+          className="w-full py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
         >
-          {loading ? 'Processando...' : 'Aceitar Convite e Criar Conta'}
+          {submitting ? 'Processando...' : 'Aceitar Convite e Criar Conta'}
         </button>
 
         <p className="mt-4 text-center text-sm text-gray-500">
@@ -257,9 +264,9 @@ function AcceptInviteContent() {
 export default function AcceptInvitePage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Carregando...</p>
         </div>
       </div>
