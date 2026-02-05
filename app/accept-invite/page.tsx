@@ -12,6 +12,8 @@ function AcceptInviteContent() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [inviteData, setInviteData] = useState<any>(null);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   useEffect(() => {
     const token = searchParams.get('token');
@@ -45,6 +47,17 @@ function AcceptInviteContent() {
   };
 
   const handleAccept = async () => {
+    // Validações
+    if (!password || password.length < 6) {
+      setError('A senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('As senhas não coincidem');
+      return;
+    }
+
     setSubmitting(true);
     setError('');
 
@@ -56,7 +69,7 @@ function AcceptInviteContent() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ token })
+        body: JSON.stringify({ token, password })
       });
 
       const data = await response.json();
@@ -67,12 +80,25 @@ function AcceptInviteContent() {
         return;
       }
 
+      // Salvar usuário no localStorage para login automático
+      if (data.user) {
+        localStorage.setItem('hg_current_user', JSON.stringify({
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          password: data.user.password,
+          plan: data.user.plan,
+          createdAt: data.user.createdAt,
+          companyName: data.user.companyName,
+          role: 'user'
+        }));
+      }
+
       setSuccess(true);
       
-      // Redirecionar para página de cadastro após 2 segundos
+      // Redirecionar para a aplicação após 2 segundos
       setTimeout(() => {
-        // Redireciona para a página principal com parâmetros para abrir cadastro
-        router.push(`/?signup=true&email=${encodeURIComponent(inviteData?.email || '')}&name=${encodeURIComponent(inviteData?.name || '')}`);
+        window.location.href = '/';
       }, 2000);
 
     } catch (err: any) {
@@ -102,12 +128,13 @@ function AcceptInviteContent() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Convite Aceito!</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Conta Criada!</h1>
           <p className="text-gray-600 mb-4">
-            Você foi adicionado à equipe de <strong>{inviteData?.owner_company_name || 'HelloGrowth'}</strong>.
+            Sua conta foi criada com sucesso e você foi adicionado à equipe de{' '}
+            <strong>{inviteData?.owner_company_name || 'HelloGrowth'}</strong>.
           </p>
           <p className="text-gray-500 mb-6">
-            Redirecionando para criar sua conta...
+            Entrando automaticamente...
           </p>
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600 mx-auto"></div>
         </div>
@@ -165,31 +192,45 @@ function AcceptInviteContent() {
 
         <div className="space-y-4 mb-6">
           <div className="bg-gray-50 p-4 rounded-lg">
-            <label className="block text-sm font-medium text-gray-500 mb-1">
-              Email
-            </label>
+            <label className="block text-sm font-medium text-gray-500 mb-1">Email</label>
             <p className="text-gray-800 font-medium">{inviteData?.email || ''}</p>
           </div>
 
           <div className="bg-gray-50 p-4 rounded-lg">
-            <label className="block text-sm font-medium text-gray-500 mb-1">
-              Nome
-            </label>
+            <label className="block text-sm font-medium text-gray-500 mb-1">Nome</label>
             <p className="text-gray-800 font-medium">{inviteData?.name || ''}</p>
           </div>
 
           <div className="bg-gray-50 p-4 rounded-lg">
-            <label className="block text-sm font-medium text-gray-500 mb-1">
-              Nível de Acesso
-            </label>
+            <label className="block text-sm font-medium text-gray-500 mb-1">Nível de Acesso</label>
             <p className="text-gray-800 font-medium">{getRoleLabel(inviteData?.role)}</p>
           </div>
-        </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <p className="text-blue-800 text-sm">
-            <strong>Próximo passo:</strong> Ao aceitar o convite, você será redirecionado para criar sua conta na plataforma com o email acima.
-          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Criar Senha *
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mínimo 6 caracteres"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Confirmar Senha *
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Digite a senha novamente"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            />
+          </div>
         </div>
 
         {error && (
@@ -200,17 +241,17 @@ function AcceptInviteContent() {
 
         <button
           onClick={handleAccept}
-          disabled={submitting}
+          disabled={submitting || !password || !confirmPassword}
           className="w-full py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
         >
           {submitting ? (
             <>
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-              Processando...
+              Criando conta...
             </>
           ) : (
             <>
-              Aceitar Convite
+              Aceitar Convite e Criar Conta
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
               </svg>
