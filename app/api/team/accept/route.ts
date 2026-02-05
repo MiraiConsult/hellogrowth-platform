@@ -3,9 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Cliente com Service Role para bypass de RLS
+// Cliente com Service Role para operações de banco
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+// Cliente com Anon Key para auth (signUp)
+const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
 
 // GET - Buscar convite pelo token
 export async function GET(request: NextRequest) {
@@ -90,15 +94,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Este convite expirou' }, { status: 400 });
     }
 
-    // 1. Criar usuário no Supabase Auth usando Admin API
+    // 1. Criar usuário usando signUp (método padrão)
     console.log('Criando usuário auth para:', invite.email);
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    const { data: authData, error: authError } = await supabaseAuth.auth.signUp({
       email: invite.email,
       password: password,
-      email_confirm: true, // Confirmar email automaticamente
-      user_metadata: {
-        name: invite.name,
-        role: invite.role
+      options: {
+        data: {
+          name: invite.name,
+          role: invite.role
+        },
+        emailRedirectTo: undefined // Não enviar email de confirmação
       }
     });
 
@@ -113,7 +119,17 @@ export async function POST(request: NextRequest) {
 
     console.log('Usuário auth criado:', authData.user.id);
 
-    // 2. Criar registro na tabela users (usando upsert para evitar duplicatas)
+    // 2. Confirmar email automaticamente usando Admin API
+    try {
+      await supabaseAdmin.auth.admin.updateUserById(authData.user.id, {
+        email_confirm: true
+      });
+      console.log('Email confirmado automaticamente');
+    } catch (confirmError) {
+      console.error('Erro ao confirmar email (não crítico):', confirmError);
+    }
+
+    // 3. Criar registro na tabela users
     console.log('Criando registro na tabela users...');
     const { error: userError } = await supabaseAdmin
       .from('users')
@@ -131,12 +147,11 @@ export async function POST(request: NextRequest) {
 
     if (userError) {
       console.error('Erro ao criar registro de usuário (não crítico):', userError);
-      // Continuar mesmo com erro - o usuário auth já foi criado
     } else {
       console.log('Registro na tabela users criado com sucesso');
     }
 
-    // 3. Criar membro da equipe
+    // 4. Criar membro da equipe
     console.log('Criando membro da equipe...');
     const { error: memberError } = await supabaseAdmin
       .from('team_members')
@@ -150,12 +165,11 @@ export async function POST(request: NextRequest) {
 
     if (memberError) {
       console.error('Erro ao criar membro (não crítico):', memberError);
-      // Continuar mesmo com erro - o usuário já foi criado
     } else {
       console.log('Membro da equipe criado com sucesso');
     }
 
-    // 4. Atualizar status do convite
+    // 5. Atualizar status do convite
     console.log('Atualizando status do convite...');
     const { error: updateError } = await supabaseAdmin
       .from('team_invites')
