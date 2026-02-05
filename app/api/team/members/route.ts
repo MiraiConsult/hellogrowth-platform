@@ -9,33 +9,39 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function GET(request: NextRequest) {
   try {
-    // Pegar email do query parameter
+    // Pegar userId do query parameter
     const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
     const email = searchParams.get('email');
 
-    if (!email) {
-      return NextResponse.json({ error: 'Email não fornecido' }, { status: 400 });
+    let ownerId = userId;
+
+    // Se recebeu email ao invés de userId, buscar o ID
+    if (!ownerId && email) {
+      const { data: userData, error: userError } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .single();
+
+      if (userError || !userData) {
+        console.error('Erro ao buscar usuário:', userError);
+        return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
+      }
+      ownerId = userData.id;
     }
 
-    // Buscar ID do usuário na tabela users
-    const { data: userData, error: userError } = await supabaseAdmin
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .single();
-
-    if (userError || !userData) {
-      console.error('Erro ao buscar usuário:', userError);
-      return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
+    if (!ownerId) {
+      return NextResponse.json({ error: 'userId ou email não fornecido' }, { status: 400 });
     }
 
-    const userId = userData.id;
+    console.log('Buscando membros para owner_id:', ownerId);
 
     // Buscar membros da equipe
     const { data: members, error: membersError } = await supabaseAdmin
       .from('team_members')
       .select('*')
-      .eq('owner_id', userId)
+      .eq('owner_id', ownerId)
       .order('created_at', { ascending: false });
 
     if (membersError) {
@@ -47,7 +53,7 @@ export async function GET(request: NextRequest) {
     const { data: invites, error: invitesError } = await supabaseAdmin
       .from('team_invites')
       .select('*')
-      .eq('owner_id', userId)
+      .eq('owner_id', ownerId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
@@ -56,10 +62,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: invitesError.message }, { status: 500 });
     }
 
+    console.log('Membros encontrados:', members?.length || 0);
+    console.log('Convites encontrados:', invites?.length || 0);
+
     return NextResponse.json({
       members: members || [],
       invites: invites || [],
-      userId
+      userId: ownerId
     });
 
   } catch (error: any) {

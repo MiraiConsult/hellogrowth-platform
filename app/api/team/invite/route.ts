@@ -11,29 +11,34 @@ export async function POST(request: NextRequest) {
   try {
     // Pegar dados do body
     const body = await request.json();
-    const { ownerEmail, name, email, role } = body;
+    const { ownerId, ownerEmail, name, email, role } = body;
 
-    if (!ownerEmail) {
-      return NextResponse.json({ error: 'Email do proprietário não fornecido' }, { status: 400 });
+    let userId = ownerId;
+
+    // Se recebeu email ao invés de ownerId, buscar o ID
+    if (!userId && ownerEmail) {
+      const { data: userData, error: userError } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('email', ownerEmail)
+        .single();
+
+      if (userError || !userData) {
+        console.error('Erro ao buscar usuário:', userError);
+        return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
+      }
+      userId = userData.id;
+    }
+
+    if (!userId) {
+      return NextResponse.json({ error: 'ownerId ou ownerEmail não fornecido' }, { status: 400 });
     }
 
     if (!name || !email || !role) {
       return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 });
     }
 
-    // Buscar ID do usuário na tabela users
-    const { data: userData, error: userError } = await supabaseAdmin
-      .from('users')
-      .select('id')
-      .eq('email', ownerEmail)
-      .single();
-
-    if (userError || !userData) {
-      console.error('Erro ao buscar usuário:', userError);
-      return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
-    }
-
-    const userId = userData.id;
+    console.log('Criando convite para owner_id:', userId);
 
     // Gerar token único
     const inviteToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
@@ -61,6 +66,8 @@ export async function POST(request: NextRequest) {
     // Gerar link de convite
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.headers.get('origin') || 'https://hellogrowth.online';
     const inviteLink = `${baseUrl}/accept-invite?token=${inviteToken}`;
+
+    console.log('Convite criado com sucesso:', invite.id);
 
     return NextResponse.json({
       success: true,

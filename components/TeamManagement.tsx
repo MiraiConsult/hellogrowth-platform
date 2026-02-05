@@ -2,7 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Users, Mail, Shield, Trash2, UserPlus, Copy, Check, AlertCircle } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
+
+interface TeamManagementProps {
+  supabase: SupabaseClient;
+  userId: string;
+}
 
 interface TeamMember {
   id: string;
@@ -24,14 +29,13 @@ interface TeamInvite {
   created_at: string;
 }
 
-const TeamManagement: React.FC = () => {
+const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [invites, setInvites] = useState<TeamInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [copied, setCopied] = useState(false);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   
   const [inviteForm, setInviteForm] = useState({
     name: '',
@@ -47,26 +51,19 @@ const TeamManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (userId) {
+      loadData();
+    }
+  }, [userId]);
 
   const loadData = async () => {
     try {
       setLoading(true);
       
-      // Buscar usuário autenticado
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user || !user.email) {
-        console.error('Usuário não autenticado');
-        setLoading(false);
-        return;
-      }
+      console.log('Loading team data for userId:', userId);
 
-      setCurrentUserEmail(user.email);
-
-      // Chamar API para buscar membros e convites
-      const response = await fetch(`/api/team/members?email=${encodeURIComponent(user.email)}`);
+      // Chamar API para buscar membros e convites usando userId diretamente
+      const response = await fetch(`/api/team/members?userId=${encodeURIComponent(userId)}`);
 
       if (!response.ok) {
         const error = await response.json();
@@ -76,6 +73,7 @@ const TeamManagement: React.FC = () => {
       }
 
       const data = await response.json();
+      console.log('Team data loaded:', data);
       setMembers(data.members || []);
       setInvites(data.invites || []);
 
@@ -88,7 +86,7 @@ const TeamManagement: React.FC = () => {
 
   const handleInvite = async () => {
     try {
-      if (!currentUserEmail) {
+      if (!userId) {
         alert('Erro: Usuário não identificado');
         return;
       }
@@ -100,7 +98,7 @@ const TeamManagement: React.FC = () => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          ownerEmail: currentUserEmail,
+          ownerId: userId,
           name: inviteForm.name,
           email: inviteForm.email,
           role: inviteForm.role
