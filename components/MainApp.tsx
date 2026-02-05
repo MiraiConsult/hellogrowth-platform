@@ -22,6 +22,7 @@ import DatabaseExport from '@/components/DatabaseExport';
 import DigitalDiagnostic from '@/components/DigitalDiagnostic';
 import ProductsManagement from '@/components/ProductsManagement';
 import BusinessProfile from '@/components/BusinessProfile';
+import TeamManagement from '@/components/TeamManagement';
 // CustomerJourney removed
 import IntelligenceCenter from '@/components/IntelligenceCenter';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
@@ -793,6 +794,13 @@ Responda APENAS com JSON válido (sem markdown):
 
         {currentView === 'tutorial' && (
             <Tutorial />
+        )}
+
+        {currentView === 'team-management' && (
+            <TeamManagement 
+                supabase={supabase}
+                userId={currentUser.id}
+            />
         )}
 
         {showTour && (
