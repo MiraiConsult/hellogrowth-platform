@@ -9,30 +9,23 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function GET(request: NextRequest) {
   try {
-    // Pegar token de autenticação do header
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
-    }
+    // Pegar email do query parameter
+    const { searchParams } = new URL(request.url);
+    const email = searchParams.get('email');
 
-    const token = authHeader.replace('Bearer ', '');
-    
-    // Criar cliente com token do usuário
-    const supabase = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Usuário não autenticado' }, { status: 401 });
+    if (!email) {
+      return NextResponse.json({ error: 'Email não fornecido' }, { status: 400 });
     }
 
     // Buscar ID do usuário na tabela users
     const { data: userData, error: userError } = await supabaseAdmin
       .from('users')
       .select('id')
-      .eq('email', user.email)
+      .eq('email', email)
       .single();
 
     if (userError || !userData) {
+      console.error('Erro ao buscar usuário:', userError);
       return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
     }
 
@@ -46,6 +39,7 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (membersError) {
+      console.error('Erro ao buscar membros:', membersError);
       return NextResponse.json({ error: membersError.message }, { status: 500 });
     }
 
@@ -58,6 +52,7 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (invitesError) {
+      console.error('Erro ao buscar convites:', invitesError);
       return NextResponse.json({ error: invitesError.message }, { status: 500 });
     }
 

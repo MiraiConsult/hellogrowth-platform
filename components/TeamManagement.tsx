@@ -35,7 +35,7 @@ const TeamManagement: React.FC = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [copied, setCopied] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   
   const [inviteForm, setInviteForm] = useState({
     name: '',
@@ -54,46 +54,23 @@ const TeamManagement: React.FC = () => {
     loadData();
   }, []);
 
-  const getAuthToken = async () => {
-    try {
-      // Tentar pegar sessão primeiro
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        return session.access_token;
-      }
-      
-      // Se não tiver sessão, tentar pegar usuário diretamente
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // Pegar nova sessão
-        const { data: { session: newSession } } = await supabase.auth.getSession();
-        return newSession?.access_token;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Erro ao obter token:', error);
-      return null;
-    }
-  };
-
   const loadData = async () => {
     try {
       setLoading(true);
       
-      const token = await getAuthToken();
-      if (!token) {
-        console.error('Token não encontrado');
+      // Buscar usuário autenticado
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user || !user.email) {
+        console.error('Usuário não autenticado');
         setLoading(false);
         return;
       }
 
+      setCurrentUserEmail(user.email);
+
       // Chamar API para buscar membros e convites
-      const response = await fetch('/api/team/members', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await fetch(`/api/team/members?email=${encodeURIComponent(user.email)}`);
 
       if (!response.ok) {
         const error = await response.json();
@@ -105,7 +82,6 @@ const TeamManagement: React.FC = () => {
       const data = await response.json();
       setMembers(data.members || []);
       setInvites(data.invites || []);
-      setCurrentUserId(data.userId);
 
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -116,9 +92,8 @@ const TeamManagement: React.FC = () => {
 
   const handleInvite = async () => {
     try {
-      const token = await getAuthToken();
-      if (!token) {
-        alert('Erro: Não autenticado');
+      if (!currentUserEmail) {
+        alert('Erro: Usuário não identificado');
         return;
       }
 
@@ -126,10 +101,10 @@ const TeamManagement: React.FC = () => {
       const response = await fetch('/api/team/invite', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          ownerEmail: currentUserEmail,
           name: inviteForm.name,
           email: inviteForm.email,
           role: inviteForm.role
@@ -164,17 +139,10 @@ const TeamManagement: React.FC = () => {
     if (!confirm('Deseja realmente remover este membro? Esta ação não pode ser desfeita.')) return;
 
     try {
-      const token = await getAuthToken();
-      if (!token) {
-        alert('Erro: Não autenticado');
-        return;
-      }
-
       const response = await fetch('/api/team/remove', {
         method: 'DELETE',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ memberId })
       });

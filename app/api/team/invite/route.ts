@@ -9,42 +9,31 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function POST(request: NextRequest) {
   try {
-    // Pegar token de autenticação do header
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
+    // Pegar dados do body
+    const body = await request.json();
+    const { ownerEmail, name, email, role } = body;
+
+    if (!ownerEmail) {
+      return NextResponse.json({ error: 'Email do proprietário não fornecido' }, { status: 400 });
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    
-    // Criar cliente com token do usuário
-    const supabase = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Usuário não autenticado' }, { status: 401 });
+    if (!name || !email || !role) {
+      return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 });
     }
 
     // Buscar ID do usuário na tabela users
     const { data: userData, error: userError } = await supabaseAdmin
       .from('users')
       .select('id')
-      .eq('email', user.email)
+      .eq('email', ownerEmail)
       .single();
 
     if (userError || !userData) {
+      console.error('Erro ao buscar usuário:', userError);
       return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
     }
 
     const userId = userData.id;
-
-    // Pegar dados do convite do body
-    const body = await request.json();
-    const { name, email, role } = body;
-
-    if (!name || !email || !role) {
-      return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 });
-    }
 
     // Gerar token único
     const inviteToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
@@ -65,11 +54,12 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (inviteError) {
+      console.error('Erro ao criar convite:', inviteError);
       return NextResponse.json({ error: inviteError.message }, { status: 500 });
     }
 
     // Gerar link de convite
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.headers.get('origin') || 'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.headers.get('origin') || 'https://hellogrowth.online';
     const inviteLink = `${baseUrl}/accept-invite?token=${inviteToken}`;
 
     return NextResponse.json({
