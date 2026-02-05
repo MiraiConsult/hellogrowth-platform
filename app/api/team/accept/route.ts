@@ -3,13 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 // Cliente com Service Role para operações de banco
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-
-// Cliente com Anon Key para auth (signUp)
-const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
 
 // GET - Buscar convite pelo token
 export async function GET(request: NextRequest) {
@@ -21,8 +17,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Token não fornecido' }, { status: 400 });
     }
 
-    console.log('Buscando convite com token:', token);
-
     // Buscar convite
     const { data: invite, error: inviteError } = await supabaseAdmin
       .from('team_invites')
@@ -32,7 +26,6 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (inviteError || !invite) {
-      console.error('Convite não encontrado:', inviteError);
       return NextResponse.json({ error: 'Convite não encontrado ou já foi aceito' }, { status: 404 });
     }
 
@@ -61,21 +54,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Aceitar convite e criar conta
+// POST - Aceitar convite (apenas criar membro da equipe, sem criar usuário auth)
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { token, password } = body;
+    const { token } = body;
 
-    if (!token || !password) {
-      return NextResponse.json({ error: 'Token e senha são obrigatórios' }, { status: 400 });
+    if (!token) {
+      return NextResponse.json({ error: 'Token é obrigatório' }, { status: 400 });
     }
-
-    if (password.length < 6) {
-      return NextResponse.json({ error: 'A senha deve ter pelo menos 6 caracteres' }, { status: 400 });
-    }
-
-    console.log('Aceitando convite com token:', token);
 
     // Buscar convite
     const { data: invite, error: inviteError } = await supabaseAdmin
@@ -94,65 +81,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Este convite expirou' }, { status: 400 });
     }
 
-    // 1. Criar usuário usando signUp (método padrão)
-    console.log('Criando usuário auth para:', invite.email);
-    const { data: authData, error: authError } = await supabaseAuth.auth.signUp({
-      email: invite.email,
-      password: password,
-      options: {
-        data: {
-          name: invite.name,
-          role: invite.role
-        }
-      }
-    });
-
-    if (authError) {
-      console.error('Erro ao criar usuário auth:', authError);
-      return NextResponse.json({ error: 'Erro ao criar usuário: ' + authError.message }, { status: 500 });
-    }
-
-    if (!authData.user) {
-      return NextResponse.json({ error: 'Erro ao criar usuário: usuário não retornado' }, { status: 500 });
-    }
-
-    const userId = authData.user.id;
-    console.log('Usuário auth criado:', userId);
-
-    // 2. Confirmar email automaticamente usando Admin API
-    try {
-      await supabaseAdmin.auth.admin.updateUserById(userId, {
-        email_confirm: true
-      });
-      console.log('Email confirmado automaticamente');
-    } catch (confirmError) {
-      console.error('Erro ao confirmar email (não crítico):', confirmError);
-    }
-
-    // 3. Criar registro na tabela users (insert simples)
-    console.log('Criando registro na tabela users...');
-    const { error: userError } = await supabaseAdmin
-      .from('users')
-      .insert({
-        id: userId,
-        email: invite.email,
-        name: invite.name,
-        company_name: invite.name
-      });
-
-    if (userError) {
-      console.error('Erro ao criar registro de usuário:', userError);
-      // Se o erro for de duplicata, ignorar
-      if (!userError.message.includes('duplicate') && !userError.message.includes('unique')) {
-        // Tentar continuar mesmo com erro
-        console.log('Continuando apesar do erro na tabela users...');
-      }
-    } else {
-      console.log('Registro na tabela users criado com sucesso');
-    }
-
-    // 4. Criar membro da equipe
-    console.log('Criando membro da equipe...');
+    // Criar membro da equipe com status 'pending' (será ativado quando o usuário fizer login)
     const { error: memberError } = await supabaseAdmin
       .from('team_members')
       .insert({
@@ -160,32 +89,29 @@ export async function POST(request: NextRequest) {
         email: invite.email,
         name: invite.name,
         role: invite.role,
-        status: 'active'
+        status: 'pending' // Será ativado quando o usuário fizer login
       });
 
-    if (memberError) {
+    if (memberError && !memberError.message.includes('duplicate')) {
       console.error('Erro ao criar membro:', memberError);
-    } else {
-      console.log('Membro da equipe criado com sucesso');
+      return NextResponse.json({ error: 'Erro ao registrar membro da equipe' }, { status: 500 });
     }
 
-    // 5. Atualizar status do convite
-    console.log('Atualizando status do convite...');
+    // Atualizar status do convite
     await supabaseAdmin
       .from('team_invites')
       .update({ status: 'accepted', updated_at: new Date().toISOString() })
       .eq('id', invite.id);
 
-    console.log('Convite aceito com sucesso!');
-
     return NextResponse.json({
       success: true,
-      message: 'Conta criada com sucesso! Faça login para acessar a plataforma.',
-      email: invite.email
+      message: 'Convite aceito! Agora faça seu cadastro para acessar a plataforma.',
+      email: invite.email,
+      redirectToSignup: true
     });
 
   } catch (error: any) {
-    console.error('Erro geral ao aceitar convite:', error);
+    console.error('Erro ao aceitar convite:', error);
     return NextResponse.json({ error: 'Erro interno: ' + error.message }, { status: 500 });
   }
 }

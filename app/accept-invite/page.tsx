@@ -12,8 +12,6 @@ function AcceptInviteContent() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [inviteData, setInviteData] = useState<any>(null);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
 
   useEffect(() => {
     const token = searchParams.get('token');
@@ -47,16 +45,6 @@ function AcceptInviteContent() {
   };
 
   const handleAccept = async () => {
-    if (newPassword !== confirmPassword) {
-      setError('As senhas não coincidem');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres');
-      return;
-    }
-
     setSubmitting(true);
     setError('');
 
@@ -68,10 +56,7 @@ function AcceptInviteContent() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          token,
-          password: newPassword
-        })
+        body: JSON.stringify({ token })
       });
 
       const data = await response.json();
@@ -84,10 +69,11 @@ function AcceptInviteContent() {
 
       setSuccess(true);
       
-      // Redirecionar para login após 3 segundos
+      // Redirecionar para página de cadastro após 2 segundos
       setTimeout(() => {
-        router.push('/');
-      }, 3000);
+        // Redireciona para a página principal com parâmetros para abrir cadastro
+        router.push(`/?signup=true&email=${encodeURIComponent(inviteData?.email || '')}&name=${encodeURIComponent(inviteData?.name || '')}`);
+      }, 2000);
 
     } catch (err: any) {
       console.error('Erro ao aceitar convite:', err);
@@ -116,9 +102,12 @@ function AcceptInviteContent() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Conta Criada!</h1>
-          <p className="text-gray-600 mb-6">
-            Sua conta foi criada com sucesso. Você será redirecionado para o login...
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Convite Aceito!</h1>
+          <p className="text-gray-600 mb-4">
+            Você foi adicionado à equipe de <strong>{inviteData?.owner_company_name || 'HelloGrowth'}</strong>.
+          </p>
+          <p className="text-gray-500 mb-6">
+            Redirecionando para criar sua conta...
           </p>
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600 mx-auto"></div>
         </div>
@@ -170,72 +159,37 @@ function AcceptInviteContent() {
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Aceitar Convite</h1>
           <p className="text-gray-600">
             Você foi convidado para se juntar à equipe de{' '}
-            <span className="font-semibold">{inviteData?.owner_company_name || 'HelloGrowth'}</span>
+            <span className="font-semibold text-emerald-600">{inviteData?.owner_company_name || 'HelloGrowth'}</span>
           </p>
         </div>
 
         <div className="space-y-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <label className="block text-sm font-medium text-gray-500 mb-1">
               Email
             </label>
-            <input
-              type="email"
-              value={inviteData?.email || ''}
-              disabled
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-            />
+            <p className="text-gray-800 font-medium">{inviteData?.email || ''}</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <label className="block text-sm font-medium text-gray-500 mb-1">
               Nome
             </label>
-            <input
-              type="text"
-              value={inviteData?.name || ''}
-              disabled
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-            />
+            <p className="text-gray-800 font-medium">{inviteData?.name || ''}</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <label className="block text-sm font-medium text-gray-500 mb-1">
               Nível de Acesso
             </label>
-            <input
-              type="text"
-              value={getRoleLabel(inviteData?.role)}
-              disabled
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-            />
+            <p className="text-gray-800 font-medium">{getRoleLabel(inviteData?.role)}</p>
           </div>
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nova Senha *
-            </label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Mínimo 6 caracteres"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Confirmar Senha *
-            </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Digite a senha novamente"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-            />
-          </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <p className="text-blue-800 text-sm">
+            <strong>Próximo passo:</strong> Ao aceitar o convite, você será redirecionado para criar sua conta na plataforma com o email acima.
+          </p>
         </div>
 
         {error && (
@@ -246,10 +200,22 @@ function AcceptInviteContent() {
 
         <button
           onClick={handleAccept}
-          disabled={submitting || !newPassword || !confirmPassword}
-          className="w-full py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
+          disabled={submitting}
+          className="w-full py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
         >
-          {submitting ? 'Processando...' : 'Aceitar Convite e Criar Conta'}
+          {submitting ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              Processando...
+            </>
+          ) : (
+            <>
+              Aceitar Convite
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </>
+          )}
         </button>
 
         <p className="mt-4 text-center text-sm text-gray-500">
