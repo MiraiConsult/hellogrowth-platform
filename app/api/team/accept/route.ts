@@ -103,8 +103,7 @@ export async function POST(request: NextRequest) {
         data: {
           name: invite.name,
           role: invite.role
-        },
-        emailRedirectTo: undefined // Não enviar email de confirmação
+        }
       }
     });
 
@@ -117,11 +116,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Erro ao criar usuário: usuário não retornado' }, { status: 500 });
     }
 
-    console.log('Usuário auth criado:', authData.user.id);
+    const userId = authData.user.id;
+    console.log('Usuário auth criado:', userId);
 
     // 2. Confirmar email automaticamente usando Admin API
     try {
-      await supabaseAdmin.auth.admin.updateUserById(authData.user.id, {
+      await supabaseAdmin.auth.admin.updateUserById(userId, {
         email_confirm: true
       });
       console.log('Email confirmado automaticamente');
@@ -129,24 +129,24 @@ export async function POST(request: NextRequest) {
       console.error('Erro ao confirmar email (não crítico):', confirmError);
     }
 
-    // 3. Criar registro na tabela users
+    // 3. Criar registro na tabela users (insert simples)
     console.log('Criando registro na tabela users...');
     const { error: userError } = await supabaseAdmin
       .from('users')
-      .upsert({
-        id: authData.user.id,
+      .insert({
+        id: userId,
         email: invite.email,
         name: invite.name,
-        role: 'user',
-        plan: 'free',
-        company_name: invite.name,
-        created_at: new Date().toISOString()
-      }, {
-        onConflict: 'id'
+        company_name: invite.name
       });
 
     if (userError) {
-      console.error('Erro ao criar registro de usuário (não crítico):', userError);
+      console.error('Erro ao criar registro de usuário:', userError);
+      // Se o erro for de duplicata, ignorar
+      if (!userError.message.includes('duplicate') && !userError.message.includes('unique')) {
+        // Tentar continuar mesmo com erro
+        console.log('Continuando apesar do erro na tabela users...');
+      }
     } else {
       console.log('Registro na tabela users criado com sucesso');
     }
@@ -164,21 +164,17 @@ export async function POST(request: NextRequest) {
       });
 
     if (memberError) {
-      console.error('Erro ao criar membro (não crítico):', memberError);
+      console.error('Erro ao criar membro:', memberError);
     } else {
       console.log('Membro da equipe criado com sucesso');
     }
 
     // 5. Atualizar status do convite
     console.log('Atualizando status do convite...');
-    const { error: updateError } = await supabaseAdmin
+    await supabaseAdmin
       .from('team_invites')
       .update({ status: 'accepted', updated_at: new Date().toISOString() })
       .eq('id', invite.id);
-
-    if (updateError) {
-      console.error('Erro ao atualizar convite (não crítico):', updateError);
-    }
 
     console.log('Convite aceito com sucesso!');
 
