@@ -10,7 +10,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 interface TeamMember {
   id: string;
-  user_id: string;
+  owner_id: string;
   email: string;
   name: string;
   role: 'admin' | 'manager' | 'member' | 'viewer';
@@ -35,6 +35,7 @@ const TeamManagement: React.FC = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [copied, setCopied] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   
   const [inviteForm, setInviteForm] = useState({
     name: '',
@@ -56,19 +57,37 @@ const TeamManagement: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
       
-      if (!user) {
+      // Buscar usuário autenticado
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      if (!authUser) {
         console.error('Usuário não autenticado');
         setLoading(false);
         return;
       }
 
-      // Buscar membros da equipe
+      // Buscar ID do usuário na tabela users (pública)
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', authUser.email)
+        .single();
+
+      if (userError || !userData) {
+        console.error('Erro ao buscar usuário na tabela users:', userError);
+        setLoading(false);
+        return;
+      }
+
+      const userId = userData.id;
+      setCurrentUserId(userId);
+
+      // Buscar membros da equipe usando o ID correto
       const { data: membersData, error: membersError } = await supabase
         .from('team_members')
         .select('*')
-        .eq('owner_id', user.id)
+        .eq('owner_id', userId)
         .order('created_at', { ascending: false });
 
       if (membersError) {
@@ -81,7 +100,7 @@ const TeamManagement: React.FC = () => {
       const { data: invitesData, error: invitesError } = await supabase
         .from('team_invites')
         .select('*')
-        .eq('owner_id', user.id)
+        .eq('owner_id', userId)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
@@ -99,8 +118,10 @@ const TeamManagement: React.FC = () => {
 
   const handleInvite = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!currentUserId) {
+        alert('Erro: Usuário não identificado');
+        return;
+      }
 
       // Gerar token único
       const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
@@ -109,7 +130,7 @@ const TeamManagement: React.FC = () => {
       const { data, error } = await supabase
         .from('team_invites')
         .insert({
-          owner_id: user.id,
+          owner_id: currentUserId,
           email: inviteForm.email,
           name: inviteForm.name,
           role: inviteForm.role,
@@ -121,6 +142,7 @@ const TeamManagement: React.FC = () => {
         .single();
 
       if (error) {
+        console.error('Erro ao criar convite:', error);
         alert('Erro ao criar convite: ' + error.message);
         return;
       }
@@ -133,7 +155,6 @@ const TeamManagement: React.FC = () => {
       // Recarregar lista de convites
       await loadData();
       
-      alert('Convite criado! Copie o link e envie para o novo membro.');
     } catch (error) {
       console.error('Erro ao criar convite:', error);
       alert('Erro ao criar convite');
