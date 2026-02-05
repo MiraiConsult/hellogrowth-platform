@@ -1,408 +1,425 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Mail, Shield, Trash2, MoreVertical, X, Loader2, CheckCircle, Clock, Ban } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { Users, Mail, Shield, Trash2, UserPlus, Copy, Check, AlertCircle } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 interface TeamMember {
   id: string;
+  user_id: string;
   email: string;
   name: string;
   role: 'admin' | 'manager' | 'member' | 'viewer';
-  status: 'pending' | 'active' | 'suspended';
-  invited_at: string;
-  accepted_at?: string;
-  last_login?: string;
+  status: 'active' | 'suspended';
+  created_at: string;
 }
 
-interface TeamManagementProps {
-  currentUser: any;
+interface TeamInvite {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  token: string;
+  status: 'pending' | 'accepted' | 'expired';
+  created_at: string;
 }
 
-const TeamManagement: React.FC<TeamManagementProps> = ({ currentUser }) => {
+const TeamManagement: React.FC = () => {
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [isSending, setIsSending] = useState(false);
+  const [invites, setInvites] = useState<TeamInvite[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
+  const [copied, setCopied] = useState(false);
   
-  // Form state
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteName, setInviteName] = useState('');
-  const [inviteRole, setInviteRole] = useState<'manager' | 'member' | 'viewer'>('member');
+  const [inviteForm, setInviteForm] = useState({
+    name: '',
+    email: '',
+    role: 'viewer' as 'admin' | 'manager' | 'member' | 'viewer'
+  });
 
-  // Load team members
-  useEffect(() => {
-    loadTeamMembers();
-  }, [currentUser]);
-
-  const loadTeamMembers = async () => {
-    if (!currentUser?.id) return;
-    
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('team_members')
-        .select('*')
-        .eq('owner_id', currentUser.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setMembers(data || []);
-    } catch (error) {
-      console.error('Erro ao carregar membros:', error);
-    } finally {
-      setIsLoading(false);
-    }
+  const roleLabels = {
+    admin: 'Admin (Você)',
+    manager: 'Gerente - Gerenciar leads, formulários e produtos',
+    member: 'Membro - Gerenciar leads e enviar mensagens',
+    viewer: 'Visualizador - Apenas visualizar relatórios'
   };
 
-  const handleInviteMember = async () => {
-    if (!inviteEmail || !inviteName || !currentUser?.id) return;
+  useEffect(() => {
+    loadData();
+  }, []);
 
-    setIsSending(true);
+  const loadData = async () => {
     try {
-      // 1. Gerar token único para o convite
-      const token = crypto.randomUUID();
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // Expira em 7 dias
-
-      // 2. Criar convite no banco
-      const { error: inviteError } = await supabase
-        .from('team_invites')
-        .insert({
-          owner_id: currentUser.id,
-          email: inviteEmail.toLowerCase(),
-          name: inviteName,
-          role: inviteRole,
-          token,
-          expires_at: expiresAt.toISOString()
-        });
-
-      if (inviteError) {
-        if (inviteError.code === '23505') { // Unique violation
-          alert('Este email já foi convidado.');
-          return;
-        }
-        throw inviteError;
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        console.error('Usuário não autenticado');
+        setLoading(false);
+        return;
       }
 
-      // 3. Criar membro com status pending
-      const { error: memberError } = await supabase
+      // Buscar membros da equipe
+      const { data: membersData, error: membersError } = await supabase
         .from('team_members')
-        .insert({
-          owner_id: currentUser.id,
-          email: inviteEmail.toLowerCase(),
-          name: inviteName,
-          role: inviteRole,
-          status: 'pending'
-        });
+        .select('*')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: false });
 
-      if (memberError) throw memberError;
+      if (membersError) {
+        console.error('Erro ao carregar membros:', membersError);
+      } else {
+        setMembers(membersData || []);
+      }
 
-      // 4. Enviar email de convite via Edge Function
-      const inviteLink = `${window.location.origin}/accept-invite?token=${token}`;
-      
-      await supabase.functions.invoke('send-team-invite', {
-        body: {
-          to: inviteEmail,
-          name: inviteName,
-          inviterName: currentUser.name || currentUser.email,
-          role: inviteRole,
-          inviteLink
-        }
-      });
+      // Buscar convites pendentes
+      const { data: invitesData, error: invitesError } = await supabase
+        .from('team_invites')
+        .select('*')
+        .eq('owner_id', user.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
 
-      alert('Convite enviado com sucesso!');
-      setIsInviteModalOpen(false);
-      setInviteEmail('');
-      setInviteName('');
-      setInviteRole('member');
-      loadTeamMembers();
+      if (invitesError) {
+        console.error('Erro ao carregar convites:', invitesError);
+      } else {
+        setInvites(invitesData || []);
+      }
     } catch (error) {
-      console.error('Erro ao enviar convite:', error);
-      alert('Erro ao enviar convite. Tente novamente.');
+      console.error('Erro ao carregar dados:', error);
     } finally {
-      setIsSending(false);
+      setLoading(false);
     }
   };
 
-  const handleRemoveMember = async (memberId: string) => {
-    if (!confirm('Tem certeza que deseja remover este membro?')) return;
-
+  const handleInvite = async () => {
     try {
-      const { error } = await supabase
-        .from('team_members')
-        .delete()
-        .eq('id', memberId);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-      if (error) throw error;
+      // Gerar token único
+      const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
       
-      loadTeamMembers();
-    } catch (error) {
-      console.error('Erro ao remover membro:', error);
-      alert('Erro ao remover membro.');
-    }
-  };
+      // Criar convite no banco
+      const { data, error } = await supabase
+        .from('team_invites')
+        .insert({
+          owner_id: user.id,
+          email: inviteForm.email,
+          name: inviteForm.name,
+          role: inviteForm.role,
+          token: token,
+          status: 'pending',
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 dias
+        })
+        .select()
+        .single();
 
-  const handleSuspendMember = async (memberId: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
-    
-    try {
-      const { error } = await supabase
-        .from('team_members')
-        .update({ status: newStatus })
-        .eq('id', memberId);
+      if (error) {
+        alert('Erro ao criar convite: ' + error.message);
+        return;
+      }
 
-      if (error) throw error;
+      // Gerar link de convite
+      const baseUrl = window.location.origin;
+      const link = `${baseUrl}/accept-invite?token=${token}`;
+      setInviteLink(link);
       
-      loadTeamMembers();
+      // Recarregar lista de convites
+      await loadData();
+      
+      alert('Convite criado! Copie o link e envie para o novo membro.');
     } catch (error) {
-      console.error('Erro ao atualizar status:', error);
-      alert('Erro ao atualizar status.');
+      console.error('Erro ao criar convite:', error);
+      alert('Erro ao criar convite');
     }
   };
 
-  const getRoleBadge = (role: string) => {
-    const styles = {
-      admin: 'bg-purple-100 text-purple-700 border-purple-200',
-      manager: 'bg-blue-100 text-blue-700 border-blue-200',
-      member: 'bg-green-100 text-green-700 border-green-200',
-      viewer: 'bg-gray-100 text-gray-700 border-gray-200'
-    };
-    
-    const labels = {
-      admin: 'Admin',
-      manager: 'Gerente',
-      member: 'Membro',
-      viewer: 'Visualizador'
-    };
+  const copyInviteLink = () => {
+    navigator.clipboard.writeText(inviteLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
+  const handleSuspend = async (memberId: string) => {
+    if (!confirm('Deseja realmente suspender este membro?')) return;
+
+    const { error } = await supabase
+      .from('team_members')
+      .update({ status: 'suspended' })
+      .eq('id', memberId);
+
+    if (error) {
+      alert('Erro ao suspender membro');
+    } else {
+      await loadData();
+    }
+  };
+
+  const handleRemove = async (memberId: string) => {
+    if (!confirm('Deseja realmente remover este membro? Esta ação não pode ser desfeita.')) return;
+
+    const { error } = await supabase
+      .from('team_members')
+      .delete()
+      .eq('id', memberId);
+
+    if (error) {
+      alert('Erro ao remover membro');
+    } else {
+      await loadData();
+    }
+  };
+
+  if (loading) {
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${styles[role as keyof typeof styles]}`}>
-        {labels[role as keyof typeof labels]}
-      </span>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
+      </div>
     );
-  };
-
-  const getStatusBadge = (status: string) => {
-    if (status === 'pending') {
-      return (
-        <span className="flex items-center gap-1 text-xs text-yellow-600">
-          <Clock size={14} /> Pendente
-        </span>
-      );
-    }
-    if (status === 'active') {
-      return (
-        <span className="flex items-center gap-1 text-xs text-green-600">
-          <CheckCircle size={14} /> Ativo
-        </span>
-      );
-    }
-    return (
-      <span className="flex items-center gap-1 text-xs text-red-600">
-        <Ban size={14} /> Suspenso
-      </span>
-    );
-  };
+  }
 
   return (
-    <div className="p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Users size={28} className="text-primary-600" />
-              Gerenciar Equipe
-            </h1>
-            <p className="text-gray-600 mt-1">Convide membros e gerencie permissões de acesso</p>
-          </div>
-          <button
-            onClick={() => setIsInviteModalOpen(true)}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 flex items-center gap-2 font-medium"
-          >
-            <UserPlus size={18} />
-            Convidar Membro
-          </button>
+    <div className="p-6 max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <Users className="text-emerald-500" />
+            Gerenciar Equipe
+          </h1>
+          <p className="text-slate-600 mt-1">Convide membros e gerencie permissões de acesso</p>
         </div>
+        <button
+          onClick={() => setShowInviteModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+        >
+          <UserPlus size={20} />
+          Convidar Membro
+        </button>
+      </div>
 
-        {/* Team Members List */}
-        {isLoading ? (
-          <div className="flex justify-center items-center py-12">
-            <Loader2 className="animate-spin text-primary-600" size={32} />
-          </div>
-        ) : members.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-            <Users size={48} className="mx-auto text-gray-300 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Nenhum membro ainda</h3>
-            <p className="text-gray-600 mb-4">Convide membros da sua equipe para colaborar</p>
-            <button
-              onClick={() => setIsInviteModalOpen(true)}
-              className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 inline-flex items-center gap-2"
-            >
-              <UserPlus size={18} />
-              Convidar Primeiro Membro
-            </button>
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-600 uppercase">Membro</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-600 uppercase">Role</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-600 uppercase">Status</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-600 uppercase">Convidado em</th>
-                  <th className="text-right px-6 py-3 text-xs font-semibold text-gray-600 uppercase">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {members.map((member) => (
-                  <tr key={member.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="font-medium text-gray-900">{member.name}</p>
-                        <p className="text-sm text-gray-500">{member.email}</p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {getRoleBadge(member.role)}
-                    </td>
-                    <td className="px-6 py-4">
-                      {getStatusBadge(member.status)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {new Date(member.invited_at).toLocaleDateString('pt-BR')}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => handleSuspendMember(member.id, member.status)}
-                          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-                          title={member.status === 'suspended' ? 'Reativar' : 'Suspender'}
-                        >
-                          <Ban size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleRemoveMember(member.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                          title="Remover"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Permissions Info */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-            <Shield size={18} />
-            Níveis de Acesso
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-            <div>
-              <p className="font-medium text-blue-900">Admin (Você)</p>
-              <p className="text-blue-700">Acesso total ao sistema</p>
+      {/* Níveis de Acesso */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+          <Shield size={18} />
+          Níveis de Acesso
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+          {Object.entries(roleLabels).map(([role, label]) => (
+            <div key={role} className="flex items-start gap-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5"></div>
+              <span className="text-blue-800">{label}</span>
             </div>
-            <div>
-              <p className="font-medium text-blue-900">Gerente</p>
-              <p className="text-blue-700">Gerenciar leads, formulários e produtos</p>
-            </div>
-            <div>
-              <p className="font-medium text-blue-900">Membro</p>
-              <p className="text-blue-700">Gerenciar leads e enviar mensagens</p>
-            </div>
-            <div>
-              <p className="font-medium text-blue-900">Visualizador</p>
-              <p className="text-blue-700">Apenas visualizar relatórios</p>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* Invite Modal */}
-      {isInviteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 m-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Convidar Membro</h3>
-              <button onClick={() => setIsInviteModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={24} />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
-                <input
-                  type="text"
-                  value={inviteName}
-                  onChange={(e) => setInviteName(e.target.value)}
-                  className="w-full rounded-lg border-gray-300 shadow-sm p-2 border"
-                  placeholder="Ex: João Silva"
-                />
+      {/* Convites Pendentes */}
+      {invites.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-slate-800 mb-3">Convites Pendentes</h2>
+          <div className="bg-white rounded-lg border border-slate-200">
+            {invites.map((invite) => (
+              <div key={invite.id} className="p-4 border-b border-slate-200 last:border-b-0">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-slate-800">{invite.name}</p>
+                    <p className="text-sm text-slate-600">{invite.email}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Enviado em {new Date(invite.created_at).toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                  <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm">
+                    Pendente
+                  </span>
+                </div>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  className="w-full rounded-lg border-gray-300 shadow-sm p-2 border"
-                  placeholder="joao@empresa.com"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nível de Acesso</label>
-                <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as any)}
-                  className="w-full rounded-lg border-gray-300 shadow-sm p-2 border"
-                >
-                  <option value="manager">Gerente - Gerenciar leads, formulários e produtos</option>
-                  <option value="member">Membro - Gerenciar leads e enviar mensagens</option>
-                  <option value="viewer">Visualizador - Apenas visualizar relatórios</option>
-                </select>
-              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
-                <p><strong>Atenção:</strong> Um email de convite será enviado com uma senha temporária.</p>
-              </div>
-              
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setIsInviteModalOpen(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleInviteMember}
-                  disabled={!inviteEmail || !inviteName || isSending}
-                  className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex justify-center items-center gap-2"
-                >
-                  {isSending ? (
-                    <>
-                      <Loader2 className="animate-spin" size={18} />
-                      Enviando...
-                    </>
-                  ) : (
-                    <>
-                      <Mail size={18} />
-                      Enviar Convite
-                    </>
-                  )}
-                </button>
-              </div>
+      {/* Membros da Equipe */}
+      <div>
+        <h2 className="text-lg font-semibold text-slate-800 mb-3">
+          Membros da Equipe ({members.length})
+        </h2>
+        <div className="bg-white rounded-lg border border-slate-200">
+          {members.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">
+              <Users size={48} className="mx-auto mb-3 text-slate-300" />
+              <p>Nenhum membro na equipe ainda.</p>
+              <p className="text-sm mt-1">Comece convidando membros para colaborar!</p>
             </div>
+          ) : (
+            members.map((member) => (
+              <div key={member.id} className="p-4 border-b border-slate-200 last:border-b-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                      <span className="text-emerald-600 font-semibold">
+                        {member.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-800">{member.name}</p>
+                      <p className="text-sm text-slate-600">{member.email}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {roleLabels[member.role]}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {member.status === 'suspended' && (
+                      <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">
+                        Suspenso
+                      </span>
+                    )}
+                    {member.role !== 'admin' && (
+                      <button
+                        onClick={() => handleRemove(member.id)}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Remover membro"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Modal de Convite */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <UserPlus className="text-emerald-500" />
+              Convidar Membro
+            </h3>
+
+            {!inviteLink ? (
+              <>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Nome
+                    </label>
+                    <input
+                      type="text"
+                      value={inviteForm.name}
+                      onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      placeholder="Nome completo"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={inviteForm.email}
+                      onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      placeholder="email@exemplo.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Nível de Acesso
+                    </label>
+                    <select
+                      value={inviteForm.role}
+                      onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value as any })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    >
+                      <option value="viewer">Visualizador - Apenas visualizar relatórios</option>
+                      <option value="member">Membro - Gerenciar leads e enviar mensagens</option>
+                      <option value="manager">Gerente - Quase tudo exceto gerenciar equipe</option>
+                    </select>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                    <p className="flex items-start gap-2">
+                      <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                      <span>Um link de convite será gerado para você copiar e enviar manualmente.</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setShowInviteModal(false)}
+                    className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleInvite}
+                    disabled={!inviteForm.name || !inviteForm.email}
+                    className="flex-1 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <Mail size={18} />
+                    Gerar Link
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                  <p className="text-green-800 font-medium mb-2">✅ Link de convite gerado!</p>
+                  <p className="text-sm text-green-700">
+                    Copie o link abaixo e envie para {inviteForm.email}
+                  </p>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4">
+                  <p className="text-xs text-slate-600 mb-2">Link de Convite:</p>
+                  <p className="text-sm text-slate-800 break-all font-mono">{inviteLink}</p>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowInviteModal(false);
+                      setInviteLink('');
+                      setInviteForm({ name: '', email: '', role: 'viewer' });
+                    }}
+                    className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    Fechar
+                  </button>
+                  <button
+                    onClick={copyInviteLink}
+                    className="flex-1 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2"
+                  >
+                    {copied ? (
+                      <>
+                        <Check size={18} />
+                        Copiado!
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={18} />
+                        Copiar Link
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
