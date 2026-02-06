@@ -103,13 +103,13 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (supabase && userId) {
+    if (supabase && userId && tenantId) {
       fetchProducts();
     }
-  }, [supabase, userId]);
+  }, [supabase, userId, tenantId]);
 
   const fetchProducts = async () => {
-    if (!supabase || !userId) return;
+    if (!supabase || !userId || !tenantId) return;
     setLoading(true);
     try {
       const { data, error } = await supabase
