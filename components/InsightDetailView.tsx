@@ -1,6 +1,6 @@
 'use client';
-import React
-import { useTenantId } from '@/hooks/useTenantId', { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, NPSResponse, Form } from '@/types';
 import { 
   ArrowLeft, AlertTriangle, TrendingUp, DollarSign, Heart,

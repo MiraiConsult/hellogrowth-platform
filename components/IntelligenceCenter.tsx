@@ -1,6 +1,6 @@
 'use client';
-import React
-import { useTenantId } from '@/hooks/useTenantId', { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, NPSResponse, InsightType } from '@/types';
 import InsightDetailView from '@/components/InsightDetailView';
 import { 

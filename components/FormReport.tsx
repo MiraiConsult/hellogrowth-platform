@@ -1,6 +1,6 @@
 
-import React
-import { useTenantId } from '@/hooks/useTenantId', { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useTenantId } from '@/hooks/useTenantId';
 import { Form, Lead } from '@/types';
 import { ArrowLeft, Users, DollarSign, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, Target, Filter, X, Mail, Phone, FileText, Edit2, Plus, Trash2, Check, AlertCircle } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';

@@ -1,6 +1,6 @@
 
-import React
-import { useTenantId } from '@/hooks/useTenantId', { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useTenantId } from '@/hooks/useTenantId';
 import { 
   Package, 
   Plus, 

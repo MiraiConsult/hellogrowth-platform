@@ -1,6 +1,6 @@
 
-import React
-import { useTenantId } from '@/hooks/useTenantId', { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useTenantId } from '@/hooks/useTenantId';
 import { NPSResponse, Campaign } from '@/types';
 import { BarChart3, Sparkles, Loader2, X, Mail, Phone, History, Plus, MessageSquare } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';

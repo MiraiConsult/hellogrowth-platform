@@ -1,6 +1,6 @@
 'use client';
-import React
-import { useTenantId } from '@/hooks/useTenantId', { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useTenantId } from '@/hooks/useTenantId';
 import { AccountSettings } from '@/types';
 import { 
   Activity, TrendingUp, TrendingDown, Minus, RefreshCw, Loader2, 
