@@ -67,12 +67,18 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   // Helper for per-form count
   const getResponseCount = (form: Form) => {
       if (leads && leads.length > 0) {
-          return leads.filter(l => {
+          console.log('[DEBUG] Form ID:', form.id, 'Form Name:', form.name);
+          console.log('[DEBUG] Total leads:', leads.length);
+          console.log('[DEBUG] First lead structure:', leads[0]);
+          const filtered = leads.filter(l => {
               // Handle both snake_case (form_id) and camelCase (formId)
               const leadFormId = (l as any).form_id || l.formId;
               const leadFormSource = (l as any).form_source || l.formSource;
+              console.log('[DEBUG] Lead form_id:', leadFormId, 'Lead formSource:', leadFormSource);
               return leadFormId === form.id || leadFormSource === form.name;
-          }).length;
+          });
+          console.log('[DEBUG] Filtered leads count:', filtered.length);
+          return filtered.length;
       }
       return form.responses || 0;
   };
