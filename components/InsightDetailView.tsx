@@ -1,5 +1,6 @@
 'use client';
-import React, { useState, useEffect, useMemo } from 'react';
+import React
+import { useTenantId } from '@/hooks/useTenantId', { useState, useEffect, useMemo } from 'react';
 import { Lead, NPSResponse, Form } from '@/types';
 import { 
   ArrowLeft, AlertTriangle, TrendingUp, DollarSign, Heart,
@@ -154,6 +155,8 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
   onBack,
   userId
 }) => {
+  const tenantId = useTenantId()
+
   const [clients, setClients] = useState<ClientAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedClient, setSelectedClient] = useState<ClientAnalysis | null>(null);
@@ -282,7 +285,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
       await supabase
         .from('interaction_history')
         .insert({
-          user_id: userId,
+          user_id: userId, tenant_id: tenantId,
           client_id: clientId,
           client_email: clientEmail,
           client_type: clientType,
@@ -636,7 +639,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
         await supabase
           .from('intelligence_actions')
           .insert({
-            user_id: userId,
+            user_id: userId, tenant_id: tenantId,
             client_id: clientId,
             insight_type: insightType,
             action_type: 'pending',
@@ -700,7 +703,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
         await supabase
           .from('intelligence_actions')
           .insert({
-            user_id: userId,
+            user_id: userId, tenant_id: tenantId,
             client_id: clientId,
             insight_type: insightType,
             action_type: 'pending',
@@ -763,7 +766,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
         const { error } = await supabase
           .from('intelligence_actions')
           .insert({
-            user_id: userId,
+            user_id: userId, tenant_id: tenantId,
             client_id: clientId,
             client_email: clientEmail,
             client_type: clientType,

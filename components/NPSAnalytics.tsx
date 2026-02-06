@@ -1,10 +1,12 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React
+import { useTenantId } from '@/hooks/useTenantId', { useState, useEffect, useRef } from 'react';
 import { NPSResponse, Campaign } from '@/types';
 import { BarChart3, Sparkles, Loader2, X, Mail, Phone, History, Plus, MessageSquare } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import ReactMarkdown from 'react-markdown';
+import React
+import { useTenantId } from '@/hooks/useTenantId'Markdown from 'react-markdown';
 
 interface NPSAnalyticsProps {
   npsData: NPSResponse[];
@@ -13,6 +15,8 @@ interface NPSAnalyticsProps {
 }
 
 const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, campaigns }) => {
+  const tenantId = useTenantId()
+
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);

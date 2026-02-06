@@ -1,5 +1,6 @@
 'use client';
-import React, { useState, useEffect, useMemo } from 'react';
+import React
+import { useTenantId } from '@/hooks/useTenantId', { useState, useEffect, useMemo } from 'react';
 import { Lead, NPSResponse, InsightType } from '@/types';
 import InsightDetailView from '@/components/InsightDetailView';
 import { 
@@ -54,6 +55,8 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
   onNavigate,
   userId
 }) => {
+  const tenantId = useTenantId()
+
   const [activeFilter, setActiveFilter] = useState<InsightType | 'all'>('all');
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [aiResponse, setAiResponse] = useState<string | null>(null);

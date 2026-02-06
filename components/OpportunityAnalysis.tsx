@@ -1,10 +1,12 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React
+import { useTenantId } from '@/hooks/useTenantId', { useState, useRef, useEffect } from 'react';
 import { Lead, Form } from '@/types';
 import { BarChart3, Sparkles, Loader2, X, PieChart, TrendingUp, DollarSign, Calendar, Mail, FileText, Phone, History, Plus, ArrowRight } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Pie, Cell } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import ReactMarkdown from 'react-markdown';
+import React
+import { useTenantId } from '@/hooks/useTenantId'Markdown from 'react-markdown';
 import { MessageSuggestionsPanel } from '@/components/MessageSuggestionsPanel';
 
 interface OpportunityAnalysisProps {
@@ -13,6 +15,8 @@ interface OpportunityAnalysisProps {
 }
 
 const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms }) => {
+  const tenantId = useTenantId()
+
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);

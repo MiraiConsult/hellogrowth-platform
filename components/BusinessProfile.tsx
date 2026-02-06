@@ -125,7 +125,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
         const { data, error } = await supabase
           .from('business_profile')
           .select('*')
-          .eq('user_id', userId)
+          .eq('tenant_id', tenantId)
           .single();
 
         if (data) {
@@ -164,7 +164,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
       const { data: existing } = await supabase
         .from('business_profile')
         .select('id')
-        .eq('user_id', userId)
+        .eq('tenant_id', tenantId)
         .single();
 
       let result;
@@ -172,7 +172,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
         result = await supabase
           .from('business_profile')
           .update(updatedProfile)
-          .eq('user_id', userId);
+          .eq('tenant_id', tenantId);
       } else {
         result = await supabase
           .from('business_profile')

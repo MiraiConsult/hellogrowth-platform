@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React
+import { useTenantId } from '@/hooks/useTenantId', { useState, useEffect, useRef } from 'react';
 import { 
   Package, 
   Plus, 
@@ -82,6 +83,8 @@ const formatStrategy = (strategy: any): string => {
 };
 
 const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userId }) => {
+  const tenantId = useTenantId()
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -203,7 +206,7 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
       const { data, error } = await supabase
         .from("products_services")
         .insert({
-          user_id: userId,
+          user_id: userId, tenant_id: tenantId,
           name: newProduct.name,
           value: parseFloat(newProduct.value.replace(",", ".")),
         })

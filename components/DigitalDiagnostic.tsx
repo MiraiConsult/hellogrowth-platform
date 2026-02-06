@@ -1,5 +1,6 @@
 'use client';
-import React, { useState, useEffect, useMemo } from 'react';
+import React
+import { useTenantId } from '@/hooks/useTenantId', { useState, useEffect, useMemo } from 'react';
 import { AccountSettings } from '@/types';
 import { 
   Activity, TrendingUp, TrendingDown, Minus, RefreshCw, Loader2, 
@@ -74,6 +75,8 @@ interface DigitalDiagnosticProps {
 }
 
 const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, settings, npsData }) => {
+  const tenantId = useTenantId()
+
   const [diagnostics, setDiagnostics] = useState<DiagnosticData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -404,7 +407,7 @@ Forneça de 3 a 5 recomendações priorizadas.
         const { error: saveError } = await supabase
           .from('digital_diagnostics')
           .insert({
-            user_id: userId,
+            user_id: userId, tenant_id: tenantId,
             place_data: mockPlaceData,
             ai_analysis: aiAnalysis,
             score_reputation: aiAnalysis.scores.reputation,
@@ -431,7 +434,7 @@ Forneça de 3 a 5 recomendações priorizadas.
       const { error: saveError } = await supabase
         .from('digital_diagnostics')
         .insert({
-          user_id: userId,
+          user_id: userId, tenant_id: tenantId,
           place_data: placeData,
           ai_analysis: aiAnalysis,
           score_reputation: aiAnalysis.scores.reputation,

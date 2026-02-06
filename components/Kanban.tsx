@@ -1,9 +1,11 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React
+import { useTenantId } from '@/hooks/useTenantId', { useState, useEffect, useRef } from 'react';
 import { Lead, Form } from '@/types';
 import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import ReactMarkdown from 'react-markdown';
+import React
+import { useTenantId } from '@/hooks/useTenantId'Markdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Pie, Cell, PieChart as RechartsPieChart } from 'recharts';
 import MessageSuggestionsPanel from './MessageSuggestionsPanel';
@@ -19,6 +21,8 @@ interface KanbanProps {
 }
 
 const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, onLeadStatusUpdate, onLeadNoteUpdate, currentUser }) => {
+  const tenantId = useTenantId()
+
   const columns = ['Novo', 'Em Contato', 'Negociação', 'Vendido', 'Perdido'] as const;
   
   // Define column colors

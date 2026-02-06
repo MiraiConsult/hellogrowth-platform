@@ -79,20 +79,28 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       try {
         if (currentUser.id !== 'public') {
           
-          // 1. Fetch All Raw Data Parallelly
+          // 1. Buscar tenant_id do usuário atual
+          const { data: userData } = await supabase
+            .from('users')
+            .select('tenant_id, settings, company_name')
+            .eq('id', currentUser.id)
+            .single();
+
+          const tenantId = userData?.tenant_id;
+
+          // 2. Fetch All Raw Data Parallelly usando tenant_id
           const results = await Promise.all([
-            supabase.from('leads').select('*').eq('user_id', currentUser.id),
-            supabase.from('campaigns').select('*').eq('user_id', currentUser.id),
-            supabase.from('forms').select('*').eq('user_id', currentUser.id),
-            supabase.from('nps_responses').select('*').eq('user_id', currentUser.id),
-            supabase.from('users').select('settings, company_name').eq('id', currentUser.id).single()
+            supabase.from('leads').select('*').eq('tenant_id', tenantId),
+            supabase.from('campaigns').select('*').eq('tenant_id', tenantId),
+            supabase.from('forms').select('*').eq('tenant_id', tenantId),
+            supabase.from('nps_responses').select('*').eq('tenant_id', tenantId)
           ]);
 
           const dbLeads = results[0].data;
           const dbCampaigns = results[1].data;
           const dbForms = results[2].data;
           const dbNPS = results[3].data;
-          const dbUser = results[4].data;
+          const dbUser = userData;
 
           // --- PROCESS DATA ---
 
@@ -276,7 +284,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       questions: form.questions,
       initial_fields: form.initialFields,
       active: form.active,
-      user_id: currentUser.id
+      user_id: currentUser.id,
+      tenant_id: currentUser.tenantId
     };
     
     if (form.id && forms.find(f => f.id === form.id)) {
@@ -303,7 +312,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       status: campaign.status,
       enable_redirection: campaign.enableRedirection,
       initial_fields: campaign.initialFields,
-      user_id: currentUser.id
+      user_id: currentUser.id,
+      tenant_id: currentUser.tenantId
     };
 
     if (campaign.id && campaigns.find(c => c.id === campaign.id)) {
@@ -332,6 +342,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       form_source: lead.formSource,
       form_id: lead.formId,
       user_id: currentUser.id,
+      tenant_id: currentUser.tenantId,
       answers: lead.answers
     }]).select().single();
     if (data && !error) {
@@ -380,6 +391,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     const { data, error } = await supabase.from('nps_responses').insert([{
         campaign_id: publicCampaign.id,
         user_id: (publicCampaign as any).user_id,
+        tenant_id: (publicCampaign as any).tenant_id,
         customer_name: response.customerName,
         customer_email: response.customerEmail,
         customer_phone: response.customerPhone,

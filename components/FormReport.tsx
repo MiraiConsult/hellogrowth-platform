@@ -1,11 +1,13 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React
+import { useTenantId } from '@/hooks/useTenantId', { useState, useMemo, useEffect } from 'react';
 import { Form, Lead } from '@/types';
 import { ArrowLeft, Users, DollarSign, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, Target, Filter, X, Mail, Phone, FileText, Edit2, Plus, Trash2, Check, AlertCircle } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import ReactMarkdown from 'react-markdown';
+import React
+import { useTenantId } from '@/hooks/useTenantId'Markdown from 'react-markdown';
 
 interface Product {
   id: string;
@@ -24,6 +26,8 @@ interface FormReportProps {
 }
 
 const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, supabase, userId, onLeadUpdate }) => {
+  const tenantId = useTenantId()
+
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   
