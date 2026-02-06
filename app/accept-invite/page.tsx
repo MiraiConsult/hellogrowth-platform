@@ -90,7 +90,9 @@ function AcceptInviteContent() {
           plan: data.user.plan,
           createdAt: data.user.createdAt,
           companyName: data.user.companyName,
-          role: 'user'
+          tenantId: data.user.tenantId,
+          isOwner: data.user.isOwner,
+          role: data.user.role || 'viewer'
         }));
       }
 

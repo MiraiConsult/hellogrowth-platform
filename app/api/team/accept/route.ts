@@ -68,10 +68,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Senha deve ter pelo menos 6 caracteres' }, { status: 400 });
     }
 
-    // Buscar convite
+    // Buscar convite com informações do owner (incluindo tenant_id)
     const { data: invite, error: inviteError } = await supabaseAdmin
       .from('team_invites')
-      .select('*')
+      .select('*, owner:users!owner_id(id, tenant_id, company_name)')
       .eq('token', token)
       .eq('status', 'pending')
       .single();
@@ -96,16 +96,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Este email já está cadastrado. Faça login normalmente.' }, { status: 400 });
     }
 
-    // 1. Criar usuário na tabela users (autenticação simples)
-    console.log('Criando usuário na tabela users:', invite.email);
+    // Obter tenant_id do owner
+    const ownerTenantId = invite.owner?.tenant_id;
+    const ownerCompanyName = invite.owner?.company_name;
+
+    if (!ownerTenantId) {
+      console.error('Owner não tem tenant_id:', invite.owner_id);
+      return NextResponse.json({ error: 'Erro ao processar convite: tenant não encontrado' }, { status: 500 });
+    }
+
+    // 1. Criar usuário na tabela users vinculado ao tenant do owner
+    console.log('Criando usuário vinculado ao tenant:', ownerTenantId);
     const { data: newUser, error: userError } = await supabaseAdmin
       .from('users')
       .insert({
         email: invite.email,
         name: invite.name,
         password: password, // Senha em texto (como o sistema já usa)
-        company_name: invite.name,
-        plan: 'trial'
+        company_name: ownerCompanyName, // Usar nome da empresa do owner
+        plan: 'growth', // Herdar plano do tenant
+        tenant_id: ownerTenantId, // IMPORTANTE: Vincular ao tenant do owner
+        is_owner: false // Não é dono do tenant
       })
       .select()
       .single();
@@ -115,24 +126,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Erro ao criar conta: ' + userError.message }, { status: 500 });
     }
 
-    console.log('Usuário criado com sucesso:', newUser.id);
+    console.log('Usuário criado com sucesso:', newUser.id, 'tenant_id:', newUser.tenant_id);
 
-    // 2. Criar membro da equipe
-    console.log('Criando membro da equipe...');
+    // 2. Atualizar membro da equipe existente com user_id
+    console.log('Atualizando membro da equipe...');
     const { error: memberError } = await supabaseAdmin
       .from('team_members')
-      .insert({
+      .update({
         user_id: newUser.id,
-        owner_id: invite.owner_id,
-        email: invite.email,
-        name: invite.name,
-        role: invite.role,
-        status: 'active'
-      });
+        status: 'active',
+        accepted_at: new Date().toISOString()
+      })
+      .eq('email', invite.email)
+      .eq('owner_id', invite.owner_id);
 
     if (memberError) {
-      console.error('Erro ao criar membro (não crítico):', memberError);
-      // Continuar mesmo com erro, pois o usuário foi criado
+      console.error('Erro ao atualizar membro:', memberError);
+      // Se não existir, criar novo
+      const { error: createMemberError } = await supabaseAdmin
+        .from('team_members')
+        .insert({
+          user_id: newUser.id,
+          owner_id: invite.owner_id,
+          email: invite.email,
+          name: invite.name,
+          role: invite.role,
+          status: 'active',
+          tenant_id: ownerTenantId
+        });
+      
+      if (createMemberError) {
+        console.error('Erro ao criar membro:', createMemberError);
+      }
     }
 
     // 3. Atualizar status do convite
@@ -141,7 +166,7 @@ export async function POST(request: NextRequest) {
       .update({ status: 'accepted', updated_at: new Date().toISOString() })
       .eq('id', invite.id);
 
-    console.log('Convite aceito com sucesso!');
+    console.log('Convite aceito com sucesso! Usuário vinculado ao tenant:', ownerTenantId);
 
     // Retornar dados do usuário para login automático
     return NextResponse.json({
@@ -154,7 +179,10 @@ export async function POST(request: NextRequest) {
         password: password,
         plan: newUser.plan,
         createdAt: newUser.created_at,
-        companyName: newUser.company_name
+        companyName: newUser.company_name,
+        tenantId: newUser.tenant_id,
+        isOwner: newUser.is_owner,
+        role: invite.role // Incluir role para controle de permissões
       }
     });
 

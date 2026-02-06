@@ -8,7 +8,9 @@ export interface User {
   plan: PlanType;
   createdAt: string; // To calculate trial expiration
   companyName: string;
-  role?: 'user' | 'super_admin'; // Added role
+  tenantId?: string; // ID do tenant (empresa) ao qual o usuário pertence
+  isOwner?: boolean; // Indica se o usuário é o dono do tenant
+  role?: 'admin' | 'manager' | 'member' | 'viewer' | 'super_admin'; // Role do usuário
 }
 
 export interface Lead {
