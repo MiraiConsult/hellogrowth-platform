@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTenantId } from '@/hooks/useTenantId';
 import { supabase } from '@/lib/supabase';
 import {
   Building2,
@@ -66,6 +67,7 @@ const BUSINESS_TYPES = [
 ];
 
 export default function BusinessProfile({ userId }: BusinessProfileProps) {
+  const tenantId = useTenantId();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -121,6 +123,8 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
 
   useEffect(() => {
     const loadProfile = async () => {
+      if (!tenantId) return;
+      
       try {
         const { data, error } = await supabase
           .from('business_profile')
@@ -138,8 +142,10 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
       }
     };
 
-    loadProfile();
-  }, [userId]);
+    if (tenantId) {
+      loadProfile();
+    }
+  }, [userId, tenantId]);
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -147,7 +153,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
   };
 
   const handleSave = async () => {
-    if (!userId) {
+    if (!userId || !tenantId) {
       showNotification('error', 'Usuário não identificado');
       return;
     }
