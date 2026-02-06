@@ -74,7 +74,7 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
         const { data, error } = await supabase
           .from('intelligence_actions')
           .select('id, client_id, insight_type, action_type')
-          .eq('user_id', userId);
+          .eq('tenant_id', tenantId);
         
         if (error) throw error;
         setIntelligenceActions(data || []);

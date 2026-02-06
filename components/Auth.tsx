@@ -75,25 +75,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             throw new Error('Email ou senha incorretos. Verifique suas credenciais.');
         }
         
-        // Buscar role do usuário na tabela team_members
-        let userRole = 'viewer'; // Default
+        // Buscar role do usuário diretamente da tabela users
         let isOwner = data.is_owner || false;
-        
-        if (isOwner) {
-          userRole = 'admin'; // Owner é sempre admin
-        } else {
-          // Buscar role na tabela team_members
-          const { data: memberData } = await supabase
-            .from('team_members')
-            .select('role')
-            .eq('user_id', data.id)
-            .eq('status', 'active')
-            .maybeSingle();
-          
-          if (memberData) {
-            userRole = memberData.role;
-          }
-        }
+        let userRole = data.role || (isOwner ? 'admin' : 'viewer');
         
         const user: User = {
           id: data.id,

@@ -7,6 +7,9 @@ import { SupabaseClient } from '@supabase/supabase-js';
 interface TeamManagementProps {
   supabase: SupabaseClient;
   userId: string;
+  userRole?: string;
+  userName?: string;
+  userEmail?: string;
 }
 
 interface TeamMember {
@@ -29,7 +32,7 @@ interface TeamInvite {
   created_at: string;
 }
 
-const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => {
+const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId, userRole = 'admin', userName = '', userEmail = '' }) => {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [invites, setInvites] = useState<TeamInvite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +48,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => 
   });
 
   const roleLabels: Record<string, string> = {
-    admin: 'Admin (Você)',
+    admin: 'Admin',
     manager: 'Gerente - Gerenciar leads, formulários e produtos',
     member: 'Membro - Gerenciar leads e enviar mensagens',
     viewer: 'Visualizador - Apenas visualizar relatórios'
@@ -204,6 +207,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => 
           </h1>
           <p className="text-slate-600 mt-1">Convide membros e gerencie permissões de acesso</p>
         </div>
+{userRole === 'admin' && (
         <button
           onClick={() => setShowInviteModal(true)}
           className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
@@ -211,6 +215,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => 
           <UserPlus size={20} />
           Convidar Membro
         </button>
+        )}
       </div>
 
       {/* Níveis de Acesso */}
@@ -220,12 +225,22 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId }) => 
           Níveis de Acesso
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-          {Object.entries(roleLabels).map(([role, label]) => (
-            <div key={role} className="flex items-start gap-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5"></div>
-              <span className="text-blue-800">{label}</span>
-            </div>
-          ))}
+          <div className="flex items-start gap-2">
+            <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5"></div>
+            <span className="text-blue-800">{userRole === 'admin' ? 'Admin (Você)' : 'Admin'}</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5"></div>
+            <span className="text-blue-800">Gerente - Gerenciar leads, formulários e produtos</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5"></div>
+            <span className="text-blue-800">Membro - Gerenciar leads e enviar mensagens</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5"></div>
+            <span className="text-blue-800">Visualizador - Apenas visualizar relatórios</span>
+          </div>
         </div>
       </div>
 

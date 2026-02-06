@@ -31,6 +31,7 @@ interface NavigationProps {
   onLogout?: () => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  userRole?: string;
 }
 
 type MenuItem = {
@@ -59,7 +60,8 @@ const Navigation: React.FC<NavigationProps> = ({
   activePlan, 
   onLogout, 
   isCollapsed, 
-  onToggleCollapse 
+  onToggleCollapse,
+  userRole = 'admin'
 }) => {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     'helloclient': true,
@@ -135,8 +137,38 @@ const Navigation: React.FC<NavigationProps> = ({
     return false;
   };
 
+  // Controle de permissões baseado no role do usuário
+  const hasRolePermission = (itemId: string) => {
+    // Admin vê tudo
+    if (userRole === 'admin') return true;
+    
+    // Itens que todos podem ver
+    const allAccess = ['dashboard', 'analytics', 'intelligence-center', 'tutorial'];
+    if (allAccess.includes(itemId)) return true;
+    
+    // Manager: tudo exceto gerenciar equipe
+    if (userRole === 'manager') {
+      return itemId !== 'team-management';
+    }
+    
+    // Member: pode ver leads, enviar mensagens, ver relatórios
+    if (userRole === 'member') {
+      const memberAccess = ['kanban', 'nps', 'database-export', 'ai-chat', 'settings', 'digital-diagnostic'];
+      return memberAccess.includes(itemId);
+    }
+    
+    // Viewer: apenas visualização de relatórios e dashboards
+    if (userRole === 'viewer') {
+      const viewerAccess = ['analytics', 'intelligence-center', 'digital-diagnostic', 'settings'];
+      return viewerAccess.includes(itemId);
+    }
+    
+    return false;
+  };
+
   const renderItem = (item: MenuItem, isChild = false) => {
     if (!hasPlanPermission(item.requiredPlan)) return null;
+    if (!hasRolePermission(item.id)) return null;
 
     const isActive = currentView === item.id;
 
@@ -258,7 +290,7 @@ const Navigation: React.FC<NavigationProps> = ({
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
         {navStructure.map((item) => {
           if ('type' in item && item.type === 'group') {
-            const hasAnyChildPermission = item.children.some(child => hasPlanPermission(child.requiredPlan));
+            const hasAnyChildPermission = item.children.some(child => hasPlanPermission(child.requiredPlan) && hasRolePermission(child.id));
             if (!hasAnyChildPermission) return null;
 
             const isExpanded = expandedGroups[item.id];

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTenantId } from '@/hooks/useTenantId';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -43,7 +44,9 @@ export default function OnboardingBlocker({
   children
 }: OnboardingBlockerProps) {
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
-  const [status, setStatus] = useState<OnboardingStatus>({
+  const tenantId = useTenantId();
+
+    const [status, setStatus] = useState<OnboardingStatus>({
     hasBusinessProfile: false,
     hasPlaceId: false,
     hasProducts: false,
@@ -63,14 +66,14 @@ export default function OnboardingBlocker({
         const { data: profile } = await supabase
           .from('business_profile')
           .select('*')
-          .eq('user_id', userId)
+          .eq('tenant_id', tenantId)
           .single();
 
         // Verificar produtos
         const { count } = await supabase
           .from('products_services')
           .select('*', { count: 'exact' })
-          .eq('user_id', user?.id || userId);
+          .eq('tenant_id', tenantId);
 
         const newStatus = {
           hasBusinessProfile: !!profile?.company_name && !!profile?.business_description,

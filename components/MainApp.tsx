@@ -82,11 +82,25 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           // 1. Buscar tenant_id do usuário atual
           const { data: userData } = await supabase
             .from('users')
-            .select('tenant_id, settings, company_name')
+            .select('tenant_id, settings, company_name, is_owner')
             .eq('id', currentUser.id)
             .single();
 
           const tenantId = userData?.tenant_id;
+
+          // 2. Se não é owner, buscar settings do owner do tenant
+          let ownerSettings = userData;
+          if (userData && !userData.is_owner && tenantId) {
+            const { data: ownerData } = await supabase
+              .from('users')
+              .select('settings, company_name')
+              .eq('tenant_id', tenantId)
+              .eq('is_owner', true)
+              .single();
+            if (ownerData) {
+              ownerSettings = { ...userData, settings: ownerData.settings, company_name: ownerData.company_name };
+            }
+          }
 
           // 2. Fetch All Raw Data Parallelly usando tenant_id
           const results = await Promise.all([
@@ -100,7 +114,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           const dbCampaigns = results[1].data;
           const dbForms = results[2].data;
           const dbNPS = results[3].data;
-          const dbUser = userData;
+          const dbUser = ownerSettings;
 
           // --- PROCESS DATA ---
 
@@ -376,7 +390,13 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
   const handleSaveSettings = async (newSettings: AccountSettings) => {
     if (!supabase) return;
-    await supabase.from('users').update({ settings: newSettings }).eq('id', currentUser.id);
+    // Se não é owner, salvar no owner do tenant
+    const { data: userData } = await supabase.from('users').select('tenant_id, is_owner').eq('id', currentUser.id).single();
+    if (userData?.is_owner) {
+      await supabase.from('users').update({ settings: newSettings }).eq('id', currentUser.id);
+    } else if (userData?.tenant_id) {
+      await supabase.from('users').update({ settings: newSettings }).eq('tenant_id', userData.tenant_id).eq('is_owner', true);
+    }
     setSettings(newSettings);
   };
 
@@ -655,6 +675,7 @@ Responda APENAS com JSON válido (sem markdown):
         onLogout={onLogout}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        userRole={currentUser.role || 'admin'}
       />
       <main className={`flex-1 relative transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
         {currentUser.plan === 'trial' && daysLeft !== undefined && (
@@ -812,6 +833,9 @@ Responda APENAS com JSON válido (sem markdown):
             <TeamManagement 
                 supabase={supabase}
                 userId={currentUser.id}
+                userRole={currentUser.role || 'admin'}
+                userName={currentUser.name}
+                userEmail={currentUser.email}
             />
         )}
 

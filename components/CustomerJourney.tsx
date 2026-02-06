@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTenantId } from '@/hooks/useTenantId';
 import { NPSResponse, CustomerAction } from '@/types';
 
 interface CustomerJourneyData {
@@ -43,7 +44,9 @@ interface CustomerJourneyProps {
 }
 
 const CustomerJourney: React.FC<CustomerJourneyProps> = ({ userId, npsData, initialFilter, onRefreshNPS }) => {
-  const [customerActions, setCustomerActions] = useState<CustomerAction[]>([]);
+  const tenantId = useTenantId();
+
+    const [customerActions, setCustomerActions] = useState<CustomerAction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'Promotor' | 'Neutro' | 'Detrator'>('all');
@@ -84,7 +87,7 @@ const CustomerJourney: React.FC<CustomerJourneyProps> = ({ userId, npsData, init
       const { data, error } = await supabase
         .from('customer_actions')
         .select('*')
-        .eq('user_id', userId)
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -395,6 +398,7 @@ const CustomerJourney: React.FC<CustomerJourneyProps> = ({ userId, npsData, init
         .from('customer_actions')
         .insert({
           user_id: userId,
+          tenant_id: tenantId,
           customer_email: selectedCustomer.customerEmail,
           action_type: actionType,
           description: actionDescription

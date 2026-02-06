@@ -193,7 +193,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
         const { data, error } = await supabase
           .from('forms')
           .select('*')
-          .eq('user_id', userId);
+          .eq('tenant_id', tenantId);
         
         if (error) throw error;
         
@@ -238,7 +238,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
       const { data, error } = await supabase
         .from('intelligence_actions')
         .select('*')
-        .eq('user_id', userId)
+        .eq('tenant_id', tenantId)
         .eq('insight_type', insightType);
       
       if (error) throw error;
@@ -256,7 +256,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
       const { data, error } = await supabase
         .from('interaction_history')
         .select('*')
-        .eq('user_id', userId)
+        .eq('tenant_id', tenantId)
         .eq('client_id', clientId)
         .order('created_at', { ascending: false });
       
@@ -626,7 +626,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
       const { data: existing } = await supabase
         .from('intelligence_actions')
         .select('*')
-        .eq('user_id', userId)
+        .eq('tenant_id', tenantId)
         .eq('client_id', clientId)
         .maybeSingle();
       
@@ -690,7 +690,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
       const { data: existing } = await supabase
         .from('intelligence_actions')
         .select('*')
-        .eq('user_id', userId)
+        .eq('tenant_id', tenantId)
         .eq('client_id', clientId)
         .maybeSingle();
       
@@ -746,7 +746,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
       const { data: existing } = await supabase
         .from('intelligence_actions')
         .select('*')
-        .eq('user_id', userId)
+        .eq('tenant_id', tenantId)
         .eq('client_id', clientId)
         .single();
       

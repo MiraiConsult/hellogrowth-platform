@@ -1,5 +1,6 @@
 // FormConsultant.tsx - Consultor Inteligente de Formulários com Edição Completa
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useTenantId } from '@/hooks/useTenantId';
 import { 
   X, 
   ArrowRight, 
@@ -125,7 +126,9 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   onSaveForm,
   existingForm 
 }) => {
-  const [currentStep, setCurrentStep] = useState<ConsultantStep>('welcome');
+  const tenantId = useTenantId();
+
+    const [currentStep, setCurrentStep] = useState<ConsultantStep>('welcome');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [userInput, setUserInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -259,7 +262,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       const { data, error } = await supabase
         .from('business_profile')
         .select('*')
-        .eq('user_id', userId)
+        .eq('tenant_id', tenantId)
         .single();
 
       if (!error && data) {
@@ -330,7 +333,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       const { data, error } = await supabase
         .from('products_services')
         .select('*')
-        .eq('user_id', user.id);
+        .eq('tenant_id', tenantId);
 
       if (!error && data) {
         setProducts(data);

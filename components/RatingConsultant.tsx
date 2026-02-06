@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useTenantId } from '@/hooks/useTenantId';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -64,7 +65,9 @@ export default function RatingConsultant({ userId, onClose, onSave }: RatingCons
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   
-  const [messages, setMessages] = useState<Message[]>([]);
+  const tenantId = useTenantId();
+
+    const [messages, setMessages] = useState<Message[]>([]);
   const [userInput, setUserInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -104,7 +107,7 @@ export default function RatingConsultant({ userId, onClose, onSave }: RatingCons
         const { data } = await supabase
           .from('business_profile')
           .select('*')
-          .eq('user_id', userId)
+          .eq('tenant_id', tenantId)
           .single();
 
         if (data) {

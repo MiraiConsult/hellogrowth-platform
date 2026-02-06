@@ -116,7 +116,8 @@ export async function POST(request: NextRequest) {
         company_name: ownerCompanyName, // Usar nome da empresa do owner
         plan: 'growth', // Herdar plano do tenant
         tenant_id: ownerTenantId, // IMPORTANTE: Vincular ao tenant do owner
-        is_owner: false // Não é dono do tenant
+        is_owner: false, // Não é dono do tenant
+        role: invite.role // IMPORTANTE: Salvar role do convite
       })
       .select()
       .single();

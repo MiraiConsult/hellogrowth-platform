@@ -157,6 +157,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
       const updatedProfile = {
         ...profile,
         user_id: userId,
+        tenant_id: tenantId,
         onboarding_score: currentScore,
         updated_at: new Date().toISOString()
       };

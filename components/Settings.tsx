@@ -28,7 +28,10 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
     const loadBusinessProfile = async () => {
       if (!currentUser?.id) return;
       try {
-        const { data } = await supabase.from('business_profile').select('*').eq('user_id', currentUser.id).single();
+        // Buscar tenant_id do usuário atual
+        const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', currentUser.id).single();
+        const tenantId = userData?.tenant_id || currentUser.id;
+        const { data } = await supabase.from('business_profile').select('*').eq('tenant_id', tenantId).single();
         if (data) {
           setBusinessProfile(data);
           if (data.google_place_id) {
@@ -63,7 +66,8 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
     setSettings(localSettings);
     if (currentUser?.id && placeIdInput) {
       try {
-        await supabase.from('business_profile').update({ google_place_id: placeIdInput }).eq('user_id', currentUser.id);
+        const { data: ud } = await supabase.from('users').select('tenant_id').eq('id', currentUser.id).single();
+        await supabase.from('business_profile').update({ google_place_id: placeIdInput }).eq('tenant_id', ud?.tenant_id || currentUser.id);
       } catch (e) { console.error('Erro ao salvar Place ID:', e); }
     }
     setTimeout(() => { setSaveStatus('saved'); setTimeout(() => setSaveStatus('idle'), 3000); }, 800);

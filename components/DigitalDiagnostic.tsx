@@ -93,10 +93,13 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, 
     if (!supabase) return;
     setIsLoading(true);
     try {
+      // Buscar tenant_id do usuário
+      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', userId).single();
+      const tenantId = userData?.tenant_id || userId;
       const { data, error } = await supabase
         .from('digital_diagnostics')
         .select('*')
-        .eq('user_id', userId)
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

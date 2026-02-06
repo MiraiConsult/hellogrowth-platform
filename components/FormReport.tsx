@@ -87,7 +87,7 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
         const { data, error } = await supabase
           .from('products_services')
           .select('id, name, value')
-          .eq('user_id', userId);
+          .eq('tenant_id', tenantId);
         
         if (error) {
           console.error('FormReport: Erro ao carregar produtos:', error);

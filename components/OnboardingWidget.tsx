@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTenantId } from '@/hooks/useTenantId';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -34,7 +35,9 @@ interface OnboardingStatus {
 
 export default function OnboardingWidget({ userId, onNavigate }: OnboardingWidgetProps) {
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
-  const [status, setStatus] = useState<OnboardingStatus>({
+  const tenantId = useTenantId();
+
+    const [status, setStatus] = useState<OnboardingStatus>({
     hasBusinessProfile: false,
     hasPlaceId: false,
     hasProducts: false,
@@ -58,14 +61,14 @@ export default function OnboardingWidget({ userId, onNavigate }: OnboardingWidge
         const { data: profile } = await supabase
           .from('business_profile')
           .select('*')
-          .eq('user_id', userId)
+          .eq('tenant_id', tenantId)
           .single();
 
         // Verificar produtos
         const { data: products, count } = await supabase
           .from('products_services')
           .select('*', { count: 'exact' })
-          .eq('user_id', user?.id || userId);
+          .eq('tenant_id', tenantId);
 
         setStatus({
           hasBusinessProfile: !!profile?.company_name && !!profile?.business_description,

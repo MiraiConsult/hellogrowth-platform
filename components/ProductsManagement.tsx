@@ -115,7 +115,7 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
       const { data, error } = await supabase
         .from('products_services')
         .select('*')
-        .eq('user_id', userId)
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
       if (error) throw error;
       setProducts(data || []);
@@ -314,7 +314,7 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
     if (!supabase || importData.length === 0 || !userId) return;
     setSaving(true);
     try {
-      const productsToInsert = importData.map((item) => ({ user_id: userId, name: item.name, value: item.value }));
+      const productsToInsert = importData.map((item) => ({ user_id: userId, tenant_id: tenantId, name: item.name, value: item.value }));
       const { data, error } = await supabase.from("products_services").insert(productsToInsert).select();
       if (error) throw error;
       setProducts((prev) => [...(data || []), ...prev]);
