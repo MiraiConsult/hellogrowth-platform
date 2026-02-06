@@ -14,10 +14,10 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get('userId');
     const email = searchParams.get('email');
 
-    let ownerId = userId;
+    let currentUserId = userId;
 
     // Se recebeu email ao invés de userId, buscar o ID
-    if (!ownerId && email) {
+    if (!currentUserId && email) {
       const { data: userData, error: userError } = await supabaseAdmin
         .from('users')
         .select('id')
@@ -28,20 +28,42 @@ export async function GET(request: NextRequest) {
         console.error('Erro ao buscar usuário:', userError);
         return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
       }
-      ownerId = userData.id;
+      currentUserId = userData.id;
     }
 
-    if (!ownerId) {
+    if (!currentUserId) {
       return NextResponse.json({ error: 'userId ou email não fornecido' }, { status: 400 });
     }
 
-    console.log('Buscando membros para owner_id:', ownerId);
+    console.log('Buscando membros para userId:', currentUserId);
 
-    // Buscar membros da equipe
+    // Buscar tenant_id do usuário atual
+    const { data: currentUser, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('tenant_id, is_owner')
+      .eq('id', currentUserId)
+      .single();
+
+    if (userError || !currentUser) {
+      console.error('Erro ao buscar usuário:', userError);
+      return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
+    }
+
+    const tenantId = currentUser.tenant_id;
+
+    if (!tenantId) {
+      console.error('Usuário não possui tenant_id:', currentUserId);
+      return NextResponse.json({ error: 'Usuário não possui tenant configurado' }, { status: 400 });
+    }
+
+    console.log('Buscando membros do tenant:', tenantId);
+
+    // Buscar todos os usuários do mesmo tenant (exceto o usuário atual)
     const { data: members, error: membersError } = await supabaseAdmin
-      .from('team_members')
-      .select('*')
-      .eq('owner_id', ownerId)
+      .from('users')
+      .select('id, name, email, role, is_owner, created_at')
+      .eq('tenant_id', tenantId)
+      .neq('id', currentUserId)
       .order('created_at', { ascending: false });
 
     if (membersError) {
@@ -49,11 +71,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: membersError.message }, { status: 500 });
     }
 
-    // Buscar convites pendentes
+    // Buscar convites pendentes do tenant
     const { data: invites, error: invitesError } = await supabaseAdmin
       .from('team_invites')
       .select('*')
-      .eq('owner_id', ownerId)
+      .eq('tenant_id', tenantId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
@@ -68,7 +90,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       members: members || [],
       invites: invites || [],
-      userId: ownerId
+      userId: currentUserId,
+      tenantId: tenantId
     });
 
   } catch (error: any) {
