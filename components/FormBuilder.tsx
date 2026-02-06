@@ -58,7 +58,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const totalResponses = useMemo(() => {
     if (leads && leads.length > 0) {
        // Filter leads that are NOT manual (i.e. likely from a form)
-       return leads.filter(l => l.formSource !== 'Manual').length;
+       return leads.filter(l => {
+         const source = (l as any).form_source || l.formSource;
+         return source !== 'Manual';
+       }).length;
     }
     // Fallback to sum of form.responses if leads not provided or empty
     return forms.reduce((acc, curr) => acc + (curr.responses || 0), 0);
@@ -67,17 +70,12 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   // Helper for per-form count
   const getResponseCount = (form: Form) => {
       if (leads && leads.length > 0) {
-          console.log('[DEBUG] Form ID:', form.id, 'Form Name:', form.name);
-          console.log('[DEBUG] Total leads:', leads.length);
-          console.log('[DEBUG] First lead structure:', leads[0]);
           const filtered = leads.filter(l => {
               // Handle both snake_case (form_id) and camelCase (formId)
               const leadFormId = (l as any).form_id || l.formId;
               const leadFormSource = (l as any).form_source || l.formSource;
-              console.log('[DEBUG] Lead form_id:', leadFormId, 'Lead formSource:', leadFormSource);
               return leadFormId === form.id || leadFormSource === form.name;
           });
-          console.log('[DEBUG] Filtered leads count:', filtered.length);
           return filtered.length;
       }
       return form.responses || 0;
