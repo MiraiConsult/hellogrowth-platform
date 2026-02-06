@@ -40,6 +40,8 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId, userR
   const [inviteLink, setInviteLink] = useState('');
   const [copied, setCopied] = useState(false);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [editingRole, setEditingRole] = useState<string>('');
   
   const [inviteForm, setInviteForm] = useState({
     name: '',
@@ -147,7 +149,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId, userR
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ memberId })
+        body: JSON.stringify({ memberId, userId })
       });
 
       if (!response.ok) {
@@ -160,6 +162,31 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId, userR
     } catch (error) {
       console.error('Erro ao remover membro:', error);
       alert('Erro ao remover membro');
+    }
+  };
+
+  const handleUpdateRole = async (memberId: string, newRole: string) => {
+    try {
+      const response = await fetch('/api/team/update-role', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ memberId, newRole, userId })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        alert('Erro ao atualizar permissão: ' + error.error);
+        return;
+      }
+
+      setEditingMemberId(null);
+      setEditingRole('');
+      await loadData();
+    } catch (error) {
+      console.error('Erro ao atualizar permissão:', error);
+      alert('Erro ao atualizar permissão');
     }
   };
 
@@ -311,12 +338,40 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId, userR
                         {member.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <p className="font-medium text-slate-800">{member.name}</p>
                       <p className="text-sm text-slate-600">{member.email}</p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        {roleLabels[member.role] || member.role}
-                      </p>
+                      {editingMemberId === member.id ? (
+                        <div className="mt-2 flex items-center gap-2">
+                          <select
+                            value={editingRole}
+                            onChange={(e) => setEditingRole(e.target.value)}
+                            className="text-xs px-2 py-1 border border-slate-300 rounded focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                          >
+                            <option value="viewer">Visualizador</option>
+                            <option value="member">Membro</option>
+                            <option value="manager">Gerente</option>
+                          </select>
+                          <button
+                            onClick={() => handleUpdateRole(member.id, editingRole)}
+                            className="p-1 text-green-600 hover:bg-green-50 rounded"
+                            title="Salvar"
+                          >
+                            <Check size={16} />
+                          </button>
+                          <button
+                            onClick={() => { setEditingMemberId(null); setEditingRole(''); }}
+                            className="p-1 text-slate-400 hover:bg-slate-50 rounded"
+                            title="Cancelar"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-500 mt-1">
+                          {roleLabels[member.role] || member.role}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -325,14 +380,23 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId, userR
                         Suspenso
                       </span>
                     )}
-                    {member.role !== 'admin' && (
-                      <button
-                        onClick={() => handleRemove(member.id)}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Remover membro"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                    {member.role !== 'admin' && userRole === 'admin' && (
+                      <>
+                        <button
+                          onClick={() => { setEditingMemberId(member.id); setEditingRole(member.role); }}
+                          className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Editar permissão"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleRemove(member.id)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Remover membro"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>

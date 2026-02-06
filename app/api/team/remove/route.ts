@@ -9,39 +9,43 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function DELETE(request: NextRequest) {
   try {
-    // Pegar token de autenticação do header
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    
-    // Criar cliente com token do usuário
-    const supabase = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Usuário não autenticado' }, { status: 401 });
-    }
-
-    // Pegar ID do membro a ser removido
+    // Pegar ID do membro a ser removido do body
     const body = await request.json();
-    const { memberId } = body;
+    const { memberId, userId } = body;
 
     if (!memberId) {
       return NextResponse.json({ error: 'ID do membro não fornecido' }, { status: 400 });
     }
 
-    // Remover membro
-    const { error: deleteError } = await supabaseAdmin
-      .from('team_members')
+    // Verificar se o usuário que está removendo é admin (opcional, mas recomendado)
+    if (userId) {
+      const { data: requester } = await supabaseAdmin
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+      if (requester && requester.role !== 'admin') {
+        return NextResponse.json({ error: 'Apenas admins podem remover membros' }, { status: 403 });
+      }
+    }
+
+    // Remover da tabela users
+    const { error: deleteUserError } = await supabaseAdmin
+      .from('users')
       .delete()
       .eq('id', memberId);
 
-    if (deleteError) {
-      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    if (deleteUserError) {
+      console.error('Erro ao remover usuário:', deleteUserError);
+      return NextResponse.json({ error: deleteUserError.message }, { status: 500 });
     }
+
+    // Remover da tabela team_invites se existir
+    await supabaseAdmin
+      .from('team_invites')
+      .delete()
+      .eq('email', (await supabaseAdmin.from('users').select('email').eq('id', memberId).single()).data?.email);
 
     return NextResponse.json({ success: true });
 
