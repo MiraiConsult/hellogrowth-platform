@@ -40,10 +40,29 @@ export async function POST(request: NextRequest) {
 
     console.log('Criando convite para owner_id:', userId);
 
+    // Buscar tenant_id do owner
+    const { data: ownerData, error: ownerError } = await supabaseAdmin
+      .from('users')
+      .select('tenant_id')
+      .eq('id', userId)
+      .single();
+
+    if (ownerError || !ownerData) {
+      console.error('Erro ao buscar tenant_id do owner:', ownerError);
+      return NextResponse.json({ error: 'Owner não encontrado' }, { status: 404 });
+    }
+
+    const ownerTenantId = ownerData.tenant_id;
+
+    if (!ownerTenantId) {
+      console.error('Owner não possui tenant_id:', userId);
+      return NextResponse.json({ error: 'Owner não possui tenant configurado' }, { status: 400 });
+    }
+
     // Gerar token único
     const inviteToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
     
-    // Criar convite no banco
+    // Criar convite no banco com tenant_id
     const { data: invite, error: inviteError } = await supabaseAdmin
       .from('team_invites')
       .insert({
@@ -53,6 +72,7 @@ export async function POST(request: NextRequest) {
         role: role,
         token: inviteToken,
         status: 'pending',
+        tenant_id: ownerTenantId, // Incluir tenant_id do owner
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 dias
       })
       .select()
