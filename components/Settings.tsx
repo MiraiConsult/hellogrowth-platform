@@ -9,9 +9,11 @@ interface SettingsProps {
   settings: AccountSettings;
   setSettings: (newSettings: AccountSettings) => void;
   currentUser?: User;
+  userRole?: string;
 }
 
-const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings, setSettings, currentUser }) => {
+const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings, setSettings, currentUser, userRole = 'admin' }) => {
+  const isReadOnly = userRole === 'viewer';
   const [placeIdInput, setPlaceIdInput] = useState(settings.placeId || '');
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -106,7 +108,13 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
     <div className="p-8 min-h-screen bg-gray-50" style={{ colorScheme: 'light' }}>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Configurações</h1>
-        <p className="text-gray-500">Gerencie sua conta e integrações.</p>
+        <p className="text-gray-500">{isReadOnly ? 'Visualização das configurações da conta.' : 'Gerencie sua conta e integrações.'}</p>
+        {isReadOnly && (
+          <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 flex items-center gap-2">
+            <ShieldCheck size={16} />
+            <span>Você tem permissão apenas para visualizar. Apenas administradores podem alterar configurações.</span>
+          </div>
+        )}
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -124,7 +132,7 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email Administrativo</label>
-                <input type="email" value={localSettings.adminEmail} onChange={(e) => handleInputChange('adminEmail', e.target.value)} className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 p-2 border bg-white text-gray-900" style={{ backgroundColor: '#ffffff', color: '#111827' }} placeholder="email@empresa.com" />
+                <input type="email" value={localSettings.adminEmail} onChange={(e) => handleInputChange('adminEmail', e.target.value)} disabled={isReadOnly} className={`w-full rounded-lg border-gray-300 shadow-sm p-2 border text-gray-900 ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : 'focus:border-primary-500 focus:ring-primary-500 bg-white'}`} style={{ backgroundColor: isReadOnly ? undefined : '#ffffff', color: '#111827' }} placeholder="email@empresa.com" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
@@ -138,14 +146,17 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
               </div>
             </div>
             <div className="mt-4 flex justify-end">
-              <button onClick={handleSaveAccountDetails} disabled={saveStatus === 'saving'} className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${saveStatus === 'saved' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-primary-600 text-white hover:bg-primary-700'}`}>
-                {saveStatus === 'saving' && <Loader2 size={18} className="animate-spin" />}
-                {saveStatus === 'saved' && <CheckCircle size={18} />}
-                {saveStatus === 'idle' ? 'Salvar Alterações' : saveStatus === 'saving' ? 'Salvando...' : 'Salvo!'}
-              </button>
+              {!isReadOnly && (
+                <button onClick={handleSaveAccountDetails} disabled={saveStatus === 'saving'} className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${saveStatus === 'saved' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-primary-600 text-white hover:bg-primary-700'}`}>
+                  {saveStatus === 'saving' && <Loader2 size={18} className="animate-spin" />}
+                  {saveStatus === 'saved' && <CheckCircle size={18} />}
+                  {saveStatus === 'idle' ? 'Salvar Alterações' : saveStatus === 'saving' ? 'Salvando...' : 'Salvo!'}
+                </button>
+              )}
             </div>
           </div>
 
+          {!isReadOnly && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
               <ShieldCheck size={20} className="text-gray-400" /> Alterar Senha
@@ -175,6 +186,7 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
               </button>
             </div>
           </div>
+          )}
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -193,8 +205,8 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
                   </ol>
                 </div>
                 <div className="flex gap-2">
-                  <input type="text" value={placeIdInput} onChange={(e) => { setPlaceIdInput(e.target.value); setVerificationStatus('idle'); }} placeholder="Cole seu Place ID aqui (Ex: ChIJ...)" className={`flex-1 rounded-lg border shadow-sm p-2 bg-white text-gray-900 ${verificationStatus === 'error' ? 'border-red-300' : 'border-gray-300'}`} style={{ backgroundColor: '#ffffff', color: '#111827' }} />
-                  <button onClick={handleVerifyPlaceId} disabled={isVerifying || !placeIdInput} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px] justify-center">
+                  <input type="text" value={placeIdInput} onChange={(e) => { setPlaceIdInput(e.target.value); setVerificationStatus('idle'); }} disabled={isReadOnly} placeholder="Cole seu Place ID aqui (Ex: ChIJ...)" className={`flex-1 rounded-lg border shadow-sm p-2 text-gray-900 ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'} ${verificationStatus === 'error' ? 'border-red-300' : 'border-gray-300'}`} style={{ backgroundColor: isReadOnly ? undefined : '#ffffff', color: '#111827' }} />
+                  <button onClick={handleVerifyPlaceId} disabled={isReadOnly || isVerifying || !placeIdInput} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px] justify-center">
                     {isVerifying ? <Loader2 size={18} className="animate-spin" /> : 'Verificar'}
                   </button>
                 </div>
@@ -202,16 +214,18 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
                 {verificationStatus === 'error' && <div className="mt-2 text-sm text-red-600 flex items-center gap-2"><AlertCircle size={16} /> Place ID inválido.</div>}
               </div>
               <div className="flex items-center gap-2 mt-4">
-                <input type="checkbox" id="auto-redirect" className="rounded text-primary-600" checked={localSettings.autoRedirect} onChange={(e) => handleInputChange('autoRedirect', e.target.checked)} />
+                <input type="checkbox" id="auto-redirect" className="rounded text-primary-600" checked={localSettings.autoRedirect} onChange={(e) => handleInputChange('autoRedirect', e.target.checked)} disabled={isReadOnly} />
                 <label htmlFor="auto-redirect" className="text-sm text-gray-700">Ativar redirecionamento automático para Promotores</label>
               </div>
-              <div className="mt-4 flex justify-end">
-                <button onClick={handleSaveAccountDetails} disabled={saveStatus === 'saving'} className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${saveStatus === 'saved' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-primary-600 text-white hover:bg-primary-700'}`}>
-                  {saveStatus === 'saving' && <Loader2 size={18} className="animate-spin" />}
-                  {saveStatus === 'saved' && <CheckCircle size={18} />}
-                  {saveStatus === 'idle' ? 'Salvar Integrações' : saveStatus === 'saving' ? 'Salvando...' : 'Salvo!'}
-                </button>
-              </div>
+              {!isReadOnly && (
+                <div className="mt-4 flex justify-end">
+                  <button onClick={handleSaveAccountDetails} disabled={saveStatus === 'saving'} className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${saveStatus === 'saved' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-primary-600 text-white hover:bg-primary-700'}`}>
+                    {saveStatus === 'saving' && <Loader2 size={18} className="animate-spin" />}
+                    {saveStatus === 'saved' && <CheckCircle size={18} />}
+                    {saveStatus === 'idle' ? 'Salvar Integrações' : saveStatus === 'saving' ? 'Salvando...' : 'Salvo!'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -225,7 +239,7 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
               <p className={`text-xs font-bold uppercase mb-1 ${isLifetime ? 'text-yellow-400' : 'text-primary-600'}`}>PLANO ATUAL</p>
               <p className={`text-xl font-bold capitalize ${isLifetime ? 'text-white' : 'text-gray-900'}`}>{isLifetime ? 'Lifetime Pro 🚀' : activePlan}</p>
             </div>
-            {!isLifetime && <button onClick={() => onSelectPlan('growth')} className="w-full mt-2 py-2 border border-primary-600 text-primary-600 rounded-lg font-medium">Upgrade</button>}
+            {!isLifetime && !isReadOnly && <button onClick={() => onSelectPlan('growth')} className="w-full mt-2 py-2 border border-primary-600 text-primary-600 rounded-lg font-medium">Upgrade</button>}
           </div>
         </div>
       </div>

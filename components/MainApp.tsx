@@ -43,7 +43,30 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   }
 
   // Sempre inicia no dashboard, independente do plano
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, setCurrentViewRaw] = useState('dashboard');
+
+  // Proteção de acesso por role - redireciona views não permitidas
+  const userRole = currentUser.role || 'admin';
+  const setCurrentView = (view: string) => {
+    const allAccess = ['dashboard', 'analytics', 'intelligence-center', 'tutorial'];
+    const viewerAccess = [...allAccess, 'digital-diagnostic', 'settings'];
+    const memberAccess = [...allAccess, 'kanban', 'nps', 'database-export', 'ai-chat', 'settings', 'digital-diagnostic'];
+    
+    if (userRole === 'admin' || userRole === 'super_admin') {
+      setCurrentViewRaw(view);
+    } else if (userRole === 'manager') {
+      if (view !== 'team-management' && view !== 'pricing') setCurrentViewRaw(view);
+      else setCurrentViewRaw('dashboard');
+    } else if (userRole === 'member') {
+      if (memberAccess.includes(view)) setCurrentViewRaw(view);
+      else setCurrentViewRaw('dashboard');
+    } else if (userRole === 'viewer') {
+      if (viewerAccess.includes(view)) setCurrentViewRaw(view);
+      else setCurrentViewRaw('dashboard');
+    } else {
+      setCurrentViewRaw(view);
+    }
+  };
 
   
   // View States
@@ -821,7 +844,8 @@ Responda APENAS com JSON válido (sem markdown):
                 onSelectPlan={() => setCurrentView('pricing')} 
                 settings={settings} 
                 setSettings={handleSaveSettings} 
-                currentUser={currentUser} 
+                currentUser={currentUser}
+                userRole={currentUser.role || 'admin'}
             />
         )}
 

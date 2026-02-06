@@ -345,33 +345,35 @@ const Navigation: React.FC<NavigationProps> = ({
 
       {/* Footer */}
       <div className="p-4 border-t border-slate-100">
-        {!isCollapsed ? (
-          <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-4 rounded-xl mb-3">
-            <div className="flex items-center gap-2 mb-2">
-              <Crown size={16} className="text-amber-500" />
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Seu Plano</span>
+        {userRole === 'admin' && (
+          !isCollapsed ? (
+            <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-4 rounded-xl mb-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Crown size={16} className="text-amber-500" />
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Seu Plano</span>
+              </div>
+              <p className="font-bold text-slate-800 capitalize text-lg">
+                {activePlan === 'growth_lifetime' ? 'Lifetime' : activePlan === 'growth' ? 'Growth' : activePlan}
+              </p>
+              <button 
+                onClick={() => setCurrentView('pricing')}
+                className="text-xs text-emerald-600 font-medium mt-2 hover:text-emerald-700 flex items-center gap-1 group"
+              >
+                <Sparkles size={12} className="group-hover:animate-pulse" />
+                Gerenciar Assinatura
+              </button>
             </div>
-            <p className="font-bold text-slate-800 capitalize text-lg">
-              {activePlan === 'growth_lifetime' ? 'Lifetime' : activePlan === 'growth' ? 'Growth' : activePlan}
-            </p>
-            <button 
-              onClick={() => setCurrentView('pricing')}
-              className="text-xs text-emerald-600 font-medium mt-2 hover:text-emerald-700 flex items-center gap-1 group"
-            >
-              <Sparkles size={12} className="group-hover:animate-pulse" />
-              Gerenciar Assinatura
-            </button>
-          </div>
-        ) : (
-          <div className="flex justify-center mb-3">
-            <button 
-              onClick={() => setCurrentView('pricing')}
-              className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30 hover:scale-105 transition-transform"
-              title="Gerenciar Plano"
-            >
-              <Crown size={18} />
-            </button>
-          </div>
+          ) : (
+            <div className="flex justify-center mb-3">
+              <button 
+                onClick={() => setCurrentView('pricing')}
+                className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30 hover:scale-105 transition-transform"
+                title="Gerenciar Plano"
+              >
+                <Crown size={18} />
+              </button>
+            </div>
+          )
         )}
         
         <button 
