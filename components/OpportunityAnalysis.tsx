@@ -5,8 +5,6 @@ import { Lead, Form } from '@/types';
 import { BarChart3, Sparkles, Loader2, X, PieChart, TrendingUp, DollarSign, Calendar, Mail, FileText, Phone, History, Plus, ArrowRight } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Pie, Cell } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import React
-import { useTenantId } from '@/hooks/useTenantId'Markdown from 'react-markdown';
 import { MessageSuggestionsPanel } from '@/components/MessageSuggestionsPanel';
 
 interface OpportunityAnalysisProps {

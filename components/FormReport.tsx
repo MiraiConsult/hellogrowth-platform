@@ -6,8 +6,7 @@ import { ArrowLeft, Users, DollarSign, TrendingUp, MessageSquare, Sparkles, Load
 import { SupabaseClient } from '@supabase/supabase-js';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import React
-import { useTenantId } from '@/hooks/useTenantId'Markdown from 'react-markdown';
+import Markdown from 'react-markdown';
 
 interface Product {
   id: string;
