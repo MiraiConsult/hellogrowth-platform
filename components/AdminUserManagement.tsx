@@ -67,12 +67,18 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
           throw new Error("Este email já está cadastrado.");
       }
 
-      // 2. Prepare User Data
+      // 2. Generate new tenant_id for the new company
+      const newTenantId = crypto.randomUUID();
+      
+      // 3. Prepare User Data with tenant_id, role, and is_owner
       const userData = {
         name: newUser.name,
         email: newUser.email,
         company_name: newUser.companyName,
         plan: newUser.plan,
+        tenant_id: newTenantId,
+        role: 'admin',
+        is_owner: true,
         settings: {
             companyName: newUser.companyName,
             adminEmail: newUser.email,
@@ -82,7 +88,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         }
       };
 
-      // 3. Insert Strategy: Try with password first, fallback if column missing
+      // 4. Insert Strategy: Try with password first, fallback if column missing
       let { error } = await supabase.from('users').insert([{
         ...userData,
         password: '12345', // Default password
