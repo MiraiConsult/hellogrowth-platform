@@ -72,6 +72,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       const newTenantId = crypto.randomUUID();
       
       // 3. Prepare User Data with tenant_id, role, and is_owner
+      console.log('[DEBUG] Creating user with tenant_id:', newTenantId, 'role: admin, is_owner: true');
       const userData = {
         name: newUser.name,
         email: newUser.email,
