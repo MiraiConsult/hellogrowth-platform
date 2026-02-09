@@ -68,6 +68,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       }
 
       // 2. Generate new tenant_id for the new company
+      // Force rebuild - 2026-02-09
       const newTenantId = crypto.randomUUID();
       
       // 3. Prepare User Data with tenant_id, role, and is_owner
