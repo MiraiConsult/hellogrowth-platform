@@ -30,9 +30,9 @@ interface Product {
   name: string;
   value: number;
   ai_description: string | null;
-  ai_persona: string | null;
-  ai_strategy: string | null;
+  keywords: string[] | null;
   created_at: string;
+  tenant_id?: string;
 }
 
 interface ProductsManagementProps {
@@ -40,47 +40,7 @@ interface ProductsManagementProps {
   userId: string;
 }
 
-const parseJsonField = (field: any): any => {
-  if (!field) return null;
-  if (typeof field === 'object') return field;
-  try {
-    return JSON.parse(field);
-  } catch {
-    return field;
-  }
-};
 
-const formatPersona = (persona: any): string => {
-  if (!persona) return '';
-  if (typeof persona === 'string') return persona;
-  const parts: string[] = [];
-  if (persona.demographics) {
-    if (persona.demographics.age) parts.push(`Idade: ${persona.demographics.age}`);
-    if (persona.demographics.gender) parts.push(`Gênero: ${persona.demographics.gender}`);
-    if (persona.demographics.income) parts.push(`Renda: ${persona.demographics.income}`);
-    if (persona.demographics.location) parts.push(`Localização: ${persona.demographics.location}`);
-  }
-  if (persona.behavioral) {
-    if (persona.behavioral.lifestyle) parts.push(`Estilo de vida: ${persona.behavioral.lifestyle}`);
-    if (persona.behavioral.spending_habits) parts.push(`Hábitos de consumo: ${persona.behavioral.spending_habits}`);
-  }
-  return parts.join(' • ');
-};
-
-const formatStrategy = (strategy: any): string => {
-  if (!strategy) return '';
-  if (typeof strategy === 'string') return strategy;
-  const parts: string[] = [];
-  if (strategy.approach) parts.push(`Abordagem: ${strategy.approach}`);
-  if (strategy.emotional_triggers && Array.isArray(strategy.emotional_triggers)) {
-    parts.push(`Gatilhos: ${strategy.emotional_triggers.join(', ')}`);
-  }
-  if (strategy.objections && Array.isArray(strategy.objections)) {
-    parts.push(`Objeções: ${strategy.objections.join(', ')}`);
-  }
-  if (strategy.closing) parts.push(`Fechamento: ${strategy.closing}`);
-  return parts.join(' • ');
-};
 
 const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userId }) => {
   const tenantId = useTenantId()
@@ -99,7 +59,7 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   const [importError, setImportError] = useState<string | null>(null);
   const [generatingAI, setGeneratingAI] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [editingField, setEditingField] = useState<{ productId: string; field: 'description' | 'persona' | 'strategy' } | null>(null);
+  const [editingField, setEditingField] = useState<{ productId: string; field: 'description' | 'keywords' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -135,17 +95,47 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   const generateAIInsights = async (productId: string, productName: string, productValue: number) => {
     setGeneratingAI(productId);
     try {
-      const prompt = `Você é um consultor de vendas especializado. Analise este produto/serviço e gere insights estratégicos:
+      // Fetch business profile to get context
+      const { data: profileData, error: profileError } = await supabase!
+        .from('business_profile')
+        .select('company_name, business_type, business_description, target_audience, brand_tone, differentials')
+        .eq('tenant_id', tenantId)
+        .single();
 
-Produto: ${productName}
+      if (profileError) {
+        console.warn('Perfil do negócio não encontrado, gerando sem contexto');
+      }
+
+      const businessContext = profileData ? `
+Contexto do Negócio:
+- Nome da Empresa: ${profileData.company_name || 'Não informado'}
+- Tipo de Negócio: ${profileData.business_type || 'Não informado'}
+- Descrição do Negócio: ${profileData.business_description || 'Não informado'}
+- Público-Alvo: ${profileData.target_audience || 'Não informado'}
+- Tom da Marca: ${profileData.brand_tone || 'Não informado'}
+- Diferenciais: ${profileData.differentials || 'Não informado'}
+` : '';
+
+      const prompt = `Você é um especialista em marketing e vendas. Analise este produto/serviço considerando o contexto do negócio e gere uma descrição comercial atraente e 10 palavras-chave relevantes.
+
+${businessContext}
+
+Produto/Serviço: ${productName}
 Valor: R$ ${productValue.toFixed(2)}
+
+IMPORTANTE: Considere o tipo de negócio ao gerar a descrição. Por exemplo:
+- Se for uma pet shop, a "Limpeza Dentária" é para animais de estimação
+- Se for uma clínica médica, a "Limpeza Dentária" é para humanos
+- Se for um salão de beleza, "Corte" refere-se a cabelo
+- Etc.
 
 Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
 {
-  "description": "Uma descrição comercial atraente do produto em 2-3 frases",
-  "persona": "Perfil detalhado do cliente ideal para este produto (características demográficas, comportamentais e psicográficas)",
-  "strategy": "Estratégia de venda: gatilhos emocionais, objeções comuns e como superá-las, melhor abordagem de fechamento"
-}`;
+  "description": "Uma descrição comercial atraente do produto/serviço em 2-3 frases, considerando o contexto do negócio e o público-alvo",
+  "keywords": ["palavra1", "palavra2", "palavra3", "palavra4", "palavra5", "palavra6", "palavra7", "palavra8", "palavra9", "palavra10"]
+}
+
+As palavras-chave devem ser relevantes para o produto/serviço E para o tipo de negócio.`;
 
       const response = await fetch("/api/gemini", {
         method: "POST",
@@ -169,8 +159,7 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
         .from("products_services")
         .update({
           ai_description: insights.description,
-          ai_persona: insights.persona,
-          ai_strategy: insights.strategy,
+          keywords: insights.keywords,
         })
         .eq("id", productId);
 
@@ -178,8 +167,7 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
 
       const updatedProduct = {
         ai_description: insights.description,
-        ai_persona: insights.persona,
-        ai_strategy: insights.strategy,
+        keywords: insights.keywords,
       };
 
       setProducts((prev) =>
@@ -190,7 +178,7 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
         setSelectedProduct({ ...selectedProduct, ...updatedProduct });
       }
 
-      showNotification("success", "Insights gerados com sucesso!");
+      showNotification("success", "Descrição e palavras-chave geradas com sucesso!");
     } catch (error) {
       console.error("Erro ao gerar insights:", error);
       showNotification("error", "Erro ao gerar insights da IA");
@@ -508,13 +496,13 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Target size={18} className="text-blue-600" />
-                        <h3 className="font-semibold text-blue-800">Cliente Ideal</h3>
+                        <h3 className="font-semibold text-blue-800">Palavras-chave</h3>
                       </div>
-                      {editingField?.productId === selectedProduct.id && editingField?.field === 'persona' ? (
+                      {editingField?.productId === selectedProduct.id && editingField?.field === 'keywords' ? (
                         <button
                           onClick={() => {
                             setEditingField(null);
-                            supabase!.from("products_services").update({ ai_persona: selectedProduct.ai_persona }).eq("id", selectedProduct.id);
+                            supabase!.from("products_services").update({ keywords: selectedProduct.keywords }).eq("id", selectedProduct.id);
                           }}
                           className="flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm"
                         >
@@ -523,7 +511,7 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
                         </button>
                       ) : (
                         <button
-                          onClick={() => setEditingField({ productId: selectedProduct.id, field: 'persona' })}
+                          onClick={() => setEditingField({ productId: selectedProduct.id, field: 'keywords' })}
                           className="flex items-center gap-1 px-3 py-1 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors text-sm"
                         >
                           <Edit3 size={14} />
@@ -531,52 +519,31 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
                         </button>
                       )}
                     </div>
-                    {editingField?.productId === selectedProduct.id && editingField?.field === 'persona' ? (
-                      <textarea
-                        value={formatPersona(parseJsonField(selectedProduct.ai_persona)) || String(selectedProduct.ai_persona || '')}
-                        onChange={(e) => setSelectedProduct({ ...selectedProduct, ai_persona: e.target.value })}
-                        className="w-full text-slate-700 leading-relaxed bg-white border border-slate-200 rounded-lg p-3 min-h-[100px] focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    ) : (
-                      <p className="text-slate-700 leading-relaxed">{formatPersona(parseJsonField(selectedProduct.ai_persona)) || String(selectedProduct.ai_persona || '')}</p>
-                    )}
-                  </div>
-
-                  <div className="bg-amber-50 rounded-xl p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <MessageSquare size={18} className="text-amber-600" />
-                        <h3 className="font-semibold text-amber-800">Estratégia de Venda</h3>
+                    {editingField?.productId === selectedProduct.id && editingField?.field === 'keywords' ? (
+                      <div className="space-y-2">
+                        {(selectedProduct.keywords || []).map((keyword, index) => (
+                          <div key={index} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={keyword}
+                              onChange={(e) => {
+                                const newKeywords = [...(selectedProduct.keywords || [])];
+                                newKeywords[index] = e.target.value;
+                                setSelectedProduct({ ...selectedProduct, keywords: newKeywords });
+                              }}
+                              className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        ))}
                       </div>
-                      {editingField?.productId === selectedProduct.id && editingField?.field === 'strategy' ? (
-                        <button
-                          onClick={() => {
-                            setEditingField(null);
-                            supabase!.from("products_services").update({ ai_strategy: selectedProduct.ai_strategy }).eq("id", selectedProduct.id);
-                          }}
-                          className="flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm"
-                        >
-                          <Save size={14} />
-                          Salvar
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setEditingField({ productId: selectedProduct.id, field: 'strategy' })}
-                          className="flex items-center gap-1 px-3 py-1 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors text-sm"
-                        >
-                          <Edit3 size={14} />
-                          Editar
-                        </button>
-                      )}
-                    </div>
-                    {editingField?.productId === selectedProduct.id && editingField?.field === 'strategy' ? (
-                      <textarea
-                        value={formatStrategy(parseJsonField(selectedProduct.ai_strategy)) || String(selectedProduct.ai_strategy || '')}
-                        onChange={(e) => setSelectedProduct({ ...selectedProduct, ai_strategy: e.target.value })}
-                        className="w-full text-slate-700 leading-relaxed bg-white border border-slate-200 rounded-lg p-3 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      />
                     ) : (
-                      <p className="text-slate-700 leading-relaxed">{formatStrategy(parseJsonField(selectedProduct.ai_strategy)) || String(selectedProduct.ai_strategy || '')}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {(selectedProduct.keywords || []).map((keyword, index) => (
+                          <span key={index} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                            {keyword}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
 
