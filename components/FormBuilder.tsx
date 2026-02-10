@@ -870,8 +870,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       ];
     }
 
+    // Find existing form to preserve its data when editing
+    const existingForm = editingFormId ? forms.find(f => f.id === editingFormId) : null;
+    
     const newForm: Form = {
-      id: Date.now().toString(),
+      id: existingForm?.id || Date.now().toString(),
       name: formData.name,
       description: formData.description || (formData.objective === 'qualify' ? 'Formulário de qualificação de leads' : formData.objective === 'feedback' ? 'Formulário de feedback' : 'Formulário personalizado'),
       questions: formData.questions.map((q: any) => ({
@@ -893,8 +896,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
           script: opt.script || ''
         })) || []
       })),
-      active: true,
-      responses: 0,
+      active: existingForm?.active ?? true,
+      responses: existingForm?.responses || 0,
+      createdAt: existingForm?.createdAt || new Date().toISOString(),
       // CORREÇÃO: Usa o formato correto de initialFields
       initialFields: initialFieldsFormatted
     };

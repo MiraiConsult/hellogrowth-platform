@@ -325,10 +325,25 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       tenant_id: currentUser.tenantId
     };
     
-    if (form.id && forms.find(f => f.id === form.id)) {
-      await supabase.from('forms').update(formData).eq('id', form.id);
-      setForms(prev => prev.map(f => f.id === form.id ? { ...f, ...form } : f));
+    // Check if form exists in database
+    if (form.id) {
+      const { data: existingForm } = await supabase
+        .from('forms')
+        .select('id')
+        .eq('id', form.id)
+        .single();
+      
+      if (existingForm) {
+        // UPDATE existing form
+        await supabase.from('forms').update(formData).eq('id', form.id);
+        setForms(prev => prev.map(f => f.id === form.id ? { ...f, ...form } : f));
+      } else {
+        // INSERT new form (ID doesn't exist in database)
+        const { data } = await supabase.from('forms').insert([formData]).select().single();
+        if (data) setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
+      }
     } else {
+      // INSERT new form (no ID provided)
       const { data } = await supabase.from('forms').insert([formData]).select().single();
       if (data) setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
     }
