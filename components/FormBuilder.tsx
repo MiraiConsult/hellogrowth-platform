@@ -344,15 +344,19 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   };
 
   const handleSave = () => {
+    // Find existing form to preserve its data
+    const existingForm = editingFormId ? forms.find(f => f.id === editingFormId) : null;
+    
     // Prepare the form object
     const formToSave: Form = {
-        id: editingFormId || Date.now().toString(), // If new, ID will be replaced by DB ID later, but OK for optimistic
+        id: editingFormId || Date.now().toString(),
         name: currentFormName,
         description: currentFormDescription,
         questions: currentQuestions,
-        responses: 0, 
-        active: true,
-        createdAt: new Date().toISOString(),
+        // Preserve existing responses count and createdAt when editing
+        responses: existingForm?.responses || 0,
+        active: existingForm?.active ?? true,
+        createdAt: existingForm?.createdAt || new Date().toISOString(),
         initialFields: currentInitialFields.length > 0 ? currentInitialFields : undefined
     };
 
