@@ -550,35 +550,34 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
           if (!error && fetchedProducts && fetchedProducts.length > 0) {
             setProducts(fetchedProducts);
             console.log('[FormConsultant] Produtos disponíveis:', fetchedProducts.length, fetchedProducts);
-              setCurrentStep('products');
-              setTimeout(() => {
-                addAssistantMessage(
-                  "📦 **Perfeito! Agora vamos focar nos produtos/serviços.**\n\n" +
-                  "Você quer que o formulário seja focado em **produtos específicos** ou deixo a IA escolher automaticamente?\n\n" +
-                  "💡 **Dica:** Se você tem uma clínica com fisioterapia E odontologia, mas quer um formulário só para fisioterapia, selecione manualmente!",
-                  [
-                    { label: "🎯 Selecionar Produtos Manualmente", value: "products_manual" },
-                    { label: "✨ Deixar a IA Escolher Automaticamente", value: "products_auto" }
-                  ]
-                );
-              }, 500);
-            } else {
-              setCurrentStep('custom_objective_detail');
-              setTimeout(() => {
-                addAssistantMessage(
-                  "🎯 **Agora a parte mais importante para criar um formulário realmente inteligente!**\n\n" +
-                  "Para que este formulário seja perfeito, quais informações são **indispensáveis** para você decidir se este é um bom cliente?\n\n" +
-                  "💡 **Exemplos:**\n" +
-                  "• Poder aquisitório (quanto pode gastar)\n" +
-                  "• Urgência (quando precisa do serviço)\n" +
-                  "• Problema específico que quer resolver\n" +
-                  "• Experiência anterior com produtos similares\n" +
-                  "• Expectativas de resultado\n\n" +
-                  "Quanto mais específico você for, mais assertivas serão as perguntas! 🚀"
-                );
-              }, 500);
-            }
-          }, 200);
+            setCurrentStep('products');
+            setTimeout(() => {
+              addAssistantMessage(
+                "📦 **Perfeito! Agora vamos focar nos produtos/serviços.**\n\n" +
+                "Você quer que o formulário seja focado em **produtos específicos** ou deixo a IA escolher automaticamente?\n\n" +
+                "💡 **Dica:** Se você tem uma clínica com fisioterapia E odontologia, mas quer um formulário só para fisioterapia, selecione manualmente!",
+                [
+                  { label: "🎯 Selecionar Produtos Manualmente", value: "products_manual" },
+                  { label: "✨ Deixar a IA Escolher Automaticamente", value: "products_auto" }
+                ]
+              );
+            }, 500);
+          } else {
+            setCurrentStep('custom_objective_detail');
+            setTimeout(() => {
+              addAssistantMessage(
+                "🎯 **Agora a parte mais importante para criar um formulário realmente inteligente!**\n\n" +
+                "Para que este formulário seja perfeito, quais informações são **indispensáveis** para você decidir se este é um bom cliente?\n\n" +
+                "💡 **Exemplos:**\n" +
+                "• Poder aquisitório (quanto pode gastar)\n" +
+                "• Urgência (quando precisa do serviço)\n" +
+                "• Problema específico que quer resolver\n" +
+                "• Experiência anterior com produtos similares\n" +
+                "• Expectativas de resultado\n\n" +
+                "Quanto mais específico você for, mais assertivas serão as perguntas! 🚀"
+              );
+            }, 500);
+        }, 200);
         })();
         break;
 
