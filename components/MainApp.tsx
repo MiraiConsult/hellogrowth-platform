@@ -352,11 +352,19 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const handleDeleteForm = async (id: string) => {
     if (!supabase) return;
     
+    // Buscar o nome do formulário para excluir respondentes
+    const form = forms.find(f => f.id === id);
+    if (!form) {
+      alert('Formulário não encontrado');
+      return;
+    }
+    
     // Primeiro: excluir todos os respondentes (form_responses) deste formulário
+    // A tabela form_responses usa 'form_name' (não 'form_id')
     const { error: responsesError } = await supabase
       .from('form_responses')
       .delete()
-      .eq('form_id', id);
+      .eq('form_name', form.name);
     
     if (responsesError) {
       console.error('Erro ao excluir respondentes:', responsesError);
@@ -676,23 +684,26 @@ Responda APENAS com JSON válido (sem markdown):
     // A análise de IA fica salva no campo _ai_analysis para consulta
     const status = 'Novo';
 
-    // 5. Inserir lead com dados enriquecidos
-    // formTenantId já foi definido no início da função (linha 499)
-    await supabase.from('leads').insert([{
-        form_id: publicForm.id,
-        user_id: formUserId,
+    // 5. Inserir resposta com dados enriquecidos na tabela form_responses
+    const { error: insertError } = await supabase.from('form_responses').insert([{
         tenant_id: formTenantId,
+        form_name: publicForm.name,
         name: data.patient.name,
         email: data.patient.email,
         phone: data.patient.phone,
         status: status,
         value: opportunityValue,
-        form_source: publicForm.name,
         answers: {
           ...data.answers,
           _ai_analysis: aiAnalysis
-        }
+        },
+        created_at: new Date().toISOString()
     }]);
+    
+    if (insertError) {
+      console.error('Erro ao salvar resposta:', insertError);
+      alert('Erro ao salvar resposta do formulário');
+    }
   };
 
   const handlePreviewSurvey = (id: string) => {

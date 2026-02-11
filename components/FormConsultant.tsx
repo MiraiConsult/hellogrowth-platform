@@ -1064,7 +1064,7 @@ Responda APENAS com JSON válido neste formato:
     const formData = {
       ...(stableExistingForm?.id && { id: stableExistingForm.id }), // Mantém ID se for edição
       name: formName || `Formulário ${new Date().toLocaleDateString('pt-BR')}`,
-      description: businessContext.businessDescription,
+      description: businessContext.customObjective || businessContext.businessDescription || 'Formulário de qualificação de leads',
       identification_fields: businessContext.identificationFields.filter(f => f.enabled),
       questions: generatedQuestions.map(q => ({
         id: q.id,
