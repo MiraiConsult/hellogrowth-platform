@@ -494,13 +494,22 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         if (ans.optionSelected && ans.optionSelected.value) opportunityValue += ans.optionSelected.value;
     });
 
-    // 2. Buscar produtos do usuário para cruzamento com IA
+    // 2. Buscar produtos E perfil do negócio para análise contextualizada
     let aiAnalysis = null;
+    const formTenantId = (publicForm as any).tenant_id || formUserId;
     try {
+      // Buscar produtos
       const { data: products } = await supabase
         .from('products_services')
         .select('*')
-        .eq('user_id', formUserId);
+        .eq('tenant_id', formTenantId);
+
+      // Buscar perfil do negócio
+      const { data: businessProfile } = await supabase
+        .from('business_profile')
+        .select('*')
+        .eq('tenant_id', formTenantId)
+        .single();
 
       if (products && products.length > 0) {
         // 3. Preparar contexto para análise da IA
@@ -510,38 +519,60 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           return `Pergunta: ${question?.text || qId}\nResposta: ${answerValue}`;
         }).join('\n\n');
 
+        // Preparar contexto de produtos com descrições
         const productsContext = products.map(p => 
-          `- ${p.name} (R$ ${p.value}): ${p.ai_persona || 'Sem perfil definido'}`
-        ).join('\n');
+          `- **${p.name}** (R$ ${p.value})\n  Descrição: ${p.ai_description || 'Sem descrição'}`
+        ).join('\n\n');
 
-        const prompt = `Você é um consultor de vendas especializado. Analise as respostas do cliente e forneça uma análise completa de oportunidade de venda.
+        // Preparar contexto do negócio
+        let businessContext = '';
+        if (businessProfile) {
+          businessContext = `\n\nCONTEXTO DO NEGÓCIO:\n- Tipo: ${businessProfile.business_type || 'Não especificado'}\n- Descrição: ${businessProfile.business_description || 'Não especificado'}\n- Público-alvo: ${businessProfile.target_audience || 'Não especificado'}\n- Diferenciais: ${businessProfile.differentials || 'Não especificado'}`;
+        }
+
+        // Verificar se o formulário tem produtos selecionados
+        const formSelectedProducts = (publicForm as any).selected_products || [];
+        let focusedProductsContext = '';
+        if (formSelectedProducts.length > 0) {
+          const focusedProducts = products.filter(p => formSelectedProducts.includes(p.id));
+          if (focusedProducts.length > 0) {
+            focusedProductsContext = `\n\n🎯 PRODUTOS EM FOCO NESTE FORMULÁRIO (PRIORIDADE ALTA):\n${focusedProducts.map(p => `- **${p.name}** (R$ ${p.value})\n  Descrição: ${p.ai_description || 'Sem descrição'}`).join('\n\n')}`;
+          }
+        }
+
+        const prompt = `Você é um consultor de vendas especializado. Analise as respostas do cliente e forneça uma análise completa de oportunidade de venda.${businessContext}
 
 RESPOSTAS DO CLIENTE:
 ${answersText}
 
 PRODUTOS/SERVIÇOS DISPONÍVEIS:
-${productsContext}
+${productsContext}${focusedProductsContext}
 
-Analise profundamente as respostas e forneça:
-1. O produto/serviço mais adequado
-2. Valor estimado da oportunidade
-3. Nível de qualificação (alta, média, baixa)
-4. Insights específicos sobre o cliente
-5. Script de abordagem personalizado
+🎯 INSTRUÇÕES:
+1. Analise profundamente as respostas do cliente
+2. ${focusedProductsContext ? 'PRIORIZE os produtos em foco, mas considere TODOS os produtos disponíveis' : 'Considere TODOS os produtos disponíveis'}
+3. Identifique TODOS os produtos que o cliente pode precisar (não apenas um)
+4. Use as descrições dos produtos para entender o que cada um resolve
+5. Conecte os problemas/necessidades do cliente com as soluções disponíveis
+6. Gere um script de vendas personalizado e estratégico
 
 Responda APENAS com JSON válido (sem markdown):
 {
-  "suggested_product": "Nome do produto mais adequado",
+  "recommended_products": [
+    {"id": "product_id_1", "name": "Nome do Produto 1", "value": 0, "reason": "Por que este produto é adequado"},
+    {"id": "product_id_2", "name": "Nome do Produto 2", "value": 0, "reason": "Por que este produto é adequado"}
+  ],
+  "suggested_product": "Nome do produto principal (para compatibilidade)",
   "suggested_value": 0,
   "classification": "opportunity|risk|monitoring",
   "confidence": 0.85,
-  "reasoning": "Explicação detalhada do porquê este produto é ideal",
+  "reasoning": "Explicação detalhada conectando as respostas do cliente com os produtos recomendados",
   "client_insights": [
     "Insight 1 sobre o cliente",
     "Insight 2 sobre necessidades",
     "Insight 3 sobre urgência"
   ],
-  "sales_script": "Script de abordagem curto e direto: O cliente [observação], então sugiro focar em [produto/serviço] porque pode gerar [benefício].",
+  "sales_script": "Script de abordagem estratégico: Baseado nas respostas, identifiquei que [necessidade do cliente]. Recomendo [produtos] porque [benefícios específicos].",
   "next_steps": [
     "Ação 1 recomendada",
     "Ação 2 recomendada"
@@ -568,8 +599,14 @@ Responda APENAS com JSON válido (sem markdown):
             console.error('Erro ao parsear resposta da IA:', e);
             // Se falhar, criar análise básica
             aiAnalysis = {
+              recommended_products: products.slice(0, 1).map(p => ({
+                id: p.id,
+                name: p.name,
+                value: p.value,
+                reason: 'Produto sugerido com base no perfil do cliente'
+              })),
               suggested_product: products[0]?.name || 'Produto não identificado',
-              suggested_value: opportunityValue || 0,
+              suggested_value: opportunityValue || products[0]?.value || 0,
               classification: opportunityValue > 0 ? 'opportunity' : 'monitoring',
               confidence: 0.5,
               reasoning: 'Análise automática baseada nas respostas fornecidas.',

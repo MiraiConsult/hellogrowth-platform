@@ -42,8 +42,6 @@ interface Product {
   name: string;
   value: number;
   ai_description: string | null;
-  ai_persona: string | null;
-  ai_strategy: string | null;
 }
 
 interface QuestionOption {
@@ -517,32 +515,82 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
           'tone_friendly': 'friendly'
         };
         setBusinessContext(prev => ({ ...prev, formTone: toneMap[value] }));
+        // Verificar se há produtos cadastrados para oferecer seleção
+        if (products.length > 0) {
+          setCurrentStep('products');
+          setTimeout(() => {
+            addAssistantMessage(
+              "📦 **Perfeito! Agora vamos focar nos produtos/serviços.**\n\n" +
+              "Você quer que o formulário seja focado em **produtos específicos** ou deixo a IA escolher automaticamente?\n\n" +
+              "💡 **Dica:** Se você tem uma clínica com fisioterapia E odontologia, mas quer um formulário só para fisioterapia, selecione manualmente!",
+              [
+                { label: "🎯 Selecionar Produtos Manualmente", value: "products_manual" },
+                { label: "✨ Deixar a IA Escolher Automaticamente", value: "products_auto" }
+              ]
+            );
+          }, 500);
+        } else {
+          setCurrentStep('custom_objective_detail');
+          setTimeout(() => {
+            addAssistantMessage(
+              "🎯 **Agora a parte mais importante para criar um formulário realmente inteligente!**\n\n" +
+              "Para que este formulário seja perfeito, quais informações são **indispensáveis** para você decidir se este é um bom cliente?\n\n" +
+              "💡 **Exemplos:**\n" +
+              "• Poder aquisitório (quanto pode gastar)\n" +
+              "• Urgência (quando precisa do serviço)\n" +
+              "• Problema específico que quer resolver\n" +
+              "• Experiência anterior com produtos similares\n" +
+              "• Expectativas de resultado\n\n" +
+              "Quanto mais específico você for, mais assertivas serão as perguntas! 🚀"
+            );
+          }, 500);
+        }
+        break;
+
+
+
+      case 'products_manual':
+        setBusinessContext(prev => ({ ...prev, productSelection: 'manual' }));
+        setTimeout(() => {
+          addAssistantMessage(
+            "👇 **Ótimo! Selecione abaixo os produtos/serviços que este formulário deve focar:**\n\n" +
+            "Você pode selecionar quantos quiser. Clique nos produtos para marcar/desmarcar."
+          );
+        }, 500);
+        break;
+
+      case 'products_auto':
+        setBusinessContext(prev => ({ ...prev, productSelection: 'auto', selectedProducts: [] }));
         setCurrentStep('custom_objective_detail');
         setTimeout(() => {
           addAssistantMessage(
             "🎯 **Agora a parte mais importante para criar um formulário realmente inteligente!**\n\n" +
             "Para que este formulário seja perfeito, quais informações são **indispensáveis** para você decidir se este é um bom cliente?\n\n" +
             "💡 **Exemplos:**\n" +
-            "\u2022 Poder aquisitório (quanto pode gastar)\n" +
-            "\u2022 Urgência (quando precisa do serviço)\n" +
-            "\u2022 Problema específico que quer resolver\n" +
-            "\u2022 Experiência anterior com produtos similares\n" +
-            "\u2022 Expectativas de resultado\n\n" +
+            "• Poder aquisitório (quanto pode gastar)\n" +
+            "• Urgência (quando precisa do serviço)\n" +
+            "• Problema específico que quer resolver\n" +
+            "• Experiência anterior com produtos similares\n" +
+            "• Expectativas de resultado\n\n" +
             "Quanto mais específico você for, mais assertivas serão as perguntas! 🚀"
           );
         }, 500);
         break;
 
-
-
       case 'confirm_products':
-        setCurrentStep('analysis');
+        setCurrentStep('custom_objective_detail');
         setTimeout(() => {
           addAssistantMessage(
-            "Perfeito! Agora vou criar perguntas estratégicas para esses produtos.\n\n" +
-            "⏳ Isso pode levar alguns segundos..."
+            "🎯 **Agora a parte mais importante para criar um formulário realmente inteligente!**\n\n" +
+            "Para que este formulário seja perfeito, quais informações são **indispensáveis** para você decidir se este é um bom cliente?\n\n" +
+            "💡 **Exemplos:**\n" +
+            "• Poder aquisitório (quanto pode gastar)\n" +
+            "• Urgência (quando precisa do serviço)\n" +
+            "• Problema específico que quer resolver\n" +
+            "• Experiência anterior com produtos similares\n" +
+            "• Expectativas de resultado\n\n" +
+            "Quanto mais específico você for, mais assertivas serão as perguntas! 🚀"
           );
-          runAIAnalysis();
         }, 500);
         break;
 
@@ -837,9 +885,14 @@ Responda APENAS com um JSON válido no formato:
     }, 500);
 
     try {
-      const selectedProductNames = products
+      // Preparar informações detalhadas dos produtos selecionados
+      const selectedProductsInfo = products
         .filter(p => businessContext.selectedProducts.includes(p.id))
-        .map(p => `${p.name} (R$ ${p.value})`);
+        .map(p => ({
+          name: p.name,
+          value: p.value,
+          description: p.ai_description || 'Sem descrição'
+        }));
 
       const toneDescriptions: Record<string, string> = {
         'direct': 'direto e objetivo, sem rodeios',
@@ -848,6 +901,17 @@ Responda APENAS com um JSON válido no formato:
         'friendly': 'acolhedor e empático, focado em criar conexão'
       };
 
+      // Construir seção de produtos de forma mais inteligente
+      let productsSection = '';
+      if (selectedProductsInfo.length > 0) {
+        productsSection = `\n\n📦 PRODUTOS/SERVIÇOS EM FOCO (PRIORIDADE ALTA):\n`;
+        selectedProductsInfo.forEach(p => {
+          productsSection += `\n**${p.name}** (R$ ${p.value.toFixed(2)})\n`;
+          productsSection += `Descrição: ${p.description}\n`;
+        });
+        productsSection += `\n🎯 IMPORTANTE: Crie perguntas que identifiquem se o cliente tem necessidades/problemas que ESTES produtos resolvem. Use as descrições acima para entender o que cada produto oferece.`;
+      }
+
       const prompt = `Você é um especialista em criação de formulários de qualificação de leads. Crie 5 perguntas estratégicas para um formulário.
 
 CONTEXTO DO NEGÓCIO:
@@ -855,21 +919,21 @@ CONTEXTO DO NEGÓCIO:
 - Público-alvo: ${businessContext.targetAudience}
 - Dores/Desejos: ${businessContext.mainPainPoints.join(', ')}
 - Objetivo: ${businessContext.formObjective === 'qualify' ? 'Qualificar leads para venda' : businessContext.customObjective}
-- Tom: ${toneDescriptions[businessContext.formTone]}
-${selectedProductNames.length > 0 ? `- Produtos em foco: ${selectedProductNames.join(', ')}` : ''}
+- Tom: ${toneDescriptions[businessContext.formTone]}${productsSection}
 
 🎯 CRITÉRIOS DE QUALIFICAÇÃO (PRIORIDADE MÁXIMA):
 ${businessContext.qualificationCriteria ? businessContext.qualificationCriteria : 'Não especificado'}
 
 REGRAS:
 1. **OBRIGATÓRIO**: Crie perguntas que capturem TODAS as informações dos CRITÉRIOS DE QUALIFICAÇÃO acima
-2. As perguntas devem ser INDIRETAS e naturais, não pareçam um interrogatório de vendas
-3. Cada pergunta deve revelar algo sobre a intenção de compra e qualificação do cliente
-4. Use o tom especificado (${businessContext.formTone})
-5. Varie os tipos: single_choice (escolha única), multiple_choice (múltipla escolha), text (texto livre)
-6. Para perguntas de escolha, forneça 3-5 opções relevantes
-7. Se os critérios mencionam "poder aquisitório" ou "quanto pode gastar", CRIE uma pergunta de faixa de preço
-8. Se os critérios mencionam "urgência" ou "prazo", CRIE uma pergunta sobre timeline
+2. ${selectedProductsInfo.length > 0 ? '**OBRIGATÓRIO**: Crie perguntas que identifiquem se o cliente precisa dos PRODUTOS EM FOCO listados acima' : 'As perguntas devem qualificar o lead para os produtos/serviços do negócio'}
+3. As perguntas devem ser INDIRETAS e naturais, não pareçam um interrogatório de vendas
+4. Cada pergunta deve revelar algo sobre a intenção de compra e qualificação do cliente
+5. Use o tom especificado (${businessContext.formTone})
+6. Varie os tipos: single_choice (escolha única), multiple_choice (múltipla escolha), text (texto livre)
+7. Para perguntas de escolha, forneça 3-5 opções relevantes
+8. Se os critérios mencionam "poder aquisitório" ou "quanto pode gastar", CRIE uma pergunta de faixa de preço
+9. Se os critérios mencionam "urgência" ou "prazo", CRIE uma pergunta sobre timeline
 
 Responda APENAS com JSON válido neste formato:
 {

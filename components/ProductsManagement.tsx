@@ -30,7 +30,6 @@ interface Product {
   name: string;
   value: number;
   ai_description: string | null;
-  keywords: string[] | null;
   created_at: string;
   tenant_id?: string;
 }
@@ -59,7 +58,7 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   const [importError, setImportError] = useState<string | null>(null);
   const [generatingAI, setGeneratingAI] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [editingField, setEditingField] = useState<{ productId: string; field: 'description' | 'keywords' } | null>(null);
+  const [editingField, setEditingField] = useState<{ productId: string; field: 'description' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -131,11 +130,8 @@ IMPORTANTE: Considere o tipo de negócio ao gerar a descrição. Por exemplo:
 
 Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
 {
-  "description": "Uma descrição comercial atraente do produto/serviço em 2-3 frases, considerando o contexto do negócio e o público-alvo",
-  "keywords": ["palavra1", "palavra2", "palavra3", "palavra4", "palavra5", "palavra6", "palavra7", "palavra8", "palavra9", "palavra10"]
-}
-
-As palavras-chave devem ser relevantes para o produto/serviço E para o tipo de negócio.`;
+  "description": "Uma descrição comercial atraente do produto/serviço em 2-3 frases, considerando o contexto do negócio e o público-alvo"
+}`;
 
       const response = await fetch("/api/gemini", {
         method: "POST",
@@ -159,7 +155,6 @@ As palavras-chave devem ser relevantes para o produto/serviço E para o tipo de 
         .from("products_services")
         .update({
           ai_description: insights.description,
-          keywords: insights.keywords,
         })
         .eq("id", productId);
 
@@ -167,7 +162,6 @@ As palavras-chave devem ser relevantes para o produto/serviço E para o tipo de 
 
       const updatedProduct = {
         ai_description: insights.description,
-        keywords: insights.keywords,
       };
 
       setProducts((prev) =>
@@ -178,7 +172,7 @@ As palavras-chave devem ser relevantes para o produto/serviço E para o tipo de 
         setSelectedProduct({ ...selectedProduct, ...updatedProduct });
       }
 
-      showNotification("success", "Descrição e palavras-chave geradas com sucesso!");
+      showNotification("success", "Descrição gerada com sucesso!");
     } catch (error) {
       console.error("Erro ao gerar insights:", error);
       showNotification("error", "Erro ao gerar insights da IA");
@@ -489,61 +483,6 @@ As palavras-chave devem ser relevantes para o produto/serviço E para o tipo de 
                       />
                     ) : (
                       <p className="text-slate-700 leading-relaxed">{String(selectedProduct.ai_description || '')}</p>
-                    )}
-                  </div>
-
-                  <div className="bg-blue-50 rounded-xl p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Target size={18} className="text-blue-600" />
-                        <h3 className="font-semibold text-blue-800">Palavras-chave</h3>
-                      </div>
-                      {editingField?.productId === selectedProduct.id && editingField?.field === 'keywords' ? (
-                        <button
-                          onClick={() => {
-                            setEditingField(null);
-                            supabase!.from("products_services").update({ keywords: selectedProduct.keywords }).eq("id", selectedProduct.id);
-                          }}
-                          className="flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm"
-                        >
-                          <Save size={14} />
-                          Salvar
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setEditingField({ productId: selectedProduct.id, field: 'keywords' })}
-                          className="flex items-center gap-1 px-3 py-1 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors text-sm"
-                        >
-                          <Edit3 size={14} />
-                          Editar
-                        </button>
-                      )}
-                    </div>
-                    {editingField?.productId === selectedProduct.id && editingField?.field === 'keywords' ? (
-                      <div className="space-y-2">
-                        {(selectedProduct.keywords || []).map((keyword, index) => (
-                          <div key={index} className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={keyword}
-                              onChange={(e) => {
-                                const newKeywords = [...(selectedProduct.keywords || [])];
-                                newKeywords[index] = e.target.value;
-                                setSelectedProduct({ ...selectedProduct, keywords: newKeywords });
-                              }}
-                              className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {(selectedProduct.keywords || []).map((keyword, index) => (
-                          <span key={index} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-                            {keyword}
-                          </span>
-                        ))}
-                      </div>
                     )}
                   </div>
 
