@@ -328,10 +328,13 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       
+      console.log('[FormConsultant] Buscando produtos com tenant_id:', tenantId);
       const { data, error } = await supabase
         .from('products_services')
         .select('*')
         .eq('tenant_id', tenantId);
+      
+      console.log('[FormConsultant] Produtos retornados:', data, 'Erro:', error);
 
       if (!error && data) {
         setProducts(data);
