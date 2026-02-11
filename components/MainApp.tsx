@@ -351,8 +351,44 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
   const handleDeleteForm = async (id: string) => {
     if (!supabase) return;
-    await supabase.from('forms').delete().eq('id', id);
+    
+    // Primeiro: excluir todos os respondentes (form_responses) deste formulário
+    const { error: responsesError } = await supabase
+      .from('form_responses')
+      .delete()
+      .eq('form_id', id);
+    
+    if (responsesError) {
+      console.error('Erro ao excluir respondentes:', responsesError);
+      alert('Erro ao excluir respondentes do formulário');
+      return;
+    }
+    
+    // Depois: excluir o formulário
+    const { error: formError } = await supabase
+      .from('forms')
+      .delete()
+      .eq('id', id);
+    
+    if (formError) {
+      console.error('Erro ao excluir formulário:', formError);
+      alert('Erro ao excluir formulário');
+      return;
+    }
+    
+    // Atualizar estado local
     setForms(prev => prev.filter(f => f.id !== id));
+    
+    // Recarregar leads para atualizar o contador
+    const { data: leadsData } = await supabase
+      .from('form_responses')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false });
+    
+    if (leadsData) {
+      setLeads(leadsData);
+    }
   };
 
   const handleSaveCampaign = async (campaign: Campaign) => {
