@@ -516,6 +516,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
         };
         setBusinessContext(prev => ({ ...prev, formTone: toneMap[value] }));
         // Verificar se há produtos cadastrados para oferecer seleção
+        console.log('[FormConsultant] Produtos disponíveis:', products.length, products);
         if (products.length > 0) {
           setCurrentStep('products');
           setTimeout(() => {
