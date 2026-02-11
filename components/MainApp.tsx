@@ -591,8 +591,11 @@ Responda APENAS com JSON válido (sem markdown):
             const cleanResponse = aiData.response.replace(/```json\n?|\n?```/g, '').trim();
             aiAnalysis = JSON.parse(cleanResponse);
             
-            // Atualizar valor se a IA sugeriu um produto
-            if (aiAnalysis.suggested_value > 0) {
+            // Atualizar valor somando TODOS os produtos recomendados
+            if (aiAnalysis.recommended_products && aiAnalysis.recommended_products.length > 0) {
+              opportunityValue = aiAnalysis.recommended_products.reduce((sum: number, product: any) => sum + (product.value || 0), 0);
+            } else if (aiAnalysis.suggested_value > 0) {
+              // Fallback: usar suggested_value se recommended_products não existir
               opportunityValue = aiAnalysis.suggested_value;
             }
           } catch (e) {
