@@ -520,8 +520,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     }
   };
 
-  const handleFormSubmit = async (data: any) => {
-    if (!supabase || !publicForm) return;
+  const handleFormSubmit = async (data: any): Promise<boolean> => {
+    if (!supabase || !publicForm) return false;
     
     const formUserId = (publicForm as any).user_id;
     
@@ -696,8 +696,10 @@ Responda APENAS com JSON válido (sem markdown):
     
     if (insertError) {
       console.error('Erro ao salvar lead:', insertError);
-      alert('Erro ao salvar resposta do formulário');
+      return false;
     }
+    
+    return true;
   };
 
   const handlePreviewSurvey = (id: string) => {

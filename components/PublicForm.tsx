@@ -6,7 +6,7 @@ import { CheckCircle, ArrowRight, ArrowLeft, Check, ShieldCheck, X } from 'lucid
 interface PublicFormProps {
   form: Form;
   onClose: () => void;
-  onSubmit: (answers: any) => void;
+  onSubmit: (answers: any) => Promise<boolean>;
   isPreview?: boolean;
   companyName?: string;
 }
@@ -39,6 +39,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [isCompleted, setIsCompleted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [patientData, setPatientData] = useState({ name: '', email: '', phone: '' });
   const [showIntro, setShowIntro] = useState(true);
@@ -128,12 +129,25 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   };
 
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStep < form.questions.length - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
-      setIsCompleted(true);
-      onSubmit({ patient: patientData, answers });
+      // Aguardar salvamento antes de mostrar sucesso
+      setIsSubmitting(true);
+      try {
+        const success = await onSubmit({ patient: patientData, answers });
+        if (success) {
+          setIsCompleted(true);
+        } else {
+          alert('Erro ao enviar formulário. Por favor, tente novamente.');
+        }
+      } catch (error) {
+        console.error('Erro ao enviar:', error);
+        alert('Erro ao enviar formulário. Por favor, tente novamente.');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -326,10 +340,20 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
                 </button>
                 <button 
                   onClick={handleNext}
-                  disabled={!answers[currentQuestion.id] || (Array.isArray(answers[currentQuestion.id]?.value) && answers[currentQuestion.id]?.value.length === 0)}
-                  className="px-8 py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary-200"
+                  disabled={isSubmitting || !answers[currentQuestion.id] || (Array.isArray(answers[currentQuestion.id]?.value) && answers[currentQuestion.id]?.value.length === 0)}
+                  className="px-8 py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary-200 flex items-center gap-2"
                 >
-                  {currentStep === form.questions.length - 1 ? 'Finalizar' : 'Próximo'}
+                  {isSubmitting ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Enviando...
+                    </>
+                  ) : (
+                    currentStep === form.questions.length - 1 ? 'Finalizar' : 'Próximo'
+                  )}
                 </button>
               </div>
             </div>
