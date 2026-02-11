@@ -551,6 +551,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
 
       case 'products_manual':
         setBusinessContext(prev => ({ ...prev, productSelection: 'manual' }));
+        // Manter o step como 'products' para mostrar a interface de seleção
         setTimeout(() => {
           addAssistantMessage(
             "👇 **Ótimo! Selecione abaixo os produtos/serviços que este formulário deve focar:**\n\n" +
