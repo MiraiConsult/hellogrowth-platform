@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
-import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart } from 'lucide-react';
+import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Markdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
@@ -61,6 +61,12 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
   const [newNoteText, setNewNoteText] = useState('');
   const [isSavingNote, setIsSavingNote] = useState(false);
   const notesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Menu Dropdown State
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  
+  // Delete State
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Scroll to bottom of notes when selected lead changes or notes update
   useEffect(() => {
@@ -173,6 +179,44 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
         alert("Erro ao salvar anotação.");
     } finally {
         setIsSavingNote(false);
+    }
+  };
+
+  const handleDeleteLead = async (leadId: string) => {
+    const leadToDelete = leads.find(l => l.id === leadId);
+    if (!leadToDelete) return;
+    
+    const confirmMessage = `Tem certeza que deseja excluir a oportunidade de "${leadToDelete.name}"?\n\nEsta ação não pode ser desfeita.`;
+    if (!window.confirm(confirmMessage)) return;
+    
+    setIsDeleting(true);
+    try {
+      // Excluir do banco de dados
+      if (supabase) {
+        const { error } = await supabase
+          .from('form_responses')
+          .delete()
+          .eq('id', leadId);
+        
+        if (error) throw error;
+      }
+      
+      // Atualizar estado local
+      setLeads(prev => prev.filter(l => l.id !== leadId));
+      
+      // Fechar modal se estiver aberto
+      if (selectedLead?.id === leadId) {
+        setSelectedLead(null);
+      }
+      
+      // Fechar menu dropdown
+      setMenuOpenId(null);
+      
+    } catch (error) {
+      console.error('Erro ao excluir oportunidade:', error);
+      alert('Erro ao excluir oportunidade. Tente novamente.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -510,16 +554,43 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                     >
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="font-medium text-gray-900">{lead.name}</h4>
-                        <button 
-                          onMouseDown={(e) => e.stopPropagation()} // Prevent drag
-                          onClick={(e) => {
-                            e.stopPropagation(); // Prevent card click
-                            handleOpenDetails(lead);
-                          }}
-                          className="text-gray-400 hover:text-primary-600 hover:bg-primary-50 p-1 rounded transition-all"
-                        >
-                          <MoreVertical size={16} />
-                        </button>
+                        <div className="relative">
+                          <button 
+                            onMouseDown={(e) => e.stopPropagation()} // Prevent drag
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent card click
+                              setMenuOpenId(menuOpenId === lead.id ? null : lead.id);
+                            }}
+                            className="text-gray-400 hover:text-primary-600 hover:bg-primary-50 p-1 rounded transition-all"
+                          >
+                            <MoreVertical size={16} />
+                          </button>
+                          {menuOpenId === lead.id && (
+                            <div className="absolute right-0 top-8 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 w-40">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMenuOpenId(null);
+                                  handleOpenDetails(lead);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                              >
+                                <Eye size={14} /> Ver Detalhes
+                              </button>
+                              <div className="h-px bg-gray-100 my-1"></div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteLead(lead.id);
+                                }}
+                                disabled={isDeleting}
+                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
+                              >
+                                {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Excluir
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <p className="text-xs text-gray-500 mb-3">{lead.formSource}</p>
                       
@@ -683,7 +754,15 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
               </div>
             </div>
             
-            <div className="p-4 bg-gray-50 border-t border-gray-100 text-right flex-shrink-0">
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center flex-shrink-0">
+              <button 
+                onClick={() => handleDeleteLead(selectedLead.id)}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-white border border-red-300 text-red-600 rounded-lg hover:bg-red-50 font-medium flex items-center gap-2 disabled:opacity-50"
+              >
+                {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                {isDeleting ? 'Excluindo...' : 'Excluir Oportunidade'}
+              </button>
               <button 
                 onClick={() => setSelectedLead(null)}
                 className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium"
