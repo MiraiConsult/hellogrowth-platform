@@ -456,14 +456,26 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
                       </div>
                       {editingField?.productId === selectedProduct.id && editingField?.field === 'description' ? (
                         <button
-                          onClick={() => {
-                            setEditingField(null);
-                            supabase!.from("products_services").update({ ai_description: selectedProduct.ai_description }).eq("id", selectedProduct.id);
+                          onClick={async () => {
+                            try {
+                              setSaving(true);
+                              const { error } = await supabase!.from("products_services").update({ ai_description: selectedProduct.ai_description }).eq("id", selectedProduct.id);
+                              if (error) throw error;
+                              showNotification('success', 'Descrição salva com sucesso!');
+                              setEditingField(null);
+                              await fetchProducts(); // Recarregar produtos para sincronizar
+                            } catch (error) {
+                              console.error('Erro ao salvar descrição:', error);
+                              showNotification('error', 'Erro ao salvar descrição');
+                            } finally {
+                              setSaving(false);
+                            }
                           }}
-                          className="flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm"
+                          disabled={saving}
+                          className="flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm disabled:opacity-50"
                         >
-                          <Save size={14} />
-                          Salvar
+                          {saving ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                          {saving ? 'Salvando...' : 'Salvar'}
                         </button>
                       ) : (
                         <button
