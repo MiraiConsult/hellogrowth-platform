@@ -578,7 +578,6 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
               );
             }, 500);
           }
-        }, 200);
         })();
         break;
 
