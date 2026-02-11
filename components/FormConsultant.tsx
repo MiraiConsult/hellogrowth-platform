@@ -577,6 +577,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
                 "Quanto mais específico você for, mais assertivas serão as perguntas! 🚀"
               );
             }, 500);
+          }
         }, 200);
         })();
         break;
