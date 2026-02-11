@@ -352,23 +352,16 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const handleDeleteForm = async (id: string) => {
     if (!supabase) return;
     
-    // Buscar o nome do formulário para excluir respondentes
-    const form = forms.find(f => f.id === id);
-    if (!form) {
-      alert('Formulário não encontrado');
-      return;
-    }
-    
-    // Primeiro: excluir todos os respondentes (form_responses) deste formulário
-    // A tabela form_responses usa 'form_name' (não 'form_id')
-    const { error: responsesError } = await supabase
-      .from('form_responses')
+    // Primeiro: excluir todos os leads (respostas) deste formulário
+    // A tabela leads usa 'form_id'
+    const { error: leadsError } = await supabase
+      .from('leads')
       .delete()
-      .eq('form_name', form.name);
+      .eq('form_id', id);
     
-    if (responsesError) {
-      console.error('Erro ao excluir respondentes:', responsesError);
-      alert('Erro ao excluir respondentes do formulário');
+    if (leadsError) {
+      console.error('Erro ao excluir leads:', leadsError);
+      alert('Erro ao excluir leads do formulário');
       return;
     }
     
@@ -389,7 +382,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     
     // Recarregar leads para atualizar o contador
     const { data: leadsData } = await supabase
-      .from('form_responses')
+      .from('leads')
       .select('*')
       .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false });
@@ -684,24 +677,25 @@ Responda APENAS com JSON válido (sem markdown):
     // A análise de IA fica salva no campo _ai_analysis para consulta
     const status = 'Novo';
 
-    // 5. Inserir resposta com dados enriquecidos na tabela form_responses
-    const { error: insertError } = await supabase.from('form_responses').insert([{
+    // 5. Inserir lead com dados enriquecidos na tabela leads
+    const { error: insertError } = await supabase.from('leads').insert([{
+        form_id: publicForm.id,
+        user_id: formUserId,
         tenant_id: formTenantId,
-        form_name: publicForm.name,
         name: data.patient.name,
         email: data.patient.email,
         phone: data.patient.phone,
         status: status,
         value: opportunityValue,
+        form_source: publicForm.name,
         answers: {
           ...data.answers,
           _ai_analysis: aiAnalysis
-        },
-        created_at: new Date().toISOString()
+        }
     }]);
     
     if (insertError) {
-      console.error('Erro ao salvar resposta:', insertError);
+      console.error('Erro ao salvar lead:', insertError);
       alert('Erro ao salvar resposta do formulário');
     }
   };

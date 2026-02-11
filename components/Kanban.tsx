@@ -194,7 +194,7 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
       // Excluir do banco de dados
       if (supabase) {
         const { error } = await supabase
-          .from('form_responses')
+          .from('leads')
           .delete()
           .eq('id', leadId);
         
