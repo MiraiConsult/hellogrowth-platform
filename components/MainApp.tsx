@@ -638,7 +638,7 @@ Responda APENAS com JSON válido (sem markdown):
     const status = 'Novo';
 
     // 5. Inserir lead com dados enriquecidos
-    const formTenantId = (publicForm as any).tenant_id || formUserId;
+    // formTenantId já foi definido no início da função (linha 499)
     await supabase.from('leads').insert([{
         form_id: publicForm.id,
         user_id: formUserId,
