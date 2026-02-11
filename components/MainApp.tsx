@@ -524,6 +524,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     if (!supabase || !publicForm) return false;
     
     const formUserId = (publicForm as any).user_id;
+    const formTenantId = (publicForm as any).tenant_id || formUserId;
     
     // 1. Calcular valor base das respostas
     let opportunityValue = 0;
@@ -531,11 +532,46 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         if (ans.optionSelected && ans.optionSelected.value) opportunityValue += ans.optionSelected.value;
     });
 
-    // 2. Buscar produtos E perfil do negócio para análise contextualizada
+    // 2. OTIMIZAÇÃO: Salvar IMEDIATAMENTE sem aguardar análise de IA
+    const status = 'Novo';
+    
+    const { data: insertedLead, error: insertError } = await supabase.from('leads').insert([{
+        form_id: publicForm.id,
+        user_id: formUserId,
+        tenant_id: formTenantId,
+        name: data.patient.name,
+        email: data.patient.email,
+        phone: data.patient.phone,
+        status: status,
+        value: opportunityValue,
+        form_source: publicForm.name,
+        answers: data.answers
+    }]).select().single();
+    
+    if (insertError) {
+      console.error('Erro ao salvar lead:', insertError);
+      return false;
+    }
+    
+    // 3. Processar análise de IA em BACKGROUND (não bloqueia o usuário)
+    processAIAnalysisInBackground(insertedLead.id, data, publicForm, formTenantId);
+    
+    return true;
+  };
+  
+  // Função auxiliar para processar análise de IA em background
+  const processAIAnalysisInBackground = async (
+    leadId: string,
+    data: any,
+    form: Form,
+    formTenantId: string
+  ) => {
+    if (!supabase) return;
+    
     let aiAnalysis = null;
-    const formTenantId = (publicForm as any).tenant_id || formUserId;
+    let updatedValue = 0;
     try {
-      // Buscar produtos
+      // Buscar produtos e perfil do negócio
       const { data: products } = await supabase
         .from('products_services')
         .select('*')
@@ -630,10 +666,10 @@ Responda APENAS com JSON válido (sem markdown):
             
             // Atualizar valor somando TODOS os produtos recomendados
             if (aiAnalysis.recommended_products && aiAnalysis.recommended_products.length > 0) {
-              opportunityValue = aiAnalysis.recommended_products.reduce((sum: number, product: any) => sum + (product.value || 0), 0);
+              updatedValue = aiAnalysis.recommended_products.reduce((sum: number, product: any) => sum + (product.value || 0), 0);
             } else if (aiAnalysis.suggested_value > 0) {
               // Fallback: usar suggested_value se recommended_products não existir
-              opportunityValue = aiAnalysis.suggested_value;
+              updatedValue = aiAnalysis.suggested_value;
             }
           } catch (e) {
             console.error('Erro ao parsear resposta da IA:', e);
@@ -646,8 +682,8 @@ Responda APENAS com JSON válido (sem markdown):
                 reason: 'Produto sugerido com base no perfil do cliente'
               })),
               suggested_product: products[0]?.name || 'Produto não identificado',
-              suggested_value: opportunityValue || products[0]?.value || 0,
-              classification: opportunityValue > 0 ? 'opportunity' : 'monitoring',
+              suggested_value: updatedValue || products[0]?.value || 0,
+              classification: updatedValue > 0 ? 'opportunity' : 'monitoring',
               confidence: 0.5,
               reasoning: 'Análise automática baseada nas respostas fornecidas.',
               client_insights: ['Cliente demonstrou interesse nos serviços'],
@@ -660,7 +696,7 @@ Responda APENAS com JSON válido (sem markdown):
         // Sem produtos cadastrados - criar análise básica
         aiAnalysis = {
           suggested_product: 'Cadastre produtos para análise automática',
-          suggested_value: opportunityValue || 0,
+          suggested_value: updatedValue || 0,
           classification: 'monitoring',
           confidence: 0.3,
           reasoning: 'Nenhum produto cadastrado para análise. Cadastre produtos na seção Produtos/Serviços.',
@@ -670,36 +706,22 @@ Responda APENAS com JSON válido (sem markdown):
         };
       }
     } catch (error) {
-      console.error('Erro na análise de IA:', error);
-    }
-
-    // 4. CORREÇÃO: Sempre usar status "Novo" para aparecer no Kanban
-    // A análise de IA fica salva no campo _ai_analysis para consulta
-    const status = 'Novo';
-
-    // 5. Inserir lead com dados enriquecidos na tabela leads
-    const { error: insertError } = await supabase.from('leads').insert([{
-        form_id: publicForm.id,
-        user_id: formUserId,
-        tenant_id: formTenantId,
-        name: data.patient.name,
-        email: data.patient.email,
-        phone: data.patient.phone,
-        status: status,
-        value: opportunityValue,
-        form_source: publicForm.name,
-        answers: {
-          ...data.answers,
-          _ai_analysis: aiAnalysis
-        }
-    }]);
-    
-    if (insertError) {
-      console.error('Erro ao salvar lead:', insertError);
-      return false;
+      console.error('Erro na análise de IA em background:', error);
     }
     
-    return true;
+    // Atualizar lead com análise de IA
+    if (aiAnalysis) {
+      await supabase
+        .from('leads')
+        .update({
+          value: updatedValue,
+          answers: {
+            ...data.answers,
+            _ai_analysis: aiAnalysis
+          }
+        })
+        .eq('id', leadId);
+    }
   };
 
   const handlePreviewSurvey = (id: string) => {
