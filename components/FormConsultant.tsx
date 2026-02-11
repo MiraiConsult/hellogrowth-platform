@@ -518,13 +518,38 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
           'tone_friendly': 'friendly'
         };
         setBusinessContext(prev => ({ ...prev, formTone: toneMap[value] }));
-        // Recarregar produtos antes de verificar para garantir dados atualizados
+        // Buscar produtos diretamente do banco ao invés de depender do estado
         (async () => {
-          await fetchProducts();
-          // Aguardar um momento para o estado atualizar
-          setTimeout(() => {
-            console.log('[FormConsultant] Produtos disponíveis após reload:', products.length, products);
-            if (products.length > 0) {
+          if (!supabase || !tenantId) {
+            console.log('[FormConsultant] Supabase ou tenantId não disponível:', { supabase: !!supabase, tenantId });
+            setCurrentStep('custom_objective_detail');
+            setTimeout(() => {
+              addAssistantMessage(
+                "🎯 **Agora a parte mais importante para criar um formulário realmente inteligente!**\n\n" +
+                "Para que este formulário seja perfeito, quais informações são **indispensáveis** para você decidir se este é um bom cliente?\n\n" +
+                "💡 **Exemplos:**\n" +
+                "• Poder aquisitório (quanto pode gastar)\n" +
+                "• Urgência (quando precisa do serviço)\n" +
+                "• Problema específico que quer resolver\n" +
+                "• Experiência anterior com produtos similares\n" +
+                "• Expectativas de resultado\n\n" +
+                "Quanto mais específico você for, mais assertivas serão as perguntas! 🚀"
+              );
+            }, 500);
+            return;
+          }
+          
+          console.log('[FormConsultant] Buscando produtos com tenant_id:', tenantId);
+          const { data: fetchedProducts, error } = await supabase
+            .from('products_services')
+            .select('*')
+            .eq('tenant_id', tenantId);
+          
+          console.log('[FormConsultant] Produtos retornados:', fetchedProducts, 'Erro:', error);
+          
+          if (!error && fetchedProducts && fetchedProducts.length > 0) {
+            setProducts(fetchedProducts);
+            console.log('[FormConsultant] Produtos disponíveis:', fetchedProducts.length, fetchedProducts);
               setCurrentStep('products');
               setTimeout(() => {
                 addAssistantMessage(
