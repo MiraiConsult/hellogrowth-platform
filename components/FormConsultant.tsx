@@ -248,11 +248,11 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
 
   // Fetch products and business profile on mount
   useEffect(() => {
-    if (supabase && userId) {
+    if (supabase && userId && tenantId) {
       fetchProducts();
       fetchBusinessProfile();
     }
-  }, [supabase, userId]);
+  }, [supabase, userId, tenantId]);
 
   const fetchBusinessProfile = async () => {
     if (!supabase) return;
