@@ -201,6 +201,23 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
 
     // === SALES INSIGHTS ===
 
+    // Vendas concluídas - SEMPRE MOSTRAR
+    const soldLeads = leads.filter(l => l.status === 'Vendido');
+    if (soldLeads.length > 0) {
+      const totalValue = soldLeads.reduce((acc, l) => acc + Number(l.value || 0), 0);
+      generatedInsights.push({
+        id: 'sales-1',
+        type: 'sales',
+        priority: 'high',
+        title: `${soldLeads.length} vendas concluídas`,
+        description: `Vendas realizadas totalizando R$ ${totalValue.toLocaleString('pt-BR')}. Clique para visualizar e editar.`,
+        metric: `R$ ${totalValue.toLocaleString('pt-BR')}`,
+        actionLabel: 'Ver Vendas',
+        actionTarget: 'sales-detail',
+        createdAt: now.toISOString()
+      });
+    }
+
     // Leads qualificados prontos para fechamento - FILTER ACTIVE ONLY
     const qualifiedLeads = leads.filter(l => 
       (l.status === 'Novo' || l.status === 'Em Contato' || l.status === 'Negociação') &&
@@ -209,9 +226,9 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
     if (qualifiedLeads.length > 0) {
       const totalValue = qualifiedLeads.reduce((acc, l) => acc + Number(l.value || 0), 0);
       generatedInsights.push({
-        id: 'sales-1',
+        id: 'sales-2',
         type: 'sales',
-        priority: 'high',
+        priority: 'medium',
         title: `${qualifiedLeads.length} leads prontos para fechamento`,
         description: `Leads qualificados totalizando R$ ${totalValue.toLocaleString('pt-BR')}. Priorize o contato para fechar negócio.`,
         metric: `R$ ${totalValue.toLocaleString('pt-BR')}`,

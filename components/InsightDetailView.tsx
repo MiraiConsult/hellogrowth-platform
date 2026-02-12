@@ -336,9 +336,14 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
         analyzedClients.push(analysis);
       }
     } else if (insightType === 'sales') {
-      // Leads qualificados
-      const qualifiedLeads = leads.filter(l => l.status === 'Novo' || l.status === 'Em Contato' || l.status === 'Negociação');
-      for (const lead of qualifiedLeads) {
+      // Leads qualificados E vendas concluídas
+      const salesLeads = leads.filter(l => 
+        l.status === 'Novo' || 
+        l.status === 'Em Contato' || 
+        l.status === 'Negociação' ||
+        l.status === 'Vendido'  // ✅ Incluir vendas concluídas
+      );
+      for (const lead of salesLeads) {
         const analysis = generateClientAnalysis(lead, 'lead', 'sales');
         analyzedClients.push(analysis);
       }
