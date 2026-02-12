@@ -312,6 +312,49 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     fetchData();
   }, [currentUser.id]);
 
+  // Supabase Realtime: Listen for new leads being inserted
+  useEffect(() => {
+    if (!supabase || !currentUser.tenantId) return;
+
+    const channel = supabase
+      .channel('leads-insert-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'leads',
+          filter: `tenant_id=eq.${currentUser.tenantId}`
+        },
+        (payload) => {
+          console.log('Novo lead inserido via Realtime:', payload);
+          const newLead = payload.new as any;
+          
+          // Adicionar novo lead ao estado local
+          setLeads((prev) => {
+            // Verificar se o lead já existe (evitar duplicatas)
+            if (prev.some(l => l.id === newLead.id)) {
+              return prev;
+            }
+            
+            return [{
+              ...newLead,
+              date: newLead.created_at,
+              formSource: newLead.form_source,
+              formId: newLead.form_id,
+              notes: newLead.notes || ''
+            }, ...prev];
+          });
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser.tenantId]);
+
   // --- CRUD HANDLERS ---
   const handleSaveForm = async (form: Form) => {
     if (!supabase) return;
@@ -545,7 +588,10 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         status: status,
         value: opportunityValue,
         form_source: publicForm.name,
-        answers: data.answers
+        answers: {
+          ...data.answers,
+          _analyzing: true  // Flag para indicar que está analisando
+        }
     }]).select().single();
     
     if (insertError) {
@@ -736,7 +782,8 @@ Responda APENAS com JSON válido (sem markdown):
           value: updatedValue,
           answers: {
             ...data.answers,
-            _ai_analysis: aiAnalysis
+            _ai_analysis: aiAnalysis,
+            _analyzing: false  // Remove flag de análise
           }
         })
         .eq('id', leadId);

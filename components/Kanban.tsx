@@ -75,6 +75,59 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
     }
   }, [selectedLead?.notes, selectedLead]);
 
+  // Supabase Realtime: Listen for lead updates (AI analysis completion)
+  useEffect(() => {
+    if (!supabase || !tenantId) return;
+
+    const channel = supabase
+      .channel('leads-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'leads',
+          filter: `tenant_id=eq.${tenantId}`
+        },
+        (payload) => {
+          console.log('Lead atualizado via Realtime:', payload);
+          const updatedLead = payload.new as any;
+          
+          // Atualizar lead no estado local
+          setLeads((prev) =>
+            prev.map((lead) =>
+              lead.id === updatedLead.id
+                ? {
+                    ...lead,
+                    value: updatedLead.value,
+                    answers: updatedLead.answers,
+                    status: updatedLead.status,
+                    notes: updatedLead.notes
+                  }
+                : lead
+            )
+          );
+          
+          // Se o lead atualizado está selecionado, atualizar também
+          if (selectedLead && selectedLead.id === updatedLead.id) {
+            setSelectedLead((prev) => prev ? {
+              ...prev,
+              value: updatedLead.value,
+              answers: updatedLead.answers,
+              status: updatedLead.status,
+              notes: updatedLead.notes
+            } : null);
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tenantId, selectedLead]);
+
   // Derived filtered leads
   const filteredLeads = leads.filter(lead => {
     if (filters.name && !lead.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
@@ -544,13 +597,19 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                 </div>
                 
                 <div className={`bg-gray-100 rounded-xl p-3 flex-1 overflow-y-auto space-y-3 transition-colors ${draggedLeadId ? 'border-2 border-dashed border-gray-300' : ''}`}>
-                  {columnLeads.map((lead) => (
+                  {columnLeads.map((lead) => {
+                    const isAnalyzing = lead.answers?._analyzing === true;
+                    return (
                     <div 
                       key={lead.id} 
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, lead.id)}
-                      onClick={() => handleOpenDetails(lead)} // Make card clickable
-                      className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all cursor-move group active:scale-95 relative"
+                      draggable={!isAnalyzing}
+                      onDragStart={(e) => !isAnalyzing && handleDragStart(e, lead.id)}
+                      onClick={() => !isAnalyzing && handleOpenDetails(lead)} // Make card clickable
+                      className={`bg-white p-4 rounded-lg shadow-sm border border-gray-200 transition-all relative ${
+                        isAnalyzing 
+                          ? 'opacity-60 cursor-wait' 
+                          : 'hover:shadow-md cursor-move group active:scale-95'
+                      }`}
                     >
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="font-medium text-gray-900">{lead.name}</h4>
@@ -594,6 +653,13 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                       </div>
                       <p className="text-xs text-gray-500 mb-3">{lead.formSource}</p>
                       
+                      {isAnalyzing && (
+                        <div className="mb-3 flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                          <Loader2 size={12} className="animate-spin" />
+                          Analisando com IA...
+                        </div>
+                      )}
+                      
                       <div className="flex items-center justify-between pt-3 border-t border-gray-50">
                         <div className="flex items-center gap-1 text-green-600 font-semibold text-sm">
                           <DollarSign size={14} />
@@ -606,7 +672,8 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                         </div>
                       </div>
                     </div>
-                  ))}
+                  );  // Fechar return
+                  })}  // Fechar map
                   {columnLeads.length === 0 && (
                     <div className="h-24 border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center text-gray-400 text-sm">
                       Solte aqui
