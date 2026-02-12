@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Form, InitialField } from '@/types';
-import { CheckCircle, ArrowRight, ArrowLeft, Check, ShieldCheck, X } from 'lucide-react';
+import { CheckCircle, ArrowRight, ArrowLeft, Check, ShieldCheck, X, Loader2 } from 'lucide-react';
 
 interface PublicFormProps {
   form: Form;
@@ -40,6 +40,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [isCompleted, setIsCompleted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
 
   const [patientData, setPatientData] = useState({ name: '', email: '', phone: '' });
   const [showIntro, setShowIntro] = useState(true);
@@ -135,8 +136,15 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
     } else {
       // Aguardar salvamento antes de mostrar sucesso
       setIsSubmitting(true);
+      setIsHolding(true);
+      
       try {
-        const success = await onSubmit({ patient: patientData, answers });
+        // Garantir 3 segundos de retenção para a IA processar
+        const holdPromise = new Promise(resolve => setTimeout(resolve, 3000));
+        const submitPromise = onSubmit({ patient: patientData, answers });
+        
+        const [success] = await Promise.all([submitPromise, holdPromise]);
+        
         if (success) {
           setIsCompleted(true);
         } else {
@@ -147,6 +155,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
         alert('Erro ao enviar formulário. Por favor, tente novamente.');
       } finally {
         setIsSubmitting(false);
+        setIsHolding(false);
       }
     }
   };
@@ -159,6 +168,22 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
 
   const currentQuestion = form.questions[currentStep];
   const progress = ((currentStep + 1) / form.questions.length) * 100;
+
+  if (isHolding) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" style={{ colorScheme: 'light' }}>
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center animate-in zoom-in duration-300">
+          <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Loader2 size={40} className="animate-spin" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Processando Respostas...</h2>
+          <p className="text-gray-600">
+            Aguarde um momento enquanto nossa IA analisa suas informações para um atendimento personalizado.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isCompleted) {
     return (
