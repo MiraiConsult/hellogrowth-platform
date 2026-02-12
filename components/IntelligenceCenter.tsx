@@ -261,7 +261,7 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
 
     // === ALL (TODOS) - Resumo geral incluindo vendas ===
     // Adicionar insight de vendas concluídas para aba "Todos" também
-    if (soldLeads.length > 0 && activeFilter === 'all') {
+    if (soldLeads.length > 0) {
       const totalValue = soldLeads.reduce((acc, l) => acc + Number(l.value || 0), 0);
       generatedInsights.push({
         id: 'all-sales',
