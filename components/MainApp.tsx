@@ -723,11 +723,18 @@ Responda APENAS com JSON válido (sem markdown):
   ]
 }`;
 
+        // Fetch com timeout de 60 segundos
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+        
         const response = await fetch('/api/gemini', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt })
+          body: JSON.stringify({ prompt }),
+          signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
 
         if (response.ok) {
           const aiData = await response.json();
@@ -778,10 +785,22 @@ Responda APENAS com JSON válido (sem markdown):
       }
     } catch (error) {
       console.error('Erro na análise de IA em background:', error);
+      
+      // Em caso de erro, criar análise básica para não deixar lead travado
+      aiAnalysis = {
+        suggested_product: 'Análise pendente',
+        suggested_value: 0,
+        classification: 'monitoring',
+        confidence: 0.1,
+        reasoning: 'Erro ao processar análise automática. Entre em contato manualmente.',
+        client_insights: ['Lead capturado - análise manual necessária'],
+        sales_script: 'Entre em contato para qualificar o lead.',
+        next_steps: ['Fazer contato inicial', 'Qualificar manualmente']
+      };
     }
     
-    // Atualizar lead com análise de IA
-    if (aiAnalysis) {
+    // SEMPRE atualizar lead para remover flag _analyzing (mesmo em caso de erro)
+    try {
       await supabase
         .from('leads')
         .update({
@@ -793,6 +812,8 @@ Responda APENAS com JSON válido (sem markdown):
           }
         })
         .eq('id', leadId);
+    } catch (updateError) {
+      console.error('Erro ao atualizar lead após análise:', updateError);
     }
   };
 

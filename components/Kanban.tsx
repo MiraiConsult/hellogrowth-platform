@@ -672,8 +672,8 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                         </div>
                       </div>
                     </div>
-                  );  // Fechar return
-                  })}  // Fechar map
+                  );
+                  })}
                   {columnLeads.length === 0 && (
                     <div className="h-24 border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center text-gray-400 text-sm">
                       Solte aqui
