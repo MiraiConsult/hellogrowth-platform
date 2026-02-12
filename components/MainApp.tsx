@@ -312,12 +312,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     fetchData();
   }, [currentUser.id]);
 
-  // Supabase Realtime: Listen for new leads being inserted
+  // Supabase Realtime: Listen for new leads AND updates
   useEffect(() => {
     if (!supabase || !currentUser.tenantId) return;
 
     const channel = supabase
-      .channel('leads-insert-realtime')
+      .channel('leads-realtime')
       .on(
         'postgres_changes',
         {
@@ -332,11 +332,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           
           // Adicionar novo lead ao estado local
           setLeads((prev) => {
-            // Verificar se o lead já existe (evitar duplicatas)
-            if (prev.some(l => l.id === newLead.id)) {
-              return prev;
-            }
-            
+            if (prev.some(l => l.id === newLead.id)) return prev;
             return [{
               ...newLead,
               date: newLead.created_at,
@@ -345,6 +341,42 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
               notes: newLead.notes || ''
             }, ...prev];
           });
+          
+          // NOVO: Disparar análise IA automaticamente quando novo lead é detectado
+          // Só analisa se ainda não tem análise (_ai_analysis)
+          const answers = newLead.answers || {};
+          if (!answers._ai_analysis) {
+            console.log('Disparando análise IA para novo lead:', newLead.id);
+            processAIAnalysisForLead(newLead.id, newLead.tenant_id);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'leads',
+          filter: `tenant_id=eq.${currentUser.tenantId}`
+        },
+        (payload) => {
+          console.log('Lead atualizado via Realtime:', payload);
+          const updatedLead = payload.new as any;
+          
+          // Atualizar lead no estado local
+          setLeads((prev) => prev.map(l => {
+            if (l.id === updatedLead.id) {
+              return {
+                ...l,
+                ...updatedLead,
+                date: updatedLead.created_at,
+                formSource: updatedLead.form_source,
+                formId: updatedLead.form_id,
+                notes: updatedLead.notes || l.notes || ''
+              };
+            }
+            return l;
+          }));
         }
       )
       .subscribe();
@@ -599,58 +631,88 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       return false;
     }
     
-    // 3. Processar análise de IA em BACKGROUND (não bloqueia o usuário)
-    processAIAnalysisInBackground(insertedLead.id, data, publicForm, formTenantId);
-    
-    // NÃO chamar fetchData() aqui pois causa reset do PublicForm
-    // O Realtime já vai atualizar o Kanban automaticamente quando o lead for inserido
+    // Análise de IA agora é feita pelo SISTEMA (Realtime Listener)
+    // Quando o lead é inserido, o sistema detecta via Realtime e analisa automaticamente
+    // Cliente pode fechar a página imediatamente sem perder a análise
     
     return true;
   };
   
-  // Função auxiliar para processar análise de IA em background
-  const processAIAnalysisInBackground = async (
-    leadId: string,
-    data: any,
-    form: Form,
-    formTenantId: string
-  ) => {
+  // Função que processa análise IA para um lead recém-inserido
+  // Chamada automaticamente pelo Realtime Listener quando novo lead é detectado
+  // Busca TUDO do banco (não depende do navegador do cliente)
+  const processAIAnalysisForLead = async (leadId: string, tenantId: string) => {
     if (!supabase) return;
     
     let aiAnalysis = null;
     let updatedValue = 0;
+    let leadAnswers: any = {};
+    
     try {
-      // Buscar produtos e perfil do negócio
+      // 1. Buscar lead completo do banco
+      const { data: lead } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('id', leadId)
+        .single();
+      
+      if (!lead) {
+        console.error('Lead não encontrado:', leadId);
+        return;
+      }
+      
+      leadAnswers = lead.answers || {};
+      
+      // Se já tem análise, não processar novamente
+      if (leadAnswers._ai_analysis) {
+        console.log('Lead já possui análise IA, ignorando:', leadId);
+        return;
+      }
+      
+      // 2. Buscar formulário para obter as perguntas
+      const { data: formData } = await supabase
+        .from('forms')
+        .select('*')
+        .eq('id', lead.form_id)
+        .single();
+      
+      const formQuestions = formData?.questions || [];
+      const formSelectedProducts = formData?.selected_products || [];
+      
+      // 3. Buscar produtos e perfil do negócio
       const { data: products } = await supabase
         .from('products_services')
         .select('*')
-        .eq('tenant_id', formTenantId);
+        .eq('tenant_id', tenantId);
 
-      // Buscar perfil do negócio
       const { data: businessProfile } = await supabase
         .from('business_profile')
         .select('*')
-        .eq('tenant_id', formTenantId)
+        .eq('tenant_id', tenantId)
         .single();
 
       if (products && products.length > 0) {
-        // 3. Preparar contexto para análise da IA
-        const answersText = Object.entries(data.answers).map(([qId, ans]: [string, any]) => {
-          const question = publicForm.questions.find((q: any) => q.id === qId);
-          const answerValue = Array.isArray(ans.value) ? ans.value.join(', ') : ans.value;
-          return `Pergunta: ${question?.text || qId}\nResposta: ${answerValue}`;
-        }).join('\n\n');
+        // 4. Preparar contexto para análise da IA
+        const answersText = Object.entries(leadAnswers)
+          .filter(([key]) => !key.startsWith('_')) // Ignorar campos internos
+          .map(([qId, ans]: [string, any]) => {
+            const question = formQuestions.find((q: any) => q.id === qId);
+            const answerValue = Array.isArray(ans.value) ? ans.value.join(', ') : ans.value;
+            return `Pergunta: ${question?.text || qId}\nResposta: ${answerValue}`;
+          }).join('\n\n');
         
         // Extrair orçamento do cliente das respostas
         let budgetContext = '';
-        const budgetAnswer = Object.entries(data.answers).find(([qId, ans]: [string, any]) => {
-          const question = form.questions.find((q: any) => q.id === qId);
-          const questionText = question?.text?.toLowerCase() || '';
-          return questionText.includes('orçamento') || 
-                 questionText.includes('investir') || 
-                 questionText.includes('valor') ||
-                 questionText.includes('quanto');
-        });
+        const budgetAnswer = Object.entries(leadAnswers)
+          .filter(([key]) => !key.startsWith('_'))
+          .find(([qId, ans]: [string, any]) => {
+            const question = formQuestions.find((q: any) => q.id === qId);
+            const questionText = question?.text?.toLowerCase() || '';
+            return questionText.includes('orçamento') || 
+                   questionText.includes('investir') || 
+                   questionText.includes('valor') ||
+                   questionText.includes('quanto');
+          });
         
         if (budgetAnswer) {
           const [, ans] = budgetAnswer as [string, any];
@@ -658,19 +720,18 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           budgetContext = `\n\n⚠️ ORÇAMENTO DO CLIENTE (RESTRIÇÃO OBRIGATÓRIA): ${budgetValue}`;
         }
 
-        // Preparar contexto de produtos com descrições
+        // Preparar contexto de produtos
         const productsContext = products.map(p => 
           `- **${p.name}** (R$ ${p.value})\n  Descrição: ${p.ai_description || 'Sem descrição'}`
         ).join('\n\n');
 
-        // Preparar contexto do negócio
+        // Contexto do negócio
         let businessContext = '';
         if (businessProfile) {
           businessContext = `\n\nCONTEXTO DO NEGÓCIO:\n- Tipo: ${businessProfile.business_type || 'Não especificado'}\n- Descrição: ${businessProfile.business_description || 'Não especificado'}\n- Público-alvo: ${businessProfile.target_audience || 'Não especificado'}\n- Diferenciais: ${businessProfile.differentials || 'Não especificado'}`;
         }
 
-        // Verificar se o formulário tem produtos selecionados
-        const formSelectedProducts = (publicForm as any).selected_products || [];
+        // Produtos em foco
         let focusedProductsContext = '';
         if (formSelectedProducts.length > 0) {
           const focusedProducts = products.filter(p => formSelectedProducts.includes(p.id));
@@ -707,7 +768,7 @@ JSON (sem markdown):
 
         // Fetch com timeout de 30 segundos
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
         
         const response = await fetch('/api/gemini', {
           method: 'POST',
@@ -724,51 +785,44 @@ JSON (sem markdown):
             const cleanResponse = aiData.response.replace(/```json\n?|\n?```/g, '').trim();
             aiAnalysis = JSON.parse(cleanResponse);
             
-            // Atualizar valor somando TODOS os produtos recomendados
             if (aiAnalysis.recommended_products && aiAnalysis.recommended_products.length > 0) {
               updatedValue = aiAnalysis.recommended_products.reduce((sum: number, product: any) => sum + (product.value || 0), 0);
             } else if (aiAnalysis.suggested_value > 0) {
-              // Fallback: usar suggested_value se recommended_products não existir
               updatedValue = aiAnalysis.suggested_value;
             }
           } catch (e) {
             console.error('Erro ao parsear resposta da IA:', e);
-            // Se falhar, criar análise básica
             aiAnalysis = {
               recommended_products: products.slice(0, 1).map(p => ({
-                id: p.id,
-                name: p.name,
-                value: p.value,
+                id: p.id, name: p.name, value: p.value,
                 reason: 'Produto sugerido com base no perfil do cliente'
               })),
               suggested_product: products[0]?.name || 'Produto não identificado',
-              suggested_value: updatedValue || products[0]?.value || 0,
-              classification: updatedValue > 0 ? 'opportunity' : 'monitoring',
+              suggested_value: products[0]?.value || 0,
+              classification: 'opportunity',
               confidence: 0.5,
               reasoning: 'Análise automática baseada nas respostas fornecidas.',
               client_insights: ['Cliente demonstrou interesse nos serviços'],
               sales_script: 'Entre em contato para entender melhor as necessidades do cliente.',
               next_steps: ['Fazer contato inicial', 'Agendar reunião']
             };
+            updatedValue = products[0]?.value || 0;
           }
         }
       } else {
-        // Sem produtos cadastrados - criar análise básica
         aiAnalysis = {
           suggested_product: 'Cadastre produtos para análise automática',
-          suggested_value: updatedValue || 0,
+          suggested_value: 0,
           classification: 'monitoring',
           confidence: 0.3,
-          reasoning: 'Nenhum produto cadastrado para análise. Cadastre produtos na seção Produtos/Serviços.',
+          reasoning: 'Nenhum produto cadastrado para análise.',
           client_insights: ['Lead capturado aguardando análise'],
           sales_script: 'Entre em contato para qualificar o lead.',
           next_steps: ['Cadastrar produtos', 'Fazer contato inicial']
         };
       }
     } catch (error) {
-      console.error('Erro na análise de IA em background:', error);
-      
-      // Em caso de erro, criar análise básica para não deixar lead travado
+      console.error('Erro na análise de IA (sistema):', error);
       aiAnalysis = {
         suggested_product: 'Análise pendente',
         suggested_value: 0,
@@ -781,18 +835,20 @@ JSON (sem markdown):
       };
     }
     
-    // SEMPRE atualizar lead para remover flag _analyzing (mesmo em caso de erro)
+    // Atualizar lead com análise IA
     try {
       await supabase
         .from('leads')
         .update({
           value: updatedValue,
           answers: {
-            ...data.answers,
+            ...leadAnswers,
             _ai_analysis: aiAnalysis
           }
         })
         .eq('id', leadId);
+      
+      console.log('Análise IA concluída para lead:', leadId, 'Valor:', updatedValue);
     } catch (updateError) {
       console.error('Erro ao atualizar lead após análise:', updateError);
     }
