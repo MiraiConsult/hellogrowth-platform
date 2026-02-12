@@ -342,13 +342,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
             }, ...prev];
           });
           
-          // NOVO: Disparar análise IA automaticamente quando novo lead é detectado
-          // Só analisa se ainda não tem análise (_ai_analysis)
-          const answers = newLead.answers || {};
-          if (!answers._ai_analysis) {
-            console.log('Disparando análise IA para novo lead:', newLead.id);
-            processAIAnalysisForLead(newLead.id, newLead.tenant_id);
-          }
+          // Análise IA é feita pela API Route /api/analyze-lead (no servidor)
+          // Não precisa disparar aqui - já foi chamada no handleFormSubmit
         }
       )
       .on(
@@ -631,9 +626,18 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       return false;
     }
     
-    // Análise de IA agora é feita pelo SISTEMA (Realtime Listener)
-    // Quando o lead é inserido, o sistema detecta via Realtime e analisa automaticamente
-    // Cliente pode fechar a página imediatamente sem perder a análise
+    // Disparar análise IA no SERVIDOR (fire-and-forget)
+    // A API roda no Vercel (servidor), não no navegador do cliente
+    // Mesmo se o cliente fechar a página, a análise continua no servidor
+    try {
+      fetch('/api/analyze-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: insertedLead.id, tenantId: formTenantId })
+      }).catch(err => console.error('Erro ao disparar análise IA:', err));
+    } catch (e) {
+      console.error('Erro ao chamar API analyze-lead:', e);
+    }
     
     return true;
   };
