@@ -602,6 +602,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     // 3. Processar análise de IA em BACKGROUND (não bloqueia o usuário)
     processAIAnalysisInBackground(insertedLead.id, data, publicForm, formTenantId);
     
+    // 4. Timer de 30 segundos para garantir que o lead apareça no Kanban
+    setTimeout(() => {
+      // Recarregar dados para mostrar o lead (com ou sem análise completa)
+      fetchData();
+    }, 30000); // 30 segundos
+    
     return true;
   };
   
