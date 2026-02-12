@@ -259,8 +259,25 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
       });
     }
 
+    // === ALL (TODOS) - Resumo geral incluindo vendas ===
+    // Adicionar insight de vendas concluídas para aba "Todos" também
+    if (soldLeads.length > 0 && activeFilter === 'all') {
+      const totalValue = soldLeads.reduce((acc, l) => acc + Number(l.value || 0), 0);
+      generatedInsights.push({
+        id: 'all-sales',
+        type: 'sales',
+        priority: 'high',
+        title: `🎉 ${soldLeads.length} vendas concluídas`,
+        description: `Vendas realizadas totalizando R$ ${totalValue.toLocaleString('pt-BR')}. Clique para visualizar e editar.`,
+        metric: `R$ ${totalValue.toLocaleString('pt-BR')}`,
+        actionLabel: 'Ver Vendas',
+        actionTarget: 'sales-detail',
+        createdAt: now.toISOString()
+      });
+    }
+
     return generatedInsights;
-  }, [leads, npsData, intelligenceActions]);
+  }, [leads, npsData, intelligenceActions, activeFilter]);
 
   // Filtered insights
   const filteredInsights = useMemo(() => {
