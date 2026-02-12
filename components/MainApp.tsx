@@ -602,8 +602,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     // 3. Processar análise de IA em BACKGROUND (não bloqueia o usuário)
     processAIAnalysisInBackground(insertedLead.id, data, publicForm, formTenantId);
     
-    // Recarregar dados imediatamente após o salvamento inicial para o Kanban mostrar o novo lead
-    fetchData();
+    // NÃO chamar fetchData() aqui pois causa reset do PublicForm
+    // O Realtime já vai atualizar o Kanban automaticamente quando o lead for inserido
     
     return true;
   };
