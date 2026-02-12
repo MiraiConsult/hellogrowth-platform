@@ -146,16 +146,20 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
         const [success] = await Promise.all([submitPromise, holdPromise]);
         
         if (success) {
+          // Primeiro setar isCompleted, depois remover isHolding para evitar flash
           setIsCompleted(true);
+          setIsHolding(false);
+          setIsSubmitting(false);
         } else {
+          setIsHolding(false);
+          setIsSubmitting(false);
           alert('Erro ao enviar formulário. Por favor, tente novamente.');
         }
       } catch (error) {
         console.error('Erro ao enviar:', error);
-        alert('Erro ao enviar formulário. Por favor, tente novamente.');
-      } finally {
-        setIsSubmitting(false);
         setIsHolding(false);
+        setIsSubmitting(false);
+        alert('Erro ao enviar formulário. Por favor, tente novamente.');
       }
     }
   };
