@@ -75,58 +75,7 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
     }
   }, [selectedLead?.notes, selectedLead]);
 
-  // Supabase Realtime: Listen for lead updates (AI analysis completion)
-  useEffect(() => {
-    if (!supabase || !tenantId) return;
-
-    const channel = supabase
-      .channel('leads-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'leads',
-          filter: `tenant_id=eq.${tenantId}`
-        },
-        (payload) => {
-          console.log('Lead atualizado via Realtime:', payload);
-          const updatedLead = payload.new as any;
-          
-          // Atualizar lead no estado local
-          setLeads((prev) =>
-            prev.map((lead) =>
-              lead.id === updatedLead.id
-                ? {
-                    ...lead,
-                    value: updatedLead.value,
-                    answers: updatedLead.answers,
-                    status: updatedLead.status,
-                    notes: updatedLead.notes
-                  }
-                : lead
-            )
-          );
-          
-          // Se o lead atualizado está selecionado, atualizar também
-          if (selectedLead && selectedLead.id === updatedLead.id) {
-            setSelectedLead((prev) => prev ? {
-              ...prev,
-              value: updatedLead.value,
-              answers: updatedLead.answers,
-              status: updatedLead.status,
-              notes: updatedLead.notes
-            } : null);
-          }
-        }
-      )
-      .subscribe();
-
-    // Cleanup subscription on unmount
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [tenantId, selectedLead]);
+  // Realtime removido para estabilidade do banco de dados
 
   // Derived filtered leads
   const filteredLeads = leads.filter(lead => {

@@ -313,74 +313,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   }, [currentUser.id]);
 
   // Supabase Realtime: Listen for new leads AND updates
-  useEffect(() => {
-    if (!supabase || !currentUser.tenantId) return;
-
-    const channel = supabase
-      .channel('leads-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'leads',
-          filter: `tenant_id=eq.${currentUser.tenantId}`
-        },
-        (payload) => {
-          console.log('Novo lead inserido via Realtime:', payload);
-          const newLead = payload.new as any;
-          
-          // Adicionar novo lead ao estado local
-          setLeads((prev) => {
-            if (prev.some(l => l.id === newLead.id)) return prev;
-            return [{
-              ...newLead,
-              date: newLead.created_at,
-              formSource: newLead.form_source,
-              formId: newLead.form_id,
-              notes: newLead.notes || ''
-            }, ...prev];
-          });
-          
-          // Análise IA é feita pela API Route /api/analyze-lead (no servidor)
-          // Não precisa disparar aqui - já foi chamada no handleFormSubmit
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'leads',
-          filter: `tenant_id=eq.${currentUser.tenantId}`
-        },
-        (payload) => {
-          console.log('Lead atualizado via Realtime:', payload);
-          const updatedLead = payload.new as any;
-          
-          // Atualizar lead no estado local
-          setLeads((prev) => prev.map(l => {
-            if (l.id === updatedLead.id) {
-              return {
-                ...l,
-                ...updatedLead,
-                date: updatedLead.created_at,
-                formSource: updatedLead.form_source,
-                formId: updatedLead.form_id,
-                notes: updatedLead.notes || l.notes || ''
-              };
-            }
-            return l;
-          }));
-        }
-      )
-      .subscribe();
-
-    // Cleanup subscription on unmount
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentUser.tenantId]);
+  // Realtime removido para estabilidade do banco de dados
 
   // --- CRUD HANDLERS ---
   const handleSaveForm = async (form: Form) => {

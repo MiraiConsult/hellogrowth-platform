@@ -139,8 +139,8 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
       setIsHolding(true);
       
       try {
-        // Garantir 3 segundos de retenção para a IA processar
-        const holdPromise = new Promise(resolve => setTimeout(resolve, 3000));
+        // Garantir 10 segundos de retenção para a IA processar
+        const holdPromise = new Promise(resolve => setTimeout(resolve, 10000));
         const submitPromise = onSubmit({ patient: patientData, answers });
         
         const [success] = await Promise.all([submitPromise, holdPromise]);
