@@ -598,18 +598,13 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                 
                 <div className={`bg-gray-100 rounded-xl p-3 flex-1 overflow-y-auto space-y-3 transition-colors ${draggedLeadId ? 'border-2 border-dashed border-gray-300' : ''}`}>
                   {columnLeads.map((lead) => {
-                    const isAnalyzing = lead.answers?._analyzing === true;
                     return (
                     <div 
                       key={lead.id} 
-                      draggable={!isAnalyzing}
-                      onDragStart={(e) => !isAnalyzing && handleDragStart(e, lead.id)}
-                      onClick={() => !isAnalyzing && handleOpenDetails(lead)} // Make card clickable
-                      className={`bg-white p-4 rounded-lg shadow-sm border border-gray-200 transition-all relative ${
-                        isAnalyzing 
-                          ? 'opacity-60 cursor-wait' 
-                          : 'hover:shadow-md cursor-move group active:scale-95'
-                      }`}
+                      draggable={true}
+                      onDragStart={(e) => handleDragStart(e, lead.id)}
+                      onClick={() => handleOpenDetails(lead)} // Make card clickable
+                      className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 transition-all relative hover:shadow-md cursor-move group active:scale-95"
                     >
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="font-medium text-gray-900">{lead.name}</h4>
@@ -652,13 +647,6 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                         </div>
                       </div>
                       <p className="text-xs text-gray-500 mb-3">{lead.formSource}</p>
-                      
-                      {isAnalyzing && (
-                        <div className="mb-3 flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                          <Loader2 size={12} className="animate-spin" />
-                          Analisando com IA...
-                        </div>
-                      )}
                       
                       <div className="flex items-center justify-between pt-3 border-t border-gray-50">
                         <div className="flex items-center gap-1 text-green-600 font-semibold text-sm">

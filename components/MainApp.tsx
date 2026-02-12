@@ -589,8 +589,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         value: opportunityValue,
         form_source: publicForm.name,
         answers: {
-          ...data.answers,
-          _analyzing: true  // Flag para indicar que está analisando
+          ...data.answers
+          // Removido _analyzing: lead aparece imediatamente sem badge
         }
     }]).select().single();
     
@@ -682,50 +682,35 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           }
         }
 
-        const prompt = `Você é um consultor de vendas especializado. Analise as respostas do cliente e forneça uma análise completa de oportunidade de venda.${businessContext}
+        const prompt = `Analise as respostas e recomende produtos.${businessContext}
 
-RESPOSTAS DO CLIENTE:
+RESPOSTAS:
 ${answersText}${budgetContext}
 
-PRODUTOS/SERVIÇOS DISPONÍVEIS:
+PRODUTOS:
 ${productsContext}${focusedProductsContext}
 
-🎯 INSTRUÇÕES:
-1. Analise profundamente as respostas do cliente
-2. ⚠️ **REGRA OBRIGATÓRIA**: Se o cliente informou um orçamento, recomende APENAS produtos dentro dessa faixa de preço (tolerando no máximo 10% acima)
-3. ${focusedProductsContext ? 'PRIORIZE os produtos em foco, mas considere TODOS os produtos disponíveis' : 'Considere TODOS os produtos disponíveis'}
-4. Identifique produtos que o cliente pode precisar E que estejam dentro do orçamento
-5. Use as descrições dos produtos para entender o que cada um resolve
-6. Conecte os problemas/necessidades do cliente com as soluções disponíveis
-7. Se nenhum produto estiver no orçamento, sugira o mais próximo e mencione possibilidade de parcelamento
-8. Gere um script de vendas personalizado e estratégico
+REGRAS:
+- Respeite o orçamento (máx +10%)
+- ${focusedProductsContext ? 'Priorize produtos em foco' : 'Considere todos produtos'}
+- Conecte necessidades com soluções
 
-Responda APENAS com JSON válido (sem markdown):
+JSON (sem markdown):
 {
-  "recommended_products": [
-    {"id": "product_id_1", "name": "Nome do Produto 1", "value": 0, "reason": "Por que este produto é adequado"},
-    {"id": "product_id_2", "name": "Nome do Produto 2", "value": 0, "reason": "Por que este produto é adequado"}
-  ],
-  "suggested_product": "Nome do produto principal (para compatibilidade)",
+  "recommended_products": [{"id": "id", "name": "nome", "value": 0, "reason": "motivo"}],
+  "suggested_product": "nome",
   "suggested_value": 0,
-  "classification": "opportunity|risk|monitoring",
-  "confidence": 0.85,
-  "reasoning": "Explicação detalhada conectando as respostas do cliente com os produtos recomendados",
-  "client_insights": [
-    "Insight 1 sobre o cliente",
-    "Insight 2 sobre necessidades",
-    "Insight 3 sobre urgência"
-  ],
-  "sales_script": "Script de abordagem estratégico: Baseado nas respostas, identifiquei que [necessidade do cliente]. Recomendo [produtos] porque [benefícios específicos].",
-  "next_steps": [
-    "Ação 1 recomendada",
-    "Ação 2 recomendada"
-  ]
+  "classification": "opportunity",
+  "confidence": 0.8,
+  "reasoning": "explicação",
+  "client_insights": ["insight1", "insight2"],
+  "sales_script": "script de abordagem",
+  "next_steps": ["ação1", "ação2"]
 }`;
 
-        // Fetch com timeout de 60 segundos
+        // Fetch com timeout de 30 segundos
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
         
         const response = await fetch('/api/gemini', {
           method: 'POST',
@@ -807,8 +792,7 @@ Responda APENAS com JSON válido (sem markdown):
           value: updatedValue,
           answers: {
             ...data.answers,
-            _ai_analysis: aiAnalysis,
-            _analyzing: false  // Remove flag de análise
+            _ai_analysis: aiAnalysis
           }
         })
         .eq('id', leadId);
