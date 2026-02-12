@@ -591,6 +591,23 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           const answerValue = Array.isArray(ans.value) ? ans.value.join(', ') : ans.value;
           return `Pergunta: ${question?.text || qId}\nResposta: ${answerValue}`;
         }).join('\n\n');
+        
+        // Extrair orçamento do cliente das respostas
+        let budgetContext = '';
+        const budgetAnswer = Object.entries(data.answers).find(([qId, ans]: [string, any]) => {
+          const question = form.questions.find((q: any) => q.id === qId);
+          const questionText = question?.text?.toLowerCase() || '';
+          return questionText.includes('orçamento') || 
+                 questionText.includes('investir') || 
+                 questionText.includes('valor') ||
+                 questionText.includes('quanto');
+        });
+        
+        if (budgetAnswer) {
+          const [, ans] = budgetAnswer as [string, any];
+          const budgetValue = Array.isArray(ans.value) ? ans.value.join(', ') : ans.value;
+          budgetContext = `\n\n⚠️ ORÇAMENTO DO CLIENTE (RESTRIÇÃO OBRIGATÓRIA): ${budgetValue}`;
+        }
 
         // Preparar contexto de produtos com descrições
         const productsContext = products.map(p => 
@@ -616,18 +633,20 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         const prompt = `Você é um consultor de vendas especializado. Analise as respostas do cliente e forneça uma análise completa de oportunidade de venda.${businessContext}
 
 RESPOSTAS DO CLIENTE:
-${answersText}
+${answersText}${budgetContext}
 
 PRODUTOS/SERVIÇOS DISPONÍVEIS:
 ${productsContext}${focusedProductsContext}
 
 🎯 INSTRUÇÕES:
 1. Analise profundamente as respostas do cliente
-2. ${focusedProductsContext ? 'PRIORIZE os produtos em foco, mas considere TODOS os produtos disponíveis' : 'Considere TODOS os produtos disponíveis'}
-3. Identifique TODOS os produtos que o cliente pode precisar (não apenas um)
-4. Use as descrições dos produtos para entender o que cada um resolve
-5. Conecte os problemas/necessidades do cliente com as soluções disponíveis
-6. Gere um script de vendas personalizado e estratégico
+2. ⚠️ **REGRA OBRIGATÓRIA**: Se o cliente informou um orçamento, recomende APENAS produtos dentro dessa faixa de preço (tolerando no máximo 10% acima)
+3. ${focusedProductsContext ? 'PRIORIZE os produtos em foco, mas considere TODOS os produtos disponíveis' : 'Considere TODOS os produtos disponíveis'}
+4. Identifique produtos que o cliente pode precisar E que estejam dentro do orçamento
+5. Use as descrições dos produtos para entender o que cada um resolve
+6. Conecte os problemas/necessidades do cliente com as soluções disponíveis
+7. Se nenhum produto estiver no orçamento, sugira o mais próximo e mencione possibilidade de parcelamento
+8. Gere um script de vendas personalizado e estratégico
 
 Responda APENAS com JSON válido (sem markdown):
 {
