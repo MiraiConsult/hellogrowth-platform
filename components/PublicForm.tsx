@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, InitialField } from '@/types';
-import { CheckCircle, ArrowRight, ArrowLeft, Check, ShieldCheck, X } from 'lucide-react';
+import { CheckCircle, ArrowRight, ArrowLeft, Check, ShieldCheck, X, Sparkles } from 'lucide-react';
 
 interface PublicFormProps {
   form: Form;
@@ -40,6 +40,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [isCompleted, setIsCompleted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showAnalyzingScreen, setShowAnalyzingScreen] = useState(false);
 
   const [patientData, setPatientData] = useState({ name: '', email: '', phone: '' });
   const [showIntro, setShowIntro] = useState(true);
@@ -138,7 +139,12 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
       try {
         const success = await onSubmit({ patient: patientData, answers });
         if (success) {
-          setIsCompleted(true);
+          // Mostrar tela de "analisando" por 5 segundos antes de concluir
+          setShowAnalyzingScreen(true);
+          setTimeout(() => {
+            setShowAnalyzingScreen(false);
+            setIsCompleted(true);
+          }, 5000);
         } else {
           alert('Erro ao enviar formulário. Por favor, tente novamente.');
         }
@@ -159,6 +165,39 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
 
   const currentQuestion = form.questions[currentStep];
   const progress = ((currentStep + 1) / form.questions.length) * 100;
+
+  // Tela de carregamento/análise de 5 segundos
+  if (showAnalyzingScreen) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" style={{ colorScheme: 'light' }}>
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center animate-in zoom-in duration-300">
+          <div className="w-20 h-20 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+            <Sparkles size={40} />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Analisando suas respostas...</h2>
+          <p className="text-gray-600 mb-6">
+            Nossa inteligência artificial está processando seu perfil para oferecer a melhor experiência.
+          </p>
+          <div className="w-full bg-gray-200 rounded-full h-2 mb-4 overflow-hidden">
+            <div 
+              className="bg-primary-600 h-2 rounded-full transition-all ease-linear"
+              style={{ 
+                width: '100%',
+                animation: 'loadingBar 5s linear forwards'
+              }}
+            />
+          </div>
+          <p className="text-xs text-gray-400">Isso levará apenas alguns segundos</p>
+          <style>{`
+            @keyframes loadingBar {
+              from { width: 0%; }
+              to { width: 100%; }
+            }
+          `}</style>
+        </div>
+      </div>
+    );
+  }
 
   if (isCompleted) {
     return (

@@ -589,8 +589,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         value: opportunityValue,
         form_source: publicForm.name,
         answers: {
-          ...data.answers,
-          _analyzing: true  // Flag para indicar que está analisando
+          ...data.answers
         }
     }]).select().single();
     
@@ -599,9 +598,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       return false;
     }
     
-    // 3. Processar análise de IA em BACKGROUND (não bloqueia o usuário)
-    processAIAnalysisInBackground(insertedLead.id, data, publicForm, formTenantId);
-    
+    // Análise de IA será feita sob demanda pelo admin (botão "Analisar com IA")
     return true;
   };
   

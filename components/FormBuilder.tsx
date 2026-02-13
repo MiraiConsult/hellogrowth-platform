@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot } from 'lucide-react';
+import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap } from 'lucide-react';
 import FormConsultant from '@/components/FormConsultant';
 import { supabase } from '@/lib/supabase';
 import { Form, FormQuestion, FormOption, Lead, InitialField } from '@/types';
@@ -44,6 +44,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [currentQrUrl, setCurrentQrUrl] = useState('');
   const [currentQrName, setCurrentQrName] = useState('');
   
+  // AI Analysis State
+  const [isAnalyzingAll, setIsAnalyzingAll] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState({ current: 0, total: 0 });
+  
   // Editor State
   const [currentQuestions, setCurrentQuestions] = useState<FormQuestion[]>([]);
   const [currentFormName, setCurrentFormName] = useState('');
@@ -54,6 +58,139 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
 
   // Stats for Mini Dashboard
   const activeFormsCount = forms.filter(f => f.active).length;
+
+  // Count leads pending AI analysis
+  const pendingAnalysisCount = leads.filter(l => {
+    const source = (l as any).form_source || l.formSource;
+    return l.answers && !l.answers._ai_analysis && source !== 'Manual';
+  }).length;
+
+  // Analyze all pending leads with AI
+  const handleAnalyzeAllLeads = async () => {
+    if (!supabase || isAnalyzingAll) return;
+    
+    const pendingLeads = leads.filter(l => {
+      const source = (l as any).form_source || l.formSource;
+      return l.answers && !l.answers._ai_analysis && source !== 'Manual';
+    });
+    
+    if (pendingLeads.length === 0) {
+      alert('Todos os leads j\u00e1 foram analisados!');
+      return;
+    }
+    
+    // Obter tenant_id do primeiro lead
+    const tenantId = (pendingLeads[0] as any).tenant_id || userId;
+    if (!tenantId) {
+      alert('Erro: tenant n\u00e3o identificado.');
+      return;
+    }
+    
+    setIsAnalyzingAll(true);
+    setAnalysisProgress({ current: 0, total: pendingLeads.length });
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    // Buscar produtos e perfil do neg\u00f3cio uma vez s\u00f3
+    const { data: products } = await supabase
+      .from('products_services')
+      .select('*')
+      .eq('tenant_id', tenantId);
+    
+    const { data: businessProfile } = await supabase
+      .from('business_profile')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .single();
+    
+    for (let i = 0; i < pendingLeads.length; i++) {
+      const lead = pendingLeads[i];
+      setAnalysisProgress({ current: i + 1, total: pendingLeads.length });
+      
+      try {
+        const leadForm = forms.find(f => f.id === lead.formId || f.name === lead.formSource);
+        
+        const answersText = Object.entries(lead.answers || {}).filter(([key]) => !key.startsWith('_')).map(([qId, ans]: [string, any]) => {
+          const questionText = leadForm ? (leadForm.questions.find((q: any) => q.id === qId)?.text || qId) : qId;
+          const answerValue = typeof ans === 'object' && ans !== null ? (Array.isArray(ans.value) ? ans.value.join(', ') : ans.value || JSON.stringify(ans)) : ans;
+          return `Pergunta: ${questionText}\nResposta: ${answerValue}`;
+        }).join('\n\n');
+        
+        if (!answersText.trim()) { failCount++; continue; }
+        
+        let budgetContext = '';
+        if (lead.answers) {
+          const budgetEntry = Object.entries(lead.answers).find(([qId]) => {
+            const q = leadForm?.questions.find((q: any) => q.id === qId);
+            const txt = q?.text?.toLowerCase() || '';
+            return txt.includes('or\u00e7amento') || txt.includes('investir') || txt.includes('valor') || txt.includes('quanto');
+          });
+          if (budgetEntry) {
+            const [, ans] = budgetEntry as [string, any];
+            const val = typeof ans === 'object' ? (Array.isArray(ans.value) ? ans.value.join(', ') : ans.value) : ans;
+            budgetContext = `\n\n\u26a0\ufe0f OR\u00c7AMENTO DO CLIENTE: ${val}`;
+          }
+        }
+        
+        const productsContext = products && products.length > 0 ? products.map(p => 
+          `- **${p.name}** (R$ ${p.value})\n  Descri\u00e7\u00e3o: ${p.ai_description || 'Sem descri\u00e7\u00e3o'}`
+        ).join('\n\n') : 'Nenhum produto cadastrado';
+        
+        let businessContext = '';
+        if (businessProfile) {
+          businessContext = `\n\nCONTEXTO DO NEG\u00d3CIO:\n- Tipo: ${businessProfile.business_type || 'N/A'}\n- Descri\u00e7\u00e3o: ${businessProfile.business_description || 'N/A'}\n- P\u00fablico-alvo: ${businessProfile.target_audience || 'N/A'}`;
+        }
+        
+        const formSelectedProducts = (leadForm as any)?.selected_products || [];
+        let focusedProductsContext = '';
+        if (formSelectedProducts.length > 0 && products) {
+          const fp = products.filter(p => formSelectedProducts.includes(p.id));
+          if (fp.length > 0) {
+            focusedProductsContext = `\n\n\ud83c\udfaf PRODUTOS EM FOCO:\n${fp.map(p => `- **${p.name}** (R$ ${p.value})`).join('\n')}`;
+          }
+        }
+        
+        const prompt = `Voc\u00ea \u00e9 um consultor de vendas especializado. Analise as respostas do cliente.${businessContext}\nRESPOSTAS DO CLIENTE:\n${answersText}${budgetContext}\nPRODUTOS/SERVI\u00c7OS DISPON\u00cdVEIS:\n${productsContext}${focusedProductsContext}\nResponda APENAS com JSON v\u00e1lido (sem markdown):\n{\n  "recommended_products": [{"id": "product_id", "name": "Nome", "value": 0, "reason": "Raz\u00e3o"}],\n  "suggested_product": "Nome do produto principal",\n  "suggested_value": 0,\n  "classification": "opportunity|risk|monitoring",\n  "confidence": 0.85,\n  "reasoning": "Explica\u00e7\u00e3o detalhada",\n  "client_insights": ["Insight 1", "Insight 2"],\n  "sales_script": "Script de abordagem",\n  "next_steps": ["A\u00e7\u00e3o 1", "A\u00e7\u00e3o 2"]\n}`;
+        
+        const response = await fetch('/api/gemini', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+        
+        if (response.ok) {
+          const aiData = await response.json();
+          const cleanResponse = aiData.response.replace(/```json\n?|\n?```/g, '').trim();
+          const aiAnalysis = JSON.parse(cleanResponse);
+          
+          let updatedValue = lead.value;
+          if (aiAnalysis.recommended_products && aiAnalysis.recommended_products.length > 0) {
+            updatedValue = aiAnalysis.recommended_products.reduce((sum: number, p: any) => sum + (p.value || 0), 0);
+          } else if (aiAnalysis.suggested_value > 0) {
+            updatedValue = aiAnalysis.suggested_value;
+          }
+          
+          await supabase.from('leads').update({
+            value: updatedValue,
+            answers: { ...lead.answers, _ai_analysis: aiAnalysis, _analyzing: false }
+          }).eq('id', lead.id);
+          
+          successCount++;
+        } else { failCount++; }
+      } catch (error) {
+        console.error(`Erro ao analisar lead:`, error);
+        failCount++;
+      }
+      
+      if (i < pendingLeads.length - 1) await new Promise(r => setTimeout(r, 1000));
+    }
+    
+    setIsAnalyzingAll(false);
+    alert(`An\u00e1lise conclu\u00edda!\n\u2705 ${successCount} leads analisados com sucesso\n${failCount > 0 ? `\u274c ${failCount} falharam` : ''}`);
+    // Recarregar p\u00e1gina para atualizar dados
+    window.location.reload();
+  };
   
   const totalResponses = useMemo(() => {
     if (leads && leads.length > 0) {
@@ -381,6 +518,30 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
             <p className="text-gray-500">Gerencie seus questionários de pré-venda</p>
           </div>
           <div className="flex gap-3">
+            {/* Botão Analisar com IA */}
+            <button 
+              onClick={handleAnalyzeAllLeads}
+              disabled={isAnalyzingAll || pendingAnalysisCount === 0}
+              className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
+                isAnalyzingAll 
+                  ? 'bg-amber-50 border-amber-300 text-amber-700 cursor-wait'
+                  : pendingAnalysisCount > 0 
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-amber-500 hover:shadow-lg hover:shadow-amber-500/30 shadow-sm'
+                    : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {isAnalyzingAll ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  Analisando {analysisProgress.current}/{analysisProgress.total}...
+                </>
+              ) : (
+                <>
+                  <Zap size={18} />
+                  Analisar com IA {pendingAnalysisCount > 0 && <span className="bg-white/30 text-xs px-1.5 py-0.5 rounded-full">{pendingAnalysisCount}</span>}
+                </>
+              )}
+            </button>
             <button 
               onClick={() => setShowConsultant(true)}
               className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/30 shadow-sm flex items-center gap-2 transition-all"
