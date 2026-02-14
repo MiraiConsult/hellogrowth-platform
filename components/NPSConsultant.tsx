@@ -402,14 +402,17 @@ Retorne APENAS um JSON válido com este formato:
       
       console.log('API Response:', data);
       
-      // Validar se data.text existe
-      if (!data || !data.text) {
+      // A API retorna o campo 'response' em vez de 'text'
+      const responseText = data.response || data.text;
+      
+      // Validar se responseText existe
+      if (!data || !responseText) {
         console.error('Invalid API response:', data);
         throw new Error('Resposta da API inválida');
       }
       
       // Tentar extrair JSON do texto se vier com markdown
-      let jsonText = data.text;
+      let jsonText = responseText;
       if (typeof jsonText === 'string' && jsonText.includes('```json')) {
         jsonText = jsonText.split('```json')[1].split('```')[0].trim();
       } else if (typeof jsonText === 'string' && jsonText.includes('```')) {
