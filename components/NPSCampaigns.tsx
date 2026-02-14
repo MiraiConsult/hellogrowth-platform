@@ -6,6 +6,7 @@ import { Plus, X, Share2, MoreVertical, Star, Link as LinkIcon, ExternalLink, Sp
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from '@/lib/supabase';
 import InitialFieldsConfig from '@/components/InitialFieldsConfig';
+import NPSConsultant from '@/components/NPSConsultant';
 
 interface NPSCampaignsProps {
   campaigns: Campaign[];
@@ -22,6 +23,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const tenantId = useTenantId()
 
   const [view, setView] = useState<'list' | 'editor'>('list');
+  const [showNPSConsultant, setShowNPSConsultant] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -523,8 +525,8 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
             <button onClick={() => setIsMassSendOpen(true)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center gap-2 hover:bg-gray-50 font-medium">
                 <Send size={18} /> Disparo em Massa
             </button>
-            <button onClick={() => { resetForm(); setView('editor'); }} className="px-4 py-2 bg-primary-500 text-white rounded-lg flex items-center gap-2 hover:bg-primary-600 font-medium">
-                <Plus size={18} /> Nova Campanha
+            <button onClick={() => setShowNPSConsultant(true)} className="px-4 py-2 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-lg flex items-center gap-2 hover:shadow-lg transition-all font-medium">
+                <Sparkles size={18} /> Nova Campanha com IA
             </button>
         </div>
       </div>
@@ -745,10 +747,20 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
                     </div>
                 </div>
             </div>
-      )}
+       )}
 
+      {/* NPS Consultant Modal */}
+      {showNPSConsultant && (
+        <NPSConsultant
+          supabase={supabase}
+          onClose={() => setShowNPSConsultant(false)}
+          onSaveCampaign={(campaignData) => {
+            onSaveCampaign(campaignData);
+            setShowNPSConsultant(false);
+          }}
+        />
+      )}
     </div>
   );
 };
-
-export default NPSCampaigns;
+export default NPSCampaigns;;
