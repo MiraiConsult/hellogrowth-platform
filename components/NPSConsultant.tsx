@@ -656,32 +656,128 @@ Retorne APENAS um JSON válido com este formato:
               </div>
               
               {editingQuestionId === question.id ? (
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={question.text}
-                    onChange={(e) => handleEditQuestion(question.id, { text: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  />
+                <div className="space-y-3">
+                  {/* Texto da pergunta */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Texto da pergunta</label>
+                    <input
+                      type="text"
+                      value={question.text}
+                      onChange={(e) => handleEditQuestion(question.id, { text: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    />
+                  </div>
+
+                  {/* Tipo de resposta (não permitir mudar se for NPS) */}
+                  {question.type !== 'nps' && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Tipo de resposta</label>
+                      <select
+                        value={question.type}
+                        onChange={(e) => {
+                          const newType = e.target.value as 'single_choice' | 'multiple_choice' | 'text' | 'rating';
+                          handleEditQuestion(question.id, { 
+                            type: newType,
+                            options: ['single_choice', 'multiple_choice'].includes(newType) 
+                              ? (question.options.length > 0 ? question.options : [
+                                  { id: 'opt1', text: 'Opção 1' },
+                                  { id: 'opt2', text: 'Opção 2' }
+                                ])
+                              : []
+                          });
+                        }}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      >
+                        <option value="single_choice">Escolha única</option>
+                        <option value="multiple_choice">Múltipla escolha</option>
+                        <option value="text">Texto livre</option>
+                        <option value="rating">Avaliação (1-5)</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Alternativas (se for single_choice ou multiple_choice) */}
+                  {['single_choice', 'multiple_choice'].includes(question.type) && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-2">Alternativas</label>
+                      <div className="space-y-2">
+                        {question.options.map((opt, optIndex) => (
+                          <div key={opt.id} className="flex gap-2">
+                            <input
+                              type="text"
+                              value={opt.text}
+                              onChange={(e) => {
+                                const newOptions = [...question.options];
+                                newOptions[optIndex] = { ...opt, text: e.target.value };
+                                handleEditQuestion(question.id, { options: newOptions });
+                              }}
+                              className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                              placeholder={`Opção ${optIndex + 1}`}
+                            />
+                            <button
+                              onClick={() => {
+                                const newOptions = question.options.filter((_, i) => i !== optIndex);
+                                handleEditQuestion(question.id, { options: newOptions });
+                              }}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => {
+                            const newOption = {
+                              id: `opt${question.options.length + 1}`,
+                              text: `Opção ${question.options.length + 1}`
+                            };
+                            handleEditQuestion(question.id, { 
+                              options: [...question.options, newOption] 
+                            });
+                          }}
+                          className="w-full py-2 border border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-emerald-500 hover:text-emerald-500 hover:bg-emerald-50 transition-all text-sm flex items-center justify-center gap-1"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Adicionar alternativa
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Insight */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Insight (opcional)</label>
+                    <input
+                      type="text"
+                      value={question.insight || ''}
+                      onChange={(e) => handleEditQuestion(question.id, { insight: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                      placeholder="Por que essa pergunta é importante?"
+                    />
+                  </div>
                 </div>
               ) : (
-                <p className="text-slate-900 font-medium">{question.text}</p>
-              )}
-              
-              {question.options.length > 0 && (
-                <div className="mt-3 space-y-1">
-                  {question.options.map((opt) => (
-                    <div key={opt.id} className="text-sm text-slate-600 flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      {opt.text}
+                <>
+                  <p className="text-slate-900 font-medium">{question.text}</p>
+                  
+                  {question.options.length > 0 && (
+                    <div className="mt-3 space-y-1">
+                      {question.options.map((opt) => (
+                        <div key={opt.id} className="text-sm text-slate-600 flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          {opt.text}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                  
+                  {question.insight && (
+                    <p className="text-xs text-slate-500 mt-3 italic bg-slate-50 p-2 rounded">
+                      💡 {question.insight}
+                    </p>
+                  )}
+                </>
               )}
-              
-              <p className="text-xs text-slate-500 mt-3 italic bg-slate-50 p-2 rounded">
-                💡 {question.insight}
-              </p>
             </div>
           ))}
 
