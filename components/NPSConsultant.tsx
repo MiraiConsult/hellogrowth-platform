@@ -256,15 +256,17 @@ export default function NPSConsultant({
         setGooglePlaceId(businessProfile.google_place_id);
         setCurrentStep('prize_config');
         addAssistantMessage(
-          'Quer oferecer um prêmio (Roleta da Sorte) para incentivar a avaliação?',
+          `✅ Usando Place ID cadastrado: **${businessProfile.google_place_id}**\n\nQuer oferecer um prêmio (Roleta da Sorte) para incentivar a avaliação?`,
           [
             { label: '🎁 Sim, com prêmio', value: 'yes' },
             { label: '📝 Não, sem prêmio', value: 'no' }
           ]
         );
       } else {
-        setCurrentStep('google_place_id');
-        addAssistantMessage('Cole aqui o **Place ID** da sua empresa no Google:\n\n💡 Você pode encontrar no perfil do negócio ou em configurações.');
+        addAssistantMessage('⚠️ **Place ID não cadastrado** no perfil do negócio.\n\nPor favor, cadastre o Place ID nas configurações do perfil antes de criar a pesquisa NPS com redirecionamento para o Google.');
+        setGoogleRedirect(false);
+        setCurrentStep('generation');
+        startGeneration();
       }
     } else {
       setGoogleRedirect(false);
@@ -276,10 +278,10 @@ export default function NPSConsultant({
   const handlePrizeSelection = (value: string) => {
     if (value === 'yes') {
       setOfferPrize(true);
-      addAssistantMessage('Ótimo! Agora escreva a mensagem que aparecerá **DEPOIS do jogo**, antes de redirecionar para o Google:\n\n💡 Exemplo: "Parabéns! Para liberar seu prêmio, nos avalie no Google na próxima tela."');
+      addAssistantMessage('Ótimo! Agora escreva a mensagem que aparecerá **DEPOIS do jogo**, antes de redirecionar para o Google:\n\n💡 Exemplo: "Parabéns! Para liberar seu prêmio, nos avalie no Google na próxima tela."\n\n_(Deixe em branco para usar mensagem padrão)_');
     } else {
       setOfferPrize(false);
-      addAssistantMessage('Escreva a mensagem que aparecerá **antes de redirecionar** para o Google:\n\n💡 Exemplo: "Obrigado! Agora nos avalie no Google para ajudar outros clientes."');
+      addAssistantMessage('Escreva a mensagem que aparecerá **antes de redirecionar** para o Google:\n\n💡 Exemplo: "Obrigado! Agora nos avalie no Google para ajudar outros clientes."\n\n_(Deixe em branco para usar mensagem padrão)_');
     }
   };
 
@@ -324,11 +326,13 @@ export default function NPSConsultant({
         ]
       );
     } else if (currentStep === 'prize_config' && offerPrize && !afterGameMessage) {
-      setAfterGameMessage(message);
+      const finalMessage = message || 'Parabéns pelo seu prêmio! Para liberá-lo, nos avalie no Google na próxima tela.';
+      setAfterGameMessage(finalMessage);
       setCurrentStep('generation');
       startGeneration();
     } else if (currentStep === 'prize_config' && !offerPrize && !beforeGoogleMessage) {
-      setBeforeGoogleMessage(message);
+      const finalMessage = message || 'Obrigado pelo seu feedback! Agora nos avalie no Google para ajudar outros clientes.';
+      setBeforeGoogleMessage(finalMessage);
       setCurrentStep('generation');
       startGeneration();
     }
@@ -396,15 +400,31 @@ Retorne APENAS um JSON válido com este formato:
 
       const data = await response.json();
       
+      console.log('API Response:', data);
+      
+      // Validar se data.text existe
+      if (!data || !data.text) {
+        console.error('Invalid API response:', data);
+        throw new Error('Resposta da API inválida');
+      }
+      
       // Tentar extrair JSON do texto se vier com markdown
       let jsonText = data.text;
-      if (jsonText.includes('```json')) {
+      if (typeof jsonText === 'string' && jsonText.includes('```json')) {
         jsonText = jsonText.split('```json')[1].split('```')[0].trim();
-      } else if (jsonText.includes('```')) {
+      } else if (typeof jsonText === 'string' && jsonText.includes('```')) {
         jsonText = jsonText.split('```')[1].split('```')[0].trim();
       }
       
+      console.log('JSON Text to parse:', jsonText);
+      
       const parsed = JSON.parse(jsonText);
+      
+      // Validar estrutura do JSON
+      if (!parsed || !parsed.questions || !Array.isArray(parsed.questions)) {
+        console.error('Invalid JSON structure:', parsed);
+        throw new Error('Estrutura JSON inválida');
+      }
       
       const questions: GeneratedQuestion[] = parsed.questions.map((q: any, index: number) => ({
         id: `q${index + 1}`,
