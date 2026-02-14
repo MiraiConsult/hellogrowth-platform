@@ -15,7 +15,8 @@ import {
   Send,
   Bot,
   User,
-  Star
+  Star,
+  Palette
 } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 
@@ -161,13 +162,17 @@ export default function NPSConsultant({
       });
       
       setGeneratedQuestions(loadedQuestions);
-      setFormObjective(existingCampaign.objective || 'satisfacao_geral');
-      setFormTone(existingCampaign.tone || 'friendly');
-      setGoogleRedirect(existingCampaign.google_redirect || false);
+      setObjective(existingCampaign.objective || 'satisfacao_geral');
+      setTone(existingCampaign.tone || 'friendly');
+      setGoogleRedirect(existingCampaign.google_redirect || existingCampaign.enableRedirection || false);
       setGooglePlaceId(existingCampaign.google_place_id || '');
       setOfferPrize(existingCampaign.offer_prize || false);
-      setPreGoogleMessage(existingCampaign.pre_google_message || '');
-      setPostGameMessage(existingCampaign.post_game_message || '');
+      setBeforeGoogleMessage(existingCampaign.before_google_message || '');
+      setAfterGameMessage(existingCampaign.after_game_message || '');
+      setCampaignName(existingCampaign.name || '');
+      if (existingCampaign.initial_fields || existingCampaign.initialFields) {
+        setInitialFields(existingCampaign.initial_fields || existingCampaign.initialFields);
+      }
     }
   }, [existingCampaign]);
 
@@ -194,9 +199,9 @@ O que você gostaria de fazer?`,
 Como já conheço seu negócio, vou criar perguntas estratégicas baseadas no seu perfil.
 
 Vamos criar uma pesquisa NPS que transforma feedback em crescimento?`
-              : 'Olá! 👋 Vou te ajudar a criar uma pesquisa NPS personalizada.
+              : `Olá! 👋 Vou te ajudar a criar uma pesquisa NPS personalizada.
 
-Vamos começar?',
+Vamos começar?`,
             [
               { label: '✨ Usar meu perfil e começar!', value: 'start', icon: Sparkles }
             ]
@@ -204,7 +209,7 @@ Vamos começar?',
         }
       }, 300);
     }
-  }, [currentStep, chatMessages.length, businessProfile, existingCampaign]);le]);
+  }, [currentStep, businessProfile, existingCampaign]);
 
   const addAssistantMessage = (content: string, options?: { label: string; value: string; icon?: any }[]) => {
     setIsTyping(true);
@@ -319,7 +324,6 @@ Vamos começar?',
     
     const selectedText = toneTexts[value];
     setTone(selectedText);
-    setFormTone(value);
     
     // Se está em modo de edição (tem perguntas existentes), regenerar com novo tom
     if (existingCampaign && generatedQuestions.length > 0) {
@@ -459,12 +463,14 @@ Vou regenerar as perguntas com o novo tom. Um momento...`
     } else if (currentStep === 'evaluation_points') {
       const points = message.split(',').map(p => p.trim()).filter(p => p);
       setEvaluationPoints(points);
-      setCurrentStep('google_redirect');
+      setCurrentStep('initial_fields');
       addAssistantMessage(
-        `Perfeito! Vou focar nestes pontos:\n• ${points.join('\n• ')}\n\nQuer redirecionar os clientes para avaliarem no Google após a pesquisa?`,
+        `Perfeito! Vou focar nestes pontos:\n• ${points.join('\n• ')}\n\n📋 Agora, quais informações você quer coletar dos clientes no início da pesquisa?`,
         [
-          { label: '✅ Sim', value: 'yes', icon: CheckCircle },
-          { label: '❌ Não', value: 'no', icon: X }
+          { label: '👤 Nome + E-mail + Telefone', value: 'all' },
+          { label: '👤 Nome + E-mail', value: 'name_email' },
+          { label: '👤 Apenas Nome', value: 'name_only' },
+          { label: '⚙️ Configurar manualmente', value: 'custom' }
         ]
       );
     } else if (currentStep === 'google_place_id') {
@@ -612,9 +618,10 @@ Retorne APENAS um JSON válido com este formato:
     }
 
     try {
-      const campaignData = {
+      const campaignData: any = {
         tenant_id: tenantId,
-        name: campaignName,
+        name: campaignName || existingCampaign?.name || `Pesquisa NPS - ${objective}`,
+        description: existingCampaign?.description || `Pesquisa NPS - ${objective}`,
         objective,
         tone,
         evaluation_points: evaluationPoints,
@@ -625,9 +632,17 @@ Retorne APENAS um JSON válido com este formato:
         before_google_message: beforeGoogleMessage,
         after_game_message: afterGameMessage,
         questions: generatedQuestions,
-        status: 'active',
-        created_at: new Date().toISOString()
+        status: existingCampaign?.status || 'active',
+        enableRedirection: googleRedirect,
+        initialFields: initialFields
       };
+
+      // Se está editando, preservar ID e dados que não devem mudar
+      if (existingCampaign?.id) {
+        campaignData.id = existingCampaign.id;
+      } else {
+        campaignData.created_at = new Date().toISOString();
+      }
 
       onSaveCampaign(campaignData);
       setCurrentStep('complete');
@@ -668,7 +683,7 @@ Retorne APENAS um JSON válido com este formato:
     ];
 
     const getStepIndex = () => {
-      if (['welcome', 'objective', 'tone', 'evaluation_points', 'google_redirect', 'google_place_id', 'prize_config', 'messages'].includes(currentStep)) return 0;
+      if (['welcome', 'objective', 'tone', 'evaluation_points', 'initial_fields', 'google_redirect', 'google_place_id', 'prize_config', 'messages'].includes(currentStep)) return 0;
       if (currentStep === 'generation') return 1;
       if (currentStep === 'review') return 2;
       if (currentStep === 'complete') return 3;
@@ -1053,7 +1068,7 @@ Retorne APENAS um JSON válido com este formato:
           </div>
 
           {/* Input Area */}
-          {['objective', 'evaluation_points', 'google_place_id', 'prize_config', 'messages'].includes(currentStep) && (
+          {['objective', 'evaluation_points', 'initial_fields', 'google_place_id', 'prize_config', 'messages'].includes(currentStep) && (
             <div className="p-6 bg-white border-t border-slate-200">
               <div className="flex gap-3">
                 <input

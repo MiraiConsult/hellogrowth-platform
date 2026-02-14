@@ -562,13 +562,21 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
   const handleSaveCampaign = async (campaign: Campaign) => {
     if (!supabase) return;
-    const campaignData = {
+    const campaignData: any = {
       name: campaign.name,
       description: campaign.description,
       questions: campaign.questions,
       status: campaign.status,
-      enable_redirection: campaign.enableRedirection,
-      initial_fields: campaign.initialFields,
+      enable_redirection: (campaign as any).google_redirect ?? campaign.enableRedirection ?? false,
+      initial_fields: (campaign as any).initial_fields ?? campaign.initialFields ?? [],
+      google_redirect: (campaign as any).google_redirect ?? campaign.enableRedirection ?? false,
+      google_place_id: (campaign as any).google_place_id ?? (campaign as any).googlePlaceId ?? '',
+      offer_prize: (campaign as any).offer_prize ?? (campaign as any).offerPrize ?? false,
+      before_google_message: (campaign as any).before_google_message ?? (campaign as any).beforeGoogleMessage ?? '',
+      after_game_message: (campaign as any).after_game_message ?? (campaign as any).afterGameMessage ?? '',
+      objective: (campaign as any).objective ?? '',
+      tone: (campaign as any).tone ?? '',
+      evaluation_points: (campaign as any).evaluation_points ?? [],
       user_id: currentUser.id,
       tenant_id: currentUser.tenantId
     };
@@ -578,7 +586,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       setCampaigns(prev => prev.map(c => c.id === campaign.id ? { ...c, ...campaign } : c));
     } else {
       const { data } = await supabase.from('campaigns').insert([campaignData]).select().single();
-      if (data) setCampaigns(prev => [...prev, { ...data, npsScore: 0, responses: 0, questions: data.questions || [], initialFields: data.initial_fields || [], enableRedirection: data.enable_redirection }]);
+      if (data) setCampaigns(prev => [...prev, { ...data, npsScore: 0, responses: 0, questions: data.questions || [], initialFields: data.initial_fields || [], enableRedirection: data.enable_redirection, google_redirect: data.google_redirect, google_place_id: data.google_place_id, offer_prize: data.offer_prize, before_google_message: data.before_google_message, after_game_message: data.after_game_message, objective: data.objective, tone: data.tone, evaluation_points: data.evaluation_points }]);
     }
   };
 

@@ -53,8 +53,8 @@ export interface InitialField {
 export interface CampaignQuestion {
   id: string;
   text: string;
-  type: 'nps' | 'text' | 'single_choice' | 'multiple_choice' | 'rating';
-  options?: Array<{ id: string; text: string }>;
+  type: 'nps' | 'text' | 'single' | 'multiple' | 'single_choice' | 'multiple_choice' | 'rating';
+  options?: any[]; // Supports both string[] and {id: string, text: string}[]
   insight?: string;
   conditional?: 'promoter' | 'passive' | 'detractor';
 }
@@ -71,6 +71,16 @@ export interface Campaign {
   googleLink?: string; // Legacy/Fallback
   questions?: CampaignQuestion[];
   initialFields?: InitialField[]; // Configurable initial fields
+  // New fields for NPS 2.0
+  google_redirect?: boolean;
+  google_place_id?: string;
+  offer_prize?: boolean;
+  before_google_message?: string;
+  after_game_message?: string;
+  initial_fields?: InitialField[];
+  objective?: string;
+  tone?: string;
+  evaluation_points?: string[];
 }
 
 export interface FormOption {

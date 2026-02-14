@@ -1,4 +1,4 @@
-
+'use client';
 import React, { useState } from 'react';
 import { Campaign, NPSResponse, InitialField } from '@/types';
 import { Star, Check, ArrowRight, ShieldCheck, MapPin, X, ChevronRight, MessageSquare } from 'lucide-react';
@@ -12,6 +12,28 @@ interface PublicSurveyProps {
   companyName?: string;
 }
 
+// Helper to get option text whether it's a string or {id, text} object
+const getOptionText = (opt: any): string => {
+  if (typeof opt === 'string') return opt;
+  if (opt && typeof opt === 'object' && opt.text) return opt.text;
+  if (opt && typeof opt === 'object' && opt.label) return opt.label;
+  return String(opt);
+};
+
+// Helper to normalize question type (support both old and new formats)
+const normalizeType = (type: string): string => {
+  const typeMap: Record<string, string> = {
+    'single': 'single_choice',
+    'multiple': 'multiple_choice',
+    'single_choice': 'single_choice',
+    'multiple_choice': 'multiple_choice',
+    'text': 'text',
+    'rating': 'rating',
+    'nps': 'nps'
+  };
+  return typeMap[type] || 'text';
+};
+
 const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit, isPreview = false, settings, companyName }) => {
   // State Definitions
   const [step, setStep] = useState<'intro' | 'score' | 'questions' | 'redirecting' | 'thankyou'>('intro');
@@ -21,8 +43,8 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [currentAnswer, setCurrentAnswer] = useState<any>('');
 
-  // Get initial fields configuration or use defaults
-  const initialFields: InitialField[] = campaign.initialFields || [
+  // Get initial fields configuration from multiple possible sources
+  const initialFields: InitialField[] = (campaign as any).initial_fields || campaign.initialFields || [
     { field: 'name', label: 'Nome Completo', placeholder: 'Seu nome', required: true, enabled: true },
     { field: 'email', label: 'Email', placeholder: 'seu@email.com', required: false, enabled: true },
     { field: 'phone', label: 'Telefone / WhatsApp', placeholder: '(00) 00000-0000', required: false, enabled: true }
@@ -33,12 +55,48 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
 
   const displayCompanyName = companyName || settings?.companyName || 'Nossa Empresa';
 
+  // Get Google Place ID from multiple possible sources
+  const getPlaceId = (): string => {
+    return (campaign as any).googlePlaceId || 
+           (campaign as any).google_place_id || 
+           settings?.placeId || 
+           '';
+  };
+
+  // Check if Google redirect is enabled
+  const isGoogleRedirectEnabled = (): boolean => {
+    return (campaign as any).googleRedirect || 
+           (campaign as any).google_redirect || 
+           (campaign as any).enableRedirection || 
+           (campaign as any).enable_redirection || 
+           false;
+  };
+
+  // Get custom messages
+  const getBeforeGoogleMessage = (): string => {
+    return (campaign as any).beforeGoogleMessage || 
+           (campaign as any).before_google_message || 
+           'Muito obrigado pela sua avaliação! Você está sendo redirecionado para nos avaliar no Google...';
+  };
+
+  const getAfterGameMessage = (): string => {
+    return (campaign as any).afterGameMessage || 
+           (campaign as any).after_game_message || 
+           '';
+  };
+
+  // Filter questions - skip NPS question (first one with type 'nps') since score is collected separately
+  const additionalQuestions = (campaign.questions || []).filter((q: any) => {
+    const qType = normalizeType(q.type);
+    return qType !== 'nps';
+  });
+
   // Handlers
   const handleStart = () => {
     // Check if all required fields are filled
     const allRequiredFilled = enabledFields
       .filter(f => f.required)
-      .every(f => respondent[f.field].trim() !== '');
+      .every(f => (respondent[f.field as keyof typeof respondent] || '').trim() !== '');
     
     if (allRequiredFilled) {
       setStep('score');
@@ -47,7 +105,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
 
   const handleScoreSelect = (val: number) => {
     setScore(val);
-    if (campaign.questions && campaign.questions.length > 0) {
+    if (additionalQuestions.length > 0) {
       setStep('questions');
     } else {
       finishSurvey(val, []);
@@ -55,14 +113,14 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
   };
 
   const handleNextQuestion = () => {
-    if (!campaign.questions) return;
+    if (!additionalQuestions || additionalQuestions.length === 0) return;
 
-    const currentQ = campaign.questions[currentQuestionIndex];
-    const newAnswers = [...answers, { question: currentQ.id, answer: currentAnswer }];
+    const currentQ = additionalQuestions[currentQuestionIndex];
+    const newAnswers = [...answers, { question: currentQ.id || currentQ.text, answer: currentAnswer }];
     setAnswers(newAnswers);
     setCurrentAnswer(''); // Reset for next question
 
-    if (currentQuestionIndex < campaign.questions.length - 1) {
+    if (currentQuestionIndex < additionalQuestions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
       finishSurvey(score!, newAnswers);
@@ -87,19 +145,24 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
 
     onSubmit(response);
 
-    // Redirect Logic - Reduced delay to 800ms
-    if (campaign.enableRedirection && finalScore >= 9 && settings?.placeId) {
+    // Redirect Logic
+    const placeId = getPlaceId();
+    const redirectEnabled = isGoogleRedirectEnabled();
+    
+    if (redirectEnabled && finalScore >= 9 && placeId) {
         setStep('redirecting');
         setTimeout(() => {
-            const googleUrl = `https://search.google.com/local/writereview?placeid=${settings.placeId}`;
+            const googleUrl = `https://search.google.com/local/writereview?placeid=${placeId}`;
             window.location.href = googleUrl;
-        }, 800);
+        }, 2000);
     } else {
         setStep('thankyou');
     }
   };
 
-  const currentQ = campaign.questions ? campaign.questions[currentQuestionIndex] : null;
+  const currentQ = additionalQuestions[currentQuestionIndex] || null;
+  const currentQType = currentQ ? normalizeType(currentQ.type) : 'text';
+  const currentQOptions = currentQ?.options || [];
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 relative">
@@ -131,29 +194,33 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                <h2 className="text-xl font-bold text-gray-900">{campaign.name}</h2>
                <p className="text-gray-500 mb-6">Por favor, preencha seus dados para iniciarmos o atendimento.</p>
                
-               {enabledFields.map((field) => {
-                 const inputType = field.field === 'email' ? 'email' : field.field === 'phone' ? 'tel' : 'text';
-                 const placeholderText = `${field.placeholder}${field.required ? '' : ' (Opcional)'}`;
-                 
-                 return (
-                   <div key={field.field}>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>
-                     <input 
-                       type={inputType}
-                       placeholder={placeholderText}
-                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-gray-900 placeholder-gray-500"
-                       style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                       value={respondent[field.field]}
-                       onChange={(e) => setRespondent({...respondent, [field.field]: e.target.value})}
-                       required={field.required}
-                     />
-                   </div>
-                 );
-               })}
+               {enabledFields.length > 0 ? (
+                 enabledFields.map((field) => {
+                   const inputType = field.field === 'email' ? 'email' : field.field === 'phone' ? 'tel' : 'text';
+                   const placeholderText = `${field.placeholder || ''}${field.required ? '' : ' (Opcional)'}`;
+                   
+                   return (
+                     <div key={field.field}>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>
+                       <input 
+                         type={inputType}
+                         placeholder={placeholderText}
+                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-gray-900 placeholder-gray-500"
+                         style={{ backgroundColor: '#ffffff', color: '#111827' }}
+                         value={respondent[field.field as keyof typeof respondent] || ''}
+                         onChange={(e) => setRespondent({...respondent, [field.field]: e.target.value})}
+                         required={field.required}
+                       />
+                     </div>
+                   );
+                 })
+               ) : (
+                 <p className="text-gray-400 text-sm">Nenhum campo de identificação configurado.</p>
+               )}
                
                <button 
                  onClick={handleStart}
-                 disabled={!enabledFields.filter(f => f.required).every(f => respondent[f.field].trim() !== '')}
+                 disabled={enabledFields.filter(f => f.required).length > 0 && !enabledFields.filter(f => f.required).every(f => (respondent[f.field as keyof typeof respondent] || '').trim() !== '')}
                  className="w-full py-3 bg-primary-600 text-white rounded-lg font-bold hover:bg-primary-700 disabled:opacity-50 transition-all mt-4 flex items-center justify-center gap-2"
                >
                  Iniciar Preenchimento <ArrowRight size={18} />
@@ -161,13 +228,11 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
             </div>
           )}
 
-          {/* STEP 2: SCORE (DESCRIPTION HIDDEN) */}
+          {/* STEP 2: SCORE */}
           {step === 'score' && (
             <>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Olá, {(respondent.name || '').split(' ')[0]}!</h2>
               <p className="text-gray-600 mb-6">Em uma escala de 0 a 10, o quanto você recomendaria a {displayCompanyName} para um amigo ou familiar?</p>
-              
-              {/* NOTE: campaign.description removed here as requested */}
               
               <div className="flex flex-wrap justify-center gap-2 mb-8">
                 {Array.from({ length: 11 }).map((_, i) => (
@@ -195,14 +260,14 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
           {step === 'questions' && currentQ && (
             <div className="w-full animate-in slide-in-from-right-8 duration-300">
                 <span className="text-xs font-bold text-primary-600 uppercase tracking-wider mb-2 block">
-                  Pergunta {currentQuestionIndex + 1} de {campaign.questions?.length}
+                  Pergunta {currentQuestionIndex + 1} de {additionalQuestions.length}
                 </span>
                 <h3 className="text-lg font-bold text-gray-900 mb-6">
                     {currentQ.text}
                 </h3>
 
                 {/* TEXT Question */}
-                {currentQ.type === 'text' && (
+                {currentQType === 'text' && (
                     <textarea 
                         className="w-full border border-gray-300 rounded-xl p-4 focus:ring-2 focus:ring-primary-500 focus:border-transparent min-h-[120px] bg-white text-gray-900 placeholder-gray-500"
                         style={{ backgroundColor: '#ffffff', color: '#111827' }}
@@ -214,38 +279,42 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                 )}
 
                 {/* SINGLE CHOICE Question */}
-                {currentQ.type === 'single' && (
+                {currentQType === 'single_choice' && (
                     <div className="space-y-2">
-                        {currentQ.options?.map((opt, idx) => (
-                            <button
-                                key={idx}
-                                onClick={() => setCurrentAnswer(opt)}
-                                className={`w-full p-3 rounded-lg border text-left transition-all flex justify-between items-center bg-white ${
-                                    currentAnswer === opt 
-                                    ? 'border-primary-500 bg-primary-50 text-primary-700' 
-                                    : 'border-gray-200 hover:bg-gray-50 text-gray-700'
-                                }`}
-                            >
-                                {opt}
-                                {currentAnswer === opt && <Check size={16} />}
-                            </button>
-                        ))}
+                        {currentQOptions.map((opt: any, idx: number) => {
+                            const optText = getOptionText(opt);
+                            return (
+                              <button
+                                  key={idx}
+                                  onClick={() => setCurrentAnswer(optText)}
+                                  className={`w-full p-3 rounded-lg border text-left transition-all flex justify-between items-center bg-white ${
+                                      currentAnswer === optText 
+                                      ? 'border-primary-500 bg-primary-50 text-primary-700' 
+                                      : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                                  }`}
+                              >
+                                  {optText}
+                                  {currentAnswer === optText && <Check size={16} />}
+                              </button>
+                            );
+                        })}
                     </div>
                 )}
 
                 {/* MULTIPLE CHOICE Question */}
-                {currentQ.type === 'multiple' && (
+                {currentQType === 'multiple_choice' && (
                     <div className="space-y-2">
-                        {currentQ.options?.map((opt, idx) => {
+                        {currentQOptions.map((opt: any, idx: number) => {
+                            const optText = getOptionText(opt);
                             const selected = Array.isArray(currentAnswer) ? currentAnswer : [];
-                            const isSelected = selected.includes(opt);
+                            const isSelected = selected.includes(optText);
                             return (
                               <button
                                   key={idx}
                                   onClick={() => {
                                       let newSelected;
-                                      if (isSelected) newSelected = selected.filter((s: any) => s !== opt);
-                                      else newSelected = [...selected, opt];
+                                      if (isSelected) newSelected = selected.filter((s: any) => s !== optText);
+                                      else newSelected = [...selected, optText];
                                       setCurrentAnswer(newSelected);
                                   }}
                                   className={`w-full p-3 rounded-lg border text-left transition-all flex justify-between items-center bg-white ${
@@ -254,7 +323,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                                       : 'border-gray-200 hover:bg-gray-50 text-gray-700'
                                   }`}
                               >
-                                  {opt}
+                                  {optText}
                                   {isSelected && <Check size={16} />}
                               </button>
                             );
@@ -263,7 +332,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                 )}
 
                 {/* RATING Question (1-5 Scale) */}
-                {currentQ.type === 'rating' && (
+                {currentQType === 'rating' && (
                     <div className="flex flex-col items-center gap-4">
                       <div className="flex justify-center gap-2">
                           {[1, 2, 3, 4, 5].map((val) => (
@@ -292,7 +361,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                         onClick={handleNextQuestion}
                         className="px-6 py-2 bg-primary-600 text-white rounded-lg font-bold hover:bg-primary-700 flex items-center gap-2"
                     >
-                        {currentQuestionIndex < (campaign.questions?.length || 0) - 1 ? 'Próxima' : 'Finalizar'} 
+                        {currentQuestionIndex < additionalQuestions.length - 1 ? 'Próxima' : 'Finalizar'} 
                         <ChevronRight size={16} />
                     </button>
                 </div>
@@ -307,7 +376,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                  </div>
                  <h2 className="text-xl font-bold text-gray-900 mb-2">Muito Obrigado!</h2>
                  <p className="text-gray-600 max-w-xs mx-auto">
-                     Ficamos felizes com sua nota! Você está sendo redirecionado para nos avaliar no Google...
+                     {getBeforeGoogleMessage()}
                  </p>
                  <div className="mt-6 flex justify-center">
                      <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin"></div>
@@ -323,7 +392,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                  </div>
                  <h2 className="text-xl font-bold text-gray-900 mb-2">Obrigado pelo feedback!</h2>
                  <p className="text-gray-600">
-                     Sua opinião ajuda a melhorarmos nossos serviços constantemente.
+                     {getAfterGameMessage() || 'Sua opinião ajuda a melhorarmos nossos serviços constantemente.'}
                  </p>
                  {isPreview && (
                      <button onClick={onClose} className="mt-8 text-primary-600 font-medium hover:underline">
