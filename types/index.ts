@@ -53,8 +53,10 @@ export interface InitialField {
 export interface CampaignQuestion {
   id: string;
   text: string;
-  type: 'text' | 'single' | 'multiple' | 'rating';
-  options?: string[];
+  type: 'nps' | 'text' | 'single_choice' | 'multiple_choice' | 'rating';
+  options?: Array<{ id: string; text: string }>;
+  insight?: string;
+  conditional?: 'promoter' | 'passive' | 'detractor';
 }
 
 export interface Campaign {
