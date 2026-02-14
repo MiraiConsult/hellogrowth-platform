@@ -46,6 +46,7 @@ type ConsultantStep =
   | 'objective' 
   | 'tone'
   | 'evaluation_points'
+  | 'initial_fields'
   | 'google_redirect'
   | 'google_place_id'
   | 'prize_config'
@@ -81,6 +82,11 @@ export default function NPSConsultant({
   const [objective, setObjective] = useState('');
   const [tone, setTone] = useState('');
   const [evaluationPoints, setEvaluationPoints] = useState<string[]>([]);
+  const [initialFields, setInitialFields] = useState<any[]>([
+    { field: 'name', label: 'Nome', placeholder: 'Digite seu nome', required: true, enabled: true },
+    { field: 'email', label: 'E-mail', placeholder: 'Digite seu e-mail', required: true, enabled: true },
+    { field: 'phone', label: 'Telefone', placeholder: 'Digite seu telefone', required: false, enabled: true }
+  ]);
   const [googleRedirect, setGoogleRedirect] = useState(false);
   const [googlePlaceId, setGooglePlaceId] = useState('');
   const [offerPrize, setOfferPrize] = useState(false);
@@ -166,21 +172,21 @@ export default function NPSConsultant({
   }, [existingCampaign]);
 
   useEffect(() => {
-    if (currentStep === 'welcome' && chatMessages.length === 0 && businessProfile !== null) {
+    if (currentStep === 'welcome' && chatMessages.length === 0) {
       setTimeout(() => {
         if (existingCampaign) {
-          // Modo de edição
+          // Modo de edição - mostrar apenas 2 opções
           addAssistantMessage(
             `Olá! 👋 Você está editando a campanha **${existingCampaign.name || 'Sem título'}**.
 
 O que você gostaria de fazer?`,
             [
-              { label: '🎨 Alterar o tom das perguntas', value: 'edit_tone', icon: Palette },
-              { label: '✏️ Editar perguntas manualmente', value: 'edit_questions', icon: Edit3 }
+              { label: '🎨 Mudar tom das perguntas', value: 'edit_tone', icon: Palette },
+              { label: '✏️ Editar perguntas', value: 'edit_questions', icon: Edit3 }
             ]
           );
-        } else {
-          // Modo de criação
+        } else if (businessProfile !== null) {
+          // Modo de criação - aguardar businessProfile
           addAssistantMessage(
             businessProfile 
               ? `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.business_name || 'sua empresa'}**.
@@ -198,7 +204,7 @@ Vamos começar?',
         }
       }, 300);
     }
-  }, [currentStep, businessProfile, existingCampaign]);le]);
+  }, [currentStep, chatMessages.length, businessProfile, existingCampaign]);le]);
 
   const addAssistantMessage = (content: string, options?: { label: string; value: string; icon?: any }[]) => {
     setIsTyping(true);
@@ -268,6 +274,8 @@ Vamos começar?',
       handleToneSelection(value, label);
     } else if (currentStep === 'evaluation_points' && value === 'ai_suggestions') {
       handleAISuggestions();
+    } else if (currentStep === 'initial_fields') {
+      handleInitialFieldsSelection(value);
     } else if (currentStep === 'google_redirect') {
       handleGoogleRedirectSelection(value);
     } else if (currentStep === 'prize_config') {
@@ -340,9 +348,50 @@ Vou regenerar as perguntas com o novo tom. Um momento...`
   const handleAISuggestions = () => {
     const suggestions = ['Atendimento', 'Qualidade do serviço', 'Tempo de resposta', 'Custo-benefício'];
     setEvaluationPoints(suggestions);
+    setCurrentStep('initial_fields');
+    addAssistantMessage(
+      `Perfeito! Vou focar nestes pontos:\n• ${suggestions.join('\n• ')}\n\n📋 Agora, quais informações você quer coletar dos clientes no início da pesquisa?`,
+      [
+        { label: '👤 Nome + E-mail + Telefone', value: 'all' },
+        { label: '👤 Nome + E-mail', value: 'name_email' },
+        { label: '👤 Apenas Nome', value: 'name_only' },
+        { label: '⚙️ Configurar manualmente', value: 'custom' }
+      ]
+    );
+  };
+
+  const handleInitialFieldsSelection = (value: string) => {
+    if (value === 'all') {
+      setInitialFields([
+        { field: 'name', label: 'Nome', placeholder: 'Digite seu nome', required: true, enabled: true },
+        { field: 'email', label: 'E-mail', placeholder: 'Digite seu e-mail', required: true, enabled: true },
+        { field: 'phone', label: 'Telefone', placeholder: 'Digite seu telefone', required: true, enabled: true }
+      ]);
+    } else if (value === 'name_email') {
+      setInitialFields([
+        { field: 'name', label: 'Nome', placeholder: 'Digite seu nome', required: true, enabled: true },
+        { field: 'email', label: 'E-mail', placeholder: 'Digite seu e-mail', required: true, enabled: true },
+        { field: 'phone', label: 'Telefone', placeholder: 'Digite seu telefone', required: false, enabled: false }
+      ]);
+    } else if (value === 'name_only') {
+      setInitialFields([
+        { field: 'name', label: 'Nome', placeholder: 'Digite seu nome', required: true, enabled: true },
+        { field: 'email', label: 'E-mail', placeholder: 'Digite seu e-mail', required: false, enabled: false },
+        { field: 'phone', label: 'Telefone', placeholder: 'Digite seu telefone', required: false, enabled: false }
+      ]);
+    } else if (value === 'custom') {
+      // TODO: Implementar tela de configuração customizada
+      addAssistantMessage('⚠️ Configuração customizada ainda não implementada. Usando padrão: Nome + E-mail');
+      setInitialFields([
+        { field: 'name', label: 'Nome', placeholder: 'Digite seu nome', required: true, enabled: true },
+        { field: 'email', label: 'E-mail', placeholder: 'Digite seu e-mail', required: true, enabled: true },
+        { field: 'phone', label: 'Telefone', placeholder: 'Digite seu telefone', required: false, enabled: false }
+      ]);
+    }
+    
     setCurrentStep('google_redirect');
     addAssistantMessage(
-      `Perfeito! Vou focar nestes pontos:\n• ${suggestions.join('\n• ')}\n\nQuer redirecionar os clientes para avaliarem no Google após a pesquisa?`,
+      '✅ Campos configurados!\n\nQuer redirecionar os clientes para avaliarem no Google após a pesquisa?',
       [
         { label: '✅ Sim', value: 'yes', icon: CheckCircle },
         { label: '❌ Não', value: 'no', icon: X }
@@ -569,6 +618,7 @@ Retorne APENAS um JSON válido com este formato:
         objective,
         tone,
         evaluation_points: evaluationPoints,
+        initial_fields: initialFields,
         google_redirect: googleRedirect,
         google_place_id: googlePlaceId,
         offer_prize: offerPrize,
