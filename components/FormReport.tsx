@@ -1,8 +1,8 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Form, Lead } from '@/types';
-import { ArrowLeft, Users, DollarSign, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, Target, Filter, X, Mail, Phone, FileText, Edit2, Plus, Trash2, Check, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Users, DollarSign, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, Target, Filter, X, Mail, Phone, FileText, Edit2, Plus, Trash2, Check, AlertCircle, Zap, Send, RefreshCw } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -37,6 +37,16 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
   const [wasManuallyEdited, setWasManuallyEdited] = useState(false);
   const [isSavingProducts, setIsSavingProducts] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  
+  // Estados para o layout de duas colunas
+  const [detailSection, setDetailSection] = useState<'products' | 'ai' | 'answers' | null>('products');
+  
+  // Estados para o chat com IA
+  const [chatMessages, setChatMessages] = useState<{role: 'user' | 'ai'; content: string}[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
 
   // 1. Get Form Data
   const form = forms.find(f => f.id === formId);
@@ -126,6 +136,21 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
     }
   }, [selectedLead]);
 
+  // Reset estados ao selecionar novo lead
+  useEffect(() => {
+    if (selectedLead) {
+      setDetailSection('products');
+      setChatMessages([]);
+      setChatInput('');
+      setIsEditingProducts(false);
+    }
+  }, [selectedLead?.id]);
+
+  // Scroll automático do chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
   // Funções de edição de produtos
   const handleAddProduct = (product: Product) => {
     if (!editedProducts.find(p => p.id === product.id)) {
@@ -143,7 +168,7 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
     try {
       const totalValue = editedProducts.reduce((sum, p) => sum + p.value, 0);
       const updatedAnalysis = {
-        ...selectedLead.answers._ai_analysis,
+        ...selectedLead.answers?._ai_analysis,
         recommended_products: editedProducts,
         suggested_product: editedProducts.map(p => p.name).join(', '),
         suggested_value: totalValue,
@@ -179,6 +204,158 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
       console.error('Erro ao salvar edições:', err);
     } finally {
       setIsSavingProducts(false);
+    }
+  };
+
+  // Função de reanálise com IA baseada nos produtos editados
+  const handleReanalyzeWithAI = async () => {
+    if (!selectedLead || !supabase) return;
+    setIsReanalyzing(true);
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      if (!apiKey) return;
+      const ai = new GoogleGenerativeAI(apiKey);
+      const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+      const answersText = selectedLead.answers 
+        ? Object.entries(selectedLead.answers)
+            .filter(([k]) => !k.startsWith('_'))
+            .map(([qId, a]: [string, any]) => `${getQuestionText(qId)}: ${Array.isArray(a.value) ? a.value.join(', ') : a.value}`)
+            .join('\n')
+        : 'Sem respostas';
+
+      const productsText = editedProducts.map(p => `${p.name} (R$ ${p.value})`).join(', ');
+
+      const prompt = `Você é um consultor de vendas especialista. Refaça a análise deste lead considerando os produtos/serviços ATUALIZADOS.
+
+CLIENTE: ${selectedLead.name}
+PRODUTOS/SERVIÇOS SELECIONADOS: ${productsText}
+VALOR TOTAL: R$ ${editedProducts.reduce((s, p) => s + p.value, 0)}
+
+RESPOSTAS DO FORMULÁRIO:
+${answersText}
+
+Retorne APENAS um JSON válido (sem markdown) com:
+{
+  "classification": "opportunity" ou "risk" ou "monitoring",
+  "confidence": 0.0 a 1.0,
+  "reasoning": "explicação detalhada",
+  "client_insights": ["insight1", "insight2"],
+  "next_steps": ["passo1", "passo2"],
+  "sales_script": "script de abordagem personalizado"
+}`;
+
+      const result = await model.generateContent(prompt);
+      let text = result.response.text();
+      text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const analysis = JSON.parse(text);
+
+      const updatedAnalysis = {
+        ...selectedLead.answers?._ai_analysis,
+        ...analysis,
+        recommended_products: editedProducts,
+        suggested_product: editedProducts.map(p => p.name).join(', '),
+        suggested_value: editedProducts.reduce((s, p) => s + p.value, 0),
+        manually_edited: true,
+        reanalyzed_at: new Date().toISOString()
+      };
+
+      const updatedAnswers = { ...selectedLead.answers, _ai_analysis: updatedAnalysis };
+      const totalValue = editedProducts.reduce((s, p) => s + p.value, 0);
+
+      await supabase.from('leads').update({ answers: updatedAnswers, value: totalValue }).eq('id', selectedLead.id);
+      if (onLeadUpdate) onLeadUpdate(selectedLead.id, { answers: updatedAnswers, value: totalValue });
+      setSelectedLead({ ...selectedLead, answers: updatedAnswers, value: totalValue });
+      setChatMessages(prev => [...prev, { role: 'ai', content: '✅ Análise atualizada com sucesso com os novos produtos/serviços!' }]);
+    } catch (err) {
+      console.error('Erro na reanálise:', err);
+      setChatMessages(prev => [...prev, { role: 'ai', content: '❌ Erro ao refazer a análise. Tente novamente.' }]);
+    } finally {
+      setIsReanalyzing(false);
+    }
+  };
+
+  // Função de chat com IA
+  const handleChatSend = async () => {
+    if (!chatInput.trim() || !selectedLead || isChatLoading) return;
+    const userMessage = chatInput.trim();
+    setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setIsChatLoading(true);
+
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      if (!apiKey) {
+        setChatMessages(prev => [...prev, { role: 'ai', content: 'API Key não configurada.' }]);
+        return;
+      }
+      const ai = new GoogleGenerativeAI(apiKey);
+      const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+      const currentAnalysis = selectedLead.answers?._ai_analysis;
+      const answersText = selectedLead.answers 
+        ? Object.entries(selectedLead.answers)
+            .filter(([k]) => !k.startsWith('_'))
+            .map(([qId, a]: [string, any]) => `${getQuestionText(qId)}: ${Array.isArray(a.value) ? a.value.join(', ') : a.value}`)
+            .join('\n')
+        : '';
+
+      const chatHistory = chatMessages.map(m => `${m.role === 'user' ? 'Usuário' : 'IA'}: ${m.content}`).join('\n');
+
+      const prompt = `Você é um consultor de vendas IA integrado ao sistema HelloGrowth. Responda de forma direta e útil.
+
+CONTEXTO DO LEAD:
+Nome: ${selectedLead.name}
+Valor: R$ ${selectedLead.value}
+Produtos: ${editedProducts.map(p => p.name).join(', ')}
+Respostas: ${answersText}
+
+ANÁLISE ATUAL:
+${currentAnalysis ? JSON.stringify(currentAnalysis, null, 2) : 'Sem análise'}
+
+HISTÓRICO DO CHAT:
+${chatHistory}
+
+MENSAGEM DO USUÁRIO: ${userMessage}
+
+Se o usuário pedir para ATUALIZAR a análise, retorne APENAS um JSON com a estrutura:
+{"update_analysis": true, "classification": "...", "confidence": 0.0-1.0, "reasoning": "...", "client_insights": [...], "next_steps": [...], "sales_script": "..."}
+
+Caso contrário, responda normalmente em texto.`;
+
+      const result = await model.generateContent(prompt);
+      let responseText = result.response.text();
+
+      // Verificar se a IA retornou um JSON de atualização
+      try {
+        const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+        if (parsed.update_analysis && supabase) {
+          const updatedAnalysis = {
+            ...currentAnalysis,
+            ...parsed,
+            recommended_products: editedProducts,
+            suggested_product: editedProducts.map(p => p.name).join(', '),
+            suggested_value: editedProducts.reduce((s, p) => s + p.value, 0),
+            chat_updated_at: new Date().toISOString()
+          };
+          delete updatedAnalysis.update_analysis;
+          const updatedAnswers = { ...selectedLead.answers, _ai_analysis: updatedAnalysis };
+          await supabase.from('leads').update({ answers: updatedAnswers }).eq('id', selectedLead.id);
+          if (onLeadUpdate) onLeadUpdate(selectedLead.id, { answers: updatedAnswers });
+          setSelectedLead({ ...selectedLead, answers: updatedAnswers });
+          setChatMessages(prev => [...prev, { role: 'ai', content: `✅ Análise atualizada!\n\n**Raciocínio:** ${parsed.reasoning}\n\n**Próximos passos:** ${parsed.next_steps?.join(', ')}` }]);
+        } else {
+          setChatMessages(prev => [...prev, { role: 'ai', content: responseText }]);
+        }
+      } catch {
+        setChatMessages(prev => [...prev, { role: 'ai', content: responseText }]);
+      }
+    } catch (err) {
+      console.error('Erro no chat:', err);
+      setChatMessages(prev => [...prev, { role: 'ai', content: '❌ Erro ao processar. Tente novamente.' }]);
+    } finally {
+      setIsChatLoading(false);
     }
   };
 
@@ -380,7 +557,7 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
           <div className="flex-1 bg-purple-50/50 rounded-xl p-6 border border-purple-100 overflow-y-auto max-h-[300px]">
             {aiAnalysis ? (
               <div className="prose prose-sm prose-purple max-w-none">
-                <ReactMarkdown>{aiAnalysis}</ReactMarkdown>
+                <Markdown>{aiAnalysis}</Markdown>
                 <div className="mt-4 flex justify-end">
                    <button onClick={() => setAiAnalysis(null)} className="text-xs text-purple-600 hover:underline">Regerar análise</button>
                 </div>
@@ -455,91 +632,216 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
         </table>
       </div>
 
-      {/* Lead Details Panel */}
+      {/* Lead Details Panel - Layout Duas Colunas */}
       {selectedLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          {/* Full Screen Panel */}
           <div className="w-full h-full bg-white shadow-2xl flex flex-col animate-in fade-in duration-300">
-            <div className="p-4 border-b border-gray-100 flex justify-between items-start bg-gray-50 sticky top-0 z-10">
-              <div>
+            {/* HEADER */}
+            <div className="px-6 py-3 border-b border-gray-200 bg-white flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-4">
                 <h2 className="text-lg font-bold text-gray-900">{selectedLead.name}</h2>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                     selectedLead.status === 'Novo' ? 'bg-blue-100 text-blue-700' :
-                     selectedLead.status === 'Vendido' ? 'bg-green-100 text-green-700' :
-                     selectedLead.status === 'Perdido' ? 'bg-red-100 text-red-700' :
-                     'bg-yellow-100 text-yellow-700'
-                  }`}>
-                    {selectedLead.status}
-                  </span>
-                  <span className="text-sm text-gray-500">
-                    {new Date(selectedLead.date || Date.now()).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                  </span>
-                </div>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                  selectedLead.status === 'Novo' ? 'bg-blue-100 text-blue-700' :
+                  selectedLead.status === 'Vendido' ? 'bg-green-100 text-green-700' :
+                  selectedLead.status === 'Perdido' ? 'bg-red-100 text-red-700' :
+                  'bg-yellow-100 text-yellow-700'
+                }`}>{selectedLead.status}</span>
+                {selectedLead.phone && (
+                  <span className="flex items-center gap-1 text-sm text-gray-500"><Phone size={14} /> {selectedLead.phone}</span>
+                )}
+                {selectedLead.email && (
+                  <span className="flex items-center gap-1 text-sm text-gray-500"><Mail size={14} /> {selectedLead.email}</span>
+                )}
+                <span className="flex items-center gap-1 text-sm text-gray-500">
+                  <Calendar size={14} /> {new Date(selectedLead.date || Date.now()).toLocaleDateString('pt-BR')}
+                </span>
               </div>
-              <button onClick={() => setSelectedLead(null)} className="text-gray-400 hover:text-gray-600 bg-white rounded-full p-2 hover:bg-gray-200 transition-colors">
+              <button onClick={() => setSelectedLead(null)} className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <X size={20} />
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1">
-              <div className="max-w-4xl mx-auto space-y-6">
-              {/* Contact Info */}
-              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white p-2 rounded-lg text-gray-500"><Mail size={18} /></div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase font-semibold">Email</p>
-                    <p className="text-sm text-gray-800">{selectedLead.email || 'Não informado'}</p>
+            {/* CORPO - Duas colunas */}
+            <div className="flex-1 flex overflow-hidden">
+              {/* COLUNA ESQUERDA - Controles */}
+              <div className="w-[400px] flex-shrink-0 border-r border-gray-200 bg-white flex flex-col p-4 gap-3">
+                
+                {/* Valor e Produtos - Sempre visível */}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-amber-700 font-semibold uppercase">Valor Identificado</span>
+                    <span className="text-lg font-bold text-green-700">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedLead.value)}
+                    </span>
+                  </div>
+                  {selectedLead.answers?._ai_analysis && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        selectedLead.answers._ai_analysis.classification === 'opportunity' ? 'bg-green-100 text-green-700' :
+                        selectedLead.answers._ai_analysis.classification === 'risk' ? 'bg-red-100 text-red-700' :
+                        'bg-yellow-100 text-yellow-700'
+                      }`}>
+                        {selectedLead.answers._ai_analysis.classification === 'opportunity' ? 'Alta Oportunidade' :
+                         selectedLead.answers._ai_analysis.classification === 'risk' ? 'Risco' : 'Monitorar'}
+                      </span>
+                      <span className="text-[10px] text-gray-500">
+                        Confiança: {Math.round((selectedLead.answers._ai_analysis.confidence || 0) * 100)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Botão: Produtos/Serviços */}
+                <button
+                  onClick={() => setDetailSection(prev => prev === 'products' ? null : 'products')}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                    detailSection === 'products'
+                      ? 'border-purple-300 bg-purple-50 text-purple-700'
+                      : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <DollarSign size={16} className={detailSection === 'products' ? 'text-purple-600' : 'text-gray-400'} />
+                    <span className="text-xs font-bold uppercase">Produtos / Serviços</span>
+                    {wasManuallyEdited && (
+                      <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-medium rounded-full">Editado</span>
+                    )}
+                  </div>
+                  <ArrowRight size={16} className="text-gray-400" />
+                </button>
+
+                {/* Botão: Análise da IA */}
+                <button
+                  onClick={() => setDetailSection(prev => prev === 'ai' ? null : 'ai')}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                    detailSection === 'ai'
+                      ? 'border-amber-300 bg-amber-50 text-amber-700'
+                      : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Zap size={16} className={detailSection === 'ai' ? 'text-amber-600' : 'text-gray-400'} />
+                    <span className="text-xs font-bold uppercase">Análise da IA</span>
+                  </div>
+                  <ArrowRight size={16} className="text-gray-400" />
+                </button>
+
+                {/* Botão: Perguntas e Respostas */}
+                {selectedLead.answers && Object.keys(selectedLead.answers).filter(k => !k.startsWith('_')).length > 0 && (
+                  <button
+                    onClick={() => setDetailSection(prev => prev === 'answers' ? null : 'answers')}
+                    className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                      detailSection === 'answers'
+                        ? 'border-blue-300 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText size={16} className={detailSection === 'answers' ? 'text-blue-600' : 'text-gray-400'} />
+                      <span className="text-xs font-bold uppercase">Perguntas e Respostas</span>
+                      <span className="text-xs text-gray-400">
+                        ({Object.keys(selectedLead.answers).filter(k => !k.startsWith('_')).length})
+                      </span>
+                    </div>
+                    <ArrowRight size={16} className="text-gray-400" />
+                  </button>
+                )}
+
+                {/* Spacer */}
+                <div className="flex-1" />
+
+                {/* Chat com IA - Fixo na parte inferior da coluna esquerda */}
+                <div className="border border-gray-200 rounded-lg bg-gray-50">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200">
+                    <Sparkles size={14} className="text-purple-600" />
+                    <span className="text-xs font-bold text-gray-700 uppercase">Chat com IA</span>
+                  </div>
+                  {/* Mensagens do chat */}
+                  <div className="h-[180px] overflow-y-auto px-3 py-2 space-y-2">
+                    {chatMessages.length === 0 && (
+                      <p className="text-xs text-gray-400 text-center mt-4">
+                        Converse com a IA sobre este lead. Peça para refazer a análise, adicionar observações, corrigir algo...
+                      </p>
+                    )}
+                    {chatMessages.map((msg, i) => (
+                      <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] px-3 py-2 rounded-lg text-xs leading-relaxed ${
+                          msg.role === 'user'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-white border border-gray-200 text-gray-700'
+                        }`}>
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                    {isChatLoading && (
+                      <div className="flex justify-start">
+                        <div className="bg-white border border-gray-200 px-3 py-2 rounded-lg">
+                          <Loader2 size={14} className="animate-spin text-purple-600" />
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+                  {/* Input do chat */}
+                  <div className="px-3 py-2 border-t border-gray-200 flex gap-2">
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleChatSend()}
+                      placeholder="Ex: Adicione fisioterapia na análise..."
+                      className="flex-1 text-xs px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-400"
+                      disabled={isChatLoading}
+                    />
+                    <button
+                      onClick={handleChatSend}
+                      disabled={!chatInput.trim() || isChatLoading}
+                      className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Send size={14} />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="bg-white p-2 rounded-lg text-green-600"><DollarSign size={18} /></div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase font-semibold">Valor Oportunidade</p>
-                    <p className="text-sm font-bold text-green-700">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedLead.value)}
-                    </p>
-                  </div>
+
+                {/* Botões de ação */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const lead = selectedLead;
+                      setSelectedLead(null);
+                    }}
+                    className="flex-1 px-3 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                  >
+                    Fechar
+                  </button>
                 </div>
               </div>
 
-              {/* AI Analysis Section */}
-              {selectedLead.answers?._ai_analysis && (
-                <div className="bg-gradient-to-br from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Sparkles size={20} className="text-purple-600" />
-                    <h3 className="text-lg font-bold text-purple-900">Análise de Oportunidade (IA)</h3>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    {/* Produto Sugerido e Valor - EDITÁVEL */}
-                    <div className="bg-white rounded-lg p-4 border border-purple-100">
-                      {/* Cabeçalho com botão de editar */}
-                      <div className="flex justify-between items-center mb-3">
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs text-gray-500 font-semibold uppercase">Produtos Recomendados</p>
-                          {wasManuallyEdited && (
-                            <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
-                              <AlertCircle size={12} />
-                              Editado manualmente
-                            </span>
-                          )}
-                        </div>
+              {/* COLUNA DIREITA - Conteúdo dinâmico */}
+              <div className="flex-1 bg-gray-50 p-6 overflow-y-auto">
+                
+                {/* Conteúdo: Produtos/Serviços */}
+                {detailSection === 'products' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <DollarSign size={18} className="text-purple-600" />
+                        <h3 className="font-bold text-gray-900">Produtos / Serviços Recomendados</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
                         {!isEditingProducts ? (
                           <button
                             onClick={() => setIsEditingProducts(true)}
-                            className="flex items-center gap-1 px-3 py-1.5 text-purple-600 hover:bg-purple-50 rounded-lg text-sm font-medium transition-colors"
+                            className="flex items-center gap-1 px-3 py-1.5 text-purple-600 hover:bg-purple-50 rounded-lg text-sm font-medium border border-purple-200 transition-colors"
                           >
-                            <Edit2 size={14} />
-                            Editar
+                            <Edit2 size={14} /> Editar
                           </button>
                         ) : (
-                          <div className="flex items-center gap-2">
+                          <>
                             <button
                               onClick={() => {
                                 setIsEditingProducts(false);
-                                // Resetar para valores originais
                                 if (selectedLead?.answers?._ai_analysis?.recommended_products) {
                                   setEditedProducts(selectedLead.answers._ai_analysis.recommended_products);
                                 }
@@ -556,231 +858,228 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
                               {isSavingProducts ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                               Salvar
                             </button>
-                          </div>
+                          </>
                         )}
+                        <button
+                          onClick={handleReanalyzeWithAI}
+                          disabled={isReanalyzing}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white hover:bg-amber-600 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                        >
+                          {isReanalyzing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                          Reanalisar com IA
+                        </button>
                       </div>
+                    </div>
 
-                      {/* Modo Visualização */}
-                      {!isEditingProducts && (
-                        <>
-                          <div className="flex justify-between items-start mb-2">
+                    {/* Modo Visualização */}
+                    {!isEditingProducts && (
+                      <div className="space-y-3">
+                        {editedProducts.length > 0 ? editedProducts.map((product, i) => (
+                          <div key={i} className="bg-white rounded-lg border border-gray-200 p-4 flex justify-between items-center">
                             <div>
-                              <p className="text-lg font-bold text-gray-900">
-                                {editedProducts.length > 0 
-                                  ? editedProducts.map(p => p.name).join(', ')
-                                  : selectedLead.answers._ai_analysis.suggested_product
-                                }
-                              </p>
+                              <p className="font-medium text-gray-900">{product.name}</p>
                             </div>
-                            <div className="text-right">
-                              <p className="text-xs text-gray-500 font-semibold uppercase">Valor Estimado</p>
-                              <p className="text-2xl font-bold text-green-600">
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                                  editedProducts.length > 0 
-                                    ? editedProducts.reduce((sum, p) => sum + p.value, 0)
-                                    : selectedLead.answers._ai_analysis.suggested_value || 0
-                                )}
-                              </p>
-                            </div>
+                            <p className="text-lg font-bold text-green-600">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.value)}
+                            </p>
                           </div>
-                          <div className="flex items-center gap-2 mt-3">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                              selectedLead.answers._ai_analysis.classification === 'opportunity' ? 'bg-green-100 text-green-700' :
-                              selectedLead.answers._ai_analysis.classification === 'risk' ? 'bg-red-100 text-red-700' :
-                              'bg-yellow-100 text-yellow-700'
-                            }`}>
-                              {selectedLead.answers._ai_analysis.classification === 'opportunity' ? '✅ Alta Oportunidade' :
-                               selectedLead.answers._ai_analysis.classification === 'risk' ? '⚠️ Risco' :
-                               '🔍 Monitorar'}
-                            </span>
-                            <span className="text-xs text-gray-600">
-                              Confiança: {Math.round((selectedLead.answers._ai_analysis.confidence || 0) * 100)}%
-                            </span>
-                          </div>
-                        </>
-                      )}
-
-                      {/* Modo Edição */}
-                      {isEditingProducts && (
-                        <div className="space-y-4">
-                          {/* Produtos selecionados */}
-                          <div>
-                            <p className="text-sm font-medium text-gray-700 mb-2">Produtos selecionados:</p>
-                            {editedProducts.length === 0 ? (
-                              <p className="text-sm text-gray-400 italic">Nenhum produto selecionado</p>
-                            ) : (
-                              <div className="space-y-2">
-                                {editedProducts.map((product) => (
-                                  <div key={product.id} className="flex items-center justify-between bg-purple-50 p-3 rounded-lg border border-purple-200">
-                                    <div>
-                                      <p className="font-medium text-gray-900">{product.name}</p>
-                                      <p className="text-sm text-green-600 font-bold">
-                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.value)}
-                                      </p>
-                                    </div>
-                                    <button
-                                      onClick={() => handleRemoveProduct(product.id)}
-                                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                    >
-                                      <Trash2 size={16} />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Adicionar produtos */}
-                          <div>
-                            <p className="text-sm font-medium text-gray-700 mb-2">Adicionar produto:</p>
-                            {products.length === 0 ? (
-                              <p className="text-sm text-gray-400 italic">Nenhum produto cadastrado. Cadastre produtos em "Produtos e Serviços".</p>
-                            ) : (
-                              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                                {products.filter(p => !editedProducts.find(ep => ep.id === p.id)).map((product) => (
-                                  <button
-                                    key={product.id}
-                                    onClick={() => handleAddProduct(product)}
-                                    className="flex items-center gap-2 p-2 text-left border border-gray-200 rounded-lg hover:border-purple-300 hover:bg-purple-50 transition-colors"
-                                  >
-                                    <Plus size={14} className="text-purple-500 flex-shrink-0" />
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-medium text-gray-900 truncate">{product.name}</p>
-                                      <p className="text-xs text-green-600">
-                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.value)}
-                                      </p>
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Total */}
-                          <div className="pt-3 border-t border-gray-200">
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm font-medium text-gray-700">Valor Total:</span>
-                              <span className="text-xl font-bold text-green-600">
-                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                                  editedProducts.reduce((sum, p) => sum + p.value, 0)
-                                )}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Raciocínio */}
-                    <div className="bg-white rounded-lg p-4 border border-purple-100">
-                      <p className="text-xs text-gray-500 font-semibold uppercase mb-2">🧠 Raciocínio da IA</p>
-                      <p className="text-gray-700 leading-relaxed">{selectedLead.answers._ai_analysis.reasoning}</p>
-                    </div>
-
-                    {/* Insights do Cliente */}
-                    {selectedLead.answers._ai_analysis.client_insights && selectedLead.answers._ai_analysis.client_insights.length > 0 && (
-                      <div className="bg-white rounded-lg p-4 border border-purple-100">
-                        <p className="text-xs text-gray-500 font-semibold uppercase mb-3">💡 Insights do Cliente</p>
-                        <ul className="space-y-2">
-                          {selectedLead.answers._ai_analysis.client_insights.map((insight: string, idx: number) => (
-                            <li key={idx} className="flex items-start gap-2">
-                              <span className="text-purple-500 mt-1">•</span>
-                              <span className="text-gray-700">{insight}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Script de Vendas */}
-                    {selectedLead.answers._ai_analysis.sales_script && (
-                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border-2 border-green-200">
-                        <p className="text-xs text-green-700 font-semibold uppercase mb-2 flex items-center gap-1">
-                          <Target size={14} /> Script de Abordagem
-                        </p>
-                        <p className="text-gray-800 font-medium italic leading-relaxed">
-                          "{selectedLead.answers._ai_analysis.sales_script}"
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Próximos Passos */}
-                    {selectedLead.answers._ai_analysis.next_steps && selectedLead.answers._ai_analysis.next_steps.length > 0 && (
-                      <div className="bg-white rounded-lg p-4 border border-purple-100">
-                        <p className="text-xs text-gray-500 font-semibold uppercase mb-3">✅ Próximos Passos Recomendados</p>
-                        <ol className="space-y-2">
-                          {selectedLead.answers._ai_analysis.next_steps.map((step: string, idx: number) => (
-                            <li key={idx} className="flex items-start gap-2">
-                              <span className="bg-purple-100 text-purple-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{idx + 1}</span>
-                              <span className="text-gray-700">{step}</span>
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Form Answers */}
-              {selectedLead.answers && Object.keys(selectedLead.answers).length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <FileText size={18} className="text-gray-400" />
-                    <h3 className="text-sm font-bold text-gray-900 uppercase">Respostas do Formulário</h3>
-                  </div>
-                  <div className="space-y-3">
-                    {Object.entries(selectedLead.answers).filter(([questionId]) => questionId !== '_ai_analysis').map(([questionId, answerData]: [string, any]) => (
-                      <div key={questionId} className="border border-gray-200 rounded-lg p-4 bg-white">
-                        <p className="text-xs text-gray-500 font-semibold mb-1.5">{getQuestionText(questionId)}</p>
-                        <div className="flex justify-between items-start">
-                          <p className="text-gray-900 font-medium text-lg">{Array.isArray(answerData.value) ? answerData.value.join(', ') : answerData.value}</p>
-                          {answerData.optionSelected?.value > 0 && (
-                            <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100">
-                              + R$ {answerData.optionSelected.value}
-                            </span>
-                          )}
-                        </div>
-                        {answerData.followUps && Object.values(answerData.followUps).some(text => text) && (
-                          <div className="mt-2 pt-2 border-t border-gray-100">
-                            {Object.entries(answerData.followUps).map(([optId, text]) => 
-                              text ? (
-                                <div key={optId}>
-                                  <p className="text-xs text-gray-500 font-medium italic">Informação adicional:</p>
-                                  <p className="text-gray-800 font-medium pl-2 border-l-2 border-gray-200 mt-1">{text as string}</p>
-                                </div>
-                              ) : null
-                            )}
-                          </div>
-                        )}
-                        {answerData.optionSelected?.script && (
-                          <div className="mt-2 pt-2 border-t border-gray-100">
-                            <p className="text-xs text-purple-600 font-medium italic flex items-center gap-1">
-                              <Sparkles size={12} /> Dica de Venda: "{answerData.optionSelected.script}"
+                        )) : (
+                          <div className="bg-white rounded-lg border border-gray-200 p-4">
+                            <p className="font-medium text-gray-900">{selectedLead.answers?._ai_analysis?.suggested_product || 'Nenhum produto'}</p>
+                            <p className="text-lg font-bold text-green-600 mt-1">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedLead.answers?._ai_analysis?.suggested_value || 0)}
                             </p>
                           </div>
                         )}
+                        <div className="bg-purple-50 rounded-lg border border-purple-200 p-4 flex justify-between items-center">
+                          <span className="font-semibold text-purple-700">Total</span>
+                          <span className="text-xl font-bold text-green-700">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                              editedProducts.length > 0 ? editedProducts.reduce((s, p) => s + p.value, 0) : (selectedLead.answers?._ai_analysis?.suggested_value || 0)
+                            )}
+                          </span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {!selectedLead.answers && (
-                <div className="text-center py-8 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                  <p>Detalhes das respostas não disponíveis para este lead antigo.</p>
-                </div>
-              )}
-              </div>
-            </div>
+                    )}
 
-            <div className="p-4 bg-gray-50 border-t border-gray-100 text-right flex-shrink-0">
-              <button 
-                onClick={() => setSelectedLead(null)}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium"
-              >
-                Fechar
-              </button>
+                    {/* Modo Edição */}
+                    {isEditingProducts && (
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 mb-2">Produtos selecionados:</p>
+                          {editedProducts.length === 0 ? (
+                            <p className="text-sm text-gray-400 italic">Nenhum produto selecionado</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {editedProducts.map((product) => (
+                                <div key={product.id} className="flex items-center justify-between bg-white p-3 rounded-lg border border-purple-200">
+                                  <div>
+                                    <p className="font-medium text-gray-900">{product.name}</p>
+                                    <p className="text-sm text-green-600 font-bold">
+                                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.value)}
+                                    </p>
+                                  </div>
+                                  <button onClick={() => handleRemoveProduct(product.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-700 mb-2">Adicionar produto:</p>
+                          {products.length === 0 ? (
+                            <p className="text-sm text-gray-400 italic">Nenhum produto cadastrado. Cadastre em "Produtos e Serviços".</p>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                              {products.filter(p => !editedProducts.find(ep => ep.id === p.id)).map((product) => (
+                                <button
+                                  key={product.id}
+                                  onClick={() => handleAddProduct(product)}
+                                  className="flex items-center gap-2 p-3 text-left border border-gray-200 rounded-lg hover:border-purple-300 hover:bg-purple-50 transition-colors"
+                                >
+                                  <Plus size={14} className="text-purple-500 flex-shrink-0" />
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{product.name}</p>
+                                    <p className="text-xs text-green-600">
+                                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.value)}
+                                    </p>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="pt-3 border-t border-gray-200">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-gray-700">Valor Total:</span>
+                            <span className="text-xl font-bold text-green-600">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                editedProducts.reduce((sum, p) => sum + p.value, 0)
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Conteúdo: Análise da IA */}
+                {detailSection === 'ai' && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <Zap size={18} className="text-amber-600" />
+                      <h3 className="font-bold text-gray-900">Análise da IA</h3>
+                    </div>
+                    {selectedLead.answers?._ai_analysis ? (
+                      <div className="space-y-4">
+                        {selectedLead.answers._ai_analysis.reasoning && (
+                          <div className="bg-white rounded-lg border border-gray-200 p-4">
+                            <span className="text-xs text-gray-500 font-semibold uppercase">Raciocínio</span>
+                            <p className="text-sm text-gray-700 mt-1 leading-relaxed">{selectedLead.answers._ai_analysis.reasoning}</p>
+                          </div>
+                        )}
+                        {selectedLead.answers._ai_analysis.client_insights && (
+                          <div className="bg-white rounded-lg border border-gray-200 p-4">
+                            <span className="text-xs text-gray-500 font-semibold uppercase">Insights do Cliente</span>
+                            <ul className="mt-2 space-y-1">
+                              {selectedLead.answers._ai_analysis.client_insights.map((insight: string, i: number) => (
+                                <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                                  <span className="text-purple-500 mt-0.5">•</span> {insight}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {selectedLead.answers._ai_analysis.sales_script && (
+                          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-2 border-green-200 p-4">
+                            <span className="text-xs text-green-700 font-semibold uppercase flex items-center gap-1">
+                              <Target size={12} /> Script de Abordagem
+                            </span>
+                            <p className="text-sm text-gray-800 font-medium italic mt-1 leading-relaxed">
+                              "{selectedLead.answers._ai_analysis.sales_script}"
+                            </p>
+                          </div>
+                        )}
+                        {selectedLead.answers._ai_analysis.next_steps && (
+                          <div className="bg-white rounded-lg border border-gray-200 p-4">
+                            <span className="text-xs text-gray-500 font-semibold uppercase">Próximos Passos</span>
+                            <ol className="mt-2 space-y-1">
+                              {selectedLead.answers._ai_analysis.next_steps.map((step: string, i: number) => (
+                                <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                                  <span className="bg-purple-100 text-purple-700 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i + 1}</span>
+                                  {step}
+                                </li>
+                              ))}
+                            </ol>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-gray-400">
+                        <Zap size={48} className="mx-auto mb-3 opacity-30" />
+                        <p className="text-sm font-medium">Análise de IA não disponível</p>
+                        <p className="text-xs mt-1">Use o botão "Analisar com IA" no Kanban para gerar a análise</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Conteúdo: Perguntas e Respostas */}
+                {detailSection === 'answers' && selectedLead.answers && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <FileText size={18} className="text-blue-600" />
+                      <h3 className="font-bold text-gray-900">Perguntas e Respostas</h3>
+                    </div>
+                    <div className="space-y-3">
+                      {Object.entries(selectedLead.answers).filter(([k]) => !k.startsWith('_')).map(([questionId, answerData]: [string, any]) => (
+                        <div key={questionId} className="bg-white rounded-lg border border-gray-200 p-4">
+                          <p className="text-xs text-gray-500 font-semibold mb-1">{getQuestionText(questionId)}</p>
+                          <div className="flex justify-between items-start">
+                            <p className="text-sm text-gray-900 font-medium">{Array.isArray(answerData.value) ? answerData.value.join(', ') : answerData.value}</p>
+                            {answerData.optionSelected?.value > 0 && (
+                              <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">
+                                + R$ {answerData.optionSelected.value}
+                              </span>
+                            )}
+                          </div>
+                          {answerData.followUps && Object.values(answerData.followUps).some((text: any) => text) && (
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                              {Object.entries(answerData.followUps).map(([optId, text]) =>
+                                text ? (
+                                  <div key={optId}>
+                                    <p className="text-xs text-gray-500 font-medium italic">Informação adicional:</p>
+                                    <p className="text-sm text-gray-800 font-medium pl-2 border-l-2 border-gray-200 mt-1">{text as string}</p>
+                                  </div>
+                                ) : null
+                              )}
+                            </div>
+                          )}
+                          {answerData.optionSelected?.script && (
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                              <p className="text-xs text-purple-600 font-medium italic flex items-center gap-1">
+                                <Sparkles size={12} /> Dica de Venda: "{answerData.optionSelected.script}"
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Estado padrão */}
+                {!detailSection && (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                    <Sparkles size={48} className="mb-3 opacity-30" />
+                    <p className="text-sm font-medium">Selecione uma opção ao lado</p>
+                    <p className="text-xs mt-1">Escolha entre Produtos, Análise IA ou Perguntas</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
