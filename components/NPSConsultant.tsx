@@ -253,13 +253,7 @@ Vamos começar?`,
       // Modo de edição: editar perguntas manualmente
       setCurrentStep('review');
       addAssistantMessage(
-        '✅ **Perfeito!** Aqui estão as perguntas da sua campanha.
-
-' +
-        'Você pode **editar** o texto das perguntas, **modificar** as opções de resposta, **mudar o tipo**, **adicionar** novas perguntas ou **remover** as que não quiser.
-
-' +
-        'Quando estiver satisfeito, clique em Salvar!'
+        `✅ **Perfeito!** Aqui estão as perguntas da sua campanha.\n\nVocê pode **editar** o texto das perguntas, **modificar** as opções de resposta, **mudar o tipo**, **adicionar** novas perguntas ou **remover** as que não quiser.\n\nQuando estiver satisfeito, clique em Salvar!`
       );
     } else if (value === 'start') {
       setCurrentStep('objective');
