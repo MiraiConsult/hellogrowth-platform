@@ -123,20 +123,82 @@ export default function NPSConsultant({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
+   // Carregar campanha existente para edição
+  useEffect(() => {
+    if (existingCampaign && existingCampaign.questions) {
+      console.log('Carregando campanha existente:', existingCampaign);
+      
+      // Mapear perguntas existentes
+      const loadedQuestions = existingCampaign.questions.map((q: any, idx: number) => {
+        let processedOptions: { id: string; text: string }[] = [];
+        
+        if (q.options && Array.isArray(q.options) && q.options.length > 0) {
+          processedOptions = q.options.map((opt: any, optIdx: number) => {
+            if (typeof opt === 'string') {
+              return { id: `opt_${idx}_${optIdx}`, text: opt };
+            }
+            return {
+              id: opt.id || `opt_${idx}_${optIdx}`,
+              text: opt.text || opt.label || ''
+            };
+          }).filter((opt: any) => opt.text.trim() !== '');
+        }
+        
+        return {
+          id: q.id || `q_${idx}`,
+          text: q.text || '',
+          type: q.type || 'text',
+          options: processedOptions,
+          insight: q.insight || '',
+          conditional: q.conditional
+        };
+      });
+      
+      setGeneratedQuestions(loadedQuestions);
+      setFormObjective(existingCampaign.objective || 'satisfacao_geral');
+      setFormTone(existingCampaign.tone || 'friendly');
+      setGoogleRedirect(existingCampaign.google_redirect || false);
+      setGooglePlaceId(existingCampaign.google_place_id || '');
+      setOfferPrize(existingCampaign.offer_prize || false);
+      setPreGoogleMessage(existingCampaign.pre_google_message || '');
+      setPostGameMessage(existingCampaign.post_game_message || '');
+    }
+  }, [existingCampaign]);
+
   useEffect(() => {
     if (currentStep === 'welcome' && chatMessages.length === 0 && businessProfile !== null) {
       setTimeout(() => {
-        addAssistantMessage(
-          businessProfile 
-            ? `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.business_name || 'sua empresa'}**.\n\nComo já conheço seu negócio, vou criar perguntas estratégicas baseadas no seu perfil.\n\nVamos criar uma pesquisa NPS que transforma feedback em crescimento?`
-            : 'Olá! 👋 Vou te ajudar a criar uma pesquisa NPS personalizada.\n\nVamos começar?',
-          [
-            { label: '✨ Usar meu perfil e começar!', value: 'start', icon: Sparkles }
-          ]
-        );
+        if (existingCampaign) {
+          // Modo de edição
+          addAssistantMessage(
+            `Olá! 👋 Você está editando a campanha **${existingCampaign.name || 'Sem título'}**.
+
+O que você gostaria de fazer?`,
+            [
+              { label: '🎨 Alterar o tom das perguntas', value: 'edit_tone', icon: Palette },
+              { label: '✏️ Editar perguntas manualmente', value: 'edit_questions', icon: Edit3 }
+            ]
+          );
+        } else {
+          // Modo de criação
+          addAssistantMessage(
+            businessProfile 
+              ? `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.business_name || 'sua empresa'}**.
+
+Como já conheço seu negócio, vou criar perguntas estratégicas baseadas no seu perfil.
+
+Vamos criar uma pesquisa NPS que transforma feedback em crescimento?`
+              : 'Olá! 👋 Vou te ajudar a criar uma pesquisa NPS personalizada.
+
+Vamos começar?',
+            [
+              { label: '✨ Usar meu perfil e começar!', value: 'start', icon: Sparkles }
+            ]
+          );
+        }
       }, 300);
     }
-  }, [currentStep, businessProfile]);
+  }, [currentStep, businessProfile, existingCampaign]);le]);
 
   const addAssistantMessage = (content: string, options?: { label: string; value: string; icon?: any }[]) => {
     setIsTyping(true);
@@ -164,7 +226,31 @@ export default function NPSConsultant({
   const handleOptionClick = (value: string, label: string) => {
     addUserMessage(label);
 
-    if (value === 'start') {
+    if (value === 'edit_tone') {
+      // Modo de edição: alterar tom das perguntas
+      setCurrentStep('tone');
+      addAssistantMessage(
+        'Qual novo tom você prefere para as perguntas?',
+        [
+          { label: '🎯 Direto e objetivo', value: 'direto' },
+          { label: '😊 Amigável e acolhedor', value: 'amigavel' },
+          { label: '💼 Profissional', value: 'profissional' },
+          { label: '🤝 Informal e descontraído', value: 'informal' }
+        ]
+      );
+    } else if (value === 'edit_questions') {
+      // Modo de edição: editar perguntas manualmente
+      setCurrentStep('review');
+      addAssistantMessage(
+        '✅ **Perfeito!** Aqui estão as perguntas da sua campanha.
+
+' +
+        'Você pode **editar** o texto das perguntas, **modificar** as opções de resposta, **mudar o tipo**, **adicionar** novas perguntas ou **remover** as que não quiser.
+
+' +
+        'Quando estiver satisfeito, clique em Salvar!'
+      );
+    } else if (value === 'start') {
       setCurrentStep('objective');
       addAssistantMessage(
         'Qual é o objetivo principal desta pesquisa NPS?',
@@ -225,13 +311,30 @@ export default function NPSConsultant({
     
     const selectedText = toneTexts[value];
     setTone(selectedText);
-    setCurrentStep('evaluation_points');
-    addAssistantMessage(
-      'Quais pontos você quer avaliar na pesquisa?\n\n(Digite separados por vírgula ou use as sugestões da IA)',
-      [
-        { label: '✨ Usar sugestões da IA', value: 'ai_suggestions', icon: Sparkles }
-      ]
-    );
+    setFormTone(value);
+    
+    // Se está em modo de edição (tem perguntas existentes), regenerar com novo tom
+    if (existingCampaign && generatedQuestions.length > 0) {
+      addAssistantMessage(
+        `✅ Tom alterado para **${selectedText}**!
+
+Vou regenerar as perguntas com o novo tom. Um momento...`
+      );
+      
+      // Regenerar perguntas com novo tom
+      setTimeout(() => {
+        startGeneration();
+      }, 1000);
+    } else {
+      // Modo de criação normal
+      setCurrentStep('evaluation_points');
+      addAssistantMessage(
+        'Quais pontos você quer avaliar na pesquisa?\n\n(Digite separados por vírgula ou use as sugestões da IA)',
+        [
+          { label: '✨ Usar sugestões da IA', value: 'ai_suggestions', icon: Sparkles }
+        ]
+      );
+    }
   };
 
   const handleAISuggestions = () => {
