@@ -22,9 +22,8 @@ interface NPSCampaignsProps {
 const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, onDeleteCampaign, navigateToAnalytics, onPreview, onViewReport, currentUser }) => {
   const tenantId = useTenantId()
 
-  const [view, setView] = useState<'list' | 'editor'>('list');
   const [showNPSConsultant, setShowNPSConsultant] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
   // Mass Send State
@@ -41,12 +40,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const [currentQrUrl, setCurrentQrUrl] = useState('');
   const [currentQrName, setCurrentQrName] = useState('');
 
-  // Form State
-  const [newCampaignName, setNewCampaignName] = useState('');
-  const [newCampaignDescription, setNewCampaignDescription] = useState('');
-  const [newCampaignRedirectEnabled, setNewCampaignRedirectEnabled] = useState(true);
-  const [questions, setQuestions] = useState<CampaignQuestion[]>([]);
-  const [initialFields, setInitialFields] = useState<InitialField[]>([]);
+  // States antigos removidos - agora usa apenas NPSConsultant
 
   // UI State
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -72,38 +66,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSave = async () => {
-    if (!newCampaignName) return;
-    setIsSaving(true);
-
-    const campaignToSave: Campaign = {
-        id: editingId || Date.now().toString(),
-        name: newCampaignName,
-        description: newCampaignDescription,
-        status: 'Ativa',
-        npsScore: 0,
-        responses: 0,
-        type: 'Nova',
-        enableRedirection: newCampaignRedirectEnabled,
-        questions: questions,
-        initialFields: initialFields.length > 0 ? initialFields : undefined
-    };
-
-    await onSaveCampaign(campaignToSave);
-
-    setIsSaving(false);
-    resetForm();
-    setView('list');
-  };
-
-  const resetForm = () => {
-    setNewCampaignName('');
-    setNewCampaignDescription('');
-    setNewCampaignRedirectEnabled(true);
-    setQuestions([]);
-    setInitialFields([]);
-    setEditingId(null);
-  };
+  // Funções antigas do editor removidas - agora usa apenas NPSConsultant
 
   // CSV Parsing Logic
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,99 +148,11 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
     setQrModalOpen(true);
   };
 
-  const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
-    if (direction === 'up' && index === 0) return;
-    if (direction === 'down' && index === questions.length - 1) return;
 
-    const newQuestions = [...questions];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    
-    // Swap
-    [newQuestions[index], newQuestions[targetIndex]] = [newQuestions[targetIndex], newQuestions[index]];
-    
-    setQuestions(newQuestions);
-  };
 
-  // FIXED AI SUGGEST LOGIC with Robust Parsing
-  const handleAiSuggest = async () => {
-    if (!newCampaignName) return;
-    setIsGenerating(true);
-    try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      if (apiKey) {
-        const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
-        const prompt = `
-          Gere exatamente 5 perguntas estratégicas de acompanhamento para uma pesquisa NPS.
-          NOME: "${newCampaignName}"
-          DESCRIÇÃO: "${newCampaignDescription}"
-          
-          REGRAS:
-          1. Retorne APENAS um JSON array válido. Sem markdown, sem \`\`\`.
-          2. Estrutura: [{"text": "Pergunta", "type": "text|rating|single", "options": ["Opção1", "Opção2"]}]
-          3. Use a descrição para criar contexto.
-        `;
-        
-        const result = await model.generateContent(prompt);
 
-        if (result.response.text()) {
-          // Remove potential markdown formatting if AI adds it
-          const cleanJson = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
-          
-          let generated;
-          try {
-             generated = JSON.parse(cleanJson);
-          } catch (e) {
-             console.warn("AI JSON Parse Failed, using raw or fallback");
-             throw new Error("Invalid JSON");
-          }
 
-          if (Array.isArray(generated) && generated.length > 0) {
-             const mapped = generated.map((q: any) => ({
-                id: Date.now().toString() + Math.random(),
-                text: q.text || "Pergunta gerada sem texto",
-                type: q.type || 'text',
-                options: q.options || []
-             }));
-             setQuestions(prev => [...prev, ...mapped]);
-             setIsGenerating(false);
-             return;
-          }
-        }
-      }
-      
-      throw new Error("AI Failed or No Key");
 
-    } catch (error) {
-      console.warn("AI Generation Failed, using Fallback:", error);
-      // ROBUST FALLBACK
-      const suggestions: CampaignQuestion[] = [];
-      const ctx = (newCampaignName + ' ' + newCampaignDescription).toLowerCase();
-
-      suggestions.push({ id: Date.now()+'1', text: 'O que motivou sua nota?', type: 'text' });
-      
-      if (ctx.includes('medico') || ctx.includes('clinica')) {
-          suggestions.push({ id: Date.now()+'2', text: 'Como avalia o tempo de espera?', type: 'rating' });
-          suggestions.push({ id: Date.now()+'3', text: 'O atendimento foi cordial?', type: 'single', options: ['Sim', 'Não', 'Regular'] });
-      } else {
-          suggestions.push({ id: Date.now()+'2', text: 'O serviço atendeu suas expectativas?', type: 'single', options: ['Sim', 'Parcialmente', 'Não'] });
-      }
-      
-      suggestions.push({ id: Date.now()+'4', text: 'Você voltaria a fazer negócio conosco?', type: 'single', options: ['Sim', 'Talvez', 'Não'] });
-      suggestions.push({ id: Date.now()+'5', text: 'Deixe uma sugestão de melhoria:', type: 'text' });
-
-      setQuestions(prev => [...prev, ...suggestions]);
-    } finally { 
-        setIsGenerating(false); 
-    }
-  };
-
-  const addQuestion = () => setQuestions([...questions, { id: Date.now().toString(), text: '', type: 'text', options: [] }]);
-  const updateQuestion = (id: string, field: keyof CampaignQuestion, value: any) => setQuestions(questions.map(q => q.id === id ? { ...q, [field]: value } : q));
-  const removeQuestion = (id: string) => setQuestions(questions.filter(q => q.id !== id));
-  const addOption = (qId: string) => setQuestions(questions.map(q => q.id === qId ? { ...q, options: [...(q.options||[]), ''] } : q));
-  const updateOption = (qId: string, idx: number, val: string) => setQuestions(questions.map(q => q.id === qId ? { ...q, options: q.options?.map((o, i) => i === idx ? val : o) } : q));
-  const removeOption = (qId: string, idx: number) => setQuestions(questions.map(q => q.id === qId ? { ...q, options: q.options?.filter((_, i) => i !== idx) } : q));
 
   const handleCopyLink = (id: string) => {
     const link = getSurveyLink(id);
@@ -287,13 +162,8 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   };
 
   const handleEdit = (camp: Campaign) => {
-    setEditingId(camp.id);
-    setNewCampaignName(camp.name);
-    setNewCampaignDescription(camp.description || '');
-    setNewCampaignRedirectEnabled(camp.enableRedirection !== false);
-    setQuestions(camp.questions || []);
-    setInitialFields(camp.initialFields || []);
-    setView('editor');
+    setEditingCampaign(camp);
+    setShowNPSConsultant(true);
     setMenuOpenId(null);
   };
 
@@ -310,208 +180,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
     setMenuOpenId(null);
   };
 
-  // Editor View (Full Screen like FormBuilder)
-  if (view === 'editor') {
-    return (
-      <div className="p-8 min-h-screen bg-gray-50" style={{ colorScheme: 'light' }}>
-        <div className="max-w-4xl mx-auto">
-          <div className="flex justify-between items-center mb-8">
-            <div className="flex items-center gap-4">
-              <button onClick={() => setView('list')} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-                <ArrowLeft size={20} className="text-gray-600" />
-              </button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {editingId ? 'Editar Campanha' : 'Nova Campanha NPS'}
-                </h1>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => {
-                  if (editingId && onPreview) {
-                    onPreview(editingId);
-                  }
-                }}
-                disabled={!editingId}
-                className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Eye size={18} /> Visualizar
-              </button>
-              <button 
-                onClick={handleSave}
-                disabled={!newCampaignName || isSaving}
-                className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 shadow-sm font-medium disabled:opacity-50 flex items-center gap-2"
-              >
-                {isSaving && <Loader2 size={18} className="animate-spin" />}
-                {isSaving ? 'Salvando...' : 'Salvar Campanha'}
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <InitialFieldsConfig 
-                initialFields={initialFields}
-                onChange={setInitialFields}
-              />
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Campanha</label>
-                <input 
-                  type="text" 
-                  value={newCampaignName}
-                  onChange={(e) => setNewCampaignName(e.target.value)}
-                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 p-2 border bg-white text-gray-900" 
-                  style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                  placeholder="Ex: Satisfação Pós-Venda"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição (Contexto para IA)</label>
-                <textarea 
-                  value={newCampaignDescription}
-                  onChange={(e) => setNewCampaignDescription(e.target.value)}
-                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 p-2 border bg-white text-gray-900" 
-                  style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                  placeholder="Descreva o contexto da pesquisa..."
-                  rows={3}
-                />
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><MapPin size={20} /></div>
-                  <div>
-                    <h5 className="font-bold text-gray-800">Redirecionamento Google</h5>
-                    <p className="text-xs text-gray-600">Envia promotores para avaliar no Google (usa Place ID Global).</p>
-                  </div>
-                </div>
-                <input 
-                  type="checkbox" 
-                  checked={newCampaignRedirectEnabled} 
-                  onChange={(e) => setNewCampaignRedirectEnabled(e.target.checked)} 
-                  className="w-6 h-6 rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
-                />
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Perguntas Adicionais</h4>
-                <button 
-                  onClick={handleAiSuggest} 
-                  disabled={!newCampaignName || isGenerating} 
-                  className="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-full flex items-center gap-1 font-bold hover:bg-purple-200 disabled:opacity-50"
-                >
-                  {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} 
-                  {isGenerating ? 'Gerando...' : 'Sugerir com IA'}
-                </button>
-              </div>
-              
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 opacity-75 flex items-center gap-2">
-                <span className="text-xs font-bold bg-gray-200 text-gray-600 px-2 rounded">FIXO</span>
-                <span className="text-sm font-medium text-gray-800">Em uma escala de 0 a 10...</span>
-              </div>
-              
-              <div className="space-y-3 mb-4">
-                {questions.map((q, idx) => (
-                  <div 
-                    key={q.id} 
-                    className="bg-white border border-gray-200 rounded-lg p-4 relative group transition-all"
-                  >
-                    <div className="absolute top-2 right-2 flex items-center gap-1">
-                      <button
-                        onClick={() => handleMoveQuestion(idx, 'up')}
-                        disabled={idx === 0}
-                        className="p-1 text-gray-400 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Mover para cima"
-                      >
-                        <ArrowUp size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleMoveQuestion(idx, 'down')}
-                        disabled={idx === questions.length - 1}
-                        className="p-1 text-gray-400 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Mover para baixo"
-                      >
-                        <ArrowDown size={16} />
-                      </button>
-                      <div className="h-4 w-px bg-gray-200 mx-1"></div>
-                      <button 
-                        onClick={() => removeQuestion(q.id)} 
-                        className="p-1 text-gray-400 hover:text-red-500"
-                        title="Excluir"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                    
-                    <div className="space-y-4 pt-2">
-                      <div className="flex gap-4">
-                        <div className="flex-1">
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Pergunta {idx + 1}</label>
-                          <input 
-                            type="text" 
-                            value={q.text} 
-                            onChange={(e) => updateQuestion(q.id, 'text', e.target.value)} 
-                            className="w-full border-b border-gray-300 text-sm bg-transparent" 
-                            placeholder="Pergunta..." 
-                          />
-                        </div>
-                        <div className="w-1/3">
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Tipo</label>
-                          <select 
-                            value={q.type} 
-                            onChange={(e) => updateQuestion(q.id, 'type', e.target.value)} 
-                            className="w-full rounded border-gray-300 text-sm py-1.5"
-                          >
-                            <option value="text">Texto</option>
-                            <option value="rating">Nota</option>
-                            <option value="single">Única</option>
-                            <option value="multiple">Múltipla</option>
-                          </select>
-                        </div>
-                      </div>
-                      {(q.type === 'single' || q.type === 'multiple') && (
-                        <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
-                          <label className="block text-xs font-semibold text-gray-500 mb-2">Alternativas:</label>
-                          {q.options?.map((opt, optIdx) => (
-                            <div key={optIdx} className="flex gap-2 mb-2 items-center">
-                              <div className="w-3 h-3 border rounded-sm flex-shrink-0 bg-gray-200"></div>
-                              <input 
-                                type="text" 
-                                value={opt} 
-                                onChange={(e) => updateOption(q.id, optIdx, e.target.value)} 
-                                className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm" 
-                              />
-                              <button onClick={() => removeOption(q.id, optIdx)} className="text-gray-400 hover:text-red-500 p-1"><Trash2 size={14} /></button>
-                            </div>
-                          ))}
-                          <button onClick={() => addOption(q.id)} className="text-xs text-primary-600 font-medium flex items-center gap-1 hover:bg-primary-50 px-2 py-1 rounded mt-1"><Plus size={14} /> Add</button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              <button 
-                onClick={addQuestion} 
-                className="w-full py-2 border border-dashed border-gray-300 text-gray-500 rounded-lg hover:border-primary-400 text-sm flex items-center justify-center gap-2"
-              >
-                <Plus size={16} /> Adicionar Pergunta
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Editor antigo removido - agora usa apenas NPSConsultant
 
   // List View
   return (
@@ -753,11 +422,17 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
       {showNPSConsultant && (
         <NPSConsultant
           supabase={supabase}
-          onClose={() => setShowNPSConsultant(false)}
+          userId={currentUser?.id || ''}
+          onClose={() => {
+            setShowNPSConsultant(false);
+            setEditingCampaign(null);
+          }}
           onSaveCampaign={(campaignData) => {
             onSaveCampaign(campaignData);
             setShowNPSConsultant(false);
+            setEditingCampaign(null);
           }}
+          existingCampaign={editingCampaign}
         />
       )}
     </div>
