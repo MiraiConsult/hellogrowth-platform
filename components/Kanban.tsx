@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
-import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap } from 'lucide-react';
+import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Markdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
@@ -72,6 +72,10 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
   // Delete State
   const [isDeleting, setIsDeleting] = useState(false);
   
+  // Lead Detail Panel State
+  const [detailSection, setDetailSection] = useState<'suggestions' | 'answers' | 'ai' | null>(null);
+  const [detailContent, setDetailContent] = useState<{ type: 'whatsapp' | 'email'; message?: any } | null>(null);
+
   // AI Analysis: uses global state from MainApp via props
 
   // Scroll to bottom of notes when selected lead changes or notes update
@@ -749,12 +753,12 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
       {/* Lead Details Panel */}
       {selectedLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          {/* Full Screen Panel */}
           <div className="w-full h-full bg-white shadow-2xl flex flex-col animate-in fade-in duration-300">
-            <div className="p-4 border-b border-gray-100 flex justify-between items-start bg-gray-50 sticky top-0 z-10">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">{selectedLead.name}</h2>
-                <div className="flex items-center gap-2 mt-1">
+            {/* HEADER - Nome, Telefone, Email, Data, Status */}
+            <div className="px-6 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-6 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-gray-900">{selectedLead.name}</h2>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
                     selectedLead.status === 'Vendido' ? 'bg-green-100 text-green-700 border-green-200' :
                     selectedLead.status === 'Perdido' ? 'bg-red-100 text-red-700 border-red-200' :
@@ -762,110 +766,289 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                   }`}>
                     {selectedLead.status}
                   </span>
-                  <span className="text-sm text-gray-500">• ID: {selectedLead.id.slice(-6)}</span>
+                </div>
+                <div className="flex items-center gap-1 text-sm text-gray-600">
+                  <Phone size={14} className="text-gray-400" />
+                  <span>{selectedLead.phone || 'Sem telefone'}</span>
+                </div>
+                <div className="flex items-center gap-1 text-sm text-gray-600">
+                  <Mail size={14} className="text-gray-400" />
+                  <span>{selectedLead.email || 'Sem email'}</span>
+                </div>
+                <div className="flex items-center gap-1 text-sm text-gray-600">
+                  <Calendar size={14} className="text-gray-400" />
+                  <span>{new Date(selectedLead.date).toLocaleDateString('pt-BR')}</span>
                 </div>
               </div>
-              <button onClick={() => setSelectedLead(null)} className="text-gray-400 hover:text-gray-600 bg-white rounded-full p-1 hover:bg-gray-200 transition-colors">
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => handleDeleteLead(selectedLead.id)}
+                  disabled={isDeleting}
+                  className="px-3 py-1.5 text-xs border border-red-300 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-1 disabled:opacity-50"
+                >
+                  {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  Excluir
+                </button>
+                <button onClick={() => setSelectedLead(null)} className="text-gray-400 hover:text-gray-600 bg-white rounded-full p-1.5 hover:bg-gray-200 transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="max-w-4xl mx-auto space-y-6">
-              
-              {/* Email and Value Section */}
-              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white p-2 rounded-lg text-gray-500"><Mail size={18} /></div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase font-semibold">Email</p>
-                    <p className="text-sm text-gray-800">{selectedLead.email || 'Não informado'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="bg-white p-2 rounded-lg text-green-600"><DollarSign size={18} /></div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase font-semibold">Valor</p>
-                    <p className="text-sm font-bold text-green-700">
+            {/* CORPO - Duas colunas */}
+            <div className="flex-1 flex overflow-hidden">
+              {/* COLUNA ESQUERDA - Controles */}
+              <div className="w-[380px] flex-shrink-0 border-r border-gray-200 bg-white flex flex-col p-4 gap-3 overflow-y-auto">
+                
+                {/* Valor e Procedimentos */}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-amber-700 font-semibold uppercase">Valor Identificado</span>
+                    <span className="text-lg font-bold text-green-700">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedLead.value)}
-                    </p>
+                    </span>
+                  </div>
+                  {selectedLead.answers?._ai_analysis?.recommended_products && (
+                    <div className="mt-2 pt-2 border-t border-amber-200">
+                      <span className="text-xs text-amber-700 font-semibold">Procedimentos recomendados:</span>
+                      <div className="mt-1 space-y-1">
+                        {selectedLead.answers._ai_analysis.recommended_products.map((p: any, i: number) => (
+                          <div key={i} className="text-xs text-gray-700 flex justify-between">
+                            <span>{p.name}</span>
+                            <span className="font-medium text-green-700">R$ {p.value?.toLocaleString('pt-BR')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Ações Rápidas - Compacto */}
+                <div className="bg-white border border-gray-200 rounded-lg p-3">
+                  <h4 className="text-xs font-bold text-gray-700 uppercase mb-2">Ações Rápidas</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={handleContactClick}
+                      disabled={!selectedLead.phone}
+                      className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm font-medium transition-colors"
+                    >
+                      <Phone size={14} /> WhatsApp
+                    </button>
+                    <button
+                      disabled={!selectedLead.email}
+                      onClick={() => {
+                        if (selectedLead.email) {
+                          window.open(`mailto:${selectedLead.email}`, '_blank');
+                        }
+                      }}
+                      className="px-3 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm font-medium transition-colors"
+                    >
+                      <Mail size={14} /> Email
+                    </button>
                   </div>
                 </div>
-              </div>
 
-              {/* AI Message Suggestions with Send Buttons */}
-              <MessageSuggestionsPanel
-                client={{
-                  id: selectedLead.id,
-                  name: selectedLead.name,
-                  email: selectedLead.email,
-                  phone: selectedLead.phone,
-                  type: 'lead',
-                  leadStatus: selectedLead.status,
-                  value: selectedLead.value,
-                  daysSinceLastContact: Math.floor((Date.now() - new Date(selectedLead.date).getTime()) / (1000 * 60 * 60 * 24)),
-                  answers: selectedLead.answers
-                }}
-                insightType={selectedLead.status === 'Vendido' ? 'opportunity' : selectedLead.status === 'Perdido' ? 'recovery' : 'sales'}
-                showSendButtons={true}
-              />
+                {/* Sugestões de Mensagem IA - Lista suspensa */}
+                <div className="bg-white border border-gray-200 rounded-lg">
+                  <button
+                    onClick={() => setDetailSection(prev => prev === 'suggestions' ? null : 'suggestions')}
+                    className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors rounded-lg"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-purple-600" />
+                      <span className="text-xs font-bold text-gray-700 uppercase">Sugestões de Mensagem IA</span>
+                    </div>
+                    {detailSection === 'suggestions' ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                  </button>
+                  {detailSection === 'suggestions' && (
+                    <div className="px-3 pb-3 border-t border-gray-100">
+                      <MessageSuggestionsPanel
+                        client={{
+                          id: selectedLead.id,
+                          name: selectedLead.name,
+                          email: selectedLead.email,
+                          phone: selectedLead.phone,
+                          type: 'lead',
+                          leadStatus: selectedLead.status,
+                          value: selectedLead.value,
+                          daysSinceLastContact: Math.floor((Date.now() - new Date(selectedLead.date).getTime()) / (1000 * 60 * 60 * 24)),
+                          answers: selectedLead.answers
+                        }}
+                        insightType={selectedLead.status === 'Vendido' ? 'opportunity' : selectedLead.status === 'Perdido' ? 'recovery' : 'sales'}
+                        showSendButtons={false}
+                        onMessageSelect={(msg) => {
+                          if (msg) {
+                            setDetailContent({ type: 'whatsapp', message: msg });
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
 
-              {/* Form Answers Section */}
-              {selectedLead.answers && Object.keys(selectedLead.answers).length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <FileText size={18} className="text-gray-400" />
-                    <h3 className="text-sm font-bold text-gray-900 uppercase">Respostas do Formulário</h3>
+                {/* Perguntas e Respostas - Lista suspensa */}
+                {selectedLead.answers && Object.keys(selectedLead.answers).filter(k => !k.startsWith('_')).length > 0 && (
+                  <div className="bg-white border border-gray-200 rounded-lg">
+                    <button
+                      onClick={() => setDetailSection(prev => prev === 'answers' ? null : 'answers')}
+                      className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors rounded-lg"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText size={16} className="text-blue-600" />
+                        <span className="text-xs font-bold text-gray-700 uppercase">Perguntas e Respostas</span>
+                        <span className="text-xs text-gray-400">
+                          ({Object.keys(selectedLead.answers).filter(k => !k.startsWith('_')).length})
+                        </span>
+                      </div>
+                      {detailSection === 'answers' ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    </button>
+                    {detailSection === 'answers' && (
+                      <div className="px-3 pb-3 border-t border-gray-100 space-y-2 max-h-[300px] overflow-y-auto">
+                        {Object.entries(selectedLead.answers).filter(([k]) => !k.startsWith('_')).map(([questionId, answerData]: [string, any]) => (
+                          <div key={questionId} className="border border-gray-100 rounded-lg p-2 bg-gray-50">
+                            <p className="text-[10px] text-gray-500 font-semibold">{getQuestionText(selectedLead, questionId)}</p>
+                            <div className="flex justify-between items-start mt-0.5">
+                              <p className="text-sm text-gray-900 font-medium">{Array.isArray(answerData.value) ? answerData.value.join(', ') : answerData.value}</p>
+                              {answerData.optionSelected?.value > 0 && (
+                                <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
+                                  + R$ {answerData.optionSelected.value}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-3">
-                    {Object.entries(selectedLead.answers).map(([questionId, answerData]: [string, any]) => (
-                      <div key={questionId} className="border border-gray-200 rounded-lg p-4 bg-white">
-                        <p className="text-xs text-gray-500 font-semibold mb-1.5">{getQuestionText(selectedLead, questionId)}</p>
-                        <div className="flex justify-between items-start">
-                          <p className="text-gray-900 font-medium text-base">{Array.isArray(answerData.value) ? answerData.value.join(', ') : answerData.value}</p>
-                          {answerData.optionSelected?.value > 0 && (
-                            <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100">
-                              + R$ {answerData.optionSelected.value}
-                            </span>
-                          )}
-                        </div>
-                        {answerData.followUps && Object.values(answerData.followUps).some(text => text) && (
-                          <div className="mt-2 pt-2 border-t border-gray-100">
-                            {Object.entries(answerData.followUps).map(([optId, text]) => 
-                              text ? (
-                                <div key={optId}>
-                                  <p className="text-xs text-gray-500 font-medium italic">Informação adicional:</p>
-                                  <p className="text-sm text-gray-800 font-medium pl-2 border-l-2 border-gray-200 mt-1">{text as string}</p>
-                                </div>
-                              ) : null
-                            )}
+                )}
+
+                {/* Análise IA - Lista suspensa */}
+                {selectedLead.answers?._ai_analysis && (
+                  <div className="bg-white border border-gray-200 rounded-lg">
+                    <button
+                      onClick={() => setDetailSection(prev => prev === 'ai' ? null : 'ai')}
+                      className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors rounded-lg"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Zap size={16} className="text-amber-600" />
+                        <span className="text-xs font-bold text-gray-700 uppercase">Análise da IA</span>
+                      </div>
+                      {detailSection === 'ai' ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    </button>
+                    {detailSection === 'ai' && (
+                      <div className="px-3 pb-3 border-t border-gray-100 space-y-2">
+                        {selectedLead.answers._ai_analysis.reasoning && (
+                          <div>
+                            <span className="text-[10px] text-gray-500 font-semibold uppercase">Raciocínio</span>
+                            <p className="text-sm text-gray-700 mt-0.5">{selectedLead.answers._ai_analysis.reasoning}</p>
                           </div>
                         )}
-
+                        {selectedLead.answers._ai_analysis.client_insights && (
+                          <div>
+                            <span className="text-[10px] text-gray-500 font-semibold uppercase">Insights do Cliente</span>
+                            <ul className="mt-0.5 space-y-0.5">
+                              {selectedLead.answers._ai_analysis.client_insights.map((insight: string, i: number) => (
+                                <li key={i} className="text-sm text-gray-700 flex items-start gap-1">
+                                  <span className="text-purple-500 mt-0.5">•</span> {insight}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {selectedLead.answers._ai_analysis.next_steps && (
+                          <div>
+                            <span className="text-[10px] text-gray-500 font-semibold uppercase">Próximos Passos</span>
+                            <ul className="mt-0.5 space-y-0.5">
+                              {selectedLead.answers._ai_analysis.next_steps.map((step: string, i: number) => (
+                                <li key={i} className="text-sm text-gray-700 flex items-start gap-1">
+                                  <span className="text-green-500 mt-0.5">{i + 1}.</span> {step}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                       </div>
-                    ))}
+                    )}
                   </div>
-                </div>
-              )}
+                )}
 
               </div>
-            </div>
-            
-            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center flex-shrink-0">
-              <button 
-                onClick={() => handleDeleteLead(selectedLead.id)}
-                disabled={isDeleting}
-                className="px-4 py-2 bg-white border border-red-300 text-red-600 rounded-lg hover:bg-red-50 font-medium flex items-center gap-2 disabled:opacity-50"
-              >
-                {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                {isDeleting ? 'Excluindo...' : 'Excluir Oportunidade'}
-              </button>
-              <button 
-                onClick={() => setSelectedLead(null)}
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium"
-              >
-                Fechar
-              </button>
+
+              {/* COLUNA DIREITA - Área de conteúdo dinâmico */}
+              <div className="flex-1 bg-gray-50 p-6 overflow-y-auto">
+                {detailContent?.type === 'whatsapp' && detailContent.message ? (
+                  <div className="h-full flex flex-col">
+                    <div className="flex items-center gap-2 mb-4">
+                      <MessageSquare size={18} className="text-green-600" />
+                      <h3 className="font-bold text-gray-900">Mensagem WhatsApp</h3>
+                    </div>
+                    <div className="bg-white rounded-xl border border-green-200 p-4 flex-1">
+                      <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{detailContent.message.whatsappMessage}</p>
+                    </div>
+                    <div className="mt-4 flex gap-2">
+                      <button
+                        onClick={() => {
+                          if (selectedLead.phone) {
+                            const cleanNumber = selectedLead.phone.replace(/[^0-9]/g, '');
+                            const url = `https://wa.me/55${cleanNumber}?text=${encodeURIComponent(detailContent.message!.whatsappMessage)}`;
+                            window.open(url, '_blank');
+                          }
+                        }}
+                        disabled={!selectedLead.phone}
+                        className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 flex items-center justify-center gap-2 font-medium transition-colors"
+                      >
+                        <Send size={16} /> Enviar via WhatsApp
+                      </button>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(detailContent.message!.whatsappMessage);
+                        }}
+                        className="px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-100 flex items-center gap-2 font-medium transition-colors"
+                      >
+                        Copiar
+                      </button>
+                    </div>
+                    {detailContent.message.emailSubject && (
+                      <div className="mt-6">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Mail size={18} className="text-blue-600" />
+                          <h3 className="font-bold text-gray-900">Email</h3>
+                        </div>
+                        <div className="bg-white rounded-xl border border-blue-200 p-4">
+                          <p className="text-xs text-blue-600 font-medium mb-1">Assunto:</p>
+                          <p className="text-sm text-gray-900 font-medium mb-3">{detailContent.message.emailSubject}</p>
+                          <p className="text-xs text-blue-600 font-medium mb-1">Corpo:</p>
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{detailContent.message.emailBody}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                    <MessageSquare size={48} className="mb-3 opacity-30" />
+                    <p className="text-sm font-medium">Selecione uma sugestão de mensagem</p>
+                    <p className="text-xs mt-1">Clique em "Sugestões de Mensagem IA" e escolha um tipo</p>
+                    
+                    {/* Mostrar respostas do formulário como conteúdo padrão */}
+                    {selectedLead.answers && Object.keys(selectedLead.answers).filter(k => !k.startsWith('_')).length > 0 && (
+                      <div className="mt-6 w-full max-w-lg">
+                        <div className="flex items-center gap-2 mb-3">
+                          <FileText size={16} className="text-gray-400" />
+                          <h4 className="text-sm font-semibold text-gray-600">Resumo das Respostas</h4>
+                        </div>
+                        <div className="space-y-2">
+                          {Object.entries(selectedLead.answers).filter(([k]) => !k.startsWith('_')).map(([questionId, answerData]: [string, any]) => (
+                            <div key={questionId} className="bg-white rounded-lg border border-gray-200 p-3">
+                              <p className="text-[10px] text-gray-500 font-semibold">{getQuestionText(selectedLead, questionId)}</p>
+                              <p className="text-sm text-gray-800 font-medium mt-0.5">{Array.isArray(answerData.value) ? answerData.value.join(', ') : answerData.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
           </div>
