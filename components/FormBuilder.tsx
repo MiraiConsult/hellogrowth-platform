@@ -16,6 +16,10 @@ interface FormBuilderProps {
   onViewReport?: (id: string) => void;
   setForms?: any;
   userId?: string;
+  isAnalyzingAll?: boolean;
+  analysisProgress?: { current: number; total: number };
+  pendingAnalysisCount?: number;
+  onAnalyzeAllLeads?: () => void;
 }
 
 
@@ -32,7 +36,7 @@ const normalizeQuestionType = (type: string): 'text' | 'single' | 'multiple' => 
   return typeMap[type] || 'text';
 };
 
-const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId }) => {
+const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads }) => {
   const [view, setView] = useState<'list' | 'editor' | 'consultant'>('list');
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [showConsultant, setShowConsultant] = useState(false);
@@ -44,9 +48,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [currentQrUrl, setCurrentQrUrl] = useState('');
   const [currentQrName, setCurrentQrName] = useState('');
   
-  // AI Analysis State
-  const [isAnalyzingAll, setIsAnalyzingAll] = useState(false);
-  const [analysisProgress, setAnalysisProgress] = useState({ current: 0, total: 0 });
+  // AI Analysis: uses global state from MainApp via props
   
   // Editor State
   const [currentQuestions, setCurrentQuestions] = useState<FormQuestion[]>([]);
@@ -59,138 +61,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   // Stats for Mini Dashboard
   const activeFormsCount = forms.filter(f => f.active).length;
 
-  // Count leads pending AI analysis
-  const pendingAnalysisCount = leads.filter(l => {
-    const source = (l as any).form_source || l.formSource;
-    return l.answers && !l.answers._ai_analysis && source !== 'Manual';
-  }).length;
 
-  // Analyze all pending leads with AI
-  const handleAnalyzeAllLeads = async () => {
-    if (!supabase || isAnalyzingAll) return;
-    
-    const pendingLeads = leads.filter(l => {
-      const source = (l as any).form_source || l.formSource;
-      return l.answers && !l.answers._ai_analysis && source !== 'Manual';
-    });
-    
-    if (pendingLeads.length === 0) {
-      alert('Todos os leads j\u00e1 foram analisados!');
-      return;
-    }
-    
-    // Obter tenant_id do primeiro lead
-    const tenantId = (pendingLeads[0] as any).tenant_id || userId;
-    if (!tenantId) {
-      alert('Erro: tenant n\u00e3o identificado.');
-      return;
-    }
-    
-    setIsAnalyzingAll(true);
-    setAnalysisProgress({ current: 0, total: pendingLeads.length });
-    
-    let successCount = 0;
-    let failCount = 0;
-    
-    // Buscar produtos e perfil do neg\u00f3cio uma vez s\u00f3
-    const { data: products } = await supabase
-      .from('products_services')
-      .select('*')
-      .eq('tenant_id', tenantId);
-    
-    const { data: businessProfile } = await supabase
-      .from('business_profile')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .single();
-    
-    for (let i = 0; i < pendingLeads.length; i++) {
-      const lead = pendingLeads[i];
-      setAnalysisProgress({ current: i + 1, total: pendingLeads.length });
-      
-      try {
-        const leadForm = forms.find(f => f.id === lead.formId || f.name === lead.formSource);
-        
-        const answersText = Object.entries(lead.answers || {}).filter(([key]) => !key.startsWith('_')).map(([qId, ans]: [string, any]) => {
-          const questionText = leadForm ? (leadForm.questions.find((q: any) => q.id === qId)?.text || qId) : qId;
-          const answerValue = typeof ans === 'object' && ans !== null ? (Array.isArray(ans.value) ? ans.value.join(', ') : ans.value || JSON.stringify(ans)) : ans;
-          return `Pergunta: ${questionText}\nResposta: ${answerValue}`;
-        }).join('\n\n');
-        
-        if (!answersText.trim()) { failCount++; continue; }
-        
-        let budgetContext = '';
-        if (lead.answers) {
-          const budgetEntry = Object.entries(lead.answers).find(([qId]) => {
-            const q = leadForm?.questions.find((q: any) => q.id === qId);
-            const txt = q?.text?.toLowerCase() || '';
-            return txt.includes('or\u00e7amento') || txt.includes('investir') || txt.includes('valor') || txt.includes('quanto');
-          });
-          if (budgetEntry) {
-            const [, ans] = budgetEntry as [string, any];
-            const val = typeof ans === 'object' ? (Array.isArray(ans.value) ? ans.value.join(', ') : ans.value) : ans;
-            budgetContext = `\n\n\u26a0\ufe0f OR\u00c7AMENTO DO CLIENTE: ${val}`;
-          }
-        }
-        
-        const productsContext = products && products.length > 0 ? products.map(p => 
-          `- **${p.name}** (R$ ${p.value})\n  Descri\u00e7\u00e3o: ${p.ai_description || 'Sem descri\u00e7\u00e3o'}`
-        ).join('\n\n') : 'Nenhum produto cadastrado';
-        
-        let businessContext = '';
-        if (businessProfile) {
-          businessContext = `\n\nCONTEXTO DO NEG\u00d3CIO:\n- Tipo: ${businessProfile.business_type || 'N/A'}\n- Descri\u00e7\u00e3o: ${businessProfile.business_description || 'N/A'}\n- P\u00fablico-alvo: ${businessProfile.target_audience || 'N/A'}`;
-        }
-        
-        const formSelectedProducts = (leadForm as any)?.selected_products || [];
-        let focusedProductsContext = '';
-        if (formSelectedProducts.length > 0 && products) {
-          const fp = products.filter(p => formSelectedProducts.includes(p.id));
-          if (fp.length > 0) {
-            focusedProductsContext = `\n\n\ud83c\udfaf PRODUTOS EM FOCO:\n${fp.map(p => `- **${p.name}** (R$ ${p.value})`).join('\n')}`;
-          }
-        }
-        
-        const prompt = `Voc\u00ea \u00e9 um consultor de vendas especializado. Analise as respostas do cliente.${businessContext}\nRESPOSTAS DO CLIENTE:\n${answersText}${budgetContext}\nPRODUTOS/SERVI\u00c7OS DISPON\u00cdVEIS:\n${productsContext}${focusedProductsContext}\nResponda APENAS com JSON v\u00e1lido (sem markdown):\n{\n  "recommended_products": [{"id": "product_id", "name": "Nome", "value": 0, "reason": "Raz\u00e3o"}],\n  "suggested_product": "Nome do produto principal",\n  "suggested_value": 0,\n  "classification": "opportunity|risk|monitoring",\n  "confidence": 0.85,\n  "reasoning": "Explica\u00e7\u00e3o detalhada",\n  "client_insights": ["Insight 1", "Insight 2"],\n  "sales_script": "Script de abordagem",\n  "next_steps": ["A\u00e7\u00e3o 1", "A\u00e7\u00e3o 2"]\n}`;
-        
-        const response = await fetch('/api/gemini', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt })
-        });
-        
-        if (response.ok) {
-          const aiData = await response.json();
-          const cleanResponse = aiData.response.replace(/```json\n?|\n?```/g, '').trim();
-          const aiAnalysis = JSON.parse(cleanResponse);
-          
-          let updatedValue = lead.value;
-          if (aiAnalysis.recommended_products && aiAnalysis.recommended_products.length > 0) {
-            updatedValue = aiAnalysis.recommended_products.reduce((sum: number, p: any) => sum + (p.value || 0), 0);
-          } else if (aiAnalysis.suggested_value > 0) {
-            updatedValue = aiAnalysis.suggested_value;
-          }
-          
-          await supabase.from('leads').update({
-            value: updatedValue,
-            answers: { ...lead.answers, _ai_analysis: aiAnalysis, _analyzing: false }
-          }).eq('id', lead.id);
-          
-          successCount++;
-        } else { failCount++; }
-      } catch (error) {
-        console.error(`Erro ao analisar lead:`, error);
-        failCount++;
-      }
-      
-      if (i < pendingLeads.length - 1) await new Promise(r => setTimeout(r, 1000));
-    }
-    
-    setIsAnalyzingAll(false);
-    alert(`An\u00e1lise conclu\u00edda!\n\u2705 ${successCount} leads analisados com sucesso\n${failCount > 0 ? `\u274c ${failCount} falharam` : ''}`);
-    // Recarregar p\u00e1gina para atualizar dados
-    window.location.reload();
-  };
   
   const totalResponses = useMemo(() => {
     if (leads && leads.length > 0) {
@@ -520,7 +391,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
           <div className="flex gap-3">
             {/* Botão Analisar com IA */}
             <button 
-              onClick={handleAnalyzeAllLeads}
+              onClick={onAnalyzeAllLeads}
               disabled={isAnalyzingAll || pendingAnalysisCount === 0}
               className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
                 isAnalyzingAll 
