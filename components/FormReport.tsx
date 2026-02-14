@@ -276,25 +276,34 @@ Retorne APENAS um JSON válido (sem markdown) com:
     }
   };
 
-  // Função para aplicar atualização pendente
+  // Função para aplicar atualização pendente (inclui produtos)
   const handleApplyPendingUpdate = async () => {
     if (!pendingUpdate || !selectedLead || !supabase) return;
     setIsChatLoading(true);
     try {
       const currentAnalysis = selectedLead.answers?._ai_analysis;
+      // Atualizar os produtos se a IA indicou novos produtos
+      let newProducts = editedProducts;
+      if (pendingUpdate.new_products && Array.isArray(pendingUpdate.new_products)) {
+        newProducts = pendingUpdate.new_products;
+        setEditedProducts(newProducts);
+        setIsEditingProducts(false);
+      }
+      const { new_products, ...analysisFields } = pendingUpdate;
       const updatedAnalysis = {
         ...currentAnalysis,
-        ...pendingUpdate,
-        recommended_products: editedProducts,
-        suggested_product: editedProducts.map(p => p.name).join(', '),
-        suggested_value: editedProducts.reduce((s, p) => s + p.value, 0),
+        ...analysisFields,
+        recommended_products: newProducts,
+        suggested_product: newProducts.map((p: any) => p.name).join(', '),
+        suggested_value: newProducts.reduce((s: number, p: any) => s + p.value, 0),
         chat_updated_at: new Date().toISOString()
       };
       const updatedAnswers = { ...selectedLead.answers, _ai_analysis: updatedAnalysis };
-      await supabase.from('leads').update({ answers: updatedAnswers }).eq('id', selectedLead.id);
-      if (onLeadUpdate) onLeadUpdate(selectedLead.id, { answers: updatedAnswers });
-      setSelectedLead({ ...selectedLead, answers: updatedAnswers });
-      setChatMessages(prev => [...prev, { role: 'ai', content: 'Pronto! An\u00e1lise atualizada com sucesso.' }]);
+      const newValue = newProducts.reduce((s: number, p: any) => s + p.value, 0);
+      await supabase.from('leads').update({ answers: updatedAnswers, value: newValue }).eq('id', selectedLead.id);
+      if (onLeadUpdate) onLeadUpdate(selectedLead.id, { answers: updatedAnswers, value: newValue });
+      setSelectedLead({ ...selectedLead, answers: updatedAnswers, value: newValue });
+      setChatMessages(prev => [...prev, { role: 'ai', content: 'Pronto! Produtos e análise atualizados com sucesso.' }]);
       setPendingUpdate(null);
     } catch (err) {
       console.error('Erro ao aplicar:', err);
@@ -306,10 +315,10 @@ Retorne APENAS um JSON válido (sem markdown) com:
 
   const handleRejectPendingUpdate = () => {
     setPendingUpdate(null);
-    setChatMessages(prev => [...prev, { role: 'ai', content: 'Ok, descartei a altera\u00e7\u00e3o. O que gostaria de ajustar?' }]);
+    setChatMessages(prev => [...prev, { role: 'ai', content: 'Ok, descartei a alteração. O que gostaria de ajustar?' }]);
   };
 
-  // Fun\u00e7\u00e3o de chat com IA
+  // Função de chat com IA
   const handleChatSend = async () => {
     if (!chatInput.trim() || !selectedLead || isChatLoading) return;
     const userMessage = chatInput.trim();
@@ -320,7 +329,7 @@ Retorne APENAS um JSON válido (sem markdown) com:
     try {
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       if (!apiKey) {
-        setChatMessages(prev => [...prev, { role: 'ai', content: 'API Key n\u00e3o configurada.' }]);
+        setChatMessages(prev => [...prev, { role: 'ai', content: 'API Key não configurada.' }]);
         return;
       }
       const ai = new GoogleGenerativeAI(apiKey);
@@ -334,61 +343,77 @@ Retorne APENAS um JSON válido (sem markdown) com:
             .join('\n')
         : '';
 
-      const productsAvailable = products.map(p => `${p.name} (R$ ${p.value})`).join(', ');
-      const productsSelected = editedProducts.map(p => `${p.name} (R$ ${p.value})`).join(', ');
-      const chatHistory = chatMessages.slice(-10).map(m => `${m.role === 'user' ? 'Usu\u00e1rio' : 'IA'}: ${m.content}`).join('\n');
+      const productsAvailable = products.map(p => `${p.name}: R$ ${p.value}`).join('\n');
+      const productsSelected = editedProducts.map(p => `${p.name}: R$ ${p.value}`).join('\n');
+      const chatHistory = chatMessages.slice(-10).map(m => `${m.role === 'user' ? 'Usuário' : 'IA'}: ${m.content}`).join('\n');
 
-      const prompt = `Voc\u00ea \u00e9 um consultor de vendas do sistema HelloGrowth. REGRAS OBRIGAT\u00d3RIAS:
+      const prompt = `Você é um consultor de vendas do sistema HelloGrowth.
 
-1. SEMPRE responda em portugu\u00eas do Brasil
-2. Respostas CURTAS (m\u00e1ximo 3 frases)
-3. NUNCA retorne JSON, c\u00f3digo ou texto t\u00e9cnico
-4. NUNCA use palavras em ingl\u00eas
-5. Seja fiel \u00e0s respostas do cliente - se ele disse que o or\u00e7amento \u00e9 X, respeite isso
-6. SEMPRE QUESTIONE antes de fazer qualquer altera\u00e7\u00e3o. Pergunte se tem certeza e explique o impacto
-7. S\u00f3 confirme a altera\u00e7\u00e3o quando o usu\u00e1rio disser "sim", "confirma", "pode fazer", "faz isso"
+REGRAS OBRIGATÓRIAS:
+1. SEMPRE responda em português do Brasil, respostas CURTAS (máximo 3 frases)
+2. NUNCA retorne JSON, código, markdown ou texto técnico ao usuário
+3. NUNCA use palavras em inglês
+4. Seja fiel às respostas do cliente - respeite orçamento e preferências
+5. SEMPRE QUESTIONE antes de alterar. Explique o impacto da mudança
+6. Só confirme quando o usuário disser "sim", "confirma", "pode fazer", "faz isso", "isso"
 
-CONTEXTO:
-Cliente: ${selectedLead.name}
-Produtos selecionados: ${productsSelected || 'Nenhum'}
-Todos os produtos dispon\u00edveis: ${productsAvailable}
-Or\u00e7amento do cliente (baseado nas respostas): verifique nas respostas abaixo
+PRODUTOS ATUALMENTE SELECIONADOS PARA ESTE CLIENTE:
+${productsSelected || 'Nenhum'}
 
-RESPOSTAS DO FORMUL\u00c1RIO:
+TODOS OS PRODUTOS/SERVIÇOS DISPONÍVEIS NA EMPRESA:
+${productsAvailable}
+
+RESPOSTAS DO CLIENTE NO FORMULÁRIO:
 ${answersText}
 
-AN\u00c1LISE ATUAL:
-Classifica\u00e7\u00e3o: ${currentAnalysis?.classification || 'N/A'}
-Confian\u00e7a: ${currentAnalysis?.confidence ? Math.round(currentAnalysis.confidence * 100) + '%' : 'N/A'}
-Racioc\u00ednio: ${currentAnalysis?.reasoning || 'N/A'}
+ANÁLISE ATUAL:
+Classificação: ${currentAnalysis?.classification || 'N/A'}
+Confiança: ${currentAnalysis?.confidence ? Math.round(currentAnalysis.confidence * 100) + '%' : 'N/A'}
+Raciocínio: ${currentAnalysis?.reasoning || 'N/A'}
 
-HIST\u00d3RICO:
+HISTÓRICO DA CONVERSA:
 ${chatHistory}
 
-MENSAGEM: ${userMessage}
+MENSAGEM DO USUÁRIO: ${userMessage}
 
-Se o usu\u00e1rio est\u00e1 CONFIRMANDO uma altera\u00e7\u00e3o que voc\u00ea j\u00e1 questionou, responda EXATAMENTE neste formato (e NADA mais):
-CONFIRMADO|classifica\u00e7\u00e3o|confian\u00e7a|racioc\u00ednio curto|insight1;insight2|passo1;passo2|script curto
-
-Se N\u00c3O \u00e9 uma confirma\u00e7\u00e3o, responda normalmente em texto curto e simples.`;
+INSTRUÇÕES DE RESPOSTA:
+- Se o usuário está apenas perguntando ou conversando: responda em texto curto e simples
+- Se o usuário está CONFIRMANDO uma alteração que você já questionou (disse sim, confirma, pode fazer, faz isso, isso, etc.):
+  Responda EXATAMENTE neste formato técnico (será processado pelo sistema, o usuário NÃO verá isso):
+  ACAO|produtos_finais|classificação|confiança|raciocínio curto
+  
+  Onde produtos_finais é a lista dos nomes dos produtos que devem FICAR selecionados, separados por vírgula.
+  Exemplo: ACAO|Inova Diamante|opportunity|0.9|Cliente focado em atendimento premium
+  Exemplo com 2 produtos: ACAO|Inova Diamante,Avaliação física|opportunity|0.85|Cliente quer acompanhamento completo
+  
+  IMPORTANTE: Inclua APENAS os produtos que devem ficar. Se o usuário pediu para remover um, NÃO inclua ele.`;
 
       const result = await model.generateContent(prompt);
       let responseText = result.response.text().trim();
 
-      // Verificar se a IA retornou uma confirma\u00e7\u00e3o de altera\u00e7\u00e3o
-      if (responseText.startsWith('CONFIRMADO|')) {
+      // Verificar se a IA retornou uma ação de atualização
+      if (responseText.startsWith('ACAO|')) {
         try {
           const parts = responseText.split('|');
+          const productNames = parts[1]?.split(',').map(s => s.trim()).filter(Boolean) || [];
+          
+          // Encontrar os produtos reais pelo nome
+          const newProducts = productNames.map(name => {
+            const found = products.find(p => p.name.toLowerCase() === name.toLowerCase());
+            return found ? { name: found.name, value: found.value } : null;
+          }).filter(Boolean) as {name: string; value: number}[];
+          
+          const totalValue = newProducts.reduce((s, p) => s + p.value, 0);
+          const productList = newProducts.map(p => `${p.name} (R$ ${p.value.toLocaleString('pt-BR', {minimumFractionDigits: 2})})`).join(', ');
+          
           const updateData = {
-            classification: parts[1]?.trim() || currentAnalysis?.classification,
-            confidence: parseFloat(parts[2]) || currentAnalysis?.confidence,
-            reasoning: parts[3]?.trim() || currentAnalysis?.reasoning,
-            client_insights: parts[4]?.split(';').map(s => s.trim()).filter(Boolean) || currentAnalysis?.client_insights,
-            next_steps: parts[5]?.split(';').map(s => s.trim()).filter(Boolean) || currentAnalysis?.next_steps,
-            sales_script: parts[6]?.trim() || currentAnalysis?.sales_script
+            classification: parts[2]?.trim() || currentAnalysis?.classification,
+            confidence: parseFloat(parts[3]) || currentAnalysis?.confidence,
+            reasoning: parts[4]?.trim() || currentAnalysis?.reasoning,
+            new_products: newProducts
           };
           setPendingUpdate(updateData);
-          setChatMessages(prev => [...prev, { role: 'ai', content: `Vou atualizar a an\u00e1lise. Deseja confirmar?` }]);
+          setChatMessages(prev => [...prev, { role: 'ai', content: `Vou alterar para: ${productList}. Total: R$ ${totalValue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}. Confirma?` }]);
         } catch {
           setChatMessages(prev => [...prev, { role: 'ai', content: responseText }]);
         }
