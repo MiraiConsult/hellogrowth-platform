@@ -99,7 +99,7 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
     }
 
     checkGmailConnection();
-  }, [client, insightType]);
+  }, [client.id, insightType]);
 
   const generateMessage = async (context: ClientContext, typeId: string) => {
     setIsGenerating(true);
