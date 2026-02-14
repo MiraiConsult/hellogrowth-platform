@@ -392,12 +392,10 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
 
   return (
     <div className="p-8 h-screen flex flex-col bg-gray-50 overflow-hidden relative">
-      <div className="flex flex-wrap items-center gap-4 mb-8">
-        <div className="mr-auto">
+      <div className="mb-8">
+        <div className="flex items-center gap-4 flex-wrap">
           <h1 className="text-2xl font-bold text-gray-900">Quadro de Oportunidades</h1>
-          <p className="text-gray-500">Gerencie seu funil de vendas (HelloClient)</p>
-        </div>
-        <div className="flex gap-3 relative items-center flex-wrap">
+          <div className="flex gap-3 relative items-center flex-wrap">
           <button 
             onClick={() => setShowDashboard(!showDashboard)}
             className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${showDashboard ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
@@ -487,6 +485,8 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
             <Plus size={18} /> Nova Oportunidade
           </button>
         </div>
+        </div>
+        <p className="text-gray-500 mt-1">Gerencie seu funil de vendas (HelloClient)</p>
       </div>
 
       {/* Dashboard View */}
