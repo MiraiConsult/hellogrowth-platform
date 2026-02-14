@@ -124,7 +124,7 @@ export default function NPSConsultant({
   }, [chatMessages]);
 
   useEffect(() => {
-    if (currentStep === 'welcome' && chatMessages.length === 0) {
+    if (currentStep === 'welcome' && chatMessages.length === 0 && businessProfile !== null) {
       setTimeout(() => {
         addAssistantMessage(
           businessProfile 
@@ -136,7 +136,7 @@ export default function NPSConsultant({
         );
       }, 300);
     }
-  }, [currentStep, businessProfile, chatMessages.length]);
+  }, [currentStep, businessProfile]);
 
   const addAssistantMessage = (content: string, options?: { label: string; value: string; icon?: any }[]) => {
     setIsTyping(true);
@@ -250,8 +250,22 @@ export default function NPSConsultant({
   const handleGoogleRedirectSelection = (value: string) => {
     if (value === 'yes') {
       setGoogleRedirect(true);
-      setCurrentStep('google_place_id');
-      addAssistantMessage('Cole aqui o **Place ID** da sua empresa no Google:\n\n💡 Você pode encontrar no perfil do negócio ou em configurações.');
+      
+      // Verificar se já tem Place ID no business_profile
+      if (businessProfile?.google_place_id) {
+        setGooglePlaceId(businessProfile.google_place_id);
+        setCurrentStep('prize_config');
+        addAssistantMessage(
+          'Quer oferecer um prêmio (Roleta da Sorte) para incentivar a avaliação?',
+          [
+            { label: '🎁 Sim, com prêmio', value: 'yes' },
+            { label: '📝 Não, sem prêmio', value: 'no' }
+          ]
+        );
+      } else {
+        setCurrentStep('google_place_id');
+        addAssistantMessage('Cole aqui o **Place ID** da sua empresa no Google:\n\n💡 Você pode encontrar no perfil do negócio ou em configurações.');
+      }
     } else {
       setGoogleRedirect(false);
       setCurrentStep('generation');
@@ -374,10 +388,23 @@ Retorne APENAS um JSON válido com este formato:
       clearInterval(progressInterval);
       setGenerationProgress(100);
 
-      if (!response.ok) throw new Error('Erro na API');
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('API Error:', errorData);
+        throw new Error('Erro na API');
+      }
 
       const data = await response.json();
-      const parsed = JSON.parse(data.text);
+      
+      // Tentar extrair JSON do texto se vier com markdown
+      let jsonText = data.text;
+      if (jsonText.includes('```json')) {
+        jsonText = jsonText.split('```json')[1].split('```')[0].trim();
+      } else if (jsonText.includes('```')) {
+        jsonText = jsonText.split('```')[1].split('```')[0].trim();
+      }
+      
+      const parsed = JSON.parse(jsonText);
       
       const questions: GeneratedQuestion[] = parsed.questions.map((q: any, index: number) => ({
         id: `q${index + 1}`,
