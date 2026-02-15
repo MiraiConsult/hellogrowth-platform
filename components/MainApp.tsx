@@ -1109,6 +1109,12 @@ Responda APENAS com JSON válido (sem markdown):
             </div>
         )}
         
+        {currentView === 'game-participations' && (
+            <div className="p-6">
+                <GameParticipations tenantId={currentUser.tenantId} />
+            </div>
+        )}
+        
         {currentView === 'campaign-report' && reportCampaignId && (
             <CampaignReport 
                 campaignId={reportCampaignId} 

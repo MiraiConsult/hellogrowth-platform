@@ -101,6 +101,7 @@ const Navigation: React.FC<NavigationProps> = ({
         { id: 'nps', label: 'Pesquisas NPS', icon: Star, requiredPlan: 'rating' },
         { id: 'analytics', label: 'Análise Feedback', icon: BarChart3, requiredPlan: 'rating' },
         { id: 'games', label: 'Roleta da Sorte', icon: Gift, requiredPlan: 'rating', isNew: true, badge: 'Novo' },
+        { id: 'game-participations', label: 'Participantes', icon: Users, requiredPlan: 'rating' },
       ]
     },
     {

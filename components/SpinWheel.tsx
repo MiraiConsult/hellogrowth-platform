@@ -191,11 +191,6 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
               <div className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-pink-500 mb-4">
                 {wonPrize?.name}
               </div>
-              <div className="bg-gray-100 rounded-lg p-4 mb-6">
-                <p className="text-sm text-gray-600 mb-2">Seu código de prêmio:</p>
-                <p className="text-2xl font-mono font-bold text-gray-800">{prizeCode}</p>
-                <p className="text-xs text-gray-500 mt-2">Guarde este código para resgatar seu prêmio</p>
-              </div>
             </div>
 
             <button
