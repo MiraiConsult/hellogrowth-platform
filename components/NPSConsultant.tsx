@@ -92,6 +92,8 @@ export default function NPSConsultant({
   const [googleRedirect, setGoogleRedirect] = useState(false);
   const [googlePlaceId, setGooglePlaceId] = useState('');
   const [offerPrize, setOfferPrize] = useState(false);
+  const [selectedGameId, setSelectedGameId] = useState<string>('');
+  const [availableGames, setAvailableGames] = useState<any[]>([]);
   const [beforeGoogleMessage, setBeforeGoogleMessage] = useState('');
   const [afterGameMessage, setAfterGameMessage] = useState('');
   const [campaignName, setCampaignName] = useState('');
@@ -107,8 +109,23 @@ export default function NPSConsultant({
   useEffect(() => {
     if (supabase && tenantId) {
       loadBusinessProfile();
+      loadAvailableGames();
     }
   }, [supabase, tenantId]);
+
+  const loadAvailableGames = async () => {
+    try {
+      const response = await fetch('/api/games', {
+        headers: { 'x-tenant-id': tenantId || '' }
+      });
+      if (response.ok) {
+        const games = await response.json();
+        setAvailableGames(games.filter((g: any) => g.status === 'active'));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar games:', error);
+    }
+  };
 
   const loadBusinessProfile = async () => {
     if (!supabase || !tenantId) return;
@@ -436,10 +453,37 @@ Vou regenerar as perguntas com o novo tom. Um momento...`
   const handlePrizeSelection = (value: string) => {
     if (value === 'yes') {
       setOfferPrize(true);
-      addAssistantMessage('Ótimo! Agora escreva a mensagem que aparecerá **DEPOIS do jogo**, antes de redirecionar para o Google:\n\n💡 Exemplo: "Parabéns! Para liberar seu prêmio, nos avalie no Google na próxima tela."\n\n_(Deixe em branco para usar mensagem padrão)_');
-    } else {
+      
+      // Mostrar lista de games disponíveis
+      if (availableGames.length > 0) {
+        const gameOptions = availableGames.map(game => ({
+          label: `🎰 ${game.name}`,
+          value: game.id
+        }));
+        
+        addAssistantMessage(
+          'Selecione qual Roleta da Sorte você quer usar:',
+          [...gameOptions, { label: '➕ Criar nova roleta', value: 'create_new' }]
+        );
+      } else {
+        addAssistantMessage(
+          '⚠️ Você ainda não tem nenhuma Roleta da Sorte configurada.\n\nPor favor, acesse **HelloRating > Roleta da Sorte** para criar uma roleta antes de continuar.',
+          [{ label: '🔙 Voltar e continuar sem prêmio', value: 'no' }]
+        );
+      }
+    } else if (value === 'no') {
       setOfferPrize(false);
       addAssistantMessage('Escreva a mensagem que aparecerá **antes de redirecionar** para o Google:\n\n💡 Exemplo: "Obrigado! Agora nos avalie no Google para ajudar outros clientes."\n\n_(Deixe em branco para usar mensagem padrão)_');
+    } else if (value === 'create_new') {
+      addAssistantMessage(
+        '⚠️ Para criar uma nova roleta, acesse **HelloRating > Roleta da Sorte** no menu.\n\nPor enquanto, vou continuar sem prêmio.',
+        [{ label: '✅ Continuar', value: 'no' }]
+      );
+    } else {
+      // value é o game_id selecionado
+      setSelectedGameId(value);
+      const selectedGame = availableGames.find(g => g.id === value);
+      addAssistantMessage(`✅ Roleta selecionada: **${selectedGame?.name}**\n\nAgora escreva a mensagem que aparecerá **DEPOIS do jogo**, antes de redirecionar para o Google:\n\n💡 Exemplo: "Parabéns! Para liberar seu prêmio, nos avalie no Google na próxima tela."\n\n_(Deixe em branco para usar mensagem padrão)_`);
     }
   };
 
@@ -631,6 +675,7 @@ Retorne APENAS um JSON válido com este formato:
         google_redirect: googleRedirect,
         google_place_id: googlePlaceId,
         offer_prize: offerPrize,
+        game_id: selectedGameId || null,
         before_google_message: beforeGoogleMessage,
         after_game_message: afterGameMessage,
         questions: generatedQuestions,

@@ -25,6 +25,8 @@ import BusinessProfile from '@/components/BusinessProfile';
 import TeamManagement from '@/components/TeamManagement';
 // CustomerJourney removed
 import IntelligenceCenter from '@/components/IntelligenceCenter';
+import GameConfig from '@/components/GameConfig';
+import GameParticipations from '@/components/GameParticipations';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { mockSettings } from '@/services/mockData';
 import { supabase } from '@/lib/supabase';
@@ -581,6 +583,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       google_redirect: (campaign as any).google_redirect ?? campaign.enableRedirection ?? false,
       google_place_id: (campaign as any).google_place_id ?? (campaign as any).googlePlaceId ?? '',
       offer_prize: (campaign as any).offer_prize ?? (campaign as any).offerPrize ?? false,
+      game_id: (campaign as any).game_id ?? null,
       before_google_message: (campaign as any).before_google_message ?? (campaign as any).beforeGoogleMessage ?? '',
       after_game_message: (campaign as any).after_game_message ?? (campaign as any).afterGameMessage ?? '',
       objective: (campaign as any).objective ?? '',
@@ -595,7 +598,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       setCampaigns(prev => prev.map(c => c.id === campaign.id ? { ...c, ...campaign } : c));
     } else {
       const { data } = await supabase.from('campaigns').insert([campaignData]).select().single();
-      if (data) setCampaigns(prev => [...prev, { ...data, npsScore: 0, responses: 0, questions: data.questions || [], initialFields: data.initial_fields || [], enableRedirection: data.enable_redirection, google_redirect: data.google_redirect, google_place_id: data.google_place_id, offer_prize: data.offer_prize, before_google_message: data.before_google_message, after_game_message: data.after_game_message, objective: data.objective, tone: data.tone, evaluation_points: data.evaluation_points }]);
+      if (data) setCampaigns(prev => [...prev, { ...data, npsScore: 0, responses: 0, questions: data.questions || [], initialFields: data.initial_fields || [], enableRedirection: data.enable_redirection, google_redirect: data.google_redirect, google_place_id: data.google_place_id, offer_prize: data.offer_prize, game_id: data.game_id, before_google_message: data.before_google_message, after_game_message: data.after_game_message, objective: data.objective, tone: data.tone, evaluation_points: data.evaluation_points }]);
     }
   };
 
@@ -1099,6 +1102,12 @@ Responda APENAS com JSON válido (sem markdown):
             onUpdateNPSNote={handleUpdateNPSNote}
             campaigns={campaigns}
         />}
+        
+        {currentView === 'games' && (
+            <div className="p-6">
+                <GameConfig tenantId={currentUser.tenantId} />
+            </div>
+        )}
         
         {currentView === 'campaign-report' && reportCampaignId && (
             <CampaignReport 

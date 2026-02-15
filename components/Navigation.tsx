@@ -20,7 +20,8 @@ import {
   Sparkles,
   Crown,
   Brain,
-  Package
+  Package,
+  Gift
 } from 'lucide-react';
 import { PlanType } from '@/types';
 
@@ -99,6 +100,7 @@ const Navigation: React.FC<NavigationProps> = ({
       children: [
         { id: 'nps', label: 'Pesquisas NPS', icon: Star, requiredPlan: 'rating' },
         { id: 'analytics', label: 'Análise Feedback', icon: BarChart3, requiredPlan: 'rating' },
+        { id: 'games', label: 'Roleta da Sorte', icon: Gift, requiredPlan: 'rating', isNew: true, badge: 'Novo' },
       ]
     },
     {
