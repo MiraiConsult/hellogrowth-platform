@@ -265,7 +265,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
           </div>
         ))}
         <button 
-            onClick={() => { resetForm(); setView('editor'); }} 
+            onClick={() => { setEditingCampaign(null); setShowNPSConsultant(true); }} 
             className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-primary-400 hover:text-primary-500 hover:bg-primary-50 transition-all min-h-[200px]"
         >
             <Plus size={32} className="mb-2" />
