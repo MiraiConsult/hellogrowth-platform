@@ -101,6 +101,7 @@ export default function NPSConsultant({
   
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const hasInitialized = useRef(false);
 
   useEffect(() => {
     if (supabase && tenantId) {
@@ -177,7 +178,8 @@ export default function NPSConsultant({
   }, [existingCampaign]);
 
   useEffect(() => {
-    if (currentStep === 'welcome' && chatMessages.length === 0) {
+    if (currentStep === 'welcome' && chatMessages.length === 0 && !hasInitialized.current) {
+      hasInitialized.current = true;
       setTimeout(() => {
         if (existingCampaign) {
           // Modo de edição - mostrar apenas 2 opções
@@ -799,22 +801,22 @@ Retorne APENAS um JSON válido com este formato:
                     </span>
                   )}
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setEditingQuestionId(editingQuestionId === question.id ? null : question.id)}
-                    className="p-1 hover:bg-slate-100 rounded transition-colors"
-                  >
-                    <Edit3 className="w-4 h-4 text-slate-600" />
-                  </button>
-                  {question.type !== 'nps' && (
+                {question.type !== 'nps' && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditingQuestionId(editingQuestionId === question.id ? null : question.id)}
+                      className="p-1 hover:bg-slate-100 rounded transition-colors"
+                    >
+                      <Edit3 className="w-4 h-4 text-slate-600" />
+                    </button>
                     <button
                       onClick={() => handleDeleteQuestion(question.id)}
                       className="p-1 hover:bg-red-50 rounded transition-colors"
                     >
                       <Trash2 className="w-4 h-4 text-red-600" />
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
               
               {editingQuestionId === question.id ? (
@@ -957,41 +959,99 @@ Retorne APENAS um JSON válido com este formato:
             <p className="text-sm text-slate-500 mb-4">Configure quais dados serão solicitados ao cliente antes da pesquisa</p>
             <div className="space-y-3">
               {initialFields.map((field, index) => (
-                <div key={field.field} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                  <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={field.enabled}
-                        onChange={(e) => {
-                          const newFields = [...initialFields];
-                          newFields[index] = { ...field, enabled: e.target.checked };
+                <div key={`${field.field}-${index}`} className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={field.enabled}
+                          onChange={(e) => {
+                            const newFields = [...initialFields];
+                            newFields[index] = { ...field, enabled: e.target.checked };
+                            setInitialFields(newFields);
+                          }}
+                          className="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"
+                        />
+                        <span className="font-medium text-slate-700">Ativo</span>
+                      </label>
+                      <label className="flex items-center gap-1 text-sm text-slate-500 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={field.required}
+                          disabled={!field.enabled}
+                          onChange={(e) => {
+                            const newFields = [...initialFields];
+                            newFields[index] = { ...field, required: e.target.checked };
+                            setInitialFields(newFields);
+                          }}
+                          className="w-3 h-3 text-emerald-500 rounded focus:ring-emerald-500"
+                        />
+                        Obrigatório
+                      </label>
+                    </div>
+                    {!['name', 'email', 'phone'].includes(field.field) && (
+                      <button
+                        onClick={() => {
+                          const newFields = initialFields.filter((_, i) => i !== index);
                           setInitialFields(newFields);
                         }}
-                        className="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"
-                      />
-                      <span className="font-medium text-slate-700">{field.label}</span>
-                    </label>
+                        className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                        title="Remover campo"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-1 text-sm text-slate-500 cursor-pointer">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Título do campo</label>
                       <input
-                        type="checkbox"
-                        checked={field.required}
-                        disabled={!field.enabled}
+                        type="text"
+                        value={field.label}
                         onChange={(e) => {
                           const newFields = [...initialFields];
-                          newFields[index] = { ...field, required: e.target.checked };
+                          newFields[index] = { ...field, label: e.target.value };
                           setInitialFields(newFields);
                         }}
-                        className="w-3 h-3 text-emerald-500 rounded focus:ring-emerald-500"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                        placeholder="Ex: Nome Completo"
                       />
-                      Obrigatório
-                    </label>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 mb-1">Placeholder (exemplo)</label>
+                      <input
+                        type="text"
+                        value={field.placeholder}
+                        onChange={(e) => {
+                          const newFields = [...initialFields];
+                          newFields[index] = { ...field, placeholder: e.target.value };
+                          setInitialFields(newFields);
+                        }}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                        placeholder="Ex: Digite seu nome"
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
+            <button
+              onClick={() => {
+                const newField = {
+                  field: `custom_${Date.now()}`,
+                  label: 'Novo Campo',
+                  placeholder: 'Digite aqui...',
+                  required: false,
+                  enabled: true
+                };
+                setInitialFields([...initialFields, newField]);
+              }}
+              className="w-full mt-3 py-3 border-2 border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-emerald-500 hover:text-emerald-500 hover:bg-emerald-50 transition-all text-sm flex items-center justify-center gap-1"
+            >
+              <Plus className="w-4 h-4" />
+              Adicionar campo
+            </button>
           </div>
 
           {/* Configurações de Redirecionamento Google */}
