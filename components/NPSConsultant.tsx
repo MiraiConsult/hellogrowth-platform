@@ -80,6 +80,7 @@ export default function NPSConsultant({
   const [isGenerating, setIsGenerating] = useState(false);
   
   const [businessProfile, setBusinessProfile] = useState<any>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [objective, setObjective] = useState('');
   const [tone, setTone] = useState('');
   const [evaluationPoints, setEvaluationPoints] = useState<string[]>([]);
@@ -122,8 +123,10 @@ export default function NPSConsultant({
       if (data && !error) {
         setBusinessProfile(data);
       }
+      setProfileLoaded(true);
     } catch (err) {
       console.error('Erro ao carregar perfil:', err);
+      setProfileLoaded(true);
     }
   };
 
@@ -178,40 +181,43 @@ export default function NPSConsultant({
   }, [existingCampaign]);
 
   useEffect(() => {
-    if (currentStep === 'welcome' && chatMessages.length === 0 && !hasInitialized.current) {
+    if (currentStep !== 'welcome' || hasInitialized.current) return;
+
+    if (existingCampaign) {
+      // Modo de edição - pode disparar imediatamente
       hasInitialized.current = true;
       setTimeout(() => {
-        if (existingCampaign) {
-          // Modo de edição - mostrar apenas 2 opções
-          addAssistantMessage(
-            `Olá! 👋 Você está editando a campanha **${existingCampaign.name || 'Sem título'}**.
+        addAssistantMessage(
+          `Olá! 👋 Você está editando a campanha **${existingCampaign.name || 'Sem título'}**.
 
 O que você gostaria de fazer?`,
-            [
-              { label: '🎨 Mudar tom das perguntas', value: 'edit_tone', icon: Palette },
-              { label: '✏️ Editar perguntas', value: 'edit_questions', icon: Edit3 }
-            ]
-          );
-        } else if (businessProfile !== null) {
-          // Modo de criação - aguardar businessProfile
-          addAssistantMessage(
-            businessProfile 
-              ? `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.business_name || 'sua empresa'}**.
+          [
+            { label: '🎨 Mudar tom das perguntas', value: 'edit_tone', icon: Palette },
+            { label: '✏️ Editar perguntas', value: 'edit_questions', icon: Edit3 }
+          ]
+        );
+      }, 300);
+    } else if (profileLoaded) {
+      // Modo de criação - só dispara após o perfil ter sido carregado (ou falhar)
+      hasInitialized.current = true;
+      setTimeout(() => {
+        addAssistantMessage(
+          businessProfile 
+            ? `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.business_name || 'sua empresa'}**.
 
 Como já conheço seu negócio, vou criar perguntas estratégicas baseadas no seu perfil.
 
 Vamos criar uma pesquisa NPS que transforma feedback em crescimento?`
-              : `Olá! 👋 Vou te ajudar a criar uma pesquisa NPS personalizada.
+            : `Olá! 👋 Vou te ajudar a criar uma pesquisa NPS personalizada.
 
 Vamos começar?`,
-            [
-              { label: '✨ Usar meu perfil e começar!', value: 'start', icon: Sparkles }
-            ]
-          );
-        }
+          [
+            { label: '✨ Usar meu perfil e começar!', value: 'start', icon: Sparkles }
+          ]
+        );
       }, 300);
     }
-  }, [currentStep, businessProfile, existingCampaign]);
+  }, [currentStep, businessProfile, existingCampaign, profileLoaded]);
 
   const addAssistantMessage = (content: string, options?: { label: string; value: string; icon?: any }[]) => {
     setIsTyping(true);
