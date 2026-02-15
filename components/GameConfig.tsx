@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, AlertCircle, Settings } from 'lucide-react';
+import { Plus, Trash2, Save, AlertCircle, Settings, Edit, Eye } from 'lucide-react';
 
 interface Prize {
   name: string;
@@ -9,6 +9,7 @@ interface Prize {
 
 interface Game {
   id?: string;
+  tenant_id?: string;
   name: string;
   status: 'active' | 'inactive';
   prizes: Prize[];
@@ -19,9 +20,7 @@ interface Game {
 }
 
 interface GameConfigProps {
-  gameId?: string;
-  onSave: (game: Game) => void;
-  onCancel: () => void;
+  tenantId: string;
 }
 
 const PRESET_COLORS = [
@@ -35,7 +34,10 @@ const PRESET_COLORS = [
   '#f97316'  // Laranja
 ];
 
-const GameConfig: React.FC<GameConfigProps> = ({ gameId, onSave, onCancel }) => {
+const GameConfig: React.FC<GameConfigProps> = ({ tenantId }) => {
+  const [games, setGames] = useState<Game[]>([]);
+  const [view, setView] = useState<'list' | 'form'>('list');
+  const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [game, setGame] = useState<Game>({
     name: '',
     status: 'active',
@@ -52,23 +54,21 @@ const GameConfig: React.FC<GameConfigProps> = ({ gameId, onSave, onCancel }) => 
   });
 
   const [errors, setErrors] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (gameId) {
-      // Carregar jogo existente
-      loadGame(gameId);
-    }
-  }, [gameId]);
+    loadGames();
+  }, [tenantId]);
 
-  const loadGame = async (id: string) => {
+  const loadGames = async () => {
     try {
-      const response = await fetch(`/api/games/${id}`);
+      const response = await fetch(`/api/games?tenant_id=${tenantId}`);
       if (response.ok) {
         const data = await response.json();
-        setGame(data);
+        setGames(data);
       }
     } catch (error) {
-      console.error('Erro ao carregar jogo:', error);
+      console.error('Erro ao carregar games:', error);
     }
   };
 
@@ -147,31 +147,182 @@ const GameConfig: React.FC<GameConfigProps> = ({ gameId, onSave, onCancel }) => 
     setGame({ ...game, prizes: newPrizes });
   };
 
-  const handleSave = () => {
-    if (validateGame()) {
-      onSave(game);
+  const handleSave = async () => {
+    if (!validateGame()) return;
+
+    setLoading(true);
+    try {
+      const gameData = {
+        ...game,
+        tenant_id: tenantId
+      };
+
+      const url = editingGame ? `/api/games/${editingGame.id}` : '/api/games';
+      const method = editingGame ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(gameData)
+      });
+
+      if (response.ok) {
+        await loadGames();
+        handleCancel();
+      } else {
+        setErrors(['Erro ao salvar roleta']);
+      }
+    } catch (error) {
+      console.error('Erro ao salvar:', error);
+      setErrors(['Erro ao salvar roleta']);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setView('list');
+    setEditingGame(null);
+    setGame({
+      name: '',
+      status: 'active',
+      prizes: [
+        { name: '10% de desconto', probability: 30, color: '#10b981' },
+        { name: '5% de desconto', probability: 40, color: '#3b82f6' },
+        { name: '15% de desconto', probability: 20, color: '#f59e0b' },
+        { name: 'Brinde grátis', probability: 10, color: '#8b5cf6' }
+      ],
+      messages: {
+        before: 'Gire a roleta e ganhe prêmios incríveis!',
+        after: 'Parabéns! Para liberar seu prêmio, nos avalie no Google na próxima tela.'
+      }
+    });
+    setErrors([]);
+  };
+
+  const handleEdit = (gameToEdit: Game) => {
+    setEditingGame(gameToEdit);
+    setGame(gameToEdit);
+    setView('form');
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta roleta?')) return;
+
+    try {
+      const response = await fetch(`/api/games/${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        await loadGames();
+      }
+    } catch (error) {
+      console.error('Erro ao excluir:', error);
     }
   };
 
   const totalProbability = game.prizes.reduce((sum, p) => sum + p.probability, 0);
 
+  if (view === 'list') {
+    return (
+      <div className="max-w-6xl mx-auto p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Roleta da Sorte</h2>
+            <p className="text-gray-600 mt-1">Configure suas roletas de prêmios</p>
+          </div>
+          <button
+            onClick={() => setView('form')}
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2"
+          >
+            <Plus size={20} />
+            Nova Roleta
+          </button>
+        </div>
+
+        {games.length === 0 ? (
+          <div className="text-center py-12 bg-gray-50 rounded-lg">
+            <Settings size={48} className="mx-auto text-gray-400 mb-4" />
+            <p className="text-gray-600 mb-4">Nenhuma roleta configurada</p>
+            <button
+              onClick={() => setView('form')}
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+            >
+              Criar primeira roleta
+            </button>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {games.map((g) => (
+              <div key={g.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-lg font-semibold text-gray-800">{g.name}</h3>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        g.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {g.status === 'active' ? '🟢 Ativo' : '🔴 Inativo'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3">
+                      {g.prizes.length} prêmios configurados
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {g.prizes.map((prize, i) => (
+                        <span
+                          key={i}
+                          className="px-3 py-1 rounded-full text-xs font-medium text-white"
+                          style={{ backgroundColor: prize.color }}
+                        >
+                          {prize.name} ({prize.probability}%)
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 ml-4">
+                    <button
+                      onClick={() => handleEdit(g)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                      title="Editar"
+                    >
+                      <Edit size={20} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(g.id!)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                      title="Excluir"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Settings className="text-primary-600" size={32} />
-          <h2 className="text-2xl font-bold text-gray-900">
-            {gameId ? 'Editar Roleta' : 'Configurar Roleta da Sorte'}
-          </h2>
+          <Settings size={32} className="text-primary-600" />
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">
+              {editingGame ? 'Editar Roleta' : 'Configurar Roleta da Sorte'}
+            </h2>
+            <p className="text-gray-600 text-sm">Configure prêmios, probabilidades e mensagens</p>
+          </div>
         </div>
       </div>
 
       {errors.length > 0 && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
           <div className="flex items-start gap-2">
-            <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
-            <div>
-              <p className="font-semibold text-red-800 mb-1">Erros de validação:</p>
+            <AlertCircle size={20} className="text-red-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-red-800 mb-1">Erros de validação:</h4>
               <ul className="list-disc list-inside text-red-700 text-sm space-y-1">
                 {errors.map((error, i) => (
                   <li key={i}>{error}</li>
@@ -194,7 +345,7 @@ const GameConfig: React.FC<GameConfigProps> = ({ gameId, onSave, onCancel }) => 
               type="text"
               value={game.name}
               onChange={(e) => setGame({ ...game, name: e.target.value })}
-              placeholder="ex: Roleta de Prêmios - Dezembro 2026"
+              placeholder="Ex: Roleta de Prêmios - Dezembro 2026"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
@@ -214,7 +365,6 @@ const GameConfig: React.FC<GameConfigProps> = ({ gameId, onSave, onCancel }) => 
               </select>
             </div>
 
-
           </div>
         </div>
       </div>
@@ -227,66 +377,61 @@ const GameConfig: React.FC<GameConfigProps> = ({ gameId, onSave, onCancel }) => 
             <span className={`font-semibold ${Math.abs(totalProbability - 100) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
               Total: {totalProbability.toFixed(1)}%
             </span>
-            <span className="text-gray-500 ml-2">(deve somar 100%)</span>
+            <span className="text-gray-500 ml-2">(deve ser 100%)</span>
           </div>
         </div>
 
         <div className="space-y-3">
           {game.prizes.map((prize, index) => (
-            <div key={index} className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+            <div key={index} className="flex gap-3 items-start p-4 bg-gray-50 rounded-lg">
               <div className="flex-1">
                 <input
                   type="text"
                   value={prize.name}
                   onChange={(e) => handlePrizeChange(index, 'name', e.target.value)}
                   placeholder="Nome do prêmio"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2"
                 />
               </div>
-
-              <div className="w-32">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={prize.probability}
-                    onChange={(e) => handlePrizeChange(index, 'probability', parseFloat(e.target.value) || 0)}
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                  <span className="text-sm text-gray-600">%</span>
-                </div>
-              </div>
-
               <div className="w-24">
+                <input
+                  type="number"
+                  value={prize.probability}
+                  onChange={(e) => handlePrizeChange(index, 'probability', parseFloat(e.target.value) || 0)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-center"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">%</span>
                 <input
                   type="color"
                   value={prize.color}
                   onChange={(e) => handlePrizeChange(index, 'color', e.target.value)}
-                  className="w-full h-10 rounded-lg cursor-pointer"
+                  className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
                 />
+                {game.prizes.length > 3 && (
+                  <button
+                    onClick={() => handleRemovePrize(index)}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                )}
               </div>
-
-              <button
-                onClick={() => handleRemovePrize(index)}
-                disabled={game.prizes.length <= 3}
-                className="p-2 text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <Trash2 size={20} />
-              </button>
             </div>
           ))}
         </div>
 
-        <button
-          onClick={handleAddPrize}
-          disabled={game.prizes.length >= 8}
-          className="mt-4 flex items-center gap-2 px-4 py-2 text-primary-600 border border-primary-300 rounded-lg hover:bg-primary-50 disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <Plus size={20} />
-          Adicionar Prêmio
-        </button>
+        {game.prizes.length < 8 && (
+          <button
+            onClick={handleAddPrize}
+            className="mt-4 w-full py-2 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg hover:border-primary-500 hover:text-primary-600 flex items-center justify-center gap-2"
+          >
+            <Plus size={20} />
+            Adicionar Prêmio
+          </button>
+        )}
       </div>
 
       {/* Seção 3: Mensagens */}
@@ -320,20 +465,22 @@ const GameConfig: React.FC<GameConfigProps> = ({ gameId, onSave, onCancel }) => 
         </div>
       </div>
 
-      {/* Botões de ação */}
-      <div className="flex gap-3 justify-end">
+      {/* Botões de Ação */}
+      <div className="flex justify-end gap-3 pt-6 border-t">
         <button
-          onClick={onCancel}
-          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+          onClick={handleCancel}
+          disabled={loading}
+          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
         >
           Cancelar
         </button>
         <button
           onClick={handleSave}
-          className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2"
+          disabled={loading}
+          className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50"
         >
           <Save size={20} />
-          Salvar Roleta
+          {loading ? 'Salvando...' : 'Salvar Roleta'}
         </button>
       </div>
     </div>
