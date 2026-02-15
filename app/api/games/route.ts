@@ -14,17 +14,12 @@ export async function GET(request: NextRequest) {
     const gameId = searchParams.get('id');
     const tenantId = request.headers.get('x-tenant-id');
 
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant ID required' }, { status: 400 });
-    }
-
     if (gameId) {
-      // Buscar game específico
+      // Buscar game específico (público, não requer tenant_id)
       const { data, error } = await supabase
         .from('nps_games')
         .select('*')
         .eq('id', gameId)
-        .eq('tenant_id', tenantId)
         .single();
 
       if (error) {
@@ -33,6 +28,10 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json(data);
     } else {
+      // Listar todos os games requer tenant_id
+      if (!tenantId) {
+        return NextResponse.json({ error: 'Tenant ID required' }, { status: 400 });
+      }
       // Listar todos os games
       const { data, error } = await supabase
         .from('nps_games')
