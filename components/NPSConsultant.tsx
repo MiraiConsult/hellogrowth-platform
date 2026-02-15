@@ -951,7 +951,96 @@ Retorne APENAS um JSON válido com este formato:
             Adicionar pergunta
           </button>
 
+          {/* Editor de Campos Iniciais */}
           <div className="bg-white rounded-xl border border-slate-200 p-5 mt-6">
+            <h3 className="text-lg font-semibold text-slate-800 mb-1">Campos de Identificação</h3>
+            <p className="text-sm text-slate-500 mb-4">Configure quais dados serão solicitados ao cliente antes da pesquisa</p>
+            <div className="space-y-3">
+              {initialFields.map((field, index) => (
+                <div key={field.field} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={field.enabled}
+                        onChange={(e) => {
+                          const newFields = [...initialFields];
+                          newFields[index] = { ...field, enabled: e.target.checked };
+                          setInitialFields(newFields);
+                        }}
+                        className="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"
+                      />
+                      <span className="font-medium text-slate-700">{field.label}</span>
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1 text-sm text-slate-500 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={field.required}
+                        disabled={!field.enabled}
+                        onChange={(e) => {
+                          const newFields = [...initialFields];
+                          newFields[index] = { ...field, required: e.target.checked };
+                          setInitialFields(newFields);
+                        }}
+                        className="w-3 h-3 text-emerald-500 rounded focus:ring-emerald-500"
+                      />
+                      Obrigatório
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Configurações de Redirecionamento Google */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5 mt-4">
+            <h3 className="text-lg font-semibold text-slate-800 mb-1">Redirecionamento Google</h3>
+            <p className="text-sm text-slate-500 mb-4">Redirecionar clientes para avaliação no Google após a pesquisa</p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={googleRedirect}
+                onChange={(e) => setGoogleRedirect(e.target.checked)}
+                className="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"
+              />
+              <span className="font-medium text-slate-700">Ativar redirecionamento para Google</span>
+            </label>
+            {googleRedirect && googlePlaceId && (
+              <p className="mt-2 text-sm text-slate-500">Place ID: {googlePlaceId}</p>
+            )}
+          </div>
+
+          {/* Mensagem de Finalização */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5 mt-4">
+            <h3 className="text-lg font-semibold text-slate-800 mb-1">Mensagens Personalizadas</h3>
+            <p className="text-sm text-slate-500 mb-4">Mensagens exibidas ao cliente durante e após a pesquisa</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Mensagem antes do Google (para promotores)</label>
+                <input
+                  type="text"
+                  value={beforeGoogleMessage}
+                  onChange={(e) => setBeforeGoogleMessage(e.target.value)}
+                  placeholder="Ex: Obrigado! Que tal nos avaliar no Google?"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Mensagem de finalização</label>
+                <input
+                  type="text"
+                  value={afterGameMessage}
+                  onChange={(e) => setAfterGameMessage(e.target.value)}
+                  placeholder="Ex: Obrigado por participar da nossa pesquisa!"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 p-5 mt-4">
             <label className="block text-sm font-medium text-slate-600 mb-2">Nome da Campanha</label>
             <input
               type="text"

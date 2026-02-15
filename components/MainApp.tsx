@@ -393,7 +393,16 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
                  npsScore: campaign.nps_score,
                  enableRedirection: campaign.enable_redirection,
                  questions: Array.isArray(campaign.questions) ? campaign.questions : [],
-                 initialFields: campaign.initial_fields || []
+                 initialFields: campaign.initial_fields || [],
+                 initial_fields: campaign.initial_fields || [],
+                 google_redirect: campaign.google_redirect || false,
+                 google_place_id: campaign.google_place_id || '',
+                 offer_prize: campaign.offer_prize || false,
+                 before_google_message: campaign.before_google_message || '',
+                 after_game_message: campaign.after_game_message || '',
+                 objective: campaign.objective || '',
+                 tone: campaign.tone || '',
+                 evaluation_points: campaign.evaluation_points || []
              };
               setPublicCampaign(safeCampaign);
               
