@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Campaign, NPSResponse, InitialField } from '@/types';
 import { Star, Check, ArrowRight, ShieldCheck, MapPin, X, ChevronRight, MessageSquare } from 'lucide-react';
 import SpinWheel from './SpinWheel';
@@ -43,6 +43,8 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
   const [answers, setAnswers] = useState<{ question: string; answer: any }[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [currentAnswer, setCurrentAnswer] = useState<any>('');
+  const [gameData, setGameData] = useState<any>(null);
+  const [loadingGame, setLoadingGame] = useState(false);
 
   // Get initial fields configuration from multiple possible sources
   const initialFields: InitialField[] = (campaign as any).initial_fields || campaign.initialFields || [
@@ -53,6 +55,29 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
 
   const enabledFields = initialFields.filter(f => f.enabled);
   const hasRequiredFields = enabledFields.some(f => f.required);
+
+  // Load game data if game_id is set
+  useEffect(() => {
+    const gameId = (campaign as any).game_id;
+    if (gameId && !gameData && !loadingGame) {
+      loadGame(gameId);
+    }
+  }, [campaign]);
+
+  const loadGame = async (gameId: string) => {
+    setLoadingGame(true);
+    try {
+      const response = await fetch(`/api/games?id=${gameId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setGameData(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar game:', error);
+    } finally {
+      setLoadingGame(false);
+    }
+  };
 
   const displayCompanyName = companyName || settings?.companyName || 'Nossa Empresa';
 
@@ -175,7 +200,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
   };
 
   // Handler quando a roleta termina
-  const handleGameComplete = (prize: string) => {
+  const handleGameComplete = (prizeCode: string, prizeName: string) => {
     const placeId = getPlaceId();
     const redirectEnabled = isGoogleRedirectEnabled();
     
@@ -401,9 +426,18 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
           )}
 
           {/* STEP 4: GAME (Roleta da Sorte) */}
-          {step === 'game' && (
+          {step === 'game' && gameData && (
             <div className="fixed inset-0 z-50">
-              <SpinWheel onComplete={handleGameComplete} />
+              <SpinWheel 
+                prizes={gameData.prizes || []}
+                gameId={gameData.id}
+                campaignId={campaign.id}
+                clientName={respondent.name}
+                clientEmail={respondent.email}
+                clientPhone={respondent.phone}
+                customMessage={gameData.messages?.before || 'Gire a roleta e ganhe prêmios incríveis!'}
+                onComplete={handleGameComplete}
+              />
             </div>
           )}
 

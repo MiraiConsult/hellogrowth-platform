@@ -1,24 +1,47 @@
 import React, { useState } from 'react';
 import { Gift, Sparkles } from 'lucide-react';
 
-interface SpinWheelProps {
-  onComplete: (prize: string) => void;
+interface Prize {
+  name: string;
+  probability: number;
+  color: string;
 }
 
-const SpinWheel: React.FC<SpinWheelProps> = ({ onComplete }) => {
+interface SpinWheelProps {
+  prizes: Prize[];
+  gameId: string;
+  campaignId?: string;
+  clientName: string;
+  clientEmail: string;
+  clientPhone: string;
+  customMessage?: string;
+  onComplete: (prizeCode: string, prizeName: string) => void;
+}
+
+// Gerar código único de prêmio (ex: DG10X, FR15Y)
+const generatePrizeCode = (name: string): string => {
+  const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `${initials}${random}`;
+};
+
+const SpinWheel: React.FC<SpinWheelProps> = ({ 
+  prizes, 
+  gameId, 
+  campaignId,
+  clientName, 
+  clientEmail, 
+  clientPhone,
+  customMessage,
+  onComplete 
+}) => {
   const [isSpinning, setIsSpinning] = useState(false);
   const [hasSpun, setHasSpun] = useState(false);
   const [rotation, setRotation] = useState(0);
-  const [prize, setPrize] = useState('');
+  const [wonPrize, setWonPrize] = useState<Prize | null>(null);
+  const [prizeCode, setPrizeCode] = useState('');
 
-  const prizes = [
-    { label: '10% OFF', color: '#10b981', probability: 0.3 },
-    { label: '5% OFF', color: '#3b82f6', probability: 0.4 },
-    { label: '15% OFF', color: '#f59e0b', probability: 0.2 },
-    { label: 'Brinde', color: '#8b5cf6', probability: 0.1 }
-  ];
-
-  const handleSpin = () => {
+  const handleSpin = async () => {
     if (isSpinning || hasSpun) return;
 
     setIsSpinning(true);
@@ -29,7 +52,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({ onComplete }) => {
     let selectedPrize = prizes[0];
 
     for (const p of prizes) {
-      cumulative += p.probability;
+      cumulative += p.probability / 100; // Converter % para decimal
       if (random <= cumulative) {
         selectedPrize = p;
         break;
@@ -44,7 +67,34 @@ const SpinWheel: React.FC<SpinWheelProps> = ({ onComplete }) => {
     const finalRotation = spins * 360 + targetAngle;
 
     setRotation(finalRotation);
-    setPrize(selectedPrize.label);
+    setWonPrize(selectedPrize);
+
+    // Gerar código único
+    const code = generatePrizeCode(clientName);
+    setPrizeCode(code);
+
+    // Salvar participação no banco
+    try {
+      const response = await fetch('/api/game-participations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          game_id: gameId,
+          campaign_id: campaignId,
+          client_name: clientName,
+          client_email: clientEmail,
+          client_phone: clientPhone,
+          prize_won: selectedPrize.name,
+          prize_code: code
+        })
+      });
+
+      if (!response.ok) {
+        console.error('Erro ao salvar participação:', await response.text());
+      }
+    } catch (error) {
+      console.error('Erro ao salvar participação:', error);
+    }
 
     // Após a animação (3s), mostrar resultado
     setTimeout(() => {
@@ -54,7 +104,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({ onComplete }) => {
   };
 
   const handleContinue = () => {
-    onComplete(prize);
+    onComplete(prizeCode, wonPrize?.name || '');
   };
 
   return (
@@ -67,7 +117,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({ onComplete }) => {
                 <Gift className="text-white" size={40} />
               </div>
               <h2 className="text-3xl font-bold text-gray-800 mb-2">Roleta da Sorte!</h2>
-              <p className="text-gray-600">Gire a roleta e ganhe um prêmio especial</p>
+              <p className="text-gray-600">{customMessage || 'Gire a roleta e ganhe um prêmio especial'}</p>
             </div>
 
             {/* Roleta */}
@@ -104,7 +154,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({ onComplete }) => {
                       }}
                     >
                       <span className="text-white font-bold text-sm block -rotate-90 whitespace-nowrap">
-                        {p.label}
+                        {p.name}
                       </span>
                     </div>
                   );
@@ -138,8 +188,13 @@ const SpinWheel: React.FC<SpinWheelProps> = ({ onComplete }) => {
               </div>
               <h2 className="text-4xl font-bold text-gray-800 mb-2">Parabéns! 🎉</h2>
               <p className="text-gray-600 mb-4">Você ganhou:</p>
-              <div className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-pink-500 mb-6">
-                {prize}
+              <div className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-pink-500 mb-4">
+                {wonPrize?.name}
+              </div>
+              <div className="bg-gray-100 rounded-lg p-4 mb-6">
+                <p className="text-sm text-gray-600 mb-2">Seu código de prêmio:</p>
+                <p className="text-2xl font-mono font-bold text-gray-800">{prizeCode}</p>
+                <p className="text-xs text-gray-500 mt-2">Guarde este código para resgatar seu prêmio</p>
               </div>
             </div>
 
