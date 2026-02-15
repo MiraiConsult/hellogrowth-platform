@@ -11,7 +11,6 @@ interface Game {
   id?: string;
   name: string;
   status: 'active' | 'inactive';
-  google_review_url: string;
   prizes: Prize[];
   messages: {
     before: string;
@@ -40,7 +39,6 @@ const GameConfig: React.FC<GameConfigProps> = ({ gameId, onSave, onCancel }) => 
   const [game, setGame] = useState<Game>({
     name: '',
     status: 'active',
-    google_review_url: '',
     prizes: [
       { name: '10% de desconto', probability: 30, color: '#10b981' },
       { name: '5% de desconto', probability: 40, color: '#3b82f6' },
@@ -216,18 +214,7 @@ const GameConfig: React.FC<GameConfigProps> = ({ gameId, onSave, onCancel }) => 
               </select>
             </div>
 
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Link do Google Reviews
-              </label>
-              <input
-                type="text"
-                value={game.google_review_url}
-                onChange={(e) => setGame({ ...game, google_review_url: e.target.value })}
-                placeholder="Place ID ou URL completa"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-            </div>
+
           </div>
         </div>
       </div>
