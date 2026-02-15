@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Campaign, NPSResponse, InitialField } from '@/types';
 import { Star, Check, ArrowRight, ShieldCheck, MapPin, X, ChevronRight, MessageSquare } from 'lucide-react';
+import SpinWheel from './SpinWheel';
 
 interface PublicSurveyProps {
   campaign: Campaign;
@@ -36,7 +37,7 @@ const normalizeType = (type: string): string => {
 
 const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit, isPreview = false, settings, companyName }) => {
   // State Definitions
-  const [step, setStep] = useState<'intro' | 'score' | 'questions' | 'redirecting' | 'thankyou'>('intro');
+  const [step, setStep] = useState<'intro' | 'score' | 'questions' | 'game' | 'redirecting' | 'thankyou'>('intro');
   const [score, setScore] = useState<number | null>(null);
   const [respondent, setRespondent] = useState({ name: '', email: '', phone: '' });
   const [answers, setAnswers] = useState<{ question: string; answer: any }[]>([]);
@@ -83,6 +84,13 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
     return (campaign as any).afterGameMessage || 
            (campaign as any).after_game_message || 
            '';
+  };
+
+  // Check if prize/game is enabled
+  const isPrizeEnabled = (): boolean => {
+    return (campaign as any).offerPrize || 
+           (campaign as any).offer_prize || 
+           false;
   };
 
   // Filter questions - skip NPS question (first one with type 'nps') since score is collected separately
@@ -148,14 +156,38 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
     // Redirect Logic
     const placeId = getPlaceId();
     const redirectEnabled = isGoogleRedirectEnabled();
+    const prizeEnabled = isPrizeEnabled();
     
-    if (redirectEnabled && finalScore >= 9 && placeId) {
+    // Se tem prêmio habilitado e é promotor (score >= 9), vai para o jogo
+    if (prizeEnabled && finalScore >= 9) {
+        setStep('game');
+    } else if (redirectEnabled && finalScore >= 9 && placeId) {
+        // Se não tem prêmio mas tem redirect e é promotor, vai direto para redirecting
         setStep('redirecting');
         setTimeout(() => {
             const googleUrl = `https://search.google.com/local/writereview?placeid=${placeId}`;
             window.location.href = googleUrl;
         }, 2000);
     } else {
+        // Senão, vai para thankyou
+        setStep('thankyou');
+    }
+  };
+
+  // Handler quando a roleta termina
+  const handleGameComplete = (prize: string) => {
+    const placeId = getPlaceId();
+    const redirectEnabled = isGoogleRedirectEnabled();
+    
+    // Após o jogo, se tem redirect habilitado, vai para redirecting
+    if (redirectEnabled && placeId) {
+        setStep('redirecting');
+        setTimeout(() => {
+            const googleUrl = `https://search.google.com/local/writereview?placeid=${placeId}`;
+            window.location.href = googleUrl;
+        }, 2000);
+    } else {
+        // Senão, vai para thankyou
         setStep('thankyou');
     }
   };
@@ -368,7 +400,14 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
             </div>
           )}
 
-          {/* STEP 4: REDIRECTING */}
+          {/* STEP 4: GAME (Roleta da Sorte) */}
+          {step === 'game' && (
+            <div className="fixed inset-0 z-50">
+              <SpinWheel onComplete={handleGameComplete} />
+            </div>
+          )}
+
+          {/* STEP 5: REDIRECTING */}
           {step === 'redirecting' && (
              <div className="py-8">
                  <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
@@ -384,7 +423,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
              </div>
           )}
 
-          {/* STEP 5: THANK YOU */}
+          {/* STEP 6: THANK YOU */}
           {step === 'thankyou' && (
              <div className="py-8">
                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
