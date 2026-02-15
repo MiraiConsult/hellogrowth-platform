@@ -62,7 +62,11 @@ const GameConfig: React.FC<GameConfigProps> = ({ tenantId }) => {
 
   const loadGames = async () => {
     try {
-      const response = await fetch(`/api/games?tenant_id=${tenantId}`);
+      const response = await fetch('/api/games', {
+        headers: {
+          'x-tenant-id': tenantId
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         setGames(data);
@@ -162,7 +166,10 @@ const GameConfig: React.FC<GameConfigProps> = ({ tenantId }) => {
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-tenant-id': tenantId
+        },
         body: JSON.stringify(gameData)
       });
 
