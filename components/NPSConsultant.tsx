@@ -679,7 +679,7 @@ Retorne APENAS um JSON válido com este formato:
         before_google_message: beforeGoogleMessage,
         after_game_message: afterGameMessage,
         questions: generatedQuestions,
-        status: existingCampaign?.status || 'active',
+        status: existingCampaign?.status || 'Ativa',
         enableRedirection: googleRedirect,
         initialFields: initialFields
       };

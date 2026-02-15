@@ -20,6 +20,15 @@ interface NPSCampaignsProps {
 }
 
 const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, onDeleteCampaign, navigateToAnalytics, onPreview, onViewReport, currentUser }) => {
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      'active': 'Ativa',
+      'paused': 'Pausada',
+      'Ativa': 'Ativa',
+      'Pausada': 'Pausada'
+    };
+    return labels[status] || status;
+  };
   const tenantId = useTenantId()
 
   const [showNPSConsultant, setShowNPSConsultant] = useState(false);
@@ -49,7 +58,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Stats for Mini Dashboard
-  const activeCampaigns = campaigns.filter(c => c.status === 'Ativa').length;
+  const activeCampaigns = campaigns.filter(c => c.status === 'Ativa' || c.status === 'active').length;
   const totalResponses = campaigns.reduce((acc, curr) => acc + (curr.responses || 0), 0);
   const avgNps = campaigns.length > 0 
       ? Math.round(campaigns.reduce((acc, curr) => acc + curr.npsScore, 0) / campaigns.length) 
@@ -170,7 +179,8 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const toggleStatus = (id: string) => {
     const camp = campaigns.find(c => c.id === id);
     if (camp) {
-        onSaveCampaign({ ...camp, status: camp.status === 'Ativa' ? 'Pausada' : 'Ativa' });
+        const currentIsActive = camp.status === 'Ativa' || camp.status === 'active';
+        onSaveCampaign({ ...camp, status: currentIsActive ? 'Pausada' : 'Ativa' });
     }
     setMenuOpenId(null);
   };
@@ -223,13 +233,13 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {campaigns.map((camp) => (
-          <div key={camp.id} className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${camp.status === 'Pausada' ? 'opacity-75' : ''}`}>
+          <div key={camp.id} className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${(camp.status === 'Pausada' || camp.status === 'paused') ? 'opacity-75' : ''}`}>
              <div className="p-5">
                 <div className="flex justify-between items-start mb-4 relative">
                   <div>
                     <h3 className="font-bold text-gray-800 text-lg mb-1">{camp.name}</h3>
                     <div className="flex gap-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${camp.status === 'Ativa' ? 'text-green-600 bg-green-50 border-green-100' : 'text-gray-500 bg-gray-100 border-gray-200'}`}>{camp.status}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${(camp.status === 'Ativa' || camp.status === 'active') ? 'text-green-600 bg-green-50 border-green-100' : 'text-gray-500 bg-gray-100 border-gray-200'}`}>{getStatusLabel(camp.status)}</span>
                       {camp.enableRedirection && <span className="text-xs px-2 py-0.5 rounded-full border border-blue-100 text-blue-600 bg-blue-50 flex items-center gap-1"><ExternalLink size={10} /> Redirecionamento</span>}
                     </div>
                   </div>
@@ -237,7 +247,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
                   {menuOpenId === camp.id && (
                     <div ref={menuRef} className="absolute right-0 top-8 bg-white rounded-lg shadow-lg border border-gray-100 w-40 z-10 py-1">
                       <button onClick={() => handleEdit(camp)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"><Edit size={14} /> Editar</button>
-                      <button onClick={() => toggleStatus(camp.id)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">{camp.status === 'Ativa' ? <Pause size={14} /> : <Play size={14} />} {camp.status === 'Ativa' ? 'Pausar' : 'Ativar'}</button>
+                      <button onClick={() => toggleStatus(camp.id)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">{(camp.status === 'Ativa' || camp.status === 'active') ? <Pause size={14} /> : <Play size={14} />} {(camp.status === 'Ativa' || camp.status === 'active') ? 'Pausar' : 'Ativar'}</button>
                       <button onClick={() => handleDelete(camp.id)} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 size={14} /> Excluir</button>
                     </div>
                   )}
