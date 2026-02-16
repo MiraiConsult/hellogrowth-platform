@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { PlanType, Lead, NPSResponse } from '@/types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';

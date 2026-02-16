@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Form, InitialField } from '@/types';
 import { CheckCircle, ArrowRight, ArrowLeft, Check, ShieldCheck, X, Sparkles } from 'lucide-react';

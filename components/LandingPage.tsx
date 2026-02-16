@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowRight, CheckCircle2, MessageSquare, Star, Target, TrendingUp, 

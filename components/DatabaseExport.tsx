@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Lead, NPSResponse, Campaign, Form, User } from '@/types';
 import { Users, Contact, BarChart3, Database, Download, Loader2 } from 'lucide-react';

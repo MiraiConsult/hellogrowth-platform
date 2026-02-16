@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User } from '@/types';
 import { Mail, Lock, ArrowRight, Loader2, AlertTriangle, ShieldCheck, Sparkles } from 'lucide-react';

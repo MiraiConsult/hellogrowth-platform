@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { BookOpen, CheckSquare, Users, Star, MessageSquare, BarChart3, ChevronRight, PlayCircle } from 'lucide-react';
 

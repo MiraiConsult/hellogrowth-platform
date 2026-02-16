@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles, Loader2, RefreshCw } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
