@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Campaign, NPSResponse } from '@/types';
-import { ArrowLeft, Users, Star, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, X, Mail, Phone, Trash2, ArrowRight, History, Plus } from 'lucide-react';
+import { ArrowLeft, Users, Star, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, X, Mail, Phone, Trash2, ArrowRight, History, Plus, User, Info, FileText, Layout, Search, Filter } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from 'react-markdown';
@@ -305,111 +305,222 @@ const CampaignReport: React.FC<CampaignReportProps> = ({ campaignId, campaigns, 
 
       {/* Response Details Panel */}
       {selectedResponse && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center print:hidden bg-black/30">
-          {/* Full Screen Panel */}
-          <div className="w-full h-full bg-white shadow-2xl flex flex-col animate-in fade-in duration-300">
-            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 sticky top-0 z-10 flex-shrink-0">
-                  <div>
-                      <h2 className="text-lg font-bold text-gray-900">{selectedResponse.customerName}</h2>
-                      <div className="flex items-center gap-2 mt-1">
-                          <span className={`px-2 py-0.5 rounded text-white text-xs font-bold ${selectedResponse.score>=9?'bg-green-500':selectedResponse.score<=6?'bg-red-500':'bg-yellow-400'}`}>Score: {selectedResponse.score}</span>
-                          <span className="text-xs text-gray-500">{selectedResponse.customerEmail}</span>
-                      </div>
-                  </div>
-                  <button onClick={() => setSelectedResponse(null)} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X size={20}/></button>
-              </div>
-              
-              <div className="p-6 overflow-y-auto flex-1">
-                <div className="max-w-4xl mx-auto space-y-6">
-                  {selectedResponse.answers && Array.isArray(selectedResponse.answers) && selectedResponse.answers.length > 0 && (
-                    <div>
-                      <h3 className="font-bold text-sm mb-3 text-gray-900 flex items-center gap-2">
-                          <MessageSquare size={16} /> Respostas Detalhadas
-                      </h3>
-                      <div className="space-y-3">
-                        {selectedResponse.answers.map((ans: any, idx: number) => {
-                            // Defensive handling for nested structures
-                            let qId = ans.question;
-                            let val = ans.answer;
-                            if (val && typeof val === 'object' && 'question' in val && 'answer' in val) {
-                                qId = val.question;
-                                val = val.answer;
-                            }
-                            const displayValue = typeof val === 'object' ? (val.label || JSON.stringify(val)) : val;
-
-                            return (
-                              <div key={idx} className="border border-gray-200 rounded-lg p-3 bg-white">
-                                <p className="text-xs font-bold text-gray-500 mb-1">{getQuestionText(qId)}</p>
-                                <p className="font-medium text-gray-800">{displayValue}</p>
-                              </div>
-                            );
-                        })}
-                      </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center print:hidden bg-black/40 backdrop-blur-sm p-4 md:p-10">
+          <div className="w-full max-w-6xl h-full max-h-[90vh] bg-white shadow-2xl flex flex-col animate-in zoom-in-95 duration-300 rounded-3xl overflow-hidden border border-gray-100">
+            {/* Header - Identidade Visual */}
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
+              <div className="flex items-center gap-4">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${
+                  selectedResponse.score >= 9 ? 'bg-green-50 text-green-600' : 
+                  selectedResponse.score <= 6 ? 'bg-red-50 text-red-600' : 
+                  'bg-yellow-50 text-yellow-600'
+                }`}>
+                  <User size={30} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    {selectedResponse.customerName}
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                      selectedResponse.score >= 9 ? 'bg-green-100 text-green-700' : 
+                      selectedResponse.score <= 6 ? 'bg-red-100 text-red-700' : 
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {selectedResponse.score >= 9 ? 'Promotor' : selectedResponse.score <= 6 ? 'Detrator' : 'Passivo'}
+                    </span>
+                  </h2>
+                  <div className="flex items-center gap-4 mt-1">
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                      <Mail size={12} className="text-gray-400" /> {selectedResponse.customerEmail || 'Sem e-mail'}
                     </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-4">
-                      {selectedResponse.customerEmail && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Mail size={16} /> {selectedResponse.customerEmail}
-                          </div>
-                      )}
-                      {selectedResponse.customerPhone && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Phone size={16} /> {selectedResponse.customerPhone}
-                          </div>
-                      )}
+                    {selectedResponse.customerPhone && (
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                        <Phone size={12} className="text-gray-400" /> {selectedResponse.customerPhone}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                      <Calendar size={12} className="text-gray-400" /> {new Date(selectedResponse.createdAt).toLocaleDateString('pt-BR')}
+                    </div>
                   </div>
-
-                  {/* Internal Notes Section (Compact & Bottom) */}
-                  <div className="border border-emerald-500 rounded-lg overflow-hidden shadow-sm bg-white flex flex-col h-36">
-                     <div className="bg-emerald-50 px-4 py-2 border-b border-emerald-100 flex justify-between items-center">
-                        <h3 className="font-bold text-emerald-900 text-xs uppercase tracking-wider flex items-center gap-2">
-                            <History size={14}/> Anotações Internas (CRM)
-                        </h3>
-                     </div>
-                     
-                     {/* History Area */}
-                     <div className="flex-1 bg-gray-50 p-3 overflow-y-auto text-sm border-b border-gray-200">
-                         {selectedResponse.notes ? (
-                             <div className="whitespace-pre-wrap text-gray-700 font-mono text-xs">
-                                 {selectedResponse.notes}
-                             </div>
-                         ) : (
-                             <div className="text-gray-400 italic text-center mt-2 text-xs">Nenhuma anotação registrada.</div>
-                         )}
-                         <div ref={notesEndRef} />
-                     </div>
-
-                     {/* New Note Input */}
-                     <div className="p-2 bg-white">
-                         <div className="flex gap-2">
-                             <input 
-                                type="text"
-                                className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-xs focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                placeholder="Nova anotação..."
-                                value={newNoteText}
-                                onChange={(e) => setNewNoteText(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAddNote()}
-                             />
-                             <button 
-                                onClick={handleAddNote}
-                                disabled={isSavingNote || !newNoteText.trim()}
-                                className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                             >
-                                {isSavingNote ? <Loader2 size={12} className="animate-spin"/> : <Plus size={12}/>}
-                                Add
-                             </button>
-                         </div>
-                     </div>
-                  </div>
-
                 </div>
               </div>
-              <div className="p-4 border-t bg-gray-50 text-right flex-shrink-0">
-                  <button onClick={() => setSelectedResponse(null)} className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 font-medium">Fechar</button>
+              <button onClick={() => setSelectedResponse(null)} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="flex-1 flex overflow-hidden">
+              {/* Sidebar de Resumo (Esquerda) */}
+              <div className="w-80 border-r border-gray-100 bg-gray-50/50 overflow-y-auto p-6 hidden lg:block space-y-6">
+                {/* Score Card */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Score Identificado</p>
+                  <div className="flex items-end justify-between mb-4">
+                    <span className={`text-5xl font-black ${
+                      selectedResponse.score >= 9 ? 'text-green-500' : 
+                      selectedResponse.score <= 6 ? 'text-red-500' : 
+                      'text-yellow-500'
+                    }`}>{selectedResponse.score}</span>
+                    <span className="text-gray-300 text-lg font-medium">/ 10</span>
+                  </div>
+                  {/* NPS Bar */}
+                  <div className="h-2 w-full bg-gray-100 rounded-full flex overflow-hidden">
+                    <div className="h-full bg-red-500" style={{ width: '60%' }} />
+                    <div className="h-full bg-yellow-400" style={{ width: '20%' }} />
+                    <div className="h-full bg-green-500" style={{ width: '20%' }} />
+                  </div>
+                  <div className="relative w-full h-4 mt-1">
+                    <div 
+                      className="absolute top-0 w-3 h-3 bg-white border-2 border-gray-800 rounded-full -translate-x-1/2 shadow-sm transition-all duration-1000"
+                      style={{ left: `${selectedResponse.score * 10}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* AI Sentiment Analysis */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-7 h-7 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center">
+                      <Sparkles size={14} />
+                    </div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Análise da IA</p>
+                  </div>
+                  <p className="text-sm text-gray-700 leading-relaxed italic">
+                    {selectedResponse.score >= 9 
+                      ? "Cliente promotor com alto potencial de indicação. Demonstra satisfação clara com os serviços prestados." 
+                      : selectedResponse.score <= 6 
+                      ? "Atenção necessária. O cliente apresenta pontos de insatisfação que podem levar ao churn se não abordados." 
+                      : "Cliente neutro. Experiência satisfatória, mas sem o 'encantamento' necessário para fidelização total."}
+                  </p>
+                </div>
+
+                {/* Tags de Categoria */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Categorias Relacionadas</p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-md uppercase tracking-tight">#NPS</span>
+                    <span className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-md uppercase tracking-tight">#Feedback</span>
+                    {selectedResponse.score >= 9 && <span className="px-2 py-1 bg-green-100 text-green-600 text-[10px] font-bold rounded-md uppercase tracking-tight">#Fidelizado</span>}
+                    {selectedResponse.score <= 6 && <span className="px-2 py-1 bg-red-100 text-red-600 text-[10px] font-bold rounded-md uppercase tracking-tight">#Crítico</span>}
+                  </div>
+                </div>
               </div>
-           </div>
+
+              {/* Conteúdo Principal (Direita) */}
+              <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-white">
+                <div className="max-w-3xl mx-auto space-y-8">
+                  {/* Seção de Respostas */}
+                  <section>
+                    <div className="flex items-center gap-2 mb-6">
+                      <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                        <Layout size={18} />
+                      </div>
+                      <h3 className="font-bold text-gray-900">Perguntas e Respostas</h3>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      {selectedResponse.answers && Array.isArray(selectedResponse.answers) && selectedResponse.answers.length > 0 ? (
+                        selectedResponse.answers.map((ans: any, idx: number) => {
+                          let qId = ans.question;
+                          let val = ans.answer;
+                          if (val && typeof val === 'object' && 'question' in val && 'answer' in val) {
+                              qId = val.question;
+                              val = val.answer;
+                          }
+                          const displayValue = typeof val === 'object' ? (val.label || JSON.stringify(val)) : val;
+
+                          return (
+                            <div key={idx} className="group p-5 rounded-2xl border border-gray-100 bg-white hover:border-indigo-100 hover:shadow-sm transition-all duration-200">
+                              <div className="flex items-start gap-3">
+                                <div className="mt-1 w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
+                                <div className="space-y-2">
+                                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{getQuestionText(qId)}</p>
+                                  <p className="text-gray-800 font-semibold leading-relaxed">{displayValue || <span className="text-gray-300 italic">Sem resposta</span>}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="p-10 text-center border-2 border-dashed border-gray-100 rounded-3xl">
+                          <p className="text-gray-400 text-sm">Nenhuma resposta detalhada registrada para este cliente.</p>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  {/* Anotações Internas (CRM Style) */}
+                  <section className="pt-4">
+                    <div className="flex items-center gap-2 mb-6">
+                      <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                        <History size={18} />
+                      </div>
+                      <h3 className="font-bold text-gray-900">Anotações do Time</h3>
+                    </div>
+                    
+                    <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
+                      <div className="max-h-60 overflow-y-auto space-y-4 mb-6 pr-2 custom-scrollbar">
+                        {selectedResponse.notes ? (
+                          selectedResponse.notes.split('\n\n').map((note, i) => (
+                            <div key={i} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                              <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{note}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-6">
+                            <p className="text-gray-400 text-xs italic">Nenhuma anotação registrada ainda.</p>
+                          </div>
+                        )}
+                        <div ref={notesEndRef} />
+                      </div>
+
+                      <div className="relative">
+                        <input 
+                          type="text"
+                          className="w-full bg-white border border-gray-200 rounded-2xl pl-5 pr-24 py-4 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent shadow-sm transition-all"
+                          placeholder="Adicionar nova nota interna..."
+                          value={newNoteText}
+                          onChange={(e) => setNewNoteText(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddNote()}
+                        />
+                        <button 
+                          onClick={handleAddNote}
+                          disabled={isSavingNote || !newNoteText.trim()}
+                          className="absolute right-2 top-2 bottom-2 bg-emerald-600 text-white px-5 rounded-xl text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-md shadow-emerald-200"
+                        >
+                          {isSavingNote ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>}
+                          SALVAR
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer com Ações */}
+            <div className="p-5 border-t border-gray-100 bg-white flex justify-between items-center flex-shrink-0">
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => {
+                    const phone = selectedResponse.customerPhone?.replace(/\D/g, '');
+                    if (phone) window.open(`https://wa.me/55${phone}?text=Olá ${selectedResponse.customerName}, obrigado pelo seu feedback!`, '_blank');
+                  }}
+                  className="px-4 py-2.5 bg-green-50 text-green-700 rounded-xl text-xs font-bold hover:bg-green-100 transition-all flex items-center gap-2 border border-green-200"
+                >
+                  <Phone size={14} /> WhatsApp
+                </button>
+                <button 
+                  onClick={() => window.location.href = `mailto:${selectedResponse.customerEmail}?subject=Feedback NPS`}
+                  className="px-4 py-2.5 bg-blue-50 text-blue-700 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all flex items-center gap-2 border border-blue-200"
+                >
+                  <Mail size={14} /> E-mail
+                </button>
+              </div>
+              <button onClick={() => setSelectedResponse(null)} className="px-8 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all shadow-lg shadow-gray-200">
+                FECHAR DETALHES
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
