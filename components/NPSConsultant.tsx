@@ -846,7 +846,11 @@ Retorne APENAS um JSON válido com este formato:
                     </span>
                   )}
                   {question.conditional && (
-                    <span className="px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded-full font-medium">
+                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                      question.conditional === 'promoter' ? 'bg-blue-100 text-blue-600' : 
+                      question.conditional === 'passive' ? 'bg-yellow-100 text-yellow-700' : 
+                      'bg-red-100 text-red-600'
+                    }`}>
                       {question.conditional === 'promoter' ? 'Promotores' : 
                        question.conditional === 'passive' ? 'Passivos' : 'Detratores'}
                     </span>
@@ -970,6 +974,44 @@ Retorne APENAS um JSON válido com este formato:
                       placeholder="Por que essa pergunta é importante?"
                     />
                   </div>
+
+                  {/* Público-alvo (Condicional) */}
+                  {question.type !== 'nps' && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-2">Exibir esta pergunta para:</label>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditQuestion(question.id, { conditional: undefined })}
+                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all ${!question.conditional ? 'bg-slate-800 text-white border-slate-800 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
+                        >
+                          Todos
+                        </button>
+                        <button
+                          onClick={() => handleEditQuestion(question.id, { conditional: 'promoter' })}
+                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all ${question.conditional === 'promoter' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-blue-600 border-blue-200 hover:border-blue-300'}`}
+                        >
+                          Promotores
+                        </button>
+                        <button
+                          onClick={() => handleEditQuestion(question.id, { conditional: 'passive' })}
+                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all ${question.conditional === 'passive' ? 'bg-yellow-500 text-white border-yellow-500 shadow-sm' : 'bg-white text-yellow-600 border-yellow-200 hover:border-yellow-300'}`}
+                        >
+                          Passivos
+                        </button>
+                        <button
+                          onClick={() => handleEditQuestion(question.id, { conditional: 'detractor' })}
+                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all ${question.conditional === 'detractor' ? 'bg-red-600 text-white border-red-600 shadow-sm' : 'bg-white text-red-600 border-red-200 hover:border-red-300'}`}
+                        >
+                          Detratores
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-2">
+                        {!question.conditional 
+                          ? 'Esta pergunta será exibida para todos os clientes, independente da nota.' 
+                          : `Esta pergunta só aparecerá para clientes que derem nota ${question.conditional === 'promoter' ? '9 ou 10' : question.conditional === 'passive' ? '7 ou 8' : 'de 0 a 6'}.`}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>
