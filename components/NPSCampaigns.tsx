@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Campaign, CampaignQuestion, User, InitialField } from '@/types';
 import { getSurveyLink } from '@/lib/utils/getBaseUrl';
-import { Plus, X, Share2, MoreVertical, Star, Link as LinkIcon, ExternalLink, Sparkles, Trash2, Check, Pause, Play, Edit, Eye, Loader2, MapPin, Send, Upload, FileSpreadsheet, QrCode, Download, FileText, AlertCircle, GripVertical, ArrowUp, ArrowDown, ArrowLeft } from 'lucide-react';
+import { Plus, X, Share2, MoreVertical, Star, Link as LinkIcon, ExternalLink, Sparkles, Trash2, Check, Pause, Play, Edit, Eye, Loader2, MapPin, Send, Upload, FileSpreadsheet, QrCode, Download, FileText, AlertCircle, GripVertical, ArrowUp, ArrowDown, ArrowLeft, Gift } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from '@/lib/supabase';
 import InitialFieldsConfig from '@/components/InitialFieldsConfig';
@@ -240,6 +240,8 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
                     <h3 className="font-bold text-gray-800 text-lg mb-1">{camp.name}</h3>
                     <div className="flex gap-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full border ${(camp.status === 'Ativa' || camp.status === 'active') ? 'text-green-600 bg-green-50 border-green-100' : 'text-gray-500 bg-gray-100 border-gray-200'}`}>{getStatusLabel(camp.status)}</span>
+                      {camp.offer_prize && <span className="text-xs px-2 py-0.5 rounded-full border border-purple-100 text-purple-600 bg-purple-50 flex items-center gap-1"><Gift size={10} /> Game Ativo</span>}
+                      {!camp.offer_prize && <span className="text-xs px-2 py-0.5 rounded-full border border-gray-100 text-gray-400 bg-gray-50 flex items-center gap-1">Sem Game</span>}
                       {camp.enableRedirection && <span className="text-xs px-2 py-0.5 rounded-full border border-blue-100 text-blue-600 bg-blue-50 flex items-center gap-1"><ExternalLink size={10} /> Redirecionamento</span>}
                     </div>
                   </div>

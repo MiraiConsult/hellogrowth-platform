@@ -1111,7 +1111,7 @@ Responda APENAS com JSON válido (sem markdown):
         
         {currentView === 'game-participations' && (
             <div className="p-6">
-                <GameParticipations tenantId={currentUser.tenantId} />
+                <GameParticipations tenantId={currentUser.tenantId} campaigns={campaigns} />
             </div>
         )}
         

@@ -24,11 +24,13 @@ interface Game {
 
 interface GameParticipationsProps {
   tenantId: string;
+  campaigns?: any[];
 }
 
-const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId }) => {
+const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campaigns: externalCampaigns }) => {
   const [participations, setParticipations] = useState<Participation[]>([]);
   const [games, setGames] = useState<Game[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>(externalCampaigns || []);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGameId, setSelectedGameId] = useState<string>('all');
@@ -36,7 +38,22 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId }) => 
 
   useEffect(() => {
     loadGames();
-  }, [tenantId]);
+    if (!externalCampaigns) {
+      loadCampaigns();
+    }
+  }, [tenantId, externalCampaigns]);
+
+  const loadCampaigns = async () => {
+    try {
+      const { data, error } = await fetch('/api/campaigns', {
+        headers: { 'x-tenant-id': tenantId }
+      }).then(res => res.json());
+      
+      if (data) setCampaigns(data);
+    } catch (error) {
+      console.error('Erro ao carregar campanhas:', error);
+    }
+  };
 
   const loadGames = async () => {
     try {
@@ -356,6 +373,9 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId }) => 
                     Cliente
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Campanha
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Contato
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -380,6 +400,13 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId }) => 
                   <tr key={participation.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900 text-sm">{participation.client_name}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-xs font-medium text-purple-600 bg-purple-50 px-2 py-1 rounded-md inline-block">
+                        {participation.campaign_id ? (
+                          campaigns.find(c => c.id === participation.campaign_id)?.name || 'Carregando...'
+                        ) : 'Direto'}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       <div>{participation.client_email || '-'}</div>
