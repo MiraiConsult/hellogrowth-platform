@@ -1147,6 +1147,82 @@ Retorne APENAS um JSON válido com este formato:
             </button>
           </div>
 
+          {/* Configuração de Roleta da Sorte (Game) */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5 mt-4">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-lg font-semibold text-slate-800">🎰 Roleta da Sorte</h3>
+              <a 
+                href="#" 
+                onClick={(e) => { e.preventDefault(); /* TODO: Navigate to GameConfig */ }} 
+                className="text-xs text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1"
+              >
+                <Edit3 className="w-3 h-3" />
+                Gerenciar Roletas
+              </a>
+            </div>
+            <p className="text-sm text-slate-500 mb-4">Ofereça prêmios para incentivar avaliações no Google</p>
+            
+            <label className="flex items-center gap-2 cursor-pointer mb-4">
+              <input
+                type="checkbox"
+                checked={offerPrize}
+                onChange={(e) => {
+                  setOfferPrize(e.target.checked);
+                  if (!e.target.checked) {
+                    setSelectedGameId(null);
+                  }
+                }}
+                className="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"
+              />
+              <span className="font-medium text-slate-700">Ativar Roleta da Sorte</span>
+            </label>
+
+            {offerPrize && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-2">Selecione a Roleta</label>
+                  {availableGames.length > 0 ? (
+                    <select
+                      value={selectedGameId || ''}
+                      onChange={(e) => setSelectedGameId(e.target.value || null)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                    >
+                      <option value="">Selecione uma roleta...</option>
+                      {availableGames.map(game => (
+                        <option key={game.id} value={game.id}>
+                          {game.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                      <p className="text-sm text-yellow-800">⚠️ Você ainda não tem nenhuma Roleta da Sorte configurada.</p>
+                      <p className="text-xs text-yellow-700 mt-1">Acesse <strong>HelloRating → Roleta da Sorte</strong> para criar uma.</p>
+                    </div>
+                  )}
+                </div>
+
+                {selectedGameId && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                    <p className="text-sm text-emerald-800 font-medium">✅ Roleta selecionada: {availableGames.find(g => g.id === selectedGameId)?.name}</p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Mensagem após o jogo</label>
+                  <input
+                    type="text"
+                    value={afterGameMessage}
+                    onChange={(e) => setAfterGameMessage(e.target.value)}
+                    placeholder="Ex: Parabéns! Para liberar seu prêmio, nos avalie no Google."
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Mensagem exibida após o cliente girar a roleta, antes de redirecionar para o Google.</p>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Configurações de Redirecionamento Google */}
           <div className="bg-white rounded-xl border border-slate-200 p-5 mt-4">
             <h3 className="text-lg font-semibold text-slate-800 mb-1">Redirecionamento Google</h3>
