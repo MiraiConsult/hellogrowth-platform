@@ -25,11 +25,11 @@ const generatePrizeCode = (name: string): string => {
   return `${initials}${random}`;
 };
 
-// Cores vibrantes para a roleta
+// Cores no padrão HelloGrowth - verde esmeralda, teal e tons complementares
 const WHEEL_COLORS = [
-  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD',
-  '#FF8C42', '#6C5CE7', '#00B894', '#FD79A8', '#74B9FF', '#A29BFE',
-  '#55EFC4', '#FF7675', '#FDCB6E', '#E17055', '#00CEC9', '#6C5CE7'
+  '#0D9488', '#10B981', '#14B8A6', '#059669', '#0EA5E9', '#6366F1',
+  '#0D9488', '#10B981', '#14B8A6', '#059669', '#0EA5E9', '#6366F1',
+  '#0D9488', '#10B981', '#14B8A6', '#059669', '#0EA5E9', '#6366F1'
 ];
 
 
@@ -73,22 +73,22 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
     ctx.save();
     ctx.beginPath();
     ctx.arc(center, center, radius + 8, 0, 2 * Math.PI);
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowColor = 'rgba(13, 148, 136, 0.25)';
     ctx.shadowBlur = 20;
     ctx.shadowOffsetY = 5;
-    ctx.fillStyle = '#2D3436';
+    ctx.fillStyle = '#F9FAFB';
     ctx.fill();
     ctx.restore();
 
-    // Borda externa dourada
+    // Borda externa - verde esmeralda elegante
     ctx.beginPath();
     ctx.arc(center, center, radius + 6, 0, 2 * Math.PI);
     const borderGrad = ctx.createLinearGradient(0, 0, size, size);
-    borderGrad.addColorStop(0, '#FFD700');
-    borderGrad.addColorStop(0.3, '#FFA500');
-    borderGrad.addColorStop(0.5, '#FFD700');
-    borderGrad.addColorStop(0.7, '#FFA500');
-    borderGrad.addColorStop(1, '#FFD700');
+    borderGrad.addColorStop(0, '#0D9488');
+    borderGrad.addColorStop(0.3, '#14B8A6');
+    borderGrad.addColorStop(0.5, '#0D9488');
+    borderGrad.addColorStop(0.7, '#14B8A6');
+    borderGrad.addColorStop(1, '#0D9488');
     ctx.fillStyle = borderGrad;
     ctx.fill();
 
@@ -96,7 +96,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
     prizes.forEach((prize, i) => {
       const startAngle = rotation + i * segmentAngle;
       const endAngle = startAngle + segmentAngle;
-      const color = prize.color || WHEEL_COLORS[i % WHEEL_COLORS.length];
+      const color = WHEEL_COLORS[i % WHEEL_COLORS.length];
 
       // Segmento
       ctx.beginPath();
@@ -109,13 +109,13 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
       const gradX = center + Math.cos(midAngle) * radius * 0.5;
       const gradY = center + Math.sin(midAngle) * radius * 0.5;
       const grad = ctx.createRadialGradient(gradX, gradY, 0, center, center, radius);
-      grad.addColorStop(0, lightenColor(color, 30));
+      grad.addColorStop(0, lightenColor(color, 40));
       grad.addColorStop(1, color);
       ctx.fillStyle = grad;
       ctx.fill();
 
       // Borda do segmento
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
       ctx.lineWidth = 2;
       ctx.stroke();
 
@@ -133,7 +133,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
       ctx.textBaseline = 'middle';
 
       // Sombra do texto
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
       ctx.shadowBlur = 3;
       ctx.shadowOffsetX = 1;
       ctx.shadowOffsetY = 1;
@@ -168,15 +168,15 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
       ctx.restore();
     });
 
-    // Círculo central decorativo
+    // Círculo central decorativo - verde esmeralda
     ctx.beginPath();
     ctx.arc(center, center, radius * 0.15, 0, 2 * Math.PI);
     const centerGrad = ctx.createRadialGradient(center - 5, center - 5, 0, center, center, radius * 0.15);
-    centerGrad.addColorStop(0, '#FFD700');
-    centerGrad.addColorStop(0.5, '#FFA500');
-    centerGrad.addColorStop(1, '#FF8C00');
+    centerGrad.addColorStop(0, '#14B8A6');
+    centerGrad.addColorStop(0.5, '#0D9488');
+    centerGrad.addColorStop(1, '#0F766E');
     ctx.fillStyle = centerGrad;
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowColor = 'rgba(13, 148, 136, 0.3)';
     ctx.shadowBlur = 5;
     ctx.fill();
     ctx.shadowBlur = 0;
@@ -184,7 +184,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
     // Borda do círculo central
     ctx.beginPath();
     ctx.arc(center, center, radius * 0.15, 0, 2 * Math.PI);
-    ctx.strokeStyle = '#FFD700';
+    ctx.strokeStyle = '#0D9488';
     ctx.lineWidth = 3;
     ctx.stroke();
 
@@ -193,7 +193,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
     ctx.fillStyle = '#FFFFFF';
     ctx.fill();
 
-    // Pontos decorativos na borda (como LEDs)
+    // Pontos decorativos na borda
     const dotCount = prizes.length * 3;
     for (let i = 0; i < dotCount; i++) {
       const dotAngle = (i / dotCount) * 2 * Math.PI + rotation;
@@ -201,7 +201,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
       const dotY = center + Math.sin(dotAngle) * (radius + 2);
       ctx.beginPath();
       ctx.arc(dotX, dotY, 2.5, 0, 2 * Math.PI);
-      ctx.fillStyle = i % 2 === 0 ? '#FFD700' : '#FFFFFF';
+      ctx.fillStyle = i % 2 === 0 ? '#FFFFFF' : '#A7F3D0';
       ctx.fill();
     }
   }, [prizes]);
@@ -299,8 +299,6 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
 
     // Calcular ângulo alvo (a seta está no topo = -PI/2)
     const segmentAngle = (2 * Math.PI) / prizes.length;
-    // O prêmio selecionado deve parar na posição da seta (topo)
-    // A seta aponta para -PI/2 (topo), então precisamos que o meio do segmento selecionado fique em -PI/2
     const targetAngle = -(selectedIndex * segmentAngle + segmentAngle / 2) - Math.PI / 2;
     
     // Adicionar voltas extras (8-12 voltas para efeito dramático)
@@ -352,14 +350,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background decorativo */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-20 -left-20 w-60 h-60 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute -bottom-20 -right-20 w-60 h-60 bg-pink-500/20 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl"></div>
-      </div>
-
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Confetti */}
       {showConfetti && (
         <div className="absolute inset-0 pointer-events-none z-20">
@@ -377,7 +368,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
               <div
                 className="w-2 h-3 rounded-sm"
                 style={{
-                  backgroundColor: WHEEL_COLORS[i % WHEEL_COLORS.length],
+                  backgroundColor: ['#0D9488', '#10B981', '#14B8A6', '#059669', '#0EA5E9', '#6366F1', '#F59E0B', '#EF4444'][i % 8],
                   transform: `rotate(${Math.random() * 360}deg)`,
                 }}
               />
@@ -388,13 +379,13 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
 
       <div className="max-w-md w-full relative z-10">
         {!hasSpun ? (
-          <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl p-8 text-center border border-white/20">
+          <div className="bg-white rounded-2xl shadow-lg p-8 text-center border border-gray-100">
             <div className="mb-6">
-              <div className="w-20 h-20 mx-auto bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-orange-500/30">
-                <Gift className="text-white" size={40} />
+              <div className="w-16 h-16 mx-auto bg-gradient-to-br from-teal-500 to-emerald-600 rounded-full flex items-center justify-center mb-4 shadow-md">
+                <Gift className="text-white" size={32} />
               </div>
-              <h2 className="text-3xl font-extrabold text-white mb-2">Roleta da Sorte!</h2>
-              <p className="text-white/70">{customMessage || 'Gire a roleta e ganhe um prêmio especial!'}</p>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Roleta da Sorte!</h2>
+              <p className="text-gray-500 text-sm">{customMessage || 'Gire a roleta e ganhe um prêmio especial!'}</p>
             </div>
 
             {/* Roleta Canvas */}
@@ -405,14 +396,14 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
                   <svg width="36" height="36" viewBox="0 0 36 36">
                     <defs>
                       <linearGradient id="arrowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="#FF4757" />
-                        <stop offset="100%" stopColor="#C0392B" />
+                        <stop offset="0%" stopColor="#0D9488" />
+                        <stop offset="100%" stopColor="#0F766E" />
                       </linearGradient>
                       <filter id="arrowShadow">
-                        <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#000" floodOpacity="0.3"/>
+                        <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#000" floodOpacity="0.15"/>
                       </filter>
                     </defs>
-                    <polygon points="18,30 6,6 30,6" fill="url(#arrowGrad)" filter="url(#arrowShadow)" stroke="#FFD700" strokeWidth="1.5"/>
+                    <polygon points="18,30 6,6 30,6" fill="url(#arrowGrad)" filter="url(#arrowShadow)" stroke="#FFFFFF" strokeWidth="1.5"/>
                   </svg>
                 </div>
               </div>
@@ -423,19 +414,19 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
                 width={320}
                 height={320}
                 className="w-full h-full"
-                style={{ filter: isSpinning ? 'brightness(1.1)' : 'brightness(1)' }}
+                style={{ filter: isSpinning ? 'brightness(1.05)' : 'brightness(1)' }}
               />
 
               {/* Glow effect quando girando */}
               {isSpinning && (
-                <div className="absolute inset-0 rounded-full bg-white/5 animate-pulse pointer-events-none"></div>
+                <div className="absolute inset-0 rounded-full bg-teal-500/5 animate-pulse pointer-events-none"></div>
               )}
             </div>
 
             <button
               onClick={handleSpin}
               disabled={isSpinning}
-              className="w-full py-4 bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white rounded-2xl font-extrabold text-lg shadow-lg shadow-orange-500/30 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 transform hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full py-4 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl font-bold text-lg shadow-md hover:shadow-lg hover:from-teal-700 hover:to-emerald-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 transform hover:scale-[1.02] active:scale-[0.98]"
             >
               {isSpinning ? (
                 <>
@@ -444,42 +435,48 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
                 </>
               ) : (
                 <>
-                  <Sparkles size={24} />
-                  <span>GIRAR ROLETA!</span>
+                  <Sparkles size={22} />
+                  <span>Girar Roleta</span>
                 </>
               )}
             </button>
           </div>
         ) : (
-          <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl p-8 text-center border border-white/20 animate-in zoom-in duration-500">
+          <div className="bg-white rounded-2xl shadow-lg p-8 text-center border border-gray-100">
             <div className="mb-6">
-              <div className="w-28 h-28 mx-auto bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-orange-500/40 animate-bounce">
-                <Gift className="text-white" size={56} />
+              <div className="w-24 h-24 mx-auto bg-gradient-to-br from-teal-500 to-emerald-600 rounded-full flex items-center justify-center mb-6 shadow-md animate-bounce">
+                <Gift className="text-white" size={48} />
               </div>
-              <h2 className="text-4xl font-extrabold text-white mb-3">Parabéns! 🎉</h2>
-              <p className="text-white/70 text-lg mb-4">Você ganhou:</p>
-              <div className="bg-gradient-to-r from-yellow-400 via-orange-400 to-pink-500 text-transparent bg-clip-text text-4xl font-black mb-6 leading-tight">
+              <h2 className="text-3xl font-bold text-gray-900 mb-3">Parabéns!</h2>
+              <p className="text-gray-500 text-base mb-4">Você ganhou:</p>
+              <div className="text-3xl font-bold text-teal-600 mb-6 leading-tight">
                 {wonPrize?.name}
               </div>
-              <div className="bg-white/10 rounded-xl p-4 mb-4 border border-white/10">
-                <p className="text-white/80 text-sm">
-                  Seu código de resgate será enviado por <strong className="text-yellow-400">WhatsApp</strong> ou <strong className="text-yellow-400">Email</strong> após sua avaliação no Google.
+              <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-100">
+                <p className="text-gray-600 text-sm">
+                  Seu código de resgate será enviado por <strong className="text-teal-600">WhatsApp</strong> ou <strong className="text-teal-600">Email</strong> após sua avaliação no Google.
                 </p>
               </div>
             </div>
 
             <button
               onClick={handleContinue}
-              className="w-full py-4 bg-gradient-to-r from-emerald-400 to-teal-500 text-white rounded-2xl font-extrabold text-lg shadow-lg shadow-emerald-500/30 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
+              className="w-full py-4 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl font-bold text-lg shadow-md hover:shadow-lg hover:from-teal-700 hover:to-emerald-700 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
             >
               <span>Continuar</span>
               <ArrowIcon />
             </button>
           </div>
         )}
+
+        {/* Footer */}
+        <div className="text-center mt-4">
+          <p className="text-gray-400 text-xs flex items-center justify-center gap-1">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+            Ambiente Seguro • Powered by HelloGrowth
+          </p>
+        </div>
       </div>
-
-
     </div>
   );
 };
