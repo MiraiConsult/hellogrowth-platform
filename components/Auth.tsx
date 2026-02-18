@@ -24,10 +24,36 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  // Debug connection on mount
+  // Check for Google OAuth callback on mount
   useEffect(() => {
     console.log("Auth Mounted. Supabase Client:", supabase);
-  }, []);
+
+    // Check if we're returning from Google OAuth
+    const params = new URLSearchParams(window.location.search);
+    const googleLogin = params.get('google_login');
+    const userParam = params.get('user');
+    const errorParam = params.get('error');
+
+    if (errorParam) {
+      setError(decodeURIComponent(errorParam));
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
+    if (googleLogin === 'success' && userParam) {
+      try {
+        const user = JSON.parse(decodeURIComponent(userParam));
+        onLogin(user);
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } catch (err) {
+        console.error('Error parsing user data:', err);
+        setError('Erro ao processar dados de login');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, [onLogin]);
 
   // Handle Google Sign-In
   const handleGoogleLogin = async () => {
@@ -35,25 +61,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     setGoogleLoading(true);
 
     try {
-      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'select_account',
-          },
-        },
-      });
-
-      if (oauthError) {
-        console.error('Google OAuth Error:', oauthError);
-        throw new Error('Erro ao iniciar login com Google. Tente novamente.');
-      }
-
-      // The user will be redirected to Google, so we don't need to do anything else here
-      // The callback page will handle the rest
-
+      // Redirect to our API route that initiates OAuth
+      window.location.href = '/api/auth/google';
     } catch (err: any) {
       console.error('Google Login Exception:', err);
       setError(err.message || 'Ocorreu um erro ao tentar entrar com o Google.');
