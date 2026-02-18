@@ -299,7 +299,8 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
 
     // Calcular ângulo alvo (a seta está no topo = -PI/2)
     const segmentAngle = (2 * Math.PI) / prizes.length;
-    const targetAngle = -(selectedIndex * segmentAngle + segmentAngle / 2) - Math.PI / 2;
+    // Corrigido: remover o sinal negativo para alinhar com a ordem de desenho dos segmentos
+    const targetAngle = (selectedIndex * segmentAngle + segmentAngle / 2) - Math.PI / 2;
     
     // Adicionar voltas extras (8-12 voltas para efeito dramático)
     const extraSpins = (8 + Math.random() * 4) * 2 * Math.PI;
