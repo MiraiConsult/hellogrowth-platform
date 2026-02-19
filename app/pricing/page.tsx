@@ -3,6 +3,9 @@
 import React, { useState } from 'react';
 import { Check, X, Sparkles, Users, Mail } from 'lucide-react';
 
+// Force dynamic rendering to support query parameters
+export const dynamic = 'force-dynamic';
+
 // Pricing data structure based on the user's table
 const PRICING_DATA: Record<number, Record<string, number>> = {
   1: {
