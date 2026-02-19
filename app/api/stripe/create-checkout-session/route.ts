@@ -94,6 +94,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { plan, userCount, addons } = body;
+    
+    console.log('Received checkout request:', { plan, userCount, addons });
 
     if (!plan || !userCount) {
       return NextResponse.json(
@@ -113,10 +115,13 @@ export async function POST(request: NextRequest) {
     // Get the price key
     const priceKey = getPriceKey(plan, addons || { game: false, mpd: false });
     const priceBRL = PRICING_DATA[userCount][priceKey];
+    
+    console.log('Price calculation:', { priceKey, priceBRL, userCount });
 
     if (!priceBRL) {
+      console.error('Invalid price configuration:', { priceKey, userCount, availableKeys: Object.keys(PRICING_DATA[userCount] || {}) });
       return NextResponse.json(
-        { error: 'Invalid price configuration' },
+        { error: `Invalid price configuration for ${priceKey} with ${userCount} users` },
         { status: 400 }
       );
     }
@@ -125,7 +130,16 @@ export async function POST(request: NextRequest) {
     const priceCents = Math.round(priceBRL * 100);
 
     // Initialize Stripe
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error('STRIPE_SECRET_KEY is not configured');
+      return NextResponse.json(
+        { error: 'Stripe is not configured. Please contact support.' },
+        { status: 500 }
+      );
+    }
+    
     const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    console.log('Stripe initialized successfully');
 
     // Get the base URL for success/cancel redirects
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.headers.get('origin') || 'http://localhost:3000';
@@ -135,6 +149,7 @@ export async function POST(request: NextRequest) {
     const description = `${planName} - ${userCount} usuário${userCount > 1 ? 's' : ''}`;
 
     // Create Checkout Session with dynamic pricing
+    console.log('Creating Stripe session with price:', priceCents, 'cents');
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -165,9 +180,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    console.log('Stripe session created successfully:', session.id);
     return NextResponse.json({ sessionId: session.id, url: session.url });
   } catch (error: any) {
-    console.error('Error creating checkout session:', error);
+    console.error('Error creating checkout session:', {
+      message: error.message,
+      stack: error.stack,
+      type: error.type,
+      code: error.code,
+    });
     return NextResponse.json(
       { error: error.message || 'Internal server error' },
       { status: 500 }
