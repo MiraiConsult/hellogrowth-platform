@@ -56,7 +56,19 @@ const PRICING_DATA: Record<number, Record<string, number>> = {
 
 // Helper function to get the price key based on plan and addons
 function getPriceKey(plan: string, addons: { game: boolean; mpd: boolean }): string {
-  const planCode = plan.replace('hello_', '').substring(0, 2); // hc, hr, hg
+  // Map plan names to their codes
+  const planCodeMap: Record<string, string> = {
+    'hello_client': 'hc',
+    'hello_rating': 'hr',
+    'hello_growth': 'hg',
+  };
+  
+  const planCode = planCodeMap[plan];
+  
+  if (!planCode) {
+    console.error('Invalid plan:', plan);
+    return plan; // fallback to original plan name
+  }
   
   if (addons.game && addons.mpd) {
     return `${planCode}_game_mpd`;
