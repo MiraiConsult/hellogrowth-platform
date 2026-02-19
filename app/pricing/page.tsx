@@ -182,6 +182,8 @@ export default function PricingPage() {
     }));
   };
 
+  const [isLoading, setIsLoading] = useState<string | null>(null);
+
   const handleSubscribe = async (plan: PlanKey) => {
     if (userCount > 10) {
       // Open email client
@@ -189,17 +191,40 @@ export default function PricingPage() {
       return;
     }
 
-    // TODO: Implement Stripe Checkout
-    // For now, just log the selection
-    const total = calculatePrice(plan);
-    console.log('Selected plan:', {
-      plan,
-      userCount,
-      addons: selectedPlans[plan],
-      total,
-    });
-    
-    alert(`Funcionalidade de checkout em desenvolvimento. Plano selecionado: ${plan} para ${userCount} usuário(s) - Total: R$ ${total.toFixed(2)}`);
+    try {
+      setIsLoading(plan);
+
+      // Call API to create checkout session
+      const response = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          plan,
+          userCount,
+          addons: selectedPlans[plan],
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create checkout session');
+      }
+
+      const { url } = await response.json();
+
+      // Redirect to Stripe Checkout
+      if (url) {
+        window.location.href = url;
+      } else {
+        throw new Error('No checkout URL returned');
+      }
+    } catch (error) {
+      console.error('Error creating checkout session:', error);
+      alert('Erro ao criar sessão de checkout. Por favor, tente novamente.');
+      setIsLoading(null);
+    }
   };
 
   const plans = [
@@ -427,7 +452,8 @@ export default function PricingPage() {
                   {/* CTA Button */}
                   <button
                     onClick={() => handleSubscribe(plan.key)}
-                    className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-300 ${
+                    disabled={isLoading === plan.key}
+                    className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
                       isRecommended
                         ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600 shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:scale-105'
                         : 'bg-gray-900 text-white hover:bg-gray-800 shadow-lg hover:shadow-xl hover:scale-105'
@@ -437,6 +463,14 @@ export default function PricingPage() {
                       <span className="flex items-center justify-center gap-2">
                         <Mail size={20} />
                         Entrar em contato
+                      </span>
+                    ) : isLoading === plan.key ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processando...
                       </span>
                     ) : (
                       'Assinar agora'
