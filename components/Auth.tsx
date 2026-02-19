@@ -349,7 +349,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               href="/pricing"
               className="text-emerald-600 hover:text-emerald-700 font-bold"
             >
-              Cadastre-se grátis
+              Cadastre-se agora
             </Link>
           </p>
         </div>

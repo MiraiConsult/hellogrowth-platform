@@ -110,6 +110,15 @@ const Navigation: React.FC<NavigationProps> = ({
       children: [
         { id: 'nps', label: 'Pesquisas NPS', icon: Star, requiredPlan: 'rating' },
         { id: 'analytics', label: 'Análise Feedback', icon: BarChart3, requiredPlan: 'rating' },
+      ]
+    },
+    {
+      id: 'game-group',
+      label: 'Game',
+      icon: Gift,
+      type: 'group',
+      color: 'pink',
+      children: [
         { id: 'games', label: 'Roleta da Sorte', icon: Gift, requiredPlan: 'rating', isNew: true, badge: 'Novo' },
         { id: 'game-participations', label: 'Participantes', icon: Users, requiredPlan: 'rating' },
       ]
@@ -126,7 +135,6 @@ const Navigation: React.FC<NavigationProps> = ({
       ]
     },
     { id: 'ai-chat', label: 'HelloIA', icon: MessageSquare, requiredPlan: 'all' },
-    { id: 'database-export', label: 'Banco de Dados', icon: Database, requiredPlan: 'all' },
     { id: 'business-profile', label: 'Perfil do Negócio', icon: Brain, requiredPlan: 'all', isNew: true, badge: 'Novo' },
     {
       id: 'settings-group',
@@ -137,9 +145,10 @@ const Navigation: React.FC<NavigationProps> = ({
       children: [
         { id: 'settings', label: 'Configurações', icon: Settings, requiredPlan: 'all' },
         { id: 'team-management', label: 'Gerenciar Equipe', icon: Users, requiredPlan: 'all' },
+        { id: 'database-export', label: 'Banco de Dados', icon: Database, requiredPlan: 'all' },
+        { id: 'tutorial', label: 'Ajuda', icon: HelpCircle, requiredPlan: 'all' },
       ]
     },
-    { id: 'tutorial', label: 'Ajuda', icon: HelpCircle, requiredPlan: 'all' },
   ];
 
   const hasPlanPermission = (requiredPlan: string) => {

@@ -41,9 +41,6 @@ const CompanySwitcher: React.FC<CompanySwitcherProps> = ({
           <span className="text-sm font-semibold text-gray-800 truncate max-w-[160px]">
             {activeCompany?.name || 'Minha Empresa'}
           </span>
-          <span className="text-xs text-gray-500 capitalize">
-            {activeCompany?.plan || 'trial'}
-          </span>
         </div>
       </div>
     );
@@ -62,9 +59,6 @@ const CompanySwitcher: React.FC<CompanySwitcherProps> = ({
         <div className="flex flex-col text-left">
           <span className="text-sm font-semibold text-gray-800 truncate max-w-[160px]">
             {activeCompany?.name || 'Minha Empresa'}
-          </span>
-          <span className="text-xs text-gray-500 capitalize">
-            {activeCompany?.plan || 'trial'}
           </span>
         </div>
         <svg
@@ -114,13 +108,6 @@ const CompanySwitcher: React.FC<CompanySwitcherProps> = ({
                       <span className="text-sm font-semibold text-gray-800 truncate">
                         {company?.name || 'Empresa'}
                       </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 capitalize">
-                          {company?.plan || 'trial'}
-                        </span>
-                        <span className="text-xs text-gray-400">•</span>
-                        <span className="text-xs text-gray-500 capitalize">{uc.role}</span>
-                      </div>
                     </div>
                     {isActive && (
                       <svg className="w-5 h-5 text-teal-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
