@@ -13,8 +13,8 @@ const PRICING_DATA: Record<number, Record<string, number>> = {
     hr_game: 129.90,
     hr_mpd: 129.90,
     hr_game_mpd: 149.90,
-    hg_game: 199.90,
-    hg_mpd: 199.90,
+    hg_game: 189.90,
+    hg_mpd: 189.90,
     hg_game_mpd: 199.90,
   },
   2: {
@@ -25,8 +25,8 @@ const PRICING_DATA: Record<number, Record<string, number>> = {
     hr_game: 124.90,
     hr_mpd: 124.90,
     hr_game_mpd: 144.90,
-    hg_game: 194.90,
-    hg_mpd: 194.90,
+    hg_game: 184.90,
+    hg_mpd: 184.90,
     hg_game_mpd: 194.90,
   },
   3: {
@@ -37,8 +37,8 @@ const PRICING_DATA: Record<number, Record<string, number>> = {
     hr_game: 119.90,
     hr_mpd: 119.90,
     hr_game_mpd: 139.90,
-    hg_game: 189.90,
-    hg_mpd: 189.90,
+    hg_game: 179.90,
+    hg_mpd: 179.90,
     hg_game_mpd: 189.90,
   },
   4: {
@@ -49,8 +49,8 @@ const PRICING_DATA: Record<number, Record<string, number>> = {
     hr_game: 114.90,
     hr_mpd: 114.90,
     hr_game_mpd: 134.90,
-    hg_game: 184.90,
-    hg_mpd: 184.90,
+    hg_game: 174.90,
+    hg_mpd: 174.90,
     hg_game_mpd: 184.90,
   },
   5: {
@@ -61,8 +61,8 @@ const PRICING_DATA: Record<number, Record<string, number>> = {
     hr_game: 109.90,
     hr_mpd: 109.90,
     hr_game_mpd: 129.90,
-    hg_game: 179.90,
-    hg_mpd: 179.90,
+    hg_game: 169.90,
+    hg_mpd: 169.90,
     hg_game_mpd: 179.90,
   },
   6: {
@@ -73,8 +73,8 @@ const PRICING_DATA: Record<number, Record<string, number>> = {
     hr_game: 104.90,
     hr_mpd: 104.90,
     hr_game_mpd: 124.90,
-    hg_game: 174.90,
-    hg_mpd: 174.90,
+    hg_game: 164.90,
+    hg_mpd: 164.90,
     hg_game_mpd: 174.90,
   },
   7: {
@@ -85,8 +85,8 @@ const PRICING_DATA: Record<number, Record<string, number>> = {
     hr_game: 99.90,
     hr_mpd: 99.90,
     hr_game_mpd: 119.90,
-    hg_game: 169.90,
-    hg_mpd: 169.90,
+    hg_game: 159.90,
+    hg_mpd: 159.90,
     hg_game_mpd: 169.90,
   },
   8: {
@@ -97,8 +97,8 @@ const PRICING_DATA: Record<number, Record<string, number>> = {
     hr_game: 94.90,
     hr_mpd: 94.90,
     hr_game_mpd: 114.90,
-    hg_game: 164.90,
-    hg_mpd: 164.90,
+    hg_game: 154.90,
+    hg_mpd: 154.90,
     hg_game_mpd: 164.90,
   },
   9: {
@@ -109,8 +109,8 @@ const PRICING_DATA: Record<number, Record<string, number>> = {
     hr_game: 89.90,
     hr_mpd: 89.90,
     hr_game_mpd: 109.90,
-    hg_game: 159.90,
-    hg_mpd: 159.90,
+    hg_game: 149.90,
+    hg_mpd: 149.90,
     hg_game_mpd: 159.90,
   },
   10: {
@@ -121,8 +121,8 @@ const PRICING_DATA: Record<number, Record<string, number>> = {
     hr_game: 84.90,
     hr_mpd: 84.90,
     hr_game_mpd: 104.90,
-    hg_game: 154.90,
-    hg_mpd: 154.90,
+    hg_game: 144.90,
+    hg_mpd: 144.90,
     hg_game_mpd: 154.90,
   },
 };
@@ -149,10 +149,6 @@ export default function PricingPage() {
     const addons = selectedPlans[plan];
 
     // Build the key for the pricing lookup
-    let key = plan;
-    const planCode = plan.substring(0, 2); // 'he' -> need to fix this
-    
-    // Fix: extract correct plan code
     const planCodeMap: Record<PlanKey, string> = {
       hello_client: 'hc',
       hello_rating: 'hr',
@@ -160,6 +156,7 @@ export default function PricingPage() {
     };
     
     const code = planCodeMap[plan];
+    let key = plan;
     
     if (addons.game && addons.mpd) {
       key = `${code}_game_mpd`;
@@ -170,6 +167,42 @@ export default function PricingPage() {
     }
 
     return pricing[key] || pricing[plan];
+  };
+
+  // Calculate savings correctly
+  const calculateSavings = (plan: PlanKey): { amount: number; percentage: number } => {
+    if (userCount <= 1) return { amount: 0, percentage: 0 };
+
+    const currentPrice = calculatePrice(plan);
+    const basePrice = PRICING_DATA[1][plan];
+    const addons = selectedPlans[plan];
+
+    // Get the correct base price with addons for 1 user
+    const planCodeMap: Record<PlanKey, string> = {
+      hello_client: 'hc',
+      hello_rating: 'hr',
+      hello_growth: 'hg',
+    };
+    
+    const code = planCodeMap[plan];
+    let basePriceKey = plan;
+    
+    if (addons.game && addons.mpd) {
+      basePriceKey = `${code}_game_mpd`;
+    } else if (addons.game) {
+      basePriceKey = `${code}_game`;
+    } else if (addons.mpd) {
+      basePriceKey = `${code}_mpd`;
+    }
+
+    const basePriceWithAddons = PRICING_DATA[1][basePriceKey];
+    const totalSavings = (basePriceWithAddons - currentPrice) * userCount;
+    const savingsPercentage = Math.round((totalSavings / (basePriceWithAddons * userCount)) * 100);
+
+    return {
+      amount: totalSavings,
+      percentage: savingsPercentage,
+    };
   };
 
   const handleAddonToggle = (plan: PlanKey, addon: 'game' | 'mpd') => {
@@ -322,6 +355,7 @@ export default function PricingPage() {
             const price = calculatePrice(plan.key);
             const isRecommended = plan.recommended;
             const addons = selectedPlans[plan.key];
+            const savings = calculateSavings(plan.key);
 
             return (
               <div
@@ -333,7 +367,7 @@ export default function PricingPage() {
                 {/* Recommended Badge */}
                 {isRecommended && (
                   <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-                    <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-6 py-2 rounded-full text-sm font-bold shadow-lg">
+                    <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-2.5 rounded-full text-sm font-bold shadow-lg whitespace-nowrap">
                       {plan.category}
                     </div>
                   </div>
@@ -366,9 +400,9 @@ export default function PricingPage() {
                         </span>
                         <span className="text-gray-600">/mês</span>
                       </div>
-                      {userCount > 1 && (
+                      {savings.amount > 0 && (
                         <p className="text-sm text-emerald-600 font-medium mt-2">
-                          Economia de R$ {((PRICING_DATA[1][plan.key] - price) * userCount).toFixed(2).replace('.', ',')} ({Math.round(((PRICING_DATA[1][plan.key] - price) / PRICING_DATA[1][plan.key]) * 100)}%)
+                          Economia de R$ {savings.amount.toFixed(2).replace('.', ',')} ({savings.percentage}%)
                         </p>
                       )}
                     </div>
@@ -397,55 +431,61 @@ export default function PricingPage() {
                         Adicionais:
                       </p>
 
-                      {/* Game Add-on */}
-                      <label
-                        className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${
+                      {/* Game Add-on - Toggle Switch Style */}
+                      <div
+                        className={`flex items-center justify-between p-3 rounded-lg border-2 transition-all ${
                           plan.canAddGame
                             ? addons.game
-                              ? 'border-emerald-500 bg-emerald-50 cursor-pointer'
-                              : 'border-gray-200 hover:border-emerald-300 cursor-pointer'
-                            : 'border-gray-100 bg-gray-50 cursor-not-allowed opacity-50'
+                              ? 'border-emerald-500 bg-emerald-50'
+                              : 'border-gray-200 hover:border-emerald-300'
+                            : 'border-gray-100 bg-gray-50 opacity-50'
                         }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={addons.game}
-                          onChange={() => handleAddonToggle(plan.key, 'game')}
-                          disabled={!plan.canAddGame}
-                          className="w-5 h-5 text-emerald-600 rounded focus:ring-emerald-500 disabled:cursor-not-allowed"
-                        />
-                        <span className="flex-1 text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-gray-900">
                           Game
                         </span>
-                        {!plan.canAddGame && (
-                          <X size={16} className="text-gray-400" />
-                        )}
-                      </label>
+                        <button
+                          onClick={() => plan.canAddGame && handleAddonToggle(plan.key, 'game')}
+                          disabled={!plan.canAddGame}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed ${
+                            addons.game && plan.canAddGame ? 'bg-emerald-600' : 'bg-gray-300'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              addons.game && plan.canAddGame ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
 
-                      {/* MPD Add-on */}
-                      <label
-                        className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${
+                      {/* MPD Add-on - Toggle Switch Style */}
+                      <div
+                        className={`flex items-center justify-between p-3 rounded-lg border-2 transition-all ${
                           plan.canAddMPD
                             ? addons.mpd
-                              ? 'border-emerald-500 bg-emerald-50 cursor-pointer'
-                              : 'border-gray-200 hover:border-emerald-300 cursor-pointer'
-                            : 'border-gray-100 bg-gray-50 cursor-not-allowed opacity-50'
+                              ? 'border-emerald-500 bg-emerald-50'
+                              : 'border-gray-200 hover:border-emerald-300'
+                            : 'border-gray-100 bg-gray-50 opacity-50'
                         }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={addons.mpd}
-                          onChange={() => handleAddonToggle(plan.key, 'mpd')}
-                          disabled={!plan.canAddMPD}
-                          className="w-5 h-5 text-emerald-600 rounded focus:ring-emerald-500 disabled:cursor-not-allowed"
-                        />
-                        <span className="flex-1 text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-gray-900">
                           MPD
                         </span>
-                        {!plan.canAddMPD && (
-                          <X size={16} className="text-gray-400" />
-                        )}
-                      </label>
+                        <button
+                          onClick={() => plan.canAddMPD && handleAddonToggle(plan.key, 'mpd')}
+                          disabled={!plan.canAddMPD}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed ${
+                            addons.mpd && plan.canAddMPD ? 'bg-emerald-600' : 'bg-gray-300'
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              addons.mpd && plan.canAddMPD ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
                     </div>
                   )}
 
