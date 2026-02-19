@@ -187,22 +187,23 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
 
   // Calculate economy
   const calculateEconomy = (plan: PlanKey): number => {
-    const basePrice = getBasePrice(plan);
     const currentPrice = calculatePrice(plan);
-    const fullPrice = PRICING_DATA[1][plan] || 0;
+    const fullPriceKey = getPriceKey(plan);
+    const fullPrice = PRICING_DATA[1][fullPriceKey] || 0;
     
-    // Economy is based on the difference from 1-user base price
-    const economy = (fullPrice - basePrice) * userCount;
+    // Economy is based on the difference from 1-user price (with same addons)
+    const economy = (fullPrice * userCount) - (currentPrice * userCount);
     return Math.max(0, economy);
   };
 
   // Calculate economy percentage
   const calculateEconomyPercentage = (plan: PlanKey): number => {
-    const basePrice = getBasePrice(plan);
-    const fullPrice = PRICING_DATA[1][plan] || 0;
+    const currentPrice = calculatePrice(plan);
+    const fullPriceKey = getPriceKey(plan);
+    const fullPrice = PRICING_DATA[1][fullPriceKey] || 0;
     
     if (fullPrice === 0) return 0;
-    return Math.round(((fullPrice - basePrice) / fullPrice) * 100);
+    return Math.round(((fullPrice - currentPrice) / fullPrice) * 100);
   };
 
   // Toggle add-on
@@ -367,23 +368,18 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
             <input
               type="range"
               min="1"
-              max="15"
+              max="10"
               value={userCount}
               onChange={(e) => setUserCount(parseInt(e.target.value))}
               className="w-full h-3 bg-gradient-to-r from-emerald-200 to-teal-200 rounded-lg appearance-none cursor-pointer slider"
               style={{
-                background: `linear-gradient(to right, rgb(16 185 129) 0%, rgb(16 185 129) ${((userCount - 1) / 14) * 100}%, rgb(209 250 229) ${((userCount - 1) / 14) * 100}%, rgb(209 250 229) 100%)`
+                background: `linear-gradient(to right, rgb(16 185 129) 0%, rgb(16 185 129) ${((userCount - 1) / 9) * 100}%, rgb(209 250 229) ${((userCount - 1) / 9) * 100}%, rgb(209 250 229) 100%)`
               }}
             />
             <div className="flex justify-between text-sm text-gray-500 mt-2">
               <span>1</span>
-              <span>15+</span>
+              <span>10</span>
             </div>
-            {userCount > 10 && (
-              <p className="text-sm text-amber-600 mt-3 text-center font-medium">
-                Para mais de 10 usuários, entre em contato para um orçamento personalizado
-              </p>
-            )}
           </div>
         </div>
 
@@ -424,6 +420,11 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
                       </span>
                       <span className="text-gray-600">/mês</span>
                     </div>
+                    {userCount > 1 && (
+                      <p className="text-gray-500 text-xs mt-1">
+                        R$ {(price * userCount).toFixed(2).replace('.', ',')} total para {userCount} usuários
+                      </p>
+                    )}
                     {userCount > 1 && economy > 0 && (
                       <p className="text-emerald-600 font-medium text-sm mt-2">
                         Economia de R$ {economy.toFixed(2).replace('.', ',')} ({economyPercentage}%)
@@ -447,38 +448,48 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
                       <p className="text-sm font-semibold text-gray-700">Adicionais:</p>
                       
                       {plan.canAddGame && (
-                        <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
-                          <span className="text-sm font-medium text-gray-700">Game</span>
-                          <button
-                            onClick={() => toggleAddon(plan.key, 'game')}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                              selectedPlans[plan.key].game ? 'bg-emerald-500' : 'bg-gray-300'
-                            }`}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                selectedPlans[plan.key].game ? 'translate-x-6' : 'translate-x-1'
+                        <div className="bg-gray-50 rounded-xl p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-gray-700">Game</span>
+                            <button
+                              onClick={() => toggleAddon(plan.key, 'game')}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                selectedPlans[plan.key].game ? 'bg-emerald-500' : 'bg-gray-300'
                               }`}
-                            />
-                          </button>
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                  selectedPlans[plan.key].game ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Adicione premiações ao fim das pesquisas NPS para incentivar mais avaliações e aumentar o engajamento dos seus clientes.
+                          </p>
                         </div>
                       )}
 
                       {plan.canAddMPD && (
-                        <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
-                          <span className="text-sm font-medium text-gray-700">MPD</span>
-                          <button
-                            onClick={() => toggleAddon(plan.key, 'mpd')}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                              selectedPlans[plan.key].mpd ? 'bg-emerald-500' : 'bg-gray-300'
-                            }`}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                selectedPlans[plan.key].mpd ? 'translate-x-6' : 'translate-x-1'
+                        <div className="bg-gray-50 rounded-xl p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-gray-700">Minha Presença Digital</span>
+                            <button
+                              onClick={() => toggleAddon(plan.key, 'mpd')}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                selectedPlans[plan.key].mpd ? 'bg-emerald-500' : 'bg-gray-300'
                               }`}
-                            />
-                          </button>
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                  selectedPlans[plan.key].mpd ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Analise seu posicionamento no Google com IA. Receba um levantamento completo de pontos fortes, fracos, melhorias e comentários para otimizar sua reputação online.
+                          </p>
                         </div>
                       )}
                     </div>
