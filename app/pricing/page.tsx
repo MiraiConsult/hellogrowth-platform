@@ -306,9 +306,34 @@ export default function PricingPage() {
     },
   ];
 
+  // Check if user canceled checkout
+  const [showCanceledMessage, setShowCanceledMessage] = useState(false);
+  
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('canceled') === 'true') {
+      setShowCanceledMessage(true);
+      // Remove the canceled parameter from URL
+      window.history.replaceState({}, '', '/pricing');
+      // Hide message after 5 seconds
+      setTimeout(() => setShowCanceledMessage(false), 5000);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 py-16 px-4">
       <div className="max-w-7xl mx-auto">
+        {/* Canceled Message */}
+        {showCanceledMessage && (
+          <div className="max-w-2xl mx-auto mb-6 bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
+            <X className="text-yellow-600 flex-shrink-0" size={24} />
+            <div>
+              <p className="text-yellow-800 font-medium">Pagamento cancelado</p>
+              <p className="text-yellow-700 text-sm">Você pode escolher um plano quando estiver pronto.</p>
+            </div>
+          </div>
+        )}
+        
         {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center justify-center mb-4">
