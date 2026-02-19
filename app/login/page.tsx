@@ -16,18 +16,22 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     
-    // TODO: Implementar lógica de login
+    // TODO: Implementar lógica de autenticação real
     console.log('Login:', { email, password, rememberMe });
     
-    // Simulação de login
+    // Simulação de login - por enquanto aceita qualquer email/senha
     setTimeout(() => {
       setIsLoading(false);
+      // Redireciona para o dashboard
+      window.location.href = '/dashboard';
     }, 1500);
   };
 
   const handleGoogleLogin = () => {
-    // TODO: Implementar login com Google
+    // TODO: Implementar login com Google OAuth
     console.log('Login com Google');
+    // Por enquanto, redireciona direto para o dashboard
+    window.location.href = '/dashboard';
   };
 
   return (
