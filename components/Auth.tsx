@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User } from '@/types';
+import { User, UserCompany } from '@/types';
 import { Eye, EyeOff, Loader2, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import Image from 'next/image';
@@ -134,17 +134,48 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         let isOwner = data.is_owner || false;
         let userRole = data.role || (isOwner ? 'admin' : 'viewer');
         
+        // Buscar empresas do usuário na tabela user_companies
+        let userCompanies: UserCompany[] = [];
+        let activeCompanyId = data.tenant_id;
+        let activePlan = data.plan;
+        let activeCompanyName = data.company_name;
+        
+        try {
+          const { data: ucData } = await supabase
+            .from('user_companies')
+            .select('*, company:companies(*)')
+            .eq('user_id', data.id)
+            .eq('status', 'active');
+          
+          if (ucData && ucData.length > 0) {
+            userCompanies = ucData;
+            // Encontrar empresa padrão ou usar a primeira
+            const defaultCompany = ucData.find((uc: any) => uc.is_default) || ucData[0];
+            if (defaultCompany?.company) {
+              activeCompanyId = defaultCompany.company_id;
+              activePlan = defaultCompany.company.plan || data.plan;
+              activeCompanyName = defaultCompany.company.name || data.company_name;
+              userRole = defaultCompany.role || userRole;
+              isOwner = defaultCompany.role === 'owner';
+            }
+          }
+        } catch (err) {
+          console.warn('Erro ao buscar empresas do usuário (tabela pode não existir ainda):', err);
+        }
+        
         const user: User = {
           id: data.id,
           name: data.name,
           email: data.email,
           password: data.password, 
-          plan: data.plan,
+          plan: activePlan,
           createdAt: data.created_at,
-          companyName: data.company_name,
-          tenantId: data.tenant_id,
+          companyName: activeCompanyName,
+          tenantId: activeCompanyId,
           isOwner: isOwner,
-          role: userRole
+          role: userRole,
+          companies: userCompanies,
+          activeCompanyId: activeCompanyId
         };
 
         onLogin(user);

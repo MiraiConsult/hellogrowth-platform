@@ -11,6 +11,39 @@ export interface User {
   tenantId?: string; // ID do tenant (empresa) ao qual o usuário pertence
   isOwner?: boolean; // Indica se o usuário é o dono do tenant
   role?: 'admin' | 'manager' | 'member' | 'viewer' | 'super_admin'; // Role do usuário
+  companies?: UserCompany[]; // Empresas às quais o usuário pertence
+  activeCompanyId?: string; // ID da empresa ativa no momento
+}
+
+// Multi-tenant: Empresa
+export interface Company {
+  id: string;
+  name: string;
+  slug?: string;
+  logo_url?: string;
+  plan: PlanType;
+  plan_addons?: string[];
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
+  subscription_status?: 'trialing' | 'active' | 'canceled' | 'past_due';
+  trial_start_at?: string;
+  trial_end_at?: string;
+  settings?: Record<string, any>;
+  google_place_id?: string;
+  max_users?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Multi-tenant: Relação Usuário-Empresa
+export interface UserCompany {
+  id: string;
+  user_id: string;
+  company_id: string;
+  role: 'owner' | 'admin' | 'manager' | 'member' | 'viewer';
+  is_default: boolean;
+  status: 'active' | 'invited' | 'suspended';
+  company?: Company; // Dados da empresa (join)
 }
 
 export interface Lead {
@@ -204,4 +237,15 @@ export interface ConsultantQuestion {
   category: 'sales' | 'satisfaction' | 'strategy' | 'operations';
   question: string;
   icon: string;
+}
+
+// Multi-tenant: Convite para empresa
+export interface CompanyInvite {
+  id: string;
+  company_id: string;
+  email: string;
+  role: 'admin' | 'manager' | 'member' | 'viewer';
+  status: 'pending' | 'accepted' | 'rejected';
+  invited_by: string;
+  created_at: string;
 }

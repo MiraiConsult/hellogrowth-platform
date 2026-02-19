@@ -23,7 +23,9 @@ import {
   Package,
   Gift
 } from 'lucide-react';
-import { PlanType } from '@/types';
+import { PlanType, Company, UserCompany } from '@/types';
+import CompanySwitcher from '@/components/CompanySwitcher';
+import { User } from '@/types';
 
 interface NavigationProps {
   currentView: string;
@@ -33,6 +35,10 @@ interface NavigationProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   userRole?: string;
+  currentUser?: User;
+  activeCompany?: Company | null;
+  userCompanies?: UserCompany[];
+  onSwitchCompany?: (companyId: string) => void;
 }
 
 type MenuItem = {
@@ -62,7 +68,11 @@ const Navigation: React.FC<NavigationProps> = ({
   onLogout, 
   isCollapsed, 
   onToggleCollapse,
-  userRole = 'admin'
+  userRole = 'admin',
+  currentUser,
+  activeCompany,
+  userCompanies = [],
+  onSwitchCompany
 }) => {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     'helloclient': true,
@@ -283,6 +293,25 @@ const Navigation: React.FC<NavigationProps> = ({
           {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
       </div>
+
+      {/* Company Switcher */}
+      {!isCollapsed && currentUser && activeCompany && (
+        <div className="px-3 py-2">
+          <CompanySwitcher
+            currentUser={currentUser}
+            companies={userCompanies}
+            activeCompany={activeCompany}
+            onSwitchCompany={onSwitchCompany || (() => {})}
+          />
+        </div>
+      )}
+      {isCollapsed && activeCompany && (
+        <div className="flex justify-center py-2">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center text-white font-bold text-sm" title={activeCompany.name}>
+            {activeCompany.name?.charAt(0)?.toUpperCase() || 'E'}
+          </div>
+        </div>
+      )}
 
       {/* Divider */}
       <div className="px-5">

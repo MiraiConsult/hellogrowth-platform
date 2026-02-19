@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Auth from '@/components/Auth';
 import MainApp from '@/components/MainApp';
-import { User, PlanType } from '@/types';
+import { User, PlanType, Company, UserCompany } from '@/types';
 import { supabase } from '@/lib/supabase';
 
 export default function HomePage() {
@@ -66,6 +66,60 @@ export default function HomePage() {
     setView('auth');
   };
 
+  // Handle Company Switch
+  const handleSwitchCompany = async (companyId: string) => {
+    if (!currentUser || !supabase) return;
+
+    try {
+      // Buscar dados da empresa selecionada
+      const { data: companyData } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', companyId)
+        .single();
+
+      // Buscar role do usuário nessa empresa
+      const { data: ucData } = await supabase
+        .from('user_companies')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .eq('company_id', companyId)
+        .single();
+
+      if (companyData && ucData) {
+        const updatedUser: User = {
+          ...currentUser,
+          tenantId: companyId,
+          activeCompanyId: companyId,
+          companyName: companyData.name,
+          plan: companyData.plan || currentUser.plan,
+          isOwner: ucData.role === 'owner',
+          role: ucData.role || currentUser.role,
+        };
+
+        // Atualizar is_default: desmarcar todas e marcar a nova
+        await supabase
+          .from('user_companies')
+          .update({ is_default: false })
+          .eq('user_id', currentUser.id);
+
+        await supabase
+          .from('user_companies')
+          .update({ is_default: true })
+          .eq('user_id', currentUser.id)
+          .eq('company_id', companyId);
+
+        setCurrentUser(updatedUser);
+        localStorage.setItem('hg_current_user', JSON.stringify(updatedUser));
+
+        // Forçar reload para recarregar todos os dados com o novo tenant
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error('Erro ao trocar de empresa:', err);
+    }
+  };
+
   // Handle Plan Updates
   const handleUpdatePlan = (newPlan: PlanType) => {
     if (!currentUser || currentUser.id === 'public') return;
@@ -76,6 +130,18 @@ export default function HomePage() {
     localStorage.setItem('hg_current_user', JSON.stringify(updatedUser));
 
     if (supabase) {
+      // Atualizar plano na tabela companies (multi-tenant)
+      if (currentUser.activeCompanyId || currentUser.tenantId) {
+        supabase
+          .from('companies')
+          .update({ plan: newPlan })
+          .eq('id', currentUser.activeCompanyId || currentUser.tenantId)
+          .then(({ error }) => {
+            if (error) console.error('Error updating plan in companies:', error);
+          });
+      }
+      
+      // Manter compatibilidade: atualizar também na tabela users
       supabase
         .from('users')
         .update({ plan: newPlan })
@@ -111,6 +177,7 @@ export default function HomePage() {
       currentUser={currentUser}
       onLogout={handleLogout}
       onUpdatePlan={handleUpdatePlan}
+      onSwitchCompany={handleSwitchCompany}
       daysLeft={undefined}
     />
   );

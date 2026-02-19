@@ -26,7 +26,8 @@ import TeamManagement from '@/components/TeamManagement';
 import IntelligenceCenter from '@/components/IntelligenceCenter';
 import GameConfig from '@/components/GameConfig';
 import GameParticipations from '@/components/GameParticipations';
-import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
+import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User, UserCompany, Company } from '@/types';
+import CompanySwitcher from '@/components/CompanySwitcher';
 import { mockSettings } from '@/services/mockData';
 import { supabase } from '@/lib/supabase';
 
@@ -34,10 +35,35 @@ interface MainAppProps {
   currentUser: User;
   onLogout: () => void;
   onUpdatePlan: (plan: PlanType) => void;
+  onSwitchCompany?: (companyId: string) => void;
   daysLeft?: number;
 }
 
-const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, daysLeft }) => {
+const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, onSwitchCompany, daysLeft }) => {
+  // Estado da empresa ativa
+  const [activeCompany, setActiveCompany] = useState<Company | null>(null);
+  const [userCompanies, setUserCompanies] = useState<UserCompany[]>(currentUser.companies || []);
+
+  // Carregar empresa ativa
+  useEffect(() => {
+    const loadActiveCompany = async () => {
+      if (currentUser.companies && currentUser.companies.length > 0) {
+        const defaultUc = currentUser.companies.find(uc => uc.is_default) || currentUser.companies[0];
+        if (defaultUc?.company) {
+          setActiveCompany(defaultUc.company as Company);
+        }
+        setUserCompanies(currentUser.companies);
+      } else if (currentUser.tenantId) {
+        // Fallback: criar empresa virtual a partir dos dados do usuário
+        setActiveCompany({
+          id: currentUser.tenantId,
+          name: currentUser.companyName || 'Minha Empresa',
+          plan: currentUser.plan,
+        });
+      }
+    };
+    loadActiveCompany();
+  }, [currentUser]);
   // If Super Admin, show Admin Panel immediately
   if (currentUser.role === 'super_admin') {
       return <AdminUserManagement onLogout={onLogout} />;
@@ -1028,6 +1054,10 @@ Responda APENAS com JSON válido (sem markdown):
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         userRole={currentUser.role || 'admin'}
+        currentUser={currentUser}
+        activeCompany={activeCompany}
+        userCompanies={userCompanies}
+        onSwitchCompany={onSwitchCompany}
       />
       <main className={`flex-1 relative transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
         {currentUser.plan === 'trial' && daysLeft !== undefined && (
