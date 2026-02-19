@@ -23,9 +23,8 @@ import ProductsManagement from '@/components/ProductsManagement';
 import BusinessProfile from '@/components/BusinessProfile';
 import TeamManagement from '@/components/TeamManagement';
 // CustomerJourney removed
-import IntelligenceCenter from '@/components/IntelligenceCenter';
-import GameConfig from '@/components/GameConfig';
-import GameParticipations from '@/components/GameParticipations';
+import Strategic from '@/components/Strategic';
+import Game from '@/components/Game';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User, UserCompany, Company } from '@/types';
 import CompanySwitcher from '@/components/CompanySwitcher';
 import { mockSettings } from '@/services/mockData';
@@ -1133,15 +1132,7 @@ Responda APENAS com JSON válido (sem markdown):
         />}
         
         {currentView === 'games' && (
-            <div className="p-6">
-                <GameConfig tenantId={currentUser.tenantId} />
-            </div>
-        )}
-        
-        {currentView === 'game-participations' && (
-            <div className="p-6">
-                <GameParticipations tenantId={currentUser.tenantId} campaigns={campaigns} />
-            </div>
+            <Game tenantId={currentUser.tenantId} campaigns={campaigns} />
         )}
         
         {currentView === 'campaign-report' && reportCampaignId && (
@@ -1181,12 +1172,12 @@ Responda APENAS com JSON válido (sem markdown):
 
         {/* NEW VIEWS FOR HELLO GROWTH 2.0 */}
         {currentView === 'intelligence-center' && (
-          <IntelligenceCenter 
+          <Strategic 
             leads={leads}
             npsData={npsData}
-
             onNavigate={handleNavigateWithFilter}
             userId={currentUser.id}
+            activePlan={currentUser.plan}
           />
         )}
 
@@ -1213,7 +1204,7 @@ Responda APENAS com JSON válido (sem markdown):
           />
         )}
         
-        {currentView === 'ai-chat' && <AIChat leads={leads} npsData={npsData} activePlan={currentUser.plan} />}
+
         
         {currentView === 'pricing' && <Pricing currentPlan={currentUser.plan} onSelectPlan={onUpdatePlan} />}
         

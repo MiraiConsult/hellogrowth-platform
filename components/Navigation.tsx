@@ -90,8 +90,8 @@ const Navigation: React.FC<NavigationProps> = ({
   const navStructure: NavigationItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, requiredPlan: 'all' },
     {
-      id: 'helloclient',
-      label: 'HelloClient',
+      id: 'pre-sale',
+      label: 'Pré-venda',
       icon: Users,
       type: 'group',
       color: 'blue',
@@ -102,8 +102,8 @@ const Navigation: React.FC<NavigationProps> = ({
       ]
     },
     {
-      id: 'hellorating',
-      label: 'HelloRating',
+      id: 'post-sale',
+      label: 'Pós-venda',
       icon: Star,
       type: 'group',
       color: 'amber',
@@ -113,29 +113,18 @@ const Navigation: React.FC<NavigationProps> = ({
       ]
     },
     {
-      id: 'game-group',
-      label: 'Game',
-      icon: Gift,
-      type: 'group',
-      color: 'pink',
-      children: [
-        { id: 'games', label: 'Roleta da Sorte', icon: Gift, requiredPlan: 'rating', isNew: true, badge: 'Novo' },
-        { id: 'game-participations', label: 'Participantes', icon: Users, requiredPlan: 'rating' },
-      ]
-    },
-    {
       id: 'intelligence',
-      label: 'Centro de Inteligência',
+      label: 'Inteligência',
       icon: Brain,
       type: 'group',
       color: 'purple',
       children: [
         { id: 'intelligence-center', label: 'Estratégico', icon: Lightbulb, requiredPlan: 'all' },
         { id: 'digital-diagnostic', label: 'Minha Presença Digital', icon: Activity, requiredPlan: 'all' },
+        { id: 'games', label: 'Game', icon: Gift, requiredPlan: 'all', isNew: true, badge: 'Novo' },
+        { id: 'business-profile', label: 'Perfil do Negócio', icon: Brain, requiredPlan: 'all' },
       ]
     },
-    { id: 'ai-chat', label: 'HelloIA', icon: MessageSquare, requiredPlan: 'all' },
-    { id: 'business-profile', label: 'Perfil do Negócio', icon: Brain, requiredPlan: 'all', isNew: true, badge: 'Novo' },
     {
       id: 'settings-group',
       label: 'Configurações',
