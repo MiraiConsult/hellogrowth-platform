@@ -148,7 +148,20 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
   // Helper function to get price key
   const getPriceKey = (plan: PlanKey): string => {
     const planAddons = selectedPlans[plan];
-    const planCode = plan.replace('hello_', '').substring(0, 2);
+    
+    // Map plan names to their codes
+    const planCodeMap: Record<string, string> = {
+      'hello_client': 'hc',
+      'hello_rating': 'hr',
+      'hello_growth': 'hg',
+    };
+    
+    const planCode = planCodeMap[plan];
+    
+    if (!planCode) {
+      console.error('Invalid plan:', plan);
+      return plan; // fallback to original plan name
+    }
     
     if (planAddons.game && planAddons.mpd) {
       return `${planCode}_game_mpd`;
