@@ -79,7 +79,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     const viewerAccess = [...allAccess, 'digital-diagnostic', 'settings'];
     const memberAccess = [...allAccess, 'kanban', 'nps', 'database-export', 'ai-chat', 'settings', 'digital-diagnostic'];
     
-    if (userRole === 'admin' || userRole === 'super_admin') {
+    if (userRole === 'admin' || userRole === 'super_admin' || userRole === 'owner') {
       setCurrentViewRaw(view);
     } else if (userRole === 'manager') {
       if (view !== 'team-management' && view !== 'pricing') setCurrentViewRaw(view);

@@ -153,7 +153,7 @@ const Navigation: React.FC<NavigationProps> = ({
   // Controle de permissões baseado no role do usuário
   const hasRolePermission = (itemId: string) => {
     // Admin vê tudo
-    if (userRole === 'admin') return true;
+    if (userRole === 'admin' || userRole === 'owner') return true;
     
     // Itens que todos podem ver
     const allAccess = ['dashboard', 'analytics', 'intelligence-center', 'tutorial'];
@@ -377,7 +377,7 @@ const Navigation: React.FC<NavigationProps> = ({
 
       {/* Footer */}
       <div className="p-4 border-t border-slate-100">
-        {userRole === 'admin' && (
+        {(userRole === 'admin' || userRole === 'owner') && (
           !isCollapsed ? (
             <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-4 rounded-xl mb-3">
               <div className="flex items-center gap-2 mb-2">
