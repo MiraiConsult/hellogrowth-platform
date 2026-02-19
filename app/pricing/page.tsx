@@ -366,8 +366,8 @@ export default function PricingPage() {
               >
                 {/* Recommended Badge */}
                 {isRecommended && (
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-                    <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-8 py-2.5 rounded-full text-sm font-bold shadow-lg whitespace-nowrap">
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-full flex justify-center">
+                    <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-6 py-2 rounded-full text-xs sm:text-sm font-bold shadow-lg whitespace-nowrap">
                       {plan.category}
                     </div>
                   </div>
