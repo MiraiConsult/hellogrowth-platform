@@ -264,7 +264,14 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
   const [showCanceledMessage, setShowCanceledMessage] = useState(initialShowCanceledMessage);
 
   React.useEffect(() => {
-    if (initialShowCanceledMessage) {
+    // Check sessionStorage for canceled flag (set by /pricing/canceled redirect)
+    const wasCanceled = sessionStorage.getItem('checkout_canceled');
+    if (wasCanceled === 'true') {
+      setShowCanceledMessage(true);
+      sessionStorage.removeItem('checkout_canceled');
+    }
+    
+    if (initialShowCanceledMessage || wasCanceled === 'true') {
       // Hide message after 5 seconds
       setTimeout(() => setShowCanceledMessage(false), 5000);
     }
