@@ -86,6 +86,13 @@ export default function HomePage() {
         .eq('company_id', companyId)
         .single();
 
+      // Buscar TODAS as empresas do usuário com dados completos
+      const { data: allUserCompanies } = await supabase
+        .from('user_companies')
+        .select('*, company:companies(*)')
+        .eq('user_id', currentUser.id)
+        .eq('status', 'active');
+
       if (companyData && ucData) {
         const updatedUser: User = {
           ...currentUser,
@@ -95,6 +102,7 @@ export default function HomePage() {
           plan: companyData.plan || currentUser.plan,
           isOwner: ucData.role === 'owner',
           role: ucData.role || currentUser.role,
+          companies: allUserCompanies || currentUser.companies,
         };
 
         // Atualizar is_default: desmarcar todas e marcar a nova
