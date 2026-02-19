@@ -97,7 +97,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
       business_type: 10,
       business_description: 15,
       target_audience: 15,
-      brand_tone: 5,
+      brand_tone: 0,
       differentials: 10,
       main_pain_points: 10,
       google_place_id: 15,
@@ -109,7 +109,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
     if (data.business_type?.trim()) score += weights.business_type;
     if (data.business_description?.trim() && data.business_description.length > 50) score += weights.business_description;
     if (data.target_audience?.trim() && data.target_audience.length > 30) score += weights.target_audience;
-    if (data.brand_tone) score += weights.brand_tone;
+    // brand_tone removido - não usado
     if (data.differentials?.trim()) score += weights.differentials;
     if (data.main_pain_points?.trim()) score += weights.main_pain_points;
     if (data.google_place_id?.trim()) score += weights.google_place_id;
@@ -416,30 +416,6 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
               rows={3}
               className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-3">
-              <MessageSquare className="inline mr-2" size={16} />
-              Tom de Voz da Marca *
-            </label>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {BRAND_TONES.map((tone) => (
-                <button
-                  key={tone.value}
-                  onClick={() => setProfile({ ...profile, brand_tone: tone.value })}
-                  className={`p-4 rounded-xl border-2 transition-all text-center ${
-                    profile.brand_tone === tone.value
-                      ? 'border-emerald-500 bg-emerald-50'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <span className="text-2xl">{tone.icon}</span>
-                  <p className="font-medium text-slate-800 mt-2">{tone.label}</p>
-                  <p className="text-xs text-slate-500">{tone.description}</p>
-                </button>
-              ))}
-            </div>
           </div>
 
           <div>

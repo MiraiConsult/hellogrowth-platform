@@ -265,11 +265,10 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
       }
     }
 
-    setWonPrize(selectedPrize);
-
+    // Não setar wonPrize aqui - apenas após animação terminar
     // Gerar código único
     const code = generatePrizeCode(clientName);
-    setPrizeCode(code);
+    // setPrizeCode será setado após animação
 
     // Salvar participação no banco ANTES da animação
     try {
@@ -330,6 +329,9 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
         rotationRef.current = endRotation;
         setIsSpinning(false);
         setHasSpun(true);
+        // Setar wonPrize e prizeCode APENAS quando animação terminar
+        setWonPrize(selectedPrize);
+        setPrizeCode(code);
         setShowConfetti(true);
       }
     };

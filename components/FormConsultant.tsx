@@ -1686,7 +1686,26 @@ Responda APENAS com JSON válido neste formato:
           {/* Product Selection */}
           {currentStep === 'products' && businessContext.productSelection === 'manual' && products.length > 0 && (
             <div className="p-6 bg-white border-t border-slate-200">
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => {
+                    const allProductIds = products.map(p => p.id);
+                    setBusinessContext(prev => ({ ...prev, selectedProducts: allProductIds }));
+                  }}
+                  className="flex-1 py-2 px-4 bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition-all text-sm"
+                >
+                  Selecionar Todos
+                </button>
+                <button
+                  onClick={() => {
+                    setBusinessContext(prev => ({ ...prev, selectedProducts: [] }));
+                  }}
+                  className="flex-1 py-2 px-4 bg-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-300 transition-all text-sm"
+                >
+                  Desmarcar Todos
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-4 max-h-96 overflow-y-auto">
                 {products.map(product => (
                   <button
                     key={product.id}
