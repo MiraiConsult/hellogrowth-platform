@@ -311,7 +311,7 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
         'Quadro Kanban',
         'Script de Vendas IA',
       ],
-      canAddGame: false,
+      canAddGame: true,
       canAddMPD: true,
     },
     {
