@@ -470,7 +470,9 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   };
 
   useEffect(() => {
-    if (activeCompany) {
+    // For public users (form/survey links), always call fetchData
+    // For logged-in users, only call when activeCompany is available
+    if (currentUser.id === 'public' || activeCompany) {
       fetchData();
     }
   }, [currentUser.id, activeCompany]);
