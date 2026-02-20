@@ -705,7 +705,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
             <h3 className="text-sm font-medium text-gray-700 mb-4">Campos de Identificação</h3>
             <p className="text-xs text-gray-500 mb-4">Configure quais dados serão solicitados ao cliente antes das perguntas</p>
             <InitialFieldsConfig
-              fields={currentInitialFields}
+              initialFields={currentInitialFields}
               onChange={setCurrentInitialFields}
             />
           </div>
