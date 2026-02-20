@@ -540,16 +540,16 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       if (existingForm) {
         // UPDATE existing form
         await supabase.from('forms').update(formData).eq('id', form.id);
-        setForms(prev => prev.map(f => f.id === form.id ? { ...f, ...form } : f));
+        await fetchData(); // Reload all data to ensure consistency
       } else {
         // INSERT new form (ID doesn't exist in database)
-        const { data } = await supabase.from('forms').insert([formData]).select().single();
-        if (data) setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
+        await supabase.from('forms').insert([formData]).select().single();
+        await fetchData(); // Reload all data to ensure consistency
       }
     } else {
       // INSERT new form (no ID provided)
-      const { data } = await supabase.from('forms').insert([formData]).select().single();
-      if (data) setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
+      await supabase.from('forms').insert([formData]).select().single();
+      await fetchData(); // Reload all data to ensure consistency
     }
   };
 

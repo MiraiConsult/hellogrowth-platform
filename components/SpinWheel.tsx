@@ -460,18 +460,23 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
               </div>
               <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-100">
                 <p className="text-gray-600 text-sm">
-                  Seu código de resgate será enviado por <strong className="text-teal-600">WhatsApp</strong> ou <strong className="text-teal-600">Email</strong> após sua avaliação no Google.
+                  {source === 'pre-sale' 
+                    ? 'Seu código de resgate será enviado por WhatsApp ou Email'
+                    : <>Seu código de resgate será enviado por <strong className="text-teal-600">WhatsApp</strong> ou <strong className="text-teal-600">Email</strong> após sua avaliação no Google.</>
+                  }
                 </p>
               </div>
             </div>
 
-            <button
-              onClick={handleContinue}
-              className="w-full py-4 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl font-bold text-lg shadow-md hover:shadow-lg hover:from-teal-700 hover:to-emerald-700 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
-            >
-              <span>Continuar</span>
-              <ArrowIcon />
-            </button>
+            {source === 'post-sale' && (
+              <button
+                onClick={handleContinue}
+                className="w-full py-4 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl font-bold text-lg shadow-md hover:shadow-lg hover:from-teal-700 hover:to-emerald-700 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
+              >
+                <span>Continuar</span>
+                <ArrowIcon />
+              </button>
+            )}
           </div>
         )}
 
