@@ -15,6 +15,7 @@ interface SpinWheelProps {
   clientEmail: string;
   clientPhone: string;
   customMessage?: string;
+  source?: 'pre-sale' | 'post-sale'; // Origem da participação
   onComplete: (prizeCode: string, prizeName: string) => void;
 }
 
@@ -41,6 +42,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
   clientEmail, 
   clientPhone,
   customMessage,
+  source,
   onComplete 
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -282,7 +284,8 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
           client_email: clientEmail,
           client_phone: clientPhone,
           prize_won: selectedPrize.name,
-          prize_code: code
+          prize_code: code,
+          source: source || 'post-sale'
         })
       });
 

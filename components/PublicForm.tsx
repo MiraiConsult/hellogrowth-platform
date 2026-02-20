@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Form, InitialField } from '@/types';
 import { CheckCircle, ArrowRight, ArrowLeft, Check, ShieldCheck, X, Sparkles } from 'lucide-react';
+import SpinWheel from './SpinWheel';ide-react';
 
 interface PublicFormProps {
   form: Form;
@@ -40,6 +41,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   const [isCompleted, setIsCompleted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAnalyzingScreen, setShowAnalyzingScreen] = useState(false);
+  const [showGame, setShowGame] = useState(false);
 
   const [patientData, setPatientData] = useState({ name: '', email: '', phone: '' });
   const [showIntro, setShowIntro] = useState(true);
@@ -142,7 +144,12 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
           setShowAnalyzingScreen(true);
           setTimeout(() => {
             setShowAnalyzingScreen(false);
-            setIsCompleted(true);
+            // Se game_enabled, mostrar roleta; senão, mostrar tela de sucesso
+            if (form.game_enabled) {
+              setShowGame(true);
+            } else {
+              setIsCompleted(true);
+            }
           }, 5000);
         } else {
           alert('Erro ao enviar formulário. Por favor, tente novamente.');
@@ -195,6 +202,31 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
           `}</style>
         </div>
       </div>
+    );
+  }
+
+  // Mostrar roleta se game_enabled
+  if (showGame) {
+    // Prêmios padrão para formulário de pré-venda (TODO: buscar do banco)
+    const defaultPrizes = [
+      { name: '10% de desconto', probability: 30, color: '#10B981' },
+      { name: '15% de desconto', probability: 25, color: '#14B8A6' },
+      { name: '20% de desconto', probability: 20, color: '#0D9488' },
+      { name: 'Brinde exclusivo', probability: 15, color: '#059669' },
+      { name: 'Consulta gratuita', probability: 10, color: '#0EA5E9' }
+    ];
+    
+    return (
+      <SpinWheel
+        prizes={defaultPrizes}
+        gameId={form.id || 'form-game'}
+        clientName={patientData.name}
+        clientEmail={patientData.email}
+        clientPhone={patientData.phone}
+        customMessage="Parabéns! Gire a roleta e ganhe um prêmio especial!"
+        source="pre-sale"
+        onComplete={() => setIsCompleted(true)}
+      />
     );
   }
 

@@ -151,6 +151,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [initialMessageSent, setInitialMessageSent] = useState(false);
   const [isEditingTone, setIsEditingTone] = useState(false); // Modo de edição de tom (reescrever perguntas existentes)
+  const [gameEnabled, setGameEnabled] = useState(false); // Ativar Game no formulário
   
   // Estabilizar existingForm para evitar re-renders
   const stableExistingForm = useMemo(() => existingForm, [existingForm?.id]);
@@ -208,6 +209,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       console.log('Perguntas carregadas:', loadedQuestions);
       setGeneratedQuestions(loadedQuestions);
       setFormName(stableExistingForm.name || '');
+      setGameEnabled(stableExistingForm.game_enabled || false);
       
       // Carregar contexto se existir
       if (stableExistingForm.ai_context?.businessContext) {
@@ -1081,6 +1083,7 @@ Responda APENAS com JSON válido neste formato:
         products: products,
         businessContext: businessContext
       },
+      game_enabled: gameEnabled,
       status: 'active'
     };
 
@@ -1558,6 +1561,28 @@ Responda APENAS com JSON válido neste formato:
             placeholder="Ex: Diagnóstico de Beleza, Qualificação de Leads..."
             className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
           />
+        </div>
+
+        {/* Game Toggle */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">Ativar Game (Roleta da Sorte)</label>
+              <p className="text-xs text-slate-500">Após o envio do formulário, o cliente poderá girar a roleta e ganhar prêmios</p>
+            </div>
+            <button
+              onClick={() => setGameEnabled(!gameEnabled)}
+              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                gameEnabled ? 'bg-pink-500' : 'bg-slate-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                  gameEnabled ? 'translate-x-7' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         {/* Save Button */}
