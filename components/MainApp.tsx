@@ -123,7 +123,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   ).length;
 
   const handleAnalyzeAllLeads = async () => {
-    if (!supabase || !currentUser.tenantId || isAnalyzingAll) return;
+    if (!supabase || !activeCompany?.id || isAnalyzingAll) return;
     
     const pendingLeads = leads.filter(l => 
       l.answers && !l.answers._ai_analysis && l.formSource !== 'Manual'
@@ -143,12 +143,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     const { data: products } = await supabase
       .from('products_services')
       .select('*')
-      .eq('tenant_id', currentUser.tenantId);
+      .eq('tenant_id', activeCompany.id);
     
     const { data: businessProfile } = await supabase
       .from('business_profile')
       .select('*')
-      .eq('tenant_id', currentUser.tenantId)
+      .eq('tenant_id', activeCompany.id)
       .single();
     
     for (let i = 0; i < pendingLeads.length; i++) {
@@ -477,7 +477,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
   // Supabase Realtime: Listen for new leads being inserted
   useEffect(() => {
-    if (!supabase || !currentUser.tenantId) return;
+    if (!supabase || !activeCompany?.id) return;
 
     const channel = supabase
       .channel('leads-insert-realtime')
@@ -487,7 +487,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           event: 'INSERT',
           schema: 'public',
           table: 'leads',
-          filter: `tenant_id=eq.${currentUser.tenantId}`
+          filter: `tenant_id=eq.${activeCompany.id}`
         },
         (payload) => {
           console.log('Novo lead inserido via Realtime:', payload);
@@ -516,7 +516,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser.tenantId]);
+  }, [activeCompany?.id]);
 
   // --- CRUD HANDLERS ---
   const handleSaveForm = async (form: Form) => {
@@ -1136,7 +1136,7 @@ Responda APENAS com JSON válido (sem markdown):
         />}
         
         {currentView === 'games' && (
-            <Game tenantId={currentUser.tenantId} campaigns={campaigns} />
+            <Game tenantId={activeCompany?.id || currentUser.tenantId} campaigns={campaigns} />
         )}
         
         {currentView === 'campaign-report' && reportCampaignId && (
