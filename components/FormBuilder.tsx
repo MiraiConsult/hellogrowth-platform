@@ -16,6 +16,7 @@ interface FormBuilderProps {
   onViewReport?: (id: string) => void;
   setForms?: any;
   userId?: string;
+  activeCompany?: { id: string; name: string };
   isAnalyzingAll?: boolean;
   analysisProgress?: { current: number; total: number };
   pendingAnalysisCount?: number;
@@ -36,7 +37,7 @@ const normalizeQuestionType = (type: string): 'text' | 'single' | 'multiple' => 
   return typeMap[type] || 'text';
 };
 
-const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads }) => {
+const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId, activeCompany, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads }) => {
   const [view, setView] = useState<'list' | 'editor' | 'consultant'>('list');
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [showConsultant, setShowConsultant] = useState(false);
@@ -94,12 +95,12 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
 
   // Fetch available games when view changes to editor
   useEffect(() => {
-    if (view === 'editor' && userId) {
+    if (view === 'editor' && activeCompany?.id) {
       const fetchGames = async () => {
         const { data, error } = await supabase
           .from('nps_games')
           .select('id, name')
-          .eq('tenant_id', userId)
+          .eq('tenant_id', activeCompany.id)
           .order('name');
         if (data && !error) {
           setAvailableGames(data);
@@ -107,7 +108,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       };
       fetchGames();
     }
-  }, [view, userId]);
+  }, [view, activeCompany]);
 
   // Handlers
   const handleCreateNew = () => {

@@ -1131,6 +1131,7 @@ Responda APENAS com JSON válido (sem markdown):
                 onPreview={handlePreviewForm} 
                 onViewReport={(id) => { setReportFormId(id); setCurrentView('form-report'); }}
                 userId={currentUser.id}
+                activeCompany={activeCompany}
                 isAnalyzingAll={isAnalyzingAll}
                 analysisProgress={analysisProgress}
                 pendingAnalysisCount={pendingAnalysisCount}
