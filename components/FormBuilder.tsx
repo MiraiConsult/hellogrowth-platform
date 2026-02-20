@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap } from 'lucide-react';
 import FormConsultant from '@/components/FormConsultant';
 import { supabase } from '@/lib/supabase';
@@ -55,6 +55,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [currentFormName, setCurrentFormName] = useState('');
   const [currentFormDescription, setCurrentFormDescription] = useState('');
   const [currentInitialFields, setCurrentInitialFields] = useState<InitialField[]>([]);
+  const [currentGameEnabled, setCurrentGameEnabled] = useState(false);
+  const [currentGameId, setCurrentGameId] = useState<string | null>(null);
+  const [availableGames, setAvailableGames] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingScriptId, setGeneratingScriptId] = useState<string | null>(null); 
 
@@ -89,6 +92,23 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       return form.responses || 0;
   };
 
+  // Fetch available games when view changes to editor
+  useEffect(() => {
+    if (view === 'editor' && userId) {
+      const fetchGames = async () => {
+        const { data, error } = await supabase
+          .from('nps_games')
+          .select('id, name')
+          .eq('tenant_id', userId)
+          .order('name');
+        if (data && !error) {
+          setAvailableGames(data);
+        }
+      };
+      fetchGames();
+    }
+  }, [view, userId]);
+
   // Handlers
   const handleCreateNew = () => {
     setEditingFormId(null);
@@ -96,6 +116,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setCurrentFormDescription('');
     setCurrentQuestions([{ id: Date.now().toString(), text: '', type: 'text', options: [] }]);
     setCurrentInitialFields([]);
+    setCurrentGameEnabled(false);
+    setCurrentGameId(null);
     setView('editor');
   };
 
@@ -105,6 +127,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setCurrentFormDescription(form.description || '');
     setCurrentQuestions(form.questions.map(q => ({ ...q, type: normalizeQuestionType(q.type), options: q.options?.map(opt => ({ ...opt, label: typeof opt.label === "object" && opt.label?.text ? opt.label.text : (opt.label || opt.text || "") })) || [] })));
     setCurrentInitialFields(form.initialFields || []);
+    setCurrentGameEnabled(form.game_enabled || false);
+    setCurrentGameId(form.game_id || null);
     setView('editor');
     setMenuOpenId(null);
   };
@@ -365,7 +389,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         responses: existingForm?.responses || 0,
         active: existingForm?.active ?? true,
         createdAt: existingForm?.createdAt || new Date().toISOString(),
-        initialFields: currentInitialFields.length > 0 ? currentInitialFields : undefined
+        initialFields: currentInitialFields.length > 0 ? currentInitialFields : undefined,
+        game_enabled: currentGameEnabled,
+        game_id: currentGameId
     };
 
     // Trigger Parent Handler for DB Save
@@ -633,9 +659,58 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                 />
              </div>
           </div>
+          
+          {/* Game Configuration */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-gray-700">Ativar Game (Roleta da Sorte)</h3>
+                <p className="text-xs text-gray-500 mt-1">Após o envio do formulário, o cliente poderá girar a roleta e ganhar prêmios</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCurrentGameEnabled(!currentGameEnabled)}
+                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
+                  currentGameEnabled ? 'bg-pink-500' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    currentGameEnabled ? 'translate-x-9' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            
+            {currentGameEnabled && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Selecione a Roleta</label>
+                <select
+                  value={currentGameId || ''}
+                  onChange={(e) => setCurrentGameId(e.target.value || null)}
+                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 p-2 border bg-white text-gray-900"
+                >
+                  <option value="">Selecione uma roleta...</option>
+                  {availableGames.map(game => (
+                    <option key={game.id} value={game.id}>{game.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Initial Fields Configuration */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 className="text-sm font-medium text-gray-700 mb-4">Campos de Identificação</h3>
+            <p className="text-xs text-gray-500 mb-4">Configure quais dados serão solicitados ao cliente antes das perguntas</p>
+            <InitialFieldsConfig
+              fields={currentInitialFields}
+              onChange={setCurrentInitialFields}
+            />
+          </div>
 
           <div className="flex justify-between items-center">
-             <h2 className="text-lg font-bold text-gray-800">Perguntas</h2>
+             <h2 className="text-lg font-bold text-gray-800">Perguntas</h2>>
              <button 
                 onClick={handleAiSuggest}
                 disabled={!currentFormName || isGenerating}
