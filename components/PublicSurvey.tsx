@@ -437,6 +437,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                 clientPhone={respondent.phone}
                 customMessage={gameData.messages?.before || 'Gire a roleta e ganhe prêmios incríveis!'}
                 onComplete={handleGameComplete}
+                source="post-sale"
               />
             </div>
           )}
