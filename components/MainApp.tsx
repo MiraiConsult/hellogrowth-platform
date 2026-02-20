@@ -524,6 +524,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       questions: form.questions,
       initial_fields: form.initialFields,
       active: form.active,
+      game_enabled: form.game_enabled || false,
       user_id: currentUser.id,
       tenant_id: currentUser.tenantId
     };
