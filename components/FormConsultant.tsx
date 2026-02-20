@@ -152,6 +152,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [initialMessageSent, setInitialMessageSent] = useState(false);
   const [isEditingTone, setIsEditingTone] = useState(false); // Modo de edição de tom (reescrever perguntas existentes)
   const [gameEnabled, setGameEnabled] = useState(false); // Ativar Game no formulário
+  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+  const [availableGames, setAvailableGames] = useState<any[]>([]);
   
   // Estabilizar existingForm para evitar re-renders
   const stableExistingForm = useMemo(() => existingForm, [existingForm?.id]);
@@ -210,6 +212,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       setGeneratedQuestions(loadedQuestions);
       setFormName(stableExistingForm.name || '');
       setGameEnabled(stableExistingForm.game_enabled || false);
+      setSelectedGameId(stableExistingForm.game_id || null);
       
       // Carregar contexto se existir
       if (stableExistingForm.ai_context?.businessContext) {
@@ -253,8 +256,23 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
     if (supabase && userId && tenantId) {
       fetchProducts();
       fetchBusinessProfile();
+      loadAvailableGames();
     }
   }, [supabase, userId, tenantId]);
+
+  const loadAvailableGames = async () => {
+    try {
+      const response = await fetch('/api/games', {
+        headers: { 'x-tenant-id': tenantId || '' }
+      });
+      if (response.ok) {
+        const games = await response.json();
+        setAvailableGames(games.filter((g: any) => g.status === 'active'));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar games:', error);
+    }
+  };
 
   const fetchBusinessProfile = async () => {
     if (!supabase) return;
@@ -1084,6 +1102,7 @@ Responda APENAS com JSON válido neste formato:
         businessContext: businessContext
       },
       game_enabled: gameEnabled,
+      game_id: selectedGameId || null,
       status: 'active'
     };
 
@@ -1563,26 +1582,60 @@ Responda APENAS com JSON válido neste formato:
           />
         </div>
 
-        {/* Game Toggle */}
+        {/* Configuração de Roleta da Sorte (Game) */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">Ativar Game (Roleta da Sorte)</label>
-              <p className="text-xs text-slate-500">Após o envio do formulário, o cliente poderá girar a roleta e ganhar prêmios</p>
-            </div>
-            <button
-              onClick={() => setGameEnabled(!gameEnabled)}
-              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-                gameEnabled ? 'bg-pink-500' : 'bg-slate-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                  gameEnabled ? 'translate-x-7' : 'translate-x-1'
-                }`}
-              />
-            </button>
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-lg font-semibold text-slate-800">🎰 Roleta da Sorte</h3>
           </div>
+          <p className="text-sm text-slate-500 mb-4">Após o envio do formulário, o cliente poderá girar a roleta e ganhar prêmios</p>
+          
+          <label className="flex items-center gap-2 cursor-pointer mb-4">
+            <input
+              type="checkbox"
+              checked={gameEnabled}
+              onChange={(e) => {
+                setGameEnabled(e.target.checked);
+                if (!e.target.checked) {
+                  setSelectedGameId(null);
+                }
+              }}
+              className="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"
+            />
+            <span className="font-medium text-slate-700">Ativar Roleta da Sorte</span>
+          </label>
+
+          {gameEnabled && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-2">Selecione a Roleta</label>
+                {availableGames.length > 0 ? (
+                  <select
+                    value={selectedGameId || ''}
+                    onChange={(e) => setSelectedGameId(e.target.value || null)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                  >
+                    <option value="">Selecione uma roleta...</option>
+                    {availableGames.map(game => (
+                      <option key={game.id} value={game.id}>
+                        {game.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p className="text-sm text-yellow-800">⚠️ Você ainda não tem nenhuma Roleta da Sorte configurada.</p>
+                    <p className="text-xs text-yellow-700 mt-1">Acesse <strong>Inteligência → Game</strong> para criar uma.</p>
+                  </div>
+                )}
+              </div>
+
+              {selectedGameId && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                  <p className="text-sm text-emerald-800 font-medium">✅ Roleta selecionada: {availableGames.find(g => g.id === selectedGameId)?.name}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Save Button */}
