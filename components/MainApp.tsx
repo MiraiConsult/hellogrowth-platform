@@ -260,7 +260,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
             .eq('id', currentUser.id)
             .single();
 
-          const tenantId = userData?.tenant_id;
+          // Use activeCompany.id if available, otherwise fallback to userData.tenant_id
+          const tenantId = activeCompany?.id || userData?.tenant_id;
 
           // 2. Se não é owner, buscar settings do owner do tenant
           let ownerSettings = userData;
@@ -469,8 +470,10 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   };
 
   useEffect(() => {
-    fetchData();
-  }, [currentUser.id]);
+    if (activeCompany) {
+      fetchData();
+    }
+  }, [currentUser.id, activeCompany]);
 
   // Supabase Realtime: Listen for new leads being inserted
   useEffect(() => {
@@ -526,7 +529,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       active: form.active,
       game_enabled: form.game_enabled || false,
       user_id: currentUser.id,
-      tenant_id: currentUser.tenantId
+      tenant_id: activeCompany?.id || currentUser.tenantId
     };
     
     // Check if form exists in database
@@ -615,7 +618,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       tone: (campaign as any).tone ?? '',
       evaluation_points: (campaign as any).evaluation_points ?? [],
       user_id: currentUser.id,
-      tenant_id: currentUser.tenantId
+      tenant_id: activeCompany?.id || currentUser.tenantId
     };
 
     if (campaign.id && campaigns.find(c => c.id === campaign.id)) {
@@ -644,7 +647,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       form_source: lead.formSource,
       form_id: lead.formId,
       user_id: currentUser.id,
-      tenant_id: currentUser.tenantId,
+      tenant_id: activeCompany?.id || currentUser.tenantId,
       answers: lead.answers
     }]).select().single();
     if (data && !error) {
