@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Form, InitialField } from '@/types';
 import { CheckCircle, ArrowRight, ArrowLeft, Check, ShieldCheck, X, Sparkles } from 'lucide-react';
-import SpinWheel from './SpinWheel';ide-react';
+import SpinWheel from './SpinWheel';
 
 interface PublicFormProps {
   form: Form;
