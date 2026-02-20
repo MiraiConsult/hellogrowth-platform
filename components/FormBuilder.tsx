@@ -932,7 +932,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       responses: existingForm?.responses || 0,
       createdAt: existingForm?.createdAt || new Date().toISOString(),
       // CORREÇÃO: Usa o formato correto de initialFields
-      initialFields: initialFieldsFormatted
+      initialFields: initialFieldsFormatted,
+      game_enabled: formData.game_enabled || false
     };
     onSaveForm(newForm);
   };
