@@ -141,6 +141,8 @@ export interface Form {
   active: boolean;
   createdAt: string;
   initialFields?: InitialField[]; // Configurable initial fields
+  game_enabled?: boolean; // Game (SpinWheel) enabled for this form
+  game_id?: string; // ID of the game (nps_games) associated with this form
 }
 
 export interface ChartData {

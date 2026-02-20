@@ -219,7 +219,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
     return (
       <SpinWheel
         prizes={defaultPrizes}
-        gameId={form.id || 'form-game'}
+        gameId={form.game_id || form.id || 'form-game'}
         clientName={patientData.name}
         clientEmail={patientData.email}
         clientPhone={patientData.phone}

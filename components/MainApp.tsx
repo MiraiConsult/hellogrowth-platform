@@ -523,6 +523,24 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   // --- CRUD HANDLERS ---
   const handleSaveForm = async (form: Form) => {
     if (!supabase) return;
+    
+    // If game is enabled, get the active game for this tenant
+    let gameId = null;
+    if (form.game_enabled) {
+      const { data: activeGame } = await supabase
+        .from('nps_games')
+        .select('id')
+        .eq('tenant_id', activeCompany?.id || currentUser.tenantId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (activeGame) {
+        gameId = activeGame.id;
+      }
+    }
+    
     const formData = {
       name: form.name,
       description: form.description,
@@ -530,6 +548,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       initial_fields: form.initialFields,
       active: form.active,
       game_enabled: form.game_enabled || false,
+      game_id: gameId,
       user_id: currentUser.id,
       tenant_id: activeCompany?.id || currentUser.tenantId
     };
