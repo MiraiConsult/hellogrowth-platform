@@ -63,9 +63,22 @@ interface AIAnalysis {
 interface DiagnosticData {
   id: string;
   user_id: string;
+  tenant_id: string;
   place_data: GooglePlaceData;
   ai_analysis: AIAnalysis;
   created_at: string;
+}
+
+interface HistoricalDiagnosticData {
+  id: string;
+  created_at: string;
+  tenant_id: string;
+  google_my_business_score: number | null;
+  response_speed_score: number | null;
+  seo_local_score: number | null;
+  social_media_score: number | null;
+  overall_score: number | null;
+  ai_insights: AIAnalysis | null;
 }
 
 interface DigitalDiagnosticProps {
@@ -78,10 +91,15 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, 
   const tenantId = useTenantId()
 
   const [diagnostics, setDiagnostics] = useState<DiagnosticData[]>([]);
+  const [historicalDiagnostics, setHistoricalDiagnostics] = useState<HistoricalDiagnosticData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<string>('');
   const [showHistory, setShowHistory] = useState(false);
+  const [showReputationExplanation, setShowReputationExplanation] = useState(false);
+  const [showVisibilityExplanation, setShowVisibilityExplanation] = useState(false);
+  const [showEngagementExplanation, setShowEngagementExplanation] = useState(false);
+  const [showOverallExplanation, setShowOverallExplanation] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch existing diagnostics
@@ -95,22 +113,42 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, 
     try {
       // Buscar tenant_id do usuário
       const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', userId).single();
-      const tenantId = userData?.tenant_id || userId;
-      const { data, error } = await supabase
-        .from('digital_diagnostics')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false });
+      const tenantId = userData?.tenant_id || userI      const { data, error } = await supabase
+        .from(\'digital_diagnostics\')
+        .select(\'*\')
+        .eq(\'tenant_id\', tenantId)
+        .order(\'created_at\', { ascending: false });
 
-      if (error) throw error;
+      const { data: historyData, error: historyError } = await supabase
+        .from(\'digital_diagnostics_history\')
+        .select(\'*\')
+        .eq(\'tenant_id\', tenantId)
+        .order(\'created_at\', { ascending: false });
+
+      if (historyError) throw historyError;   if (error) throw error;
 
       if (data) {
         setDiagnostics(data.map(d => ({
           id: d.id,
           user_id: d.user_id,
+          tenant_id: d.tenant_id,
           place_data: d.place_data || {},
           ai_analysis: d.ai_analysis || null,
           created_at: d.created_at
+        })));
+      }
+
+      if (historyData) {
+        setHistoricalDiagnostics(historyData.map(d => ({
+          id: d.id,
+          created_at: d.created_at,
+          tenant_id: d.tenant_id,
+          google_my_business_score: d.google_my_business_score,
+          response_speed_score: d.response_speed_score,
+          seo_local_score: d.seo_local_score,
+          social_media_score: d.social_media_score,
+          overall_score: d.overall_score,
+          ai_insights: d.ai_insights,
         })));
       }
     } catch (e) {
@@ -421,6 +459,21 @@ Forneça de 3 a 5 recomendações priorizadas.
             recommendations: aiAnalysis.recommendations
           });
 
+        // Save to digital_diagnostics_history table
+        const { error: historySaveError } = await supabase
+          .from("digital_diagnostics_history")
+          .insert({
+            tenant_id: tenantId,
+            google_my_business_score: aiAnalysis.scores.reputation,
+            response_speed_score: null, // Não disponível diretamente na análise atual
+            seo_local_score: aiAnalysis.scores.visibility,
+            social_media_score: aiAnalysis.scores.engagement,
+            overall_score: aiAnalysis.scores.overall,
+            ai_insights: aiAnalysis,
+          });
+
+        if (historySaveError) throw historySaveError;
+
         if (saveError) throw saveError;
         await fetchDiagnostics();
         return;
@@ -436,17 +489,32 @@ Forneça de 3 a 5 recomendações priorizadas.
       setAnalysisStep('Salvando diagnóstico...');
       const { error: saveError } = await supabase
         .from('digital_diagnostics')
+          .insert({
+            user_id: userId, tenant_id: tenantId,
+            place_data: placeData,
+            ai_analysis: aiAnalysis,
+            score_reputation: aiAnalysis.scores.reputation,
+            score_information: aiAnalysis.scores.visibility,
+            score_engagement: aiAnalysis.scores.engagement,
+            overall_score: aiAnalysis.scores.overall,
+            details: placeData,
+            recommendations: aiAnalysis.recommendations
+          });
+
+      // Save to digital_diagnostics_history table
+      const { error: historySaveError } = await supabase
+        .from("digital_diagnostics_history")
         .insert({
-          user_id: userId, tenant_id: tenantId,
-          place_data: placeData,
-          ai_analysis: aiAnalysis,
-          score_reputation: aiAnalysis.scores.reputation,
-          score_information: aiAnalysis.scores.visibility,
-          score_engagement: aiAnalysis.scores.engagement,
+          tenant_id: tenantId,
+          google_my_business_score: aiAnalysis.scores.reputation,
+          response_speed_score: null, // Não disponível diretamente na análise atual
+          seo_local_score: aiAnalysis.scores.visibility,
+          social_media_score: aiAnalysis.scores.engagement,
           overall_score: aiAnalysis.scores.overall,
-          details: placeData,
-          recommendations: aiAnalysis.recommendations
+          ai_insights: aiAnalysis,
         });
+
+      if (historySaveError) throw historySaveError;
 
       if (saveError) throw saveError;
 
@@ -472,18 +540,19 @@ Forneça de 3 a 5 recomendações priorizadas.
 
   // Chart data for evolution
   const evolutionData = useMemo(() => {
-    return diagnostics
-      .filter(d => d.ai_analysis)
-      .slice(0, 10)
+    return historicalDiagnostics
+      .filter(d => d.overall_score !== null)
+      .slice(0, 10) // Limitar aos últimos 10 diagnósticos para o gráfico
       .reverse()
       .map(d => ({
-        date: new Date(d.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
-        reputation: d.ai_analysis?.scores.reputation || 0,
-        visibility: d.ai_analysis?.scores.visibility || 0,
-        engagement: d.ai_analysis?.scores.engagement || 0,
-        overall: d.ai_analysis?.scores.overall || 0
+        date: new Date(d.created_at).toLocaleDateString(\'pt-BR\', { day: \'2-digit\', month: \'short\' }),
+        google_my_business: d.google_my_business_score || 0,
+        response_speed: d.response_speed_score || 0,
+        seo_local: d.seo_local_score || 0,
+        social_media: d.social_media_score || 0,
+        overall: d.overall_score || 0
       }));
-  }, [diagnostics]);
+  }, [historicalDiagnostics]);
 
   // Radar chart data
   const radarData = latestDiagnostic?.ai_analysis ? [
@@ -585,8 +654,614 @@ Forneça de 3 a 5 recomendações priorizadas.
         </div>
       )}
 
-      {/* Business Info Card */}
-      {placeData && (
+      {showHistory && historicalDiagnostics.length > 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <History className="text-primary-600" size={20} />
+            <h3 className="font-semibold text-gray-800">Histórico de Diagnósticos</h3>
+          </div>
+          
+          {/* Evolution Chart */}
+          {evolutionData.length > 1 && (
+            <div className="h-64 w-full mb-6">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={evolutionData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis domain={[0, 100]} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="overall" stroke="#8884d8" name="Escore Geral" />
+                  <Line type="monotone" dataKey="google_my_business" stroke="#82ca9d" name="Google Meu Negócio" />
+                  <Line type="monotone" dataKey="seo_local" stroke="#ffc658" name="SEO Local" />
+                  <Line type="monotone" dataKey="social_media" stroke="#ff7300" name="Mídias Sociais" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Comparative Cards */}
+          {latestDiagnostic && previousDiagnostic && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {/* Latest Diagnostic */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">Último Diagnóstico ({new Date(latestDiagnostic.created_at).toLocaleDateString(\'pt-BR\')})</p>
+                <div className="flex items-center gap-2">
+                  <span className={`text-2xl font-bold ${getScoreColor(latestDiagnostic.ai_analysis.scores.overall)}`}>
+                    {latestDiagnostic.ai_analysis.scores.overall}
+                  </span>
+                  <span className="text-sm text-gray-500">Escore Geral</span>
+                </div>
+              </div>
+
+              {/* Previous Diagnostic */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">Diagnóstico Anterior ({new Date(previousDiagnostic.created_at).toLocaleDateString(\'pt-BR\')})</p>
+                <div className="flex items-center gap-2">
+                  <span className={`text-2xl font-bold ${getScoreColor(previousDiagnostic.ai_analysis.scores.overall)}`}>
+                    {previousDiagnostic.ai_analysis.scores.overall}
+                  </span>
+                  <span className="text-sm text-gray-500">Escore Geral</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Current Diagnostic Details (if available) */}
+          {latestDiagnostic && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-16 h-16 bg-primary-100 rounded-xl flex items-center justify-center">
+                  <Globe className="text-primary-600" size={32} />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold text-gray-800">{latestDiagnostic.place_data.name || settings.companyName}</h2>
+                  <p className="text-gray-500 flex items-center gap-2 mt-1">
+                    <MapPin size={14} />
+                    {latestDiagnostic.place_data.formatted_address || \'Endereço não disponível\'}
+                  </p>
+                  <div className="flex items-center gap-4 mt-2">
+                    {latestDiagnostic.place_data.rating && latestDiagnostic.place_data.rating > 0 ? (
+                      <span className="flex items-center gap-1 text-yellow-600">
+                        <Star size={16} fill="currentColor" />
+                        {latestDiagnostic.place_data.rating} ({latestDiagnostic.place_data.user_ratings_total} avaliações)
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">Sem avaliações</span>
+                    )}
+                    {latestDiagnostic.place_data.formatted_phone_number && (
+                      <span className="flex items-center gap-1 text-gray-600">
+                        <Phone size={14} />
+                        {latestDiagnostic.place_data.formatted_phone_number}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {latestDiagnostic.place_data.url && (
+                  <a 
+                    href={latestDiagnostic.place_data.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                  >
+                    Ver no Google
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* AI Analysis Summary */}
+          {latestDiagnostic?.ai_analysis && (
+            <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-100 p-6 mb-6">
+              <div className="flex items-start gap-3 mb-4">
+                <Sparkles className="text-purple-600" size={24} />
+                <div>
+                  <h3 className="font-semibold text-purple-800">Análise da IA</h3>
+                  <p className="text-gray-700 mt-1">{latestDiagnostic.ai_analysis.summary}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Score Cards */}
+          {latestDiagnostic?.ai_analysis && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className={`rounded-xl border p-4 ${getScoreBg(latestDiagnostic.ai_analysis.scores.overall)}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-600 text-sm font-medium">Escore Geral</span>
+                  <button onClick={() => setShowOverallExplanation(!showOverallExplanation)} className="text-gray-400 hover:text-gray-600">
+                    {showOverallExplanation ? <Minus size={18} /> : <ChevronRight size={18} />}
+                  </button>
+                </div>
+                <div className={`text-3xl font-bold ${getScoreColor(latestDiagnostic.ai_analysis.scores.overall)}`}>
+                  {latestDiagnostic.ai_analysis.scores.overall}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {latestDiagnostic.ai_analysis.scores.overall >= 80 ? 'Excelente' : latestDiagnostic.ai_analysis.scores.overall >= 60 ? 'Bom' : latestDiagnostic.ai_analysis.scores.overall >= 40 ? 'Regular' : 'Precisa melhorar'}
+                </div>
+                {showOverallExplanation && (
+                  <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm text-gray-700">
+                    <p>O Escore Geral reflete a saúde da sua presença digital, sendo uma média ponderada da sua Reputação, Visibilidade e Engajamento.</p>
+                    <p className="mt-2"><strong>Como melhorar:</strong> Foque nas recomendações de maior prioridade e acompanhe a evolução dos scores individuais.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className={`rounded-xl border p-4 ${getScoreBg(latestDiagnostic.ai_analysis.scores.reputation)}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-600 text-sm font-medium">Reputação</span>
+                  <button onClick={() => setShowReputationExplanation(!showReputationExplanation)} className="text-gray-400 hover:text-gray-600">
+                    {showReputationExplanation ? <Minus size={18} /> : <ChevronRight size={18} />}
+                  </button>
+                </div>
+                <div className={`text-3xl font-bold ${getScoreColor(latestDiagnostic.ai_analysis.scores.reputation)}`}>
+                  {latestDiagnostic.ai_analysis.scores.reputation}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">Nota e avaliações no Google</div>
+                {showReputationExplanation && (
+                  <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm text-gray-700">
+                    <p>A Reputação é calculada com base na sua nota média e no volume de avaliações no Google Meu Negócio.</p>
+                    <p className="mt-2"><strong>Como melhorar:</strong> Incentive mais clientes satisfeitos a deixar avaliações e responda a todas as avaliações, sejam elas positivas ou negativas.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className={`rounded-xl border p-4 ${getScoreBg(latestDiagnostic.ai_analysis.scores.visibility)}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-600 text-sm font-medium">Visibilidade</span>
+                  <button onClick={() => setShowVisibilityExplanation(!showVisibilityExplanation)} className="text-gray-400 hover:text-gray-600">
+                    {showVisibilityExplanation ? <Minus size={18} /> : <ChevronRight size={18} />}
+                  </button>
+                </div>
+                <div className={`text-3xl font-bold ${getScoreColor(latestDiagnostic.ai_analysis.scores.visibility)}`}>
+                  {latestDiagnostic.ai_analysis.scores.visibility}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">Fotos, horários e informações</div>
+                {showVisibilityExplanation && (
+                  <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm text-gray-700">
+                    <p>A Visibilidade mede o quão completo e otimizado está o seu perfil no Google Meu Negócio, incluindo fotos, horários de funcionamento e informações de contato.</p>
+                    <p className="mt-2"><strong>Como melhorar:</strong> Mantenha seu perfil sempre atualizado, adicione fotos de alta qualidade e certifique-se de que todas as informações estejam corretas e completas.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className={`rounded-xl border p-4 ${getScoreBg(latestDiagnostic.ai_analysis.scores.engagement)}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-600 text-sm font-medium">Engajamento</span>
+                  <button onClick={() => setShowEngagementExplanation(!showEngagementExplanation)} className="text-gray-400 hover:text-gray-600">
+                    {showEngagementExplanation ? <Minus size={18} /> : <ChevronRight size={18} />}
+                  </button>
+                </div>
+                <div className={`text-3xl font-bold ${getScoreColor(latestDiagnostic.ai_analysis.scores.engagement)}`}>
+                  {latestDiagnostic.ai_analysis.scores.engagement}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">Interação com clientes</div>
+                {showEngagementExplanation && (
+                  <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm text-gray-700">
+                    <p>O Engajamento avalia sua interação com os clientes, principalmente através da resposta a avaliações e perguntas no Google Meu Negócio.</p>
+                    <p className="mt-2"><strong>Como melhorar:</strong> Responda rapidamente a todas as avaliações e mensagens. Um bom engajamento mostra que você valoriza seus clientes.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Strengths and Weaknesses */}
+          {latestDiagnostic?.ai_analysis && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* Strengths */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <ThumbsUp className="text-green-600" size={20} />
+                  <h3 className="font-semibold text-gray-800">Pontos Fortes</h3>
+                </div>
+                <div className="space-y-3">
+                  {latestDiagnostic.ai_analysis.strengths.map((strength, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <CheckCircle className="text-green-500 mt-0.5" size={16} />
+                      <p className="text-gray-700">{strength}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Weaknesses */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <ThumbsDown className="text-red-600" size={20} />
+                  <h3 className="font-semibold text-gray-800">Pontos Fracos</h3>
+                </div>
+                <div className="space-y-3">
+                  {latestDiagnostic.ai_analysis.weaknesses.map((weakness, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <AlertTriangle className="text-red-500 mt-0.5" size={16} />
+                      <p className="text-gray-700">{weakness}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Recommendations */}
+          {latestDiagnostic?.ai_analysis && latestDiagnostic.ai_analysis.recommendations && latestDiagnostic.ai_analysis.recommendations.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Lightbulb className="text-blue-600" size={20} />
+                <h3 className="font-semibold text-gray-800">Recomendações Personalizadas</h3>
+              </div>
+              <div className="space-y-4">
+                {latestDiagnostic.ai_analysis.recommendations.map((rec, i) => (
+                  <div key={i} className="border-l-4 border-blue-200 pl-4">
+                    <p className="text-sm font-semibold text-gray-800">{rec.title}</p>
+                    <p className="text-sm text-gray-600 mt-1">{rec.description}</p>
+                    <p className="text-xs text-gray-500 mt-1">Impacto: {rec.impact}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent Reviews */}
+          {latestDiagnostic?.place_data?.reviews && latestDiagnostic.place_data.reviews.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <MessageSquare className="text-blue-600" size={20} />
+                <h3 className="font-semibold text-gray-800">Últimas Avaliações</h3>
+              </div>
+              <div className="space-y-4">
+                {latestDiagnostic.place_data.reviews.slice(0, 5).map((review, index) => (
+                  <div key={index} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-medium text-gray-800">{review.author_name}</span>
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <Star 
+                            key={i} 
+                            size={14} 
+                            className={i < review.rating ? \'text-yellow-500 fill-yellow-500\' : \'text-gray-300\'}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-gray-400 text-sm">{review.relative_time_description}</span>
+                    </div>
+                    <p className="text-gray-600 text-sm">{review.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+      {showHistory && historicalDiagnostics.length > 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <History className="text-primary-600" size={20} />
+            <h3 className="font-semibold text-gray-800">Histórico de Diagnósticos</h3>
+          </div>
+          
+          {/* Evolution Chart */}
+          {evolutionData.length > 1 && (
+            <div className="h-64 w-full mb-6">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={evolutionData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis domain={[0, 100]} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="overall" stroke="#8884d8" name="Escore Geral" />
+                  <Line type="monotone" dataKey="google_my_business" stroke="#82ca9d" name="Google Meu Negócio" />
+                  <Line type="monotone" dataKey="seo_local" stroke="#ffc658" name="SEO Local" />
+                  <Line type="monotone" dataKey="social_media" stroke="#ff7300" name="Mídias Sociais" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Comparative Cards */}
+          {latestDiagnostic && previousDiagnostic && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {/* Latest Diagnostic */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">Último Diagnóstico ({new Date(latestDiagnostic.created_at).toLocaleDateString('pt-BR')})</p>
+                <div className="flex items-center gap-2">
+                  <span className={`text-2xl font-bold ${getScoreColor(latestDiagnostic.ai_analysis.scores.overall)}`}>
+                    {latestDiagnostic.ai_analysis.scores.overall}
+                  </span>
+                  <span className="text-sm text-gray-500">Escore Geral</span>
+                </div>
+              </div>
+
+              {/* Previous Diagnostic */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">Diagnóstico Anterior ({new Date(previousDiagnostic.created_at).toLocaleDateString('pt-BR')})</p>
+                <div className="flex items-center gap-2">
+                  <span className={`text-2xl font-bold ${getScoreColor(previousDiagnostic.ai_analysis.scores.overall)}`}>
+                    {previousDiagnostic.ai_analysis.scores.overall}
+                  </span>
+                  <span className="text-sm text-gray-500">Escore Geral</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {showHistory && historicalDiagnostics.length > 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <History className="text-primary-600" size={20} />
+            <h3 className="font-semibold text-gray-800">Histórico de Diagnósticos</h3>
+          </div>
+          
+          {/* Evolution Chart */}
+          {evolutionData.length > 1 && (
+            <div className="h-64 w-full mb-6">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={evolutionData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis domain={[0, 100]} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="overall" stroke="#8884d8" name="Escore Geral" />
+                  <Line type="monotone" dataKey="google_my_business" stroke="#82ca9d" name="Google Meu Negócio" />
+                  <Line type="monotone" dataKey="seo_local" stroke="#ffc658" name="SEO Local" />
+                  <Line type="monotone" dataKey="social_media" stroke="#ff7300" name="Mídias Sociais" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Comparative Cards */}
+          {latestDiagnostic && previousDiagnostic && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {/* Latest Diagnostic */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">Último Diagnóstico ({new Date(latestDiagnostic.created_at).toLocaleDateString(\'pt-BR\')})</p>
+                <div className="flex items-center gap-2">
+                  <span className={`text-2xl font-bold ${getScoreColor(latestDiagnostic.ai_analysis.scores.overall)}`}>
+                    {latestDiagnostic.ai_analysis.scores.overall}
+                  </span>
+                  <span className="text-sm text-gray-500">Escore Geral</span>
+                </div>
+              </div>
+
+              {/* Previous Diagnostic */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">Diagnóstico Anterior ({new Date(previousDiagnostic.created_at).toLocaleDateString(\'pt-BR\')})</p>
+                <div className="flex items-center gap-2">
+                  <span className={`text-2xl font-bold ${getScoreColor(previousDiagnostic.ai_analysis.scores.overall)}`}>
+                    {previousDiagnostic.ai_analysis.scores.overall}
+                  </span>
+                  <span className="text-sm text-gray-500">Escore Geral</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Current Diagnostic Details (if available) */}
+          {latestDiagnostic && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-16 h-16 bg-primary-100 rounded-xl flex items-center justify-center">
+                  <Globe className="text-primary-600" size={32} />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold text-gray-800">{latestDiagnostic.place_data.name || settings.companyName}</h2>
+                  <p className="text-gray-500 flex items-center gap-2 mt-1">
+                    <MapPin size={14} />
+                    {latestDiagnostic.place_data.formatted_address || \'Endereço não disponível\'}
+                  </p>
+                  <div className="flex items-center gap-4 mt-2">
+                    {latestDiagnostic.place_data.rating && latestDiagnostic.place_data.rating > 0 ? (
+                      <span className="flex items-center gap-1 text-yellow-600">
+                        <Star size={16} fill="currentColor" />
+                        {latestDiagnostic.place_data.rating} ({latestDiagnostic.place_data.user_ratings_total} avaliações)
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">Sem avaliações</span>
+                    )}
+                    {latestDiagnostic.place_data.formatted_phone_number && (
+                      <span className="flex items-center gap-1 text-gray-600">
+                        <Phone size={14} />
+                        {latestDiagnostic.place_data.formatted_phone_number}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {latestDiagnostic.place_data.url && (
+                  <a 
+                    href={latestDiagnostic.place_data.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                  >
+                    Ver no Google
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* AI Analysis Summary */}
+          {latestDiagnostic?.ai_analysis && (
+            <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-100 p-6 mb-6">
+              <div className="flex items-start gap-3 mb-4">
+                <Sparkles className="text-purple-600" size={24} />
+                <div>
+                  <h3 className="font-semibold text-purple-800">Análise da IA</h3>
+                  <p className="text-gray-700 mt-1">{latestDiagnostic.ai_analysis.summary}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Score Cards */}
+          {latestDiagnostic?.ai_analysis && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className={`rounded-xl border p-4 ${getScoreBg(latestDiagnostic.ai_analysis.scores.overall)}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-600 text-sm font-medium">Escore Geral</span>
+                  <Activity size={18} className="text-gray-400" />
+                </div>
+                <div className={`text-3xl font-bold ${getScoreColor(latestDiagnostic.ai_analysis.scores.overall)}`}>
+                  {latestDiagnostic.ai_analysis.scores.overall}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {latestDiagnostic.ai_analysis.scores.overall >= 80 ? \'Excelente\' : latestDiagnostic.ai_analysis.scores.overall >= 60 ? \'Bom\' : latestDiagnostic.ai_analysis.scores.overall >= 40 ? \'Regular\' : \'Precisa melhorar\'}
+                </div>
+              </div>
+
+              <div className={`rounded-xl border p-4 ${getScoreBg(latestDiagnostic.ai_analysis.scores.reputation)}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-600 text-sm font-medium">Reputação</span>
+                  <button onClick={() => setShowReputationExplanation(!showReputationExplanation)} className="text-gray-400 hover:text-gray-600">
+                    {showReputationExplanation ? <Minus size={18} /> : <ChevronRight size={18} />}
+                  </button>
+                </div>
+                <div className={`text-3xl font-bold ${getScoreColor(latestDiagnostic.ai_analysis.scores.reputation)}`}>
+                  {latestDiagnostic.ai_analysis.scores.reputation}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">Nota e avaliações no Google</div>
+                {showReputationExplanation && (
+                  <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm text-gray-700">
+                    <p>A Reputação é calculada com base na sua nota média e no volume de avaliações no Google Meu Negócio.</p>
+                    <p className="mt-2"><strong>Como melhorar:</strong> Incentive mais clientes satisfeitos a deixar avaliações e responda a todas as avaliações, sejam elas positivas ou negativas.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className={`rounded-xl border p-4 ${getScoreBg(latestDiagnostic.ai_analysis.scores.visibility)}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-600 text-sm font-medium">Visibilidade</span>
+                  <button onClick={() => setShowVisibilityExplanation(!showVisibilityExplanation)} className="text-gray-400 hover:text-gray-600">
+                    {showVisibilityExplanation ? <Minus size={18} /> : <ChevronRight size={18} />}
+                  </button>
+                </div>
+                <div className={`text-3xl font-bold ${getScoreColor(latestDiagnostic.ai_analysis.scores.visibility)}`}>
+                  {latestDiagnostic.ai_analysis.scores.visibility}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">Fotos, horários e informações</div>
+                {showVisibilityExplanation && (
+                  <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm text-gray-700">
+                    <p>A Visibilidade mede o quão completo e otimizado está o seu perfil no Google Meu Negócio, incluindo fotos, horários de funcionamento e informações de contato.</p>
+                    <p className="mt-2"><strong>Como melhorar:</strong> Mantenha seu perfil sempre atualizado, adicione fotos de alta qualidade e certifique-se de que todas as informações estejam corretas e completas.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className={`rounded-xl border p-4 ${getScoreBg(latestDiagnostic.ai_analysis.scores.engagement)}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-600 text-sm font-medium">Engajamento</span>
+                  <button onClick={() => setShowEngagementExplanation(!showEngagementExplanation)} className="text-gray-400 hover:text-gray-600">
+                    {showEngagementExplanation ? <Minus size={18} /> : <ChevronRight size={18} />}
+                  </button>
+                </div>
+                <div className={`text-3xl font-bold ${getScoreColor(latestDiagnostic.ai_analysis.scores.engagement)}`}>
+                  {latestDiagnostic.ai_analysis.scores.engagement}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">Interação com clientes</div>
+                {showEngagementExplanation && (
+                  <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm text-gray-700">
+                    <p>O Engajamento avalia sua interação com os clientes, principalmente através da resposta a avaliações e perguntas no Google Meu Negócio.</p>
+                    <p className="mt-2"><strong>Como melhorar:</strong> Responda rapidamente a todas as avaliações e mensagens. Um bom engajamento mostra que você valoriza seus clientes.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Strengths and Weaknesses */}
+          {latestDiagnostic?.ai_analysis && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* Strengths */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <ThumbsUp className="text-green-600" size={20} />
+                  <h3 className="font-semibold text-gray-800">Pontos Fortes</h3>
+                </div>
+                <div className="space-y-3">
+                  {latestDiagnostic.ai_analysis.strengths.map((strength, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <CheckCircle className="text-green-500 mt-0.5" size={16} />
+                      <p className="text-gray-700">{strength}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Weaknesses */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <ThumbsDown className="text-red-600" size={20} />
+                  <h3 className="font-semibold text-gray-800">Pontos Fracos</h3>
+                </div>
+                <div className="space-y-3">
+                  {latestDiagnostic.ai_analysis.weaknesses.map((weakness, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <AlertTriangle className="text-red-500 mt-0.5" size={16} />
+                      <p className="text-gray-700">{weakness}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Recommendations */}
+          {latestDiagnostic?.ai_analysis && latestDiagnostic.ai_analysis.recommendations && latestDiagnostic.ai_analysis.recommendations.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Lightbulb className="text-blue-600" size={20} />
+                <h3 className="font-semibold text-gray-800">Recomendações Personalizadas</h3>
+              </div>
+              <div className="space-y-4">
+                {latestDiagnostic.ai_analysis.recommendations.map((rec, i) => (
+                  <div key={i} className="border-l-4 border-blue-200 pl-4">
+                    <p className="text-sm font-semibold text-gray-800">{rec.title}</p>
+                    <p className="text-sm text-gray-600 mt-1">{rec.description}</p>
+                    <p className="text-xs text-gray-500 mt-1">Impacto: {rec.impact}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent Reviews */}
+          {latestDiagnostic?.place_data?.reviews && latestDiagnostic.place_data.reviews.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <MessageSquare className="text-blue-600" size={20} />
+                <h3 className="font-semibold text-gray-800">Últimas Avaliações</h3>
+              </div>
+              <div className="space-y-4">
+                {latestDiagnostic.place_data.reviews.slice(0, 5).map((review, index) => (
+                  <div key={index} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-medium text-gray-800">{review.author_name}</span>
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <Star 
+                            key={i} 
+                            size={14} 
+                            className={i < review.rating ? \'text-yellow-500 fill-yellow-500\' : \'text-gray-300\'}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-gray-400 text-sm">{review.relative_time_description}</span>
+                    </div>
+                    <p className="text-gray-600 text-sm">{review.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Business Info Card */}
+          {placeData && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
           <div className="flex items-start gap-4">
             <div className="w-16 h-16 bg-primary-100 rounded-xl flex items-center justify-center">
@@ -792,6 +1467,12 @@ Forneça de 3 a 5 recomendações priorizadas.
             ))}
           </div>
         </div>
+      )}
+
+        </>
+      )}
+
+        </>
       )}
 
       {/* History Modal */}
