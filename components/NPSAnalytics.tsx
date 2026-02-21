@@ -4,7 +4,7 @@ import { NPSResponse, Campaign } from '@/types';
 import { BarChart3, Sparkles, Loader2, X, Mail, Phone, History, Plus, MessageSquare, User, Calendar, Layout } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import Markdown from 'react-markdown';
+import ReactMarkdown from 'react-markdown';
 
 interface NPSAnalyticsProps {
   npsData: NPSResponse[];
