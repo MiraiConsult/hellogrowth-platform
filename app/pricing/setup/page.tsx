@@ -118,11 +118,22 @@ function SetupContent() {
             <CheckCircle2 size={48} />
           </div>
           <h2 className="text-3xl font-bold text-slate-900 mb-4">Tudo Pronto!</h2>
-          <p className="text-slate-600 mb-8 text-lg leading-relaxed">
-            Suas empresas foram configuradas com sucesso. Agora você já pode acessar o sistema e começar a crescer!
-          </p>
+          
+          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 mb-8 text-left">
+            <p className="text-emerald-800 font-semibold mb-2">Suas empresas foram configuradas com sucesso!</p>
+            <p className="text-emerald-700 text-sm leading-relaxed">
+              Para o seu primeiro acesso, utilize o e-mail da compra e a senha padrão:
+            </p>
+            <div className="mt-3 flex items-center justify-center bg-white border border-emerald-200 py-2 rounded-xl text-2xl font-mono font-bold text-emerald-600 tracking-widest shadow-sm">
+              12345
+            </div>
+            <p className="text-emerald-600 text-xs mt-3 italic text-center">
+              Você poderá alterar sua senha após o primeiro login.
+            </p>
+          </div>
+
           <button 
-            onClick={() => router.push('/login')}
+            onClick={() => router.push('/')}
             className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-emerald-200 hover:shadow-emerald-300 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3"
           >
             <LayoutDashboard size={24} />
