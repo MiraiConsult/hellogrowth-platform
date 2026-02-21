@@ -191,8 +191,9 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/pricing/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/pricing/canceled`,
+	      success_url: `${baseUrl}/pricing/success?session_id={CHECKOUT_SESSION_ID}`,
+	      cancel_url: `${baseUrl}/pricing/canceled`,
+	      allow_promotion_codes: true,
       metadata: {
         plan,
         userCount: userCount.toString(),
