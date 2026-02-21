@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sessionId, email, companies, plan, addons } = body;
+    const { sessionId, email, companies, plan: stripePlan, addons: stripeAddons } = body;
 
     if (!sessionId || !email || !companies || !Array.isArray(companies)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -21,7 +21,18 @@ export async function POST(request: NextRequest) {
     const userEmail = email.toLowerCase().trim();
     const defaultPassword = '12345';
 
-    // 2. Check if user already exists or create a new one
+    // 2. Map Stripe Plan to System Plan
+    // stripePlan could be: hello_client, hello_rating, hello_growth
+    // systemPlan should be: client, rating, growth
+    let systemPlan = 'client';
+    if (stripePlan === 'hello_growth') systemPlan = 'growth';
+    else if (stripePlan === 'hello_rating') systemPlan = 'rating';
+    else if (stripePlan === 'hello_client') systemPlan = 'client';
+    else if (stripePlan === 'growth' || stripePlan === 'rating' || stripePlan === 'client') {
+      systemPlan = stripePlan; // Fallback if already correct
+    }
+
+    // 3. Check if user already exists or create a new one
     let userId: string;
     const { data: existingUser, error: userError } = await supabase
       .from('users')
@@ -41,11 +52,11 @@ export async function POST(request: NextRequest) {
           password: defaultPassword,
           role: 'admin',
           is_owner: true,
-          plan: plan || 'hello_growth',
+          plan: systemPlan,
           settings: {
             adminEmail: userEmail,
             autoRedirect: true,
-            addons: addons || {}
+            addons: stripeAddons || {}
           }
         }])
         .select()
@@ -55,7 +66,7 @@ export async function POST(request: NextRequest) {
       userId = newUser.id;
     }
 
-    // 3. Create each company and link to the user
+    // 4. Create each company and link to the user
     const results = [];
     for (let i = 0; i < companies.length; i++) {
       const companyName = companies[i].trim();
@@ -67,8 +78,8 @@ export async function POST(request: NextRequest) {
         .insert([{
           id: companyId,
           name: companyName,
-          plan: plan || 'hello_growth',
-          plan_addons: addons ? JSON.stringify(addons) : '[]',
+          plan: systemPlan,
+          plan_addons: stripeAddons ? JSON.stringify(stripeAddons) : '[]',
           stripe_customer_id: session.customer,
           stripe_subscription_id: session.subscription,
           subscription_status: 'active',
@@ -76,7 +87,8 @@ export async function POST(request: NextRequest) {
           settings: {
             companyName: companyName,
             adminEmail: userEmail,
-            autoRedirect: true
+            autoRedirect: true,
+            addons: stripeAddons || {} // Save addons in settings for UI logic
           }
         }])
         .select()
@@ -108,7 +120,8 @@ export async function POST(request: NextRequest) {
             .from('users')
             .update({ 
               tenant_id: companyId,
-              company_name: companyName 
+              company_name: companyName,
+              plan: systemPlan // Ensure user record has correct mapped plan
             })
             .eq('id', userId);
         }
