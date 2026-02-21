@@ -71,7 +71,13 @@ function SetupContent() {
         })
       });
 
-      if (!response.ok) throw new Error('Erro ao criar suas empresas.');
+      if (!response.ok) {
+        const data = await response.json();
+        if (data.error === 'EMAIL_EXISTS') {
+          throw new Error(data.message);
+        }
+        throw new Error('Erro ao criar suas empresas. Por favor, tente novamente.');
+      }
       
       setStep('success');
     } catch (err: any) {

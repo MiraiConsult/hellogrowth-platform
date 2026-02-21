@@ -22,57 +22,59 @@ export async function POST(request: NextRequest) {
     const defaultPassword = '12345';
 
     // 2. Map Stripe Plan to System Plan
-    // stripePlan could be: hello_client, hello_rating, hello_growth
-    // systemPlan should be: client, rating, growth
     let systemPlan = 'client';
     if (stripePlan === 'hello_growth') systemPlan = 'growth';
     else if (stripePlan === 'hello_rating') systemPlan = 'rating';
     else if (stripePlan === 'hello_client') systemPlan = 'client';
     else if (stripePlan === 'growth' || stripePlan === 'rating' || stripePlan === 'client') {
-      systemPlan = stripePlan; // Fallback if already correct
+      systemPlan = stripePlan;
     }
 
-    // 3. Check if user already exists or create a new one
-    let userId: string;
+    // 3. TRAVA DE E-MAIL ÚNICO: Check if user already exists
     const { data: existingUser, error: userError } = await supabase
       .from('users')
-      .select('id')
+      .select('id, email')
       .eq('email', userEmail)
       .maybeSingle();
 
+    // Se o usuário já existe, bloqueamos a criação de uma nova conta "do zero"
+    // No futuro, poderíamos apenas adicionar as novas empresas a esta conta,
+    // mas por segurança e organização, vamos impedir a duplicidade agora.
     if (existingUser) {
-      userId = existingUser.id;
-    } else {
-      // Create new user record
-      const { data: newUser, error: createError } = await supabase
-        .from('users')
-        .insert([{
-          name: userEmail.split('@')[0],
-          email: userEmail,
-          password: defaultPassword,
-          role: 'admin',
-          is_owner: true,
-          plan: systemPlan,
-          settings: {
-            adminEmail: userEmail,
-            autoRedirect: true,
-            addons: stripeAddons || {}
-          }
-        }])
-        .select()
-        .single();
-
-      if (createError) throw createError;
-      userId = newUser.id;
+      return NextResponse.json({ 
+        error: 'EMAIL_EXISTS',
+        message: 'Este e-mail já possui uma conta ativa no sistema. Por favor, faça login para gerenciar suas empresas.' 
+      }, { status: 409 }); // 409 Conflict
     }
 
-    // 4. Create each company and link to the user
+    // 4. Create new user record
+    const { data: newUser, error: createError } = await supabase
+      .from('users')
+      .insert([{
+        name: userEmail.split('@')[0],
+        email: userEmail,
+        password: defaultPassword,
+        role: 'admin',
+        is_owner: true,
+        plan: systemPlan,
+        settings: {
+          adminEmail: userEmail,
+          autoRedirect: true,
+          addons: stripeAddons || {}
+        }
+      }])
+      .select()
+      .single();
+
+    if (createError) throw createError;
+    const userId = newUser.id;
+
+    // 5. Create each company and link to the user
     const results = [];
     for (let i = 0; i < companies.length; i++) {
       const companyName = companies[i].trim();
       const companyId = crypto.randomUUID();
       
-      // Create the company (tenant)
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
         .insert([{
@@ -88,7 +90,7 @@ export async function POST(request: NextRequest) {
             companyName: companyName,
             adminEmail: userEmail,
             autoRedirect: true,
-            addons: stripeAddons || {} // Save addons in settings for UI logic
+            addons: stripeAddons || {}
           }
         }])
         .select()
@@ -99,14 +101,13 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Link user to company in user_companies
       const { error: linkError } = await supabase
         .from('user_companies')
         .insert([{
           user_id: userId,
           company_id: companyId,
           role: 'owner',
-          is_default: i === 0, // First company is the default
+          is_default: i === 0,
           status: 'active',
           accepted_at: new Date().toISOString()
         }]);
@@ -114,14 +115,13 @@ export async function POST(request: NextRequest) {
       if (linkError) {
         console.error(`Error linking user to company ${companyName}:`, linkError);
       } else {
-        // Also update the main user record with the first company as tenant_id (legacy support)
         if (i === 0) {
           await supabase
             .from('users')
             .update({ 
               tenant_id: companyId,
               company_name: companyName,
-              plan: systemPlan // Ensure user record has correct mapped plan
+              plan: systemPlan
             })
             .eq('id', userId);
         }
