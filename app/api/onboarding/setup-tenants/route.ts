@@ -18,53 +18,108 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Payment not completed' }, { status: 400 });
     }
 
-    // 2. Create users/tenants in Supabase
-    // Note: In this architecture, a "user" record represents a tenant/company.
-    // If multiple companies were purchased, we create multiple user records with the same email
-    // but different tenant_ids and company_names.
-    
-    const results = [];
-    for (const companyName of companies) {
-      const newTenantId = crypto.randomUUID();
-      
-      const userData = {
-        name: email.split('@')[0], // Default name from email
-        email: email,
-        company_name: companyName,
-        plan: plan || 'hello_growth',
-        tenant_id: newTenantId,
-        role: 'admin',
-        is_owner: true,
-        password: '12345', // Default password for new users
-        settings: {
-          companyName: companyName,
-          adminEmail: email,
-          phone: '',
-          website: '',
-          autoRedirect: true,
-          addons: addons || {}
-        }
-      };
+    const userEmail = email.toLowerCase().trim();
+    const defaultPassword = '12345';
 
-      const { data, error } = await supabase
+    // 2. Check if user already exists or create a new one
+    let userId: string;
+    const { data: existingUser, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', userEmail)
+      .maybeSingle();
+
+    if (existingUser) {
+      userId = existingUser.id;
+    } else {
+      // Create new user record
+      const { data: newUser, error: createError } = await supabase
         .from('users')
-        .insert([userData])
+        .insert([{
+          name: userEmail.split('@')[0],
+          email: userEmail,
+          password: defaultPassword,
+          role: 'admin',
+          is_owner: true,
+          plan: plan || 'hello_growth',
+          settings: {
+            adminEmail: userEmail,
+            autoRedirect: true,
+            addons: addons || {}
+          }
+        }])
         .select()
         .single();
 
-      if (error) {
-        console.error(`Error creating company ${companyName}:`, error);
-        // If it's a unique constraint error on email, we might need a different strategy
-        // but for now we follow the existing AdminUserManagement logic.
+      if (createError) throw createError;
+      userId = newUser.id;
+    }
+
+    // 3. Create each company and link to the user
+    const results = [];
+    for (let i = 0; i < companies.length; i++) {
+      const companyName = companies[i].trim();
+      const companyId = crypto.randomUUID();
+      
+      // Create the company (tenant)
+      const { data: companyData, error: companyError } = await supabase
+        .from('companies')
+        .insert([{
+          id: companyId,
+          name: companyName,
+          plan: plan || 'hello_growth',
+          plan_addons: addons ? JSON.stringify(addons) : '[]',
+          stripe_customer_id: session.customer,
+          stripe_subscription_id: session.subscription,
+          subscription_status: 'active',
+          created_by: userId,
+          settings: {
+            companyName: companyName,
+            adminEmail: userEmail,
+            autoRedirect: true
+          }
+        }])
+        .select()
+        .single();
+
+      if (companyError) {
+        console.error(`Error creating company ${companyName}:`, companyError);
+        continue;
+      }
+
+      // Link user to company in user_companies
+      const { error: linkError } = await supabase
+        .from('user_companies')
+        .insert([{
+          user_id: userId,
+          company_id: companyId,
+          role: 'owner',
+          is_default: i === 0, // First company is the default
+          status: 'active',
+          accepted_at: new Date().toISOString()
+        }]);
+
+      if (linkError) {
+        console.error(`Error linking user to company ${companyName}:`, linkError);
       } else {
-        results.push(data);
+        // Also update the main user record with the first company as tenant_id (legacy support)
+        if (i === 0) {
+          await supabase
+            .from('users')
+            .update({ 
+              tenant_id: companyId,
+              company_name: companyName 
+            })
+            .eq('id', userId);
+        }
+        results.push(companyData);
       }
     }
 
     return NextResponse.json({ 
       success: true, 
       count: results.length,
-      message: `${results.length} empresas configuradas com sucesso.` 
+      message: `${results.length} empresas configuradas com sucesso para o usuário ${userEmail}.` 
     });
 
   } catch (error: any) {
