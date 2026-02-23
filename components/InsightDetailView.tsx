@@ -539,7 +539,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
           // Extrai o valor da resposta
           let answerValue: any;
           if (typeof ans === 'object' && ans !== null) {
-            answerValue = ans.value !== undefined ? ans.value : (ans.answer || ans.text || JSON.stringify(ans));
+            answerValue = ans.value !== undefined ? ans.value : (ans.answer || ans.text || ans.label || ans.resposta || '[Resposta não disponível]');
           } else {
             answerValue = ans;
           }
