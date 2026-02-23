@@ -70,6 +70,10 @@ const Tutorial: React.FC = () => {
                     </p>
                   </div>
                </div>
+
+               <div className="p-4 bg-purple-50 rounded-lg border border-purple-100 text-sm text-purple-800">
+                  <strong>Novidade: Gamificação!</strong> 🎁 Ao ativar a roleta de prêmios em um formulário, ele exibirá a tag <strong>"Game Ativo"</strong> no painel principal. Isso ajuda você a identificar rapidamente quais campanhas estão usando gamificação para aumentar a conversão.
+               </div>
                
                <div className="flex gap-4">
                   <div className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">2</div>
@@ -119,6 +123,13 @@ const Tutorial: React.FC = () => {
                       <div>
                          <h4 className="font-bold text-gray-900">Detalhes do Lead</h4>
                          <p className="text-gray-600 text-sm">Clique no card para ver todas as respostas do formulário, dados de contato e o histórico de anotações (CRM).</p>
+                      </div>
+                   </li>
+                   <li className="flex gap-3">
+                      <CheckSquare className="text-blue-500 flex-shrink-0 mt-1" />
+                      <div>
+                         <h4 className="font-bold text-gray-900">Contato via Email</h4>
+                         <p className="text-gray-600 text-sm">A função de envio direto de e-mail está em desenvolvimento (tag <strong>Em Breve</strong>). Por enquanto, utilize o botão de WhatsApp para um contato imediato e eficiente.</p>
                       </div>
                    </li>
                    <li className="flex gap-3">

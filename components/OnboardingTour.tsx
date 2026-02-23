@@ -183,18 +183,23 @@ const OnboardingTour: React.FC<OnboardingTourProps> = ({ onClose, setCurrentView
              </>
           )}
 
-          {step === 5 && (
-             <>
-               <div className="flex items-center gap-2 mb-2 text-gray-800">
-                  <CheckSquare size={20} className="text-blue-600" />
-                  <h3 className="font-bold text-lg">Formulários (HelloClient)</h3>
-               </div>
-               <p className="text-sm text-gray-600 mb-4">
-                 Crie formulários de anamnese inteligentes. Eles qualificam o lead automaticamente e já calculam o valor da oportunidade antes mesmo de você entrar em contato.
-               </p>
-               <button onClick={handleNext} className="w-full py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 text-sm">Ver Gestão de Leads</button>
-             </>
-          )}
+	          {step === 5 && (
+	             <>
+	               <div className="flex items-center gap-2 mb-2 text-gray-800">
+	                  <CheckSquare size={20} className="text-blue-600" />
+	                  <h3 className="font-bold text-lg">Formulários (HelloClient)</h3>
+	               </div>
+	               <p className="text-sm text-gray-600 mb-2">
+	                 Crie formulários de anamnese inteligentes que qualificam o lead automaticamente.
+	               </p>
+	               <div className="bg-purple-50 p-2 rounded-lg border border-purple-100 mb-4">
+	                  <p className="text-xs text-purple-700">
+	                    <strong>Dica:</strong> Procure pela tag <strong>"Game Ativo"</strong> para saber quais formulários estão usando a roleta de prêmios para atrair mais clientes!
+	                  </p>
+	               </div>
+	               <button onClick={handleNext} className="w-full py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 text-sm">Ver Gestão de Leads</button>
+	             </>
+	          )}
 
           {step === 6 && (
              <>
