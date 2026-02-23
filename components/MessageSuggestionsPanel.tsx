@@ -210,11 +210,9 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
         setIsSendingEmail(false);
       }
     } else {
-      // Abrir cliente de email local com mailto:
       const subject = encodeURIComponent(generatedMessage.emailSubject);
       const body = encodeURIComponent(generatedMessage.emailBody);
-      const mailtoLink = `mailto:${client.email}?subject=${subject}&body=${body}`;
-      window.open(mailtoLink);
+      window.open(`mailto:${client.email}?subject=${subject}&body=${body}`, '_blank');
     }
   };
 
@@ -268,15 +266,19 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
               Enviar WhatsApp
             </button>
             <div className="flex flex-col gap-1">
-<button
-  disabled={true}
-  className="px-4 py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors bg-gray-100 text-gray-400 cursor-not-allowed relative"
->
-  <Mail size={18} />
-  Enviar Email
-  <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Em Breve</span>
-</button>
-<p className="text-[10px] text-gray-500 text-center">Funcionalidade em desenvolvimento</p>
+              <button
+                disabled={true}
+                className="px-4 py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors bg-gray-100 text-gray-400 cursor-not-allowed relative"
+              >
+                <Mail size={18} />
+                Enviar Email
+                <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Em Breve</span>
+              </button>
+              <p className="text-[10px] text-gray-500 text-center">Funcionalidade em desenvolvimento</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex items-center gap-2 mb-4">
