@@ -29,8 +29,8 @@ export default function Strategic({
   return (
     <div className="flex flex-col h-full">
       {/* Header com abas */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">Estratégico</h1>
+      <div className="bg-white border-b border-gray-200 px-6 py-2">
+        <h1 className="text-xl font-bold text-gray-900 mb-2">Estratégico</h1>
         <div className="flex gap-2">
           <button
             onClick={() => setActiveTab('insights')}

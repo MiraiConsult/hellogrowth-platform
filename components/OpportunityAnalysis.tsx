@@ -81,7 +81,7 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
             Object.entries(selectedLead.answers).forEach(([qId, data]: [string, any]) => {
                 const question = getQuestionText(selectedLead, qId);
                 const answer = (typeof data === 'object' && data !== null) 
-                    ? (data.value || JSON.stringify(data)) 
+                    ? (data.value || data.text || data.label || data.answer || data.resposta || '[Resposta não disponível]') 
                     : data;
                 formAnswersContext += `- Pergunta: "${question}" | Resposta: "${answer}"\n`;
             });

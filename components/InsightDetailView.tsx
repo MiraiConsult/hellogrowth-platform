@@ -1046,22 +1046,6 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
 
           {/* Right Column - Actions */}
           <div className="space-y-4">
-            {/* Coach IA Button - MOVED HERE */}
-            {selectedClient.type === 'lead' && (
-              <button
-                onClick={() => {
-                  setSalesCoachClient(selectedClient);
-                  setShowSalesCoach(true);
-                  // Add to history
-                  addToHistory(selectedClient.id, selectedClient.email, selectedClient.type, 'coach_used');
-                }}
-                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium px-4 py-3 rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg"
-              >
-                <Sparkles size={18} />
-                Coach de Vendas IA
-              </button>
-            )}
-
             {/* Mark Action Status */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <h3 className="font-bold text-gray-900 mb-3 text-sm">Marcar Status</h3>
