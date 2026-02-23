@@ -268,24 +268,15 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
               Enviar WhatsApp
             </button>
             <div className="flex flex-col gap-1">
-              <button
-                onClick={handleSendEmail}
-                disabled={!client.email || !generatedMessage || isSendingEmail || isGenerating}
-                className={`px-4 py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors ${
-                  isGmailConnected 
-                    ? 'bg-red-600 text-white hover:bg-red-700' 
-                    : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
-                } disabled:bg-gray-100 disabled:cursor-not-allowed`}
-              >
-                {isSendingEmail ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
-                {isSendingEmail ? 'Enviando...' : isGmailConnected ? 'Enviar via Gmail' : 'Enviar Email'}
-              </button>
-              {sendSuccess && <p className="text-[10px] text-green-600 text-center font-bold">Email enviado!</p>}
-              {sendError && <p className="text-[10px] text-red-600 text-center font-bold">{sendError}</p>}
-            </div>
-          </div>
-        </div>
-      )}
+<button
+  disabled={true}
+  className="px-4 py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors bg-gray-100 text-gray-400 cursor-not-allowed relative"
+>
+  <Mail size={18} />
+  Enviar Email
+  <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Em Breve</span>
+</button>
+<p className="text-[10px] text-gray-500 text-center">Funcionalidade em desenvolvimento</p>
 
       {/* Header */}
       <div className="flex items-center gap-2 mb-4">
