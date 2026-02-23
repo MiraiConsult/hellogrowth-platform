@@ -17,6 +17,7 @@ const CompanySwitcher: React.FC<CompanySwitcherProps> = ({
   onSwitchCompany,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isSwitching, setIsSwitching] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Fechar dropdown ao clicar fora
@@ -58,9 +59,12 @@ const CompanySwitcher: React.FC<CompanySwitcherProps> = ({
         </div>
         <div className="flex flex-col text-left">
           <span className="text-sm font-semibold text-gray-800 truncate max-w-[160px]">
-            {activeCompany?.name || 'Minha Empresa'}
+            {isSwitching ? 'Trocando empresa...' : (activeCompany?.name || 'Minha Empresa')}
           </span>
         </div>
+        {isSwitching && (
+          <div className="w-4 h-4 border-2 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
+        )}
         <svg
           className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
@@ -87,9 +91,11 @@ const CompanySwitcher: React.FC<CompanySwitcherProps> = ({
                 return (
                   <button
                     key={uc.id}
-                    onClick={() => {
-                      onSwitchCompany(uc.company_id);
+                    onClick={async () => {
+                      if (isActive || isSwitching) return;
+                      setIsSwitching(true);
                       setIsOpen(false);
+                      onSwitchCompany(uc.company_id);
                     }}
                     className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${
                       isActive ? 'bg-teal-50 border-l-4 border-teal-500' : ''
