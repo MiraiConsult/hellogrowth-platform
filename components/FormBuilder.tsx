@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap } from 'lucide-react';
+import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift } from 'lucide-react';
 import FormConsultant from '@/components/FormConsultant';
 import { supabase } from '@/lib/supabase';
 import { Form, FormQuestion, FormOption, Lead, InitialField } from '@/types';
@@ -513,6 +513,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                  <span className={`text-xs px-2 py-0.5 rounded-full border ${form.active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
                     {form.active ? 'Ativo' : 'Pausado'}
                  </span>
+                 {form.game_enabled && (
+                   <span className="text-xs px-2 py-0.5 rounded-full border border-purple-100 text-purple-600 bg-purple-50 flex items-center gap-1">
+                     <Gift size={10} /> Game Ativo
+                   </span>
+                 )}
                  <span className="text-xs text-gray-400">{form.questions.length} perguntas • {getResponseCount(form)} respostas</span>
                </div>
                
