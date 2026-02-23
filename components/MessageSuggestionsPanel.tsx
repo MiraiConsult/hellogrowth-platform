@@ -212,7 +212,7 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
     } else {
       const subject = encodeURIComponent(generatedMessage.emailSubject);
       const body = encodeURIComponent(generatedMessage.emailBody);
-      window.open(`mailto:${client.email}?subject=${subject}&body=${body}`, '_blank');
+      window.location.href = `mailto:${client.email}?subject=${subject}&body=${body}`;
     }
   };
 

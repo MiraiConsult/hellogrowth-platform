@@ -607,7 +607,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
   const handleEmail = async (client: ClientAnalysis) => {
     const subject = encodeURIComponent(client.emailSubject);
     const body = encodeURIComponent(client.emailBody);
-    window.open(`mailto:${client.email}?subject=${subject}&body=${body}`, '_blank');
+    window.location.href = `mailto:${client.email}?subject=${subject}&body=${body}`;
     
     // Add to history
     await addToHistory(client.id, client.email, client.type, 'email_sent', undefined, undefined, `${client.emailSubject}\n\n${client.emailBody}`);
