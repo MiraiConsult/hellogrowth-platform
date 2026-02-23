@@ -605,17 +605,11 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
   };
 
   const handleEmail = async (client: ClientAnalysis) => {
-    // Usar elemento <a> para abrir mailto: sem causar erros de navegação
+    // Abrir cliente de email local com mailto:
     const subject = encodeURIComponent(client.emailSubject);
     const body = encodeURIComponent(client.emailBody);
     const mailtoLink = `mailto:${client.email}?subject=${subject}&body=${body}`;
-    
-    const link = document.createElement('a');
-    link.href = mailtoLink;
-    link.target = '_self';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    window.open(mailtoLink);
     
     // Add to history
     await addToHistory(client.id, client.email, client.type, 'email_sent', undefined, undefined, `${client.emailSubject}\n\n${client.emailBody}`);

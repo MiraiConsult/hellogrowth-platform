@@ -210,17 +210,11 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
         setIsSendingEmail(false);
       }
     } else {
-      // Usar elemento <a> para abrir mailto: sem causar erros de navegação
+      // Abrir cliente de email local com mailto:
       const subject = encodeURIComponent(generatedMessage.emailSubject);
       const body = encodeURIComponent(generatedMessage.emailBody);
       const mailtoLink = `mailto:${client.email}?subject=${subject}&body=${body}`;
-      
-      const link = document.createElement('a');
-      link.href = mailtoLink;
-      link.target = '_self';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      window.open(mailtoLink);
     }
   };
 
