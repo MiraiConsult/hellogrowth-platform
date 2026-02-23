@@ -18,6 +18,8 @@ const CompanySwitcher: React.FC<CompanySwitcherProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<UserCompany | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Fechar dropdown ao clicar fora
@@ -47,9 +49,36 @@ const CompanySwitcher: React.FC<CompanySwitcherProps> = ({
     );
   }
 
+  const handleCompanySelect = (company: UserCompany) => {
+    if (activeCompany?.id === company.company_id || isSwitching) return;
+    setSelectedCompany(company);
+    setShowConfirmation(true);
+    setIsOpen(false);
+  };
+
+  const handleConfirmSwitch = () => {
+    if (!selectedCompany) return;
+    setIsSwitching(true);
+    setShowConfirmation(false);
+    onSwitchCompany(selectedCompany.company_id);
+  };
+
   // Com múltiplas empresas, mostra dropdown
   return (
-    <div className="relative" ref={dropdownRef}>
+    <>
+      {showConfirmation && selectedCompany && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl">
+            <h3 className="text-lg font-semibold mb-4">Confirmar Troca de Empresa</h3>
+            <p className="mb-6">Deseja trocar para a empresa <strong>{selectedCompany.company?.name}</strong>?</p>
+            <div className="flex justify-end gap-4">
+              <button onClick={() => setShowConfirmation(false)} className="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">Cancelar</button>
+              <button onClick={handleConfirmSwitch} className="px-4 py-2 rounded-lg bg-teal-500 text-white hover:bg-teal-600">Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
@@ -91,12 +120,7 @@ const CompanySwitcher: React.FC<CompanySwitcherProps> = ({
                 return (
                   <button
                     key={uc.id}
-                    onClick={async () => {
-                      if (isActive || isSwitching) return;
-                      setIsSwitching(true);
-                      setIsOpen(false);
-                      onSwitchCompany(uc.company_id);
-                    }}
+                    onClick={() => handleCompanySelect(uc)}
                     className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${
                       isActive ? 'bg-teal-50 border-l-4 border-teal-500' : ''
                     }`}
@@ -135,3 +159,5 @@ const CompanySwitcher: React.FC<CompanySwitcherProps> = ({
 };
 
 export default CompanySwitcher;
+
+    </>
