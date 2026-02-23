@@ -71,35 +71,6 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   // Sempre inicia no dashboard, independente do plano
   const [currentView, setCurrentViewRaw] = useState("dashboard");
 
-  const handleSwitchCompany = async (companyId: string) => {
-    if (!supabase) return;
-
-    const { error } = await supabase
-      .from("user_companies")
-      .update({ is_default: false })
-      .eq("user_id", currentUser.id);
-
-    if (error) {
-      console.error("Error clearing default company:", error);
-      return;
-    }
-
-    const { error: newDefaultError } = await supabase
-      .from("user_companies")
-      .update({ is_default: true })
-      .eq("user_id", currentUser.id)
-      .eq("company_id", companyId);
-
-    if (newDefaultError) {
-      console.error("Error setting new default company:", newDefaultError);
-      return;
-    }
-
-    // Pequeno delay para garantir que a atualização seja confirmada no banco
-    await new Promise(resolve => setTimeout(resolve, 300));
-    window.location.reload();
-  };
-
   // Proteção de acesso por role - redireciona views não permitidas
   const userRole = currentUser.role || 'admin';
   const setCurrentView = (view: string) => {
@@ -1110,7 +1081,7 @@ Responda APENAS com JSON válido (sem markdown):
         currentUser={currentUser}
         activeCompany={activeCompany}
         userCompanies={userCompanies}
-        onSwitchCompany={handleSwitchCompany}
+        onSwitchCompany={onSwitchCompany}
       />
       <main className={`flex-1 relative transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
         {currentUser.plan === 'trial' && daysLeft !== undefined && (
