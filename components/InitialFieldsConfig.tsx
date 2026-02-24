@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, X, Edit2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { InitialField } from '@/types';
 
 interface InitialFieldsConfigProps {
@@ -10,99 +10,120 @@ interface InitialFieldsConfigProps {
 const InitialFieldsConfig: React.FC<InitialFieldsConfigProps> = ({ initialFields, onChange }) => {
   // Campos padrão se nenhum for fornecido
   const defaultFields: InitialField[] = [
-    { field: 'name', label: 'Nome Completo', placeholder: 'Seu nome', required: true, enabled: true },
-    { field: 'email', label: 'Email', placeholder: 'seu@email.com', required: true, enabled: true },
-    { field: 'phone', label: 'Telefone / WhatsApp', placeholder: '(00) 00000-0000', required: false, enabled: true }
+    { field: 'name', label: 'Nome', placeholder: 'Digite seu nome', required: true, enabled: true },
+    { field: 'email', label: 'E-mail', placeholder: 'Digite seu e-mail', required: true, enabled: true },
+    { field: 'phone', label: 'Telefone', placeholder: 'Digite seu telefone', required: false, enabled: true }
   ];
 
   const fields = initialFields.length > 0 ? initialFields : defaultFields;
 
-  const handleToggle = (fieldKey: string, property: 'required' | 'enabled') => {
-    const newFields = fields.map(f => {
-      if (f.field === fieldKey) {
-        // O campo 'name' deve estar sempre habilitado e ser obrigatório para o CRM funcionar bem
-        if (fieldKey === 'name') return f;
-        return { ...f, [property]: !f[property] };
-      }
-      return f;
-    });
+  const handleToggle = (index: number, property: 'required' | 'enabled') => {
+    const newFields = [...fields];
+    newFields[index] = { ...newFields[index], [property]: !newFields[index][property] };
     onChange(newFields);
   };
 
-  const handleLabelChange = (fieldKey: string, newLabel: string) => {
-    const newFields = fields.map(f => {
-      if (f.field === fieldKey) {
-        return { ...f, label: newLabel };
-      }
-      return f;
-    });
+  const handleChange = (index: number, property: 'label' | 'placeholder', value: string) => {
+    const newFields = [...fields];
+    newFields[index] = { ...newFields[index], [property]: value };
+    onChange(newFields);
+  };
+
+  const handleAddField = () => {
+    const newField: InitialField = {
+      field: `custom_${Date.now()}`,
+      label: '',
+      placeholder: '',
+      required: false,
+      enabled: true
+    };
+    onChange([...fields, newField]);
+  };
+
+  const handleRemoveField = (index: number) => {
+    // Não permitir remover os 3 campos padrão
+    if (index < 3) return;
+    const newFields = fields.filter((_, i) => i !== index);
     onChange(newFields);
   };
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3">
-        {fields.map((f) => (
-          <div 
-            key={f.field} 
-            className={`flex flex-col md:flex-row md:items-center justify-between p-3 rounded-lg border transition-all ${
-              f.enabled ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-100 opacity-60'
-            }`}
-          >
-            <div className="flex-1 flex items-center gap-3 mb-3 md:mb-0">
-              <div className={`p-2 rounded-md ${f.enabled ? 'bg-primary-50 text-primary-600' : 'bg-gray-100 text-gray-400'}`}>
-                <Edit2 size={16} />
+      <div>
+        <h3 className="text-base font-bold text-gray-900 mb-1">Campos de Identificação</h3>
+        <p className="text-sm text-gray-600 mb-4">Configure quais dados serão solicitados ao cliente antes da pesquisa</p>
+      </div>
+
+      <div className="space-y-4">
+        {fields.map((field, index) => (
+          <div key={field.field} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={field.enabled}
+                    onChange={() => handleToggle(index, 'enabled')}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Ativo</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={field.required}
+                    onChange={() => handleToggle(index, 'required')}
+                    disabled={!field.enabled}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Obrigatório</span>
+                </label>
               </div>
-              <div className="flex-1">
-                <input
-                  type="text"
-                  value={f.label}
-                  onChange={(e) => handleLabelChange(f.field, e.target.value)}
-                  disabled={!f.enabled}
-                  className="bg-transparent border-none p-0 font-medium text-gray-900 focus:ring-0 w-full"
-                  placeholder="Rótulo do campo"
-                />
-                <p className="text-xs text-gray-400">ID do campo: {f.field}</p>
-              </div>
+              {index >= 3 && (
+                <button
+                  onClick={() => handleRemoveField(index)}
+                  className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                  title="Remover campo"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">Habilitado</span>
-                <button
-                  onClick={() => handleToggle(f.field, 'enabled')}
-                  disabled={f.field === 'name'}
-                  className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors ${
-                    f.enabled ? 'bg-green-500' : 'bg-gray-300'
-                  } ${f.field === 'name' ? 'cursor-not-allowed opacity-50' : ''}`}
-                >
-                  <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                    f.enabled ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
-                </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Título do campo</label>
+                <input
+                  type="text"
+                  value={field.label}
+                  onChange={(e) => handleChange(index, 'label', e.target.value)}
+                  disabled={!field.enabled}
+                  placeholder="Ex: Nome"
+                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 p-2 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                />
               </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">Obrigatório</span>
-                <button
-                  onClick={() => handleToggle(f.field, 'required')}
-                  disabled={!f.enabled || f.field === 'name'}
-                  className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors ${
-                    f.required ? 'bg-primary-500' : 'bg-gray-300'
-                  } ${(!f.enabled || f.field === 'name') ? 'cursor-not-allowed opacity-50' : ''}`}
-                >
-                  <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                    f.required ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
-                </button>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Placeholder (exemplo)</label>
+                <input
+                  type="text"
+                  value={field.placeholder}
+                  onChange={(e) => handleChange(index, 'placeholder', e.target.value)}
+                  disabled={!field.enabled}
+                  placeholder="Ex: Digite seu nome"
+                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 p-2 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                />
               </div>
             </div>
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-gray-400 italic">
-        * O campo 'Nome' é essencial para a organização do seu Kanban e não pode ser desabilitado.
-      </p>
+
+      <button
+        onClick={handleAddField}
+        className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-primary-400 hover:text-primary-600 hover:bg-primary-50 transition-all flex items-center justify-center gap-2 text-sm font-medium"
+      >
+        <Plus size={16} /> Adicionar campo
+      </button>
     </div>
   );
 };
