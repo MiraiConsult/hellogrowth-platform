@@ -215,30 +215,42 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       setSelectedGameId(stableExistingForm.game_id || null);
       
       // Carregar campos de identificação salvos
-      if (stableExistingForm.identification_fields && Array.isArray(stableExistingForm.identification_fields)) {
-        const loadedFields = stableExistingForm.identification_fields.map((field: any) => ({
-          id: field.id || field.field || 'unknown',
-          label: field.label || field.name || '',
-          type: field.type || 'text',
-          enabled: field.enabled !== undefined ? field.enabled : true,
-          required: field.required !== undefined ? field.required : false,
-          placeholder: field.placeholder || `Digite seu ${(field.label || '').toLowerCase()}`
-        }));
+      console.log('=== DEBUG IDENTIFICATION FIELDS ===');
+      console.log('stableExistingForm.identification_fields:', JSON.stringify(stableExistingForm.identification_fields, null, 2));
+      
+      if (stableExistingForm.identification_fields && Array.isArray(stableExistingForm.identification_fields) && stableExistingForm.identification_fields.length > 0) {
+        const loadedFields = stableExistingForm.identification_fields.map((field: any) => {
+          console.log('Processando campo:', field);
+          return {
+            id: field.id || field.field || 'unknown',
+            label: field.label || field.name || '',
+            type: field.type || 'text',
+            enabled: field.enabled !== undefined ? field.enabled : true,
+            required: field.required !== undefined ? field.required : false,
+            placeholder: field.placeholder || `Digite seu ${(field.label || '').toLowerCase()}`
+          };
+        });
+        
+        console.log('Campos carregados para o businessContext:', loadedFields);
         
         setBusinessContext(prev => ({
           ...prev,
           identificationFields: loadedFields
         }));
+      } else {
+        console.log('Não há identification_fields para carregar ou array vazio');
       }
       
-      // Carregar contexto se existir
+      // Carregar contexto se existir (mas preservar identificationFields já carregados)
       if (stableExistingForm.ai_context?.businessContext) {
-        setBusinessContext(prev => ({
-          ...prev,
-          ...stableExistingForm.ai_context.businessContext,
-          // Manter identificationFields já carregados acima
-          identificationFields: prev.identificationFields
-        }));
+        setBusinessContext(prev => {
+          const savedIdentificationFields = prev.identificationFields;
+          return {
+            ...prev,
+            ...stableExistingForm.ai_context.businessContext,
+            identificationFields: savedIdentificationFields // Preservar os campos já carregados
+          };
+        });
       }
     }
   }, [stableExistingForm]);
@@ -1241,24 +1253,6 @@ Responda APENAS com JSON válido neste formato:
     }));
   };
 
-  const handleEditFieldLabel = (fieldId: string, newLabel: string) => {
-    setBusinessContext(prev => ({
-      ...prev,
-      identificationFields: prev.identificationFields.map(f =>
-        f.id === fieldId ? { ...f, label: newLabel } : f
-      )
-    }));
-  };
-
-  const handleEditFieldPlaceholder = (fieldId: string, newPlaceholder: string) => {
-    setBusinessContext(prev => ({
-      ...prev,
-      identificationFields: prev.identificationFields.map(f =>
-        f.id === fieldId ? { ...f, placeholder: newPlaceholder } : f
-      )
-    }));
-  };
-
   // Render Progress Bar
   const renderProgressBar = () => {
     const steps = [
@@ -1385,57 +1379,30 @@ Responda APENAS com JSON válido neste formato:
             <Users size={20} className="text-emerald-500" />
             Campos de Identificação
           </h3>
-          <p className="text-sm text-slate-500 mb-4">Configure quais dados serão solicitados ao cliente antes da pesquisa</p>
-          <div className="space-y-4">
+          <p className="text-sm text-slate-500 mb-4">Defina quais informações coletar do cliente no início do formulário</p>
+          <div className="space-y-3">
             {businessContext.identificationFields.map(field => (
-              <div key={field.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={field.enabled}
-                        onChange={() => handleToggleIdentificationField(field.id)}
-                        className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
-                      />
-                      <span className="text-sm font-medium text-slate-700">Ativo</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={field.required}
-                        onChange={() => handleToggleFieldRequired(field.id)}
-                        disabled={!field.enabled}
-                        className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500 disabled:opacity-50"
-                      />
-                      <span className="text-sm font-medium text-slate-700">Obrigatório</span>
-                    </label>
-                  </div>
+              <div key={field.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={field.enabled}
+                    onChange={() => handleToggleIdentificationField(field.id)}
+                    className="w-5 h-5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                  />
+                  <span className={field.enabled ? 'text-slate-800' : 'text-slate-400'}>{field.label}</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Título do campo</label>
+                {field.enabled && (
+                  <label className="flex items-center gap-2 text-sm">
                     <input
-                      type="text"
-                      value={field.label}
-                      onChange={(e) => handleEditFieldLabel(field.id, e.target.value)}
-                      disabled={!field.enabled}
-                      placeholder="Ex: Nome"
-                      className="w-full rounded-lg border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                      type="checkbox"
+                      checked={field.required}
+                      onChange={() => handleToggleFieldRequired(field.id)}
+                      className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Placeholder (exemplo)</label>
-                    <input
-                      type="text"
-                      value={field.placeholder || `Digite seu ${field.label.toLowerCase()}`}
-                      onChange={(e) => handleEditFieldPlaceholder(field.id, e.target.value)}
-                      disabled={!field.enabled}
-                      placeholder="Ex: Digite seu nome"
-                      className="w-full rounded-lg border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
-                    />
-                  </div>
-                </div>
+                    <span className="text-slate-600">Obrigatório</span>
+                  </label>
+                )}
               </div>
             ))}
           </div>
