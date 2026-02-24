@@ -1222,6 +1222,24 @@ Responda APENAS com JSON válido neste formato:
     }));
   };
 
+  const handleEditFieldLabel = (fieldId: string, newLabel: string) => {
+    setBusinessContext(prev => ({
+      ...prev,
+      identificationFields: prev.identificationFields.map(f =>
+        f.id === fieldId ? { ...f, label: newLabel } : f
+      )
+    }));
+  };
+
+  const handleEditFieldPlaceholder = (fieldId: string, newPlaceholder: string) => {
+    setBusinessContext(prev => ({
+      ...prev,
+      identificationFields: prev.identificationFields.map(f =>
+        f.id === fieldId ? { ...f, placeholder: newPlaceholder } : f
+      )
+    }));
+  };
+
   // Render Progress Bar
   const renderProgressBar = () => {
     const steps = [
@@ -1348,30 +1366,57 @@ Responda APENAS com JSON válido neste formato:
             <Users size={20} className="text-emerald-500" />
             Campos de Identificação
           </h3>
-          <p className="text-sm text-slate-500 mb-4">Defina quais informações coletar do cliente no início do formulário</p>
-          <div className="space-y-3">
+          <p className="text-sm text-slate-500 mb-4">Configure quais dados serão solicitados ao cliente antes da pesquisa</p>
+          <div className="space-y-4">
             {businessContext.identificationFields.map(field => (
-              <div key={field.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={field.enabled}
-                    onChange={() => handleToggleIdentificationField(field.id)}
-                    className="w-5 h-5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
-                  />
-                  <span className={field.enabled ? 'text-slate-800' : 'text-slate-400'}>{field.label}</span>
+              <div key={field.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={field.enabled}
+                        onChange={() => handleToggleIdentificationField(field.id)}
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      <span className="text-sm font-medium text-slate-700">Ativo</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={field.required}
+                        onChange={() => handleToggleFieldRequired(field.id)}
+                        disabled={!field.enabled}
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500 disabled:opacity-50"
+                      />
+                      <span className="text-sm font-medium text-slate-700">Obrigatório</span>
+                    </label>
+                  </div>
                 </div>
-                {field.enabled && (
-                  <label className="flex items-center gap-2 text-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Título do campo</label>
                     <input
-                      type="checkbox"
-                      checked={field.required}
-                      onChange={() => handleToggleFieldRequired(field.id)}
-                      className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                      type="text"
+                      value={field.label}
+                      onChange={(e) => handleEditFieldLabel(field.id, e.target.value)}
+                      disabled={!field.enabled}
+                      placeholder="Ex: Nome"
+                      className="w-full rounded-lg border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
                     />
-                    <span className="text-slate-600">Obrigatório</span>
-                  </label>
-                )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Placeholder (exemplo)</label>
+                    <input
+                      type="text"
+                      value={field.placeholder || `Digite seu ${field.label.toLowerCase()}`}
+                      onChange={(e) => handleEditFieldPlaceholder(field.id, e.target.value)}
+                      disabled={!field.enabled}
+                      placeholder="Ex: Digite seu nome"
+                      className="w-full rounded-lg border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                    />
+                  </div>
+                </div>
               </div>
             ))}
           </div>
