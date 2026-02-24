@@ -214,11 +214,30 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       setGameEnabled(stableExistingForm.game_enabled || false);
       setSelectedGameId(stableExistingForm.game_id || null);
       
+      // Carregar campos de identificação salvos
+      if (stableExistingForm.identification_fields && Array.isArray(stableExistingForm.identification_fields)) {
+        const loadedFields = stableExistingForm.identification_fields.map((field: any) => ({
+          id: field.id || field.field || 'unknown',
+          label: field.label || field.name || '',
+          type: field.type || 'text',
+          enabled: field.enabled !== undefined ? field.enabled : true,
+          required: field.required !== undefined ? field.required : false,
+          placeholder: field.placeholder || `Digite seu ${(field.label || '').toLowerCase()}`
+        }));
+        
+        setBusinessContext(prev => ({
+          ...prev,
+          identificationFields: loadedFields
+        }));
+      }
+      
       // Carregar contexto se existir
       if (stableExistingForm.ai_context?.businessContext) {
         setBusinessContext(prev => ({
           ...prev,
-          ...stableExistingForm.ai_context.businessContext
+          ...stableExistingForm.ai_context.businessContext,
+          // Manter identificationFields já carregados acima
+          identificationFields: prev.identificationFields
         }));
       }
     }
