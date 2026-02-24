@@ -215,39 +215,30 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       setSelectedGameId(stableExistingForm.game_id || null);
       
       // Carregar campos de identificação salvos
-      console.log('=== DEBUG IDENTIFICATION FIELDS ===');
-      console.log('stableExistingForm.identification_fields:', JSON.stringify(stableExistingForm.identification_fields, null, 2));
-      
       if (stableExistingForm.identification_fields && Array.isArray(stableExistingForm.identification_fields) && stableExistingForm.identification_fields.length > 0) {
-        const loadedFields = stableExistingForm.identification_fields.map((field: any) => {
-          console.log('Processando campo:', field);
-          return {
-            id: field.id || field.field || 'unknown',
-            label: field.label || field.name || '',
-            type: field.type || 'text',
-            enabled: field.enabled !== undefined ? field.enabled : true,
-            required: field.required !== undefined ? field.required : false,
-            placeholder: field.placeholder || `Digite seu ${(field.label || '').toLowerCase()}`
-          };
-        });
-        
-        console.log('Campos carregados para o businessContext:', loadedFields);
+        const loadedFields = stableExistingForm.identification_fields.map((field: any) => ({
+          id: field.id || field.field || 'unknown',
+          label: field.label || field.name || '',
+          type: field.type || 'text',
+          enabled: field.enabled !== undefined ? field.enabled : true,
+          required: field.required !== undefined ? field.required : false,
+          placeholder: field.placeholder || `Digite seu ${(field.label || '').toLowerCase()}`
+        }));
         
         setBusinessContext(prev => ({
           ...prev,
           identificationFields: loadedFields
         }));
-      } else {
-        console.log('Não há identification_fields para carregar ou array vazio');
       }
       
       // Carregar contexto se existir (mas preservar identificationFields já carregados)
       if (stableExistingForm.ai_context?.businessContext) {
         setBusinessContext(prev => {
           const savedIdentificationFields = prev.identificationFields;
+          const { identificationFields: _, ...contextWithoutFields } = stableExistingForm.ai_context.businessContext;
           return {
             ...prev,
-            ...stableExistingForm.ai_context.businessContext,
+            ...contextWithoutFields,
             identificationFields: savedIdentificationFields // Preservar os campos já carregados
           };
         });
@@ -1253,6 +1244,15 @@ Responda APENAS com JSON válido neste formato:
     }));
   };
 
+  const handleUpdateIdentificationField = (fieldId: string, property: 'label' | 'placeholder', value: string) => {
+    setBusinessContext(prev => ({
+      ...prev,
+      identificationFields: prev.identificationFields.map(f =>
+        f.id === fieldId ? { ...f, [property]: value } : f
+      )
+    }));
+  };
+
   // Render Progress Bar
   const renderProgressBar = () => {
     const steps = [
@@ -1380,29 +1380,54 @@ Responda APENAS com JSON válido neste formato:
             Campos de Identificação
           </h3>
           <p className="text-sm text-slate-500 mb-4">Defina quais informações coletar do cliente no início do formulário</p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {businessContext.identificationFields.map(field => (
-              <div key={field.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={field.enabled}
-                    onChange={() => handleToggleIdentificationField(field.id)}
-                    className="w-5 h-5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
-                  />
-                  <span className={field.enabled ? 'text-slate-800' : 'text-slate-400'}>{field.label}</span>
-                </div>
-                {field.enabled && (
-                  <label className="flex items-center gap-2 text-sm">
+              <div key={field.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <div className="flex items-center gap-4 mb-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={field.enabled}
+                      onChange={() => handleToggleIdentificationField(field.id)}
+                      className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                    />
+                    <span className="text-sm font-medium text-slate-700">Ativo</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={field.required}
                       onChange={() => handleToggleFieldRequired(field.id)}
-                      className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                      disabled={!field.enabled}
+                      className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500 disabled:opacity-50"
                     />
-                    <span className="text-slate-600">Obrigatório</span>
+                    <span className="text-sm font-medium text-slate-700">Obrigatório</span>
                   </label>
-                )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Título do campo</label>
+                    <input
+                      type="text"
+                      value={field.label}
+                      onChange={(e) => handleUpdateIdentificationField(field.id, 'label', e.target.value)}
+                      disabled={!field.enabled}
+                      placeholder="Ex: Nome"
+                      className="w-full rounded-lg border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Placeholder (exemplo)</label>
+                    <input
+                      type="text"
+                      value={field.placeholder || ''}
+                      onChange={(e) => handleUpdateIdentificationField(field.id, 'placeholder', e.target.value)}
+                      disabled={!field.enabled}
+                      placeholder="Ex: Digite seu nome"
+                      className="w-full rounded-lg border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                    />
+                  </div>
+                </div>
               </div>
             ))}
           </div>
