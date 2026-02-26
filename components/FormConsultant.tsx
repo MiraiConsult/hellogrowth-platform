@@ -1297,35 +1297,64 @@ Responda APENAS com JSON válido neste formato:
     setIsReviewChatProcessing(true);
 
     try {
-      const prompt = `Você é um consultor simpático e direto chamado "Consultor HelloGrowth". Fale de forma curta, amigável e humanizada, como se estivesse conversando com um amigo empreendedor. Use no máximo 3-4 frases curtas por resposta.
+      // Detectar se é um pedido de mudança
+      const changeKeywords = ['diminua', 'aumente', 'mude', 'altere', 'modifique', 'troque', 'adicione', 'inclua', 'remova', 'delete', 'tire', 'ajuste', 'corrija'];
+      const isChangeRequest = changeKeywords.some(keyword => message.toLowerCase().includes(keyword));
 
-CONTEXTO DO NEGÓCIO:
-- Tipo: ${businessContext.businessType}
+      const prompt = isChangeRequest 
+        ? `Você é um assistente que EXECUTA mudanças em perguntas de formulário.
+
+PERGUNTAS ATUAIS (JSON):
+${JSON.stringify(generatedQuestions.map(q => ({
+  text: q.text,
+  type: q.type,
+  options: q.options.map(opt => opt.text),
+  insight: q.insight
+})), null, 2)}
+
+PEDIDO DO USUÁRIO: "${message}"
+
+INSTRUÇÕES:
+1. Identifique qual pergunta o usuário quer modificar (ex: "pergunta 3" = índice 2)
+2. Faça a mudança solicitada (ex: "diminua os valores" = reduza os números nas opções)
+3. Retorne APENAS um JSON neste formato EXATO:
+{
+  "message": "Pronto! [explicação curta em 1 frase]",
+  "updated_questions": [array completo com TODAS as ${generatedQuestions.length} perguntas, incluindo a modificada]
+}
+
+EXEMPLO de resposta:
+{
+  "message": "Pronto! Diminuí os valores da pergunta 3 para faixas mais acessíveis.",
+  "updated_questions": [
+    {"text": "...", "type": "single_choice", "options": ["..."], "insight": "..."},
+    {"text": "...", "type": "single_choice", "options": ["..."], "insight": "..."},
+    {"text": "PERGUNTA MODIFICADA", "type": "single_choice", "options": ["Opção 1", "Opção 2"], "insight": "..."},
+    ...
+  ]
+}
+
+RETORNE APENAS O JSON. NADA MAIS.`
+        : `Você é o Consultor HelloGrowth. Responda de forma curta e amigável.
+
+CONTEXTO:
+- Negócio: ${businessContext.businessType}
 - Público: ${businessContext.targetAudience}
-- Dores: ${businessContext.mainPainPoints.join(', ')}
-- Objetivo: ${businessContext.formObjective === 'qualify' ? 'Qualificar leads' : businessContext.customObjective}
+- Critérios pedidos: ${businessContext.qualificationCriteria || 'Não especificado'}
 
-🎯 CRITÉRIOS INDISPENSÁVEIS QUE O USUÁRIO PEDIU:
-${businessContext.qualificationCriteria || 'Não especificado'}
+PERGUNTAS DO FORMULÁRIO:
+${generatedQuestions.map((q, idx) => `${idx + 1}. ${q.text}\nInsight: ${q.insight}`).join('\n\n')}
 
-PERGUNTAS ATUAIS DO FORMULÁRIO:
-${generatedQuestions.map((q, idx) => `${idx + 1}. ${q.text} (${q.type}) - Insight: ${q.insight}`).join('\n')}
+PERGUNTA DO USUÁRIO: ${message}
 
-PEDIDO DO USUÁRIO: ${message}
+REGRAS:
+- Responda em texto puro (NÃO use JSON)
+- Máximo 2-3 frases
+- NÃO comece com saudações
+- Se perguntarem sobre uma pergunta específica, explique citando o que o cliente escreveu
+- Se perguntarem sobre algo dos CRITÉRIOS que não foi incluído, reconheça e ofereça adicionar
 
-REGRAS IMPORTANTES:
-- NUNCA responda em JSON. Responda APENAS em texto puro, como uma conversa normal.
-- Seja CURTO e DIRETO. Máximo 2-3 frases.
-- Use tom amigável e simpático, como um consultor parceiro.
-- NÃO comece com "Olá!", "E aí!" ou outras saudações. Esta é uma conversa em andamento, vá direto ao ponto.
-- Se pedirem para explicar uma pergunta, explique de forma simples citando o que o cliente escreveu sobre o negócio (especialmente os CRITÉRIOS INDISPENSÁVEIS).
-- Se o usuário perguntar sobre algo que ESTÁ nos CRITÉRIOS INDISPENSÁVEIS mas NÃO foi incluído nas perguntas, reconheça o erro e ofereça adicionar.
-- Se pedirem para mudar/adicionar/remover perguntas, faça a mudança E explique brevemente o porquê. Neste caso, APÓS sua mensagem, adicione uma linha separada com exatamente este formato:
-[PERGUNTAS_ATUALIZADAS]
-(e então o JSON array das perguntas: [{ "text": "...", "type": "...", "options": [{"id": "...", "text": "..."}], "insight": "..." }])
-- Se NÃO for pedido de mudança, NÃO inclua [PERGUNTAS_ATUALIZADAS].
-
-Responda agora de forma curta e simpática:`;
+Responda:`;
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -1346,44 +1375,59 @@ Responda agora de forma curta e simpática:`;
       const data = await response.json();
       let rawText = data.response || '';
       
-      // Limpar possíveis blocos de código JSON que a IA pode retornar
+      console.log('[ReviewChat DEBUG] Resposta bruta:', rawText);
+      
+      // Limpar blocos de código
       rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       
-      // Tentar extrair mensagem se a IA retornou JSON mesmo assim
       let displayMessage = rawText;
       let updatedQuestions = null;
       
+      // Tentar parsear como JSON
       try {
         const parsed = JSON.parse(rawText);
-        // Se veio JSON, extrair só a mensagem
+        console.log('[ReviewChat DEBUG] JSON parseado:', parsed);
+        
         displayMessage = parsed.message || parsed.text || rawText;
+        
         if (parsed.updated_questions && Array.isArray(parsed.updated_questions)) {
+          console.log('[ReviewChat DEBUG] Perguntas atualizadas encontradas:', parsed.updated_questions.length);
           updatedQuestions = parsed.updated_questions;
         }
       } catch (e) {
-        // Não é JSON, verificar se tem [PERGUNTAS_ATUALIZADAS]
-        if (rawText.includes('[PERGUNTAS_ATUALIZADAS]')) {
-          const parts = rawText.split('[PERGUNTAS_ATUALIZADAS]');
-          displayMessage = parts[0].trim();
-          try {
-            updatedQuestions = JSON.parse(parts[1].trim());
-          } catch (e2) {
-            // Ignorar erro de parsing das perguntas
-          }
-        }
-        // Se não é JSON nem tem marcador, usar o texto puro (que é o ideal)
+        console.log('[ReviewChat DEBUG] Não é JSON, usando texto puro');
+        // Não é JSON, usar texto puro
       }
       
-      // Se a IA retornou perguntas atualizadas, aplicar
-      if (updatedQuestions && Array.isArray(updatedQuestions)) {
-        const mapped = updatedQuestions.map((q: any, idx: number) => ({
-          id: generatedQuestions[idx]?.id || `q_${Date.now()}_${idx}`,
-          text: q.text,
-          type: q.type,
-          options: q.options || [],
-          insight: q.insight || 'Atualizado via chat'
-        }));
+      // Aplicar perguntas atualizadas
+      if (updatedQuestions && Array.isArray(updatedQuestions) && updatedQuestions.length > 0) {
+        console.log('[ReviewChat DEBUG] Aplicando perguntas atualizadas...');
+        const mapped = updatedQuestions.map((q: any, idx: number) => {
+          // Processar opções
+          let processedOptions: QuestionOption[] = [];
+          if (q.options && Array.isArray(q.options)) {
+            processedOptions = q.options.map((opt: any, optIdx: number) => {
+              if (typeof opt === 'string') {
+                return { id: `opt_${idx}_${optIdx}`, text: opt };
+              } else if (opt.text) {
+                return { id: opt.id || `opt_${idx}_${optIdx}`, text: opt.text };
+              }
+              return { id: `opt_${idx}_${optIdx}`, text: String(opt) };
+            });
+          }
+          
+          return {
+            id: generatedQuestions[idx]?.id || `q_${Date.now()}_${idx}`,
+            text: q.text,
+            type: q.type || 'single_choice',
+            options: processedOptions,
+            insight: q.insight || generatedQuestions[idx]?.insight || 'Atualizado via chat'
+          };
+        });
+        
+        console.log('[ReviewChat DEBUG] Perguntas mapeadas:', mapped.length);
         setGeneratedQuestions(mapped);
+        displayMessage = displayMessage + ' ✅';
       }
 
       // Adicionar resposta da IA
