@@ -1029,10 +1029,10 @@ PASSO A PASSO DO SEU RACIOCÍNIO (Chain of Thought):
    - Façam o lead admitir a necessidade da solução (Necessidade de Solução).
    - Qualifiquem o lead sem parecer um interrogatório.
 
-REGRAS:
-1. **OBRIGATÓRIO**: Capture TODAS as informações dos CRITÉRIOS DE QUALIFICAÇÃO.
+REGRAS CRÍTICAS (NUNCA IGNORE):
+1. **OBRIGATÓRIO E INEGOCIÁVEL**: Para CADA item listado em "CRITÉRIOS DE QUALIFICAÇÃO", você DEVE criar pelo menos UMA pergunta que capture essa informação. Se o usuário pediu "poder aquisitório", DEVE haver uma pergunta sobre orçamento/investimento. Se pediu "urgência", DEVE haver pergunta sobre prazo. NÃO PULE NENHUM CRITÉRIO.
 2. ${selectedProductsInfo.length > 0 ? '**OBRIGATÓRIO**: Identifique se o cliente precisa dos PRODUTOS EM FOCO listados acima.' : 'Qualifique o lead para os produtos/serviços do negócio.'}
-3. As perguntas devem ser INDIRETAS e naturais.
+3. As perguntas devem ser INDIRETAS e naturais (não pergunte "qual seu orçamento?", pergunte "qual faixa de investimento você considera ideal?").
 4. Use o tom ${businessContext.formTone}.
 5. Varie os tipos: single_choice, multiple_choice, text.
 6. Forneça 3-5 opções relevantes para perguntas de escolha.
@@ -1305,6 +1305,9 @@ CONTEXTO DO NEGÓCIO:
 - Dores: ${businessContext.mainPainPoints.join(', ')}
 - Objetivo: ${businessContext.formObjective === 'qualify' ? 'Qualificar leads' : businessContext.customObjective}
 
+🎯 CRITÉRIOS INDISPENSÁVEIS QUE O USUÁRIO PEDIU:
+${businessContext.qualificationCriteria || 'Não especificado'}
+
 PERGUNTAS ATUAIS DO FORMULÁRIO:
 ${generatedQuestions.map((q, idx) => `${idx + 1}. ${q.text} (${q.type}) - Insight: ${q.insight}`).join('\n')}
 
@@ -1312,9 +1315,11 @@ PEDIDO DO USUÁRIO: ${message}
 
 REGRAS IMPORTANTES:
 - NUNCA responda em JSON. Responda APENAS em texto puro, como uma conversa normal.
-- Seja CURTO e DIRETO. Máximo 3-4 frases.
+- Seja CURTO e DIRETO. Máximo 2-3 frases.
 - Use tom amigável e simpático, como um consultor parceiro.
-- Se pedirem para explicar uma pergunta, explique de forma simples citando o que o cliente escreveu sobre o negócio.
+- NÃO comece com "Olá!", "E aí!" ou outras saudações. Esta é uma conversa em andamento, vá direto ao ponto.
+- Se pedirem para explicar uma pergunta, explique de forma simples citando o que o cliente escreveu sobre o negócio (especialmente os CRITÉRIOS INDISPENSÁVEIS).
+- Se o usuário perguntar sobre algo que ESTÁ nos CRITÉRIOS INDISPENSÁVEIS mas NÃO foi incluído nas perguntas, reconheça o erro e ofereça adicionar.
 - Se pedirem para mudar/adicionar/remover perguntas, faça a mudança E explique brevemente o porquê. Neste caso, APÓS sua mensagem, adicione uma linha separada com exatamente este formato:
 [PERGUNTAS_ATUALIZADAS]
 (e então o JSON array das perguntas: [{ "text": "...", "type": "...", "options": [{"id": "...", "text": "..."}], "insight": "..." }])
@@ -1426,8 +1431,8 @@ Perguntas geradas: ${generatedQuestions.length}
 
 REGRAS:
 - Responda APENAS em texto puro. NUNCA use JSON.
-- Máximo 4 frases curtas.
-- Comece com "Olá!" ou "E aí!"
+- Máximo 3-4 frases curtas.
+- Comece com uma saudação amigável ("Olá!" ou "E aí! 👋")
 - Mencione brevemente o negócio e diga que criou ${generatedQuestions.length} perguntas estratégicas.
 - Termine convidando a perguntar sobre qualquer pergunta ou pedir ajustes.
 - Tom: amigo consultor, leve e simpático.
