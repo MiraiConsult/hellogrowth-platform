@@ -1393,12 +1393,19 @@ Responda em formato JSON:
 
   // Mensagem inicial do chat de ajuste quando entra na tela de revisão
   useEffect(() => {
+    console.log('[ReviewChat DEBUG] useEffect disparado:', {
+      currentStep,
+      reviewChatMessagesLength: reviewChatMessages.length,
+      generatedQuestionsLength: generatedQuestions.length
+    });
     if (currentStep === 'review' && reviewChatMessages.length === 0 && generatedQuestions.length > 0) {
+      console.log('[ReviewChat DEBUG] Condições atendidas! Chamando generateStrategyExplanation...');
       generateStrategyExplanation();
     }
-  }, [currentStep, generatedQuestions.length]);
+  }, [currentStep, reviewChatMessages.length, generatedQuestions.length]);
 
   const generateStrategyExplanation = async () => {
+    console.log('[ReviewChat DEBUG] Função generateStrategyExplanation iniciada');
     setIsReviewChatProcessing(true);
     try {
       const prompt = `Você é um consultor de estratégia de vendas. Analise o contexto abaixo e explique de forma didática a estratégia que você usou para criar as perguntas.
