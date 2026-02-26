@@ -1432,22 +1432,34 @@ INSTRUÇÕES:
 
 Responda APENAS com o texto da mensagem (sem JSON, sem formatação extra).`;
 
+      console.log('[ReviewChat DEBUG] Preparando chamada para /api/gemini...');
+      console.log('[ReviewChat DEBUG] Prompt:', prompt.substring(0, 200) + '...');
+      
       const response = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt })
       });
+      
+      console.log('[ReviewChat DEBUG] Resposta recebida. Status:', response.status);
 
       if (response.ok) {
+        console.log('[ReviewChat DEBUG] Resposta OK! Parseando JSON...');
         const data = await response.json();
+        console.log('[ReviewChat DEBUG] Dados recebidos:', data);
+        
         const welcomeMessage: ChatMessage = {
           id: `msg_${Date.now()}`,
           role: 'assistant',
           content: data.text,
           timestamp: new Date()
         };
+        console.log('[ReviewChat DEBUG] Mensagem criada:', welcomeMessage);
+        console.log('[ReviewChat DEBUG] Atualizando estado reviewChatMessages...');
         setReviewChatMessages([welcomeMessage]);
+        console.log('[ReviewChat DEBUG] Estado atualizado com sucesso!');
       } else {
+        console.log('[ReviewChat DEBUG] Resposta não OK. Usando fallback...');
         // Fallback para mensagem padrão se a IA falhar
         const fallbackMessage: ChatMessage = {
           id: `msg_${Date.now()}`,
@@ -1458,6 +1470,7 @@ Responda APENAS com o texto da mensagem (sem JSON, sem formatação extra).`;
         setReviewChatMessages([fallbackMessage]);
       }
     } catch (error) {
+      console.error('[ReviewChat DEBUG] ERRO capturado:', error);
       console.error('Erro ao gerar explicação da estratégia:', error);
       // Fallback
       const fallbackMessage: ChatMessage = {
