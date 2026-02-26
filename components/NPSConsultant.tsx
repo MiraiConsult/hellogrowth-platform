@@ -1136,16 +1136,7 @@ Responda:`;
                       NPS
                     </span>
                   )}
-                  {question.conditional && (
-                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                      question.conditional === 'promoter' ? 'bg-blue-100 text-blue-600' : 
-                      question.conditional === 'passive' ? 'bg-yellow-100 text-yellow-700' : 
-                      'bg-red-100 text-red-600'
-                    }`}>
-                      {question.conditional === 'promoter' ? 'Promotores' : 
-                       question.conditional === 'passive' ? 'Passivos' : 'Detratores'}
-                    </span>
-                  )}
+
                 </div>
                 {question.type !== 'nps' && (
                   <div className="flex gap-2">
