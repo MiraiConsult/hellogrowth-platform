@@ -1298,8 +1298,16 @@ Responda APENAS com JSON válido neste formato:
 
     try {
       // Detectar se é um pedido de mudança
-      const changeKeywords = ['diminua', 'aumente', 'mude', 'altere', 'modifique', 'troque', 'adicione', 'inclua', 'remova', 'delete', 'tire', 'ajuste', 'corrija'];
+      const changeKeywords = [
+        'diminua', 'aumente', 'mude', 'altere', 'modifique', 'troque', 
+        'adicione', 'inclua', 'remova', 'delete', 'tire', 'ajuste', 'corrija',
+        'coloque', 'insira', 'acrescente', 'ponha', 'bote', 'crie',
+        'exclua', 'apague', 'substitua', 'reescreva', 'refatore'
+      ];
       const isChangeRequest = changeKeywords.some(keyword => message.toLowerCase().includes(keyword));
+      
+      console.log('[ReviewChat DEBUG] Mensagem:', message);
+      console.log('[ReviewChat DEBUG] É pedido de mudança?', isChangeRequest);
 
       const prompt = isChangeRequest 
         ? `Você é um assistente que EXECUTA mudanças em perguntas de formulário.
@@ -1314,27 +1322,31 @@ ${JSON.stringify(generatedQuestions.map(q => ({
 
 PEDIDO DO USUÁRIO: "${message}"
 
-INSTRUÇÕES:
-1. Identifique qual pergunta o usuário quer modificar (ex: "pergunta 3" = índice 2)
-2. Faça a mudança solicitada (ex: "diminua os valores" = reduza os números nas opções)
-3. Retorne APENAS um JSON neste formato EXATO:
-{
-  "message": "Pronto! [explicação curta em 1 frase]",
-  "updated_questions": [array completo com TODAS as ${generatedQuestions.length} perguntas, incluindo a modificada]
-}
+INSTRUÇÕES CRÍTICAS:
+1. Identifique qual pergunta modificar (ex: "pergunta 3" = índice 2 do array)
+2. Faça a mudança EXATA solicitada:
+   - "diminua valores" = reduza números nas opções
+   - "adicione alternativa" = adicione novo item no array options
+   - "coloque alternativa com valor 2000" = adicione "R$ 2.000" nas options
+   - "remova pergunta" = retire do array
+3. Retorne OBRIGATORIAMENTE um JSON válido neste formato:
 
-EXEMPLO de resposta:
 {
-  "message": "Pronto! Diminuí os valores da pergunta 3 para faixas mais acessíveis.",
+  "message": "Pronto! [1 frase curta explicando o que fez]",
   "updated_questions": [
-    {"text": "...", "type": "single_choice", "options": ["..."], "insight": "..."},
-    {"text": "...", "type": "single_choice", "options": ["..."], "insight": "..."},
-    {"text": "PERGUNTA MODIFICADA", "type": "single_choice", "options": ["Opção 1", "Opção 2"], "insight": "..."},
-    ...
+    // TODAS as ${generatedQuestions.length} perguntas aqui, incluindo a modificada
+    {"text": "pergunta 1", "type": "single_choice", "options": ["op1", "op2"], "insight": "..."},
+    {"text": "pergunta 2", "type": "single_choice", "options": ["op1", "op2"], "insight": "..."},
+    {"text": "pergunta 3 MODIFICADA", "type": "single_choice", "options": ["op1", "op2", "op3 NOVA"], "insight": "..."},
+    // ... resto das perguntas
   ]
 }
 
-RETORNE APENAS O JSON. NADA MAIS.`
+ATENÇÃO: 
+- NÃO escreva texto antes ou depois do JSON
+- NÃO use markdown (```json)
+- NÃO explique, apenas RETORNE O JSON
+- O array "updated_questions" DEVE ter ${generatedQuestions.length} itens`
         : `Você é o Consultor HelloGrowth. Responda de forma curta e amigável.
 
 CONTEXTO:
