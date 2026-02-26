@@ -215,9 +215,13 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       setSelectedGameId(stableExistingForm.game_id || null);
       
       // Carregar campos de identificação salvos
-      if (stableExistingForm.identification_fields && Array.isArray(stableExistingForm.identification_fields) && stableExistingForm.identification_fields.length > 0) {
-        const loadedFields = stableExistingForm.identification_fields.map((field: any) => ({
-          id: field.id || field.field || 'unknown',
+      // CORREÇÃO: O banco salva como initial_fields, o MainApp mapeia para initialFields
+      // O campo identification_fields NÃO EXISTE no objeto passado - por isso nunca carregava!
+      const savedFields = stableExistingForm.initialFields || stableExistingForm.initial_fields || stableExistingForm.identification_fields;
+      
+      if (savedFields && Array.isArray(savedFields) && savedFields.length > 0) {
+        const loadedFields = savedFields.map((field: any) => ({
+          id: field.field || field.id || 'unknown',
           label: field.label || field.name || '',
           type: field.type || 'text',
           enabled: field.enabled !== undefined ? field.enabled : true,
@@ -225,23 +229,28 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
           placeholder: field.placeholder || `Digite seu ${(field.label || '').toLowerCase()}`
         }));
         
-        setBusinessContext(prev => ({
-          ...prev,
-          identificationFields: loadedFields
-        }));
-      }
-      
-      // Carregar contexto se existir (mas preservar identificationFields já carregados)
-      if (stableExistingForm.ai_context?.businessContext) {
-        setBusinessContext(prev => {
-          const savedIdentificationFields = prev.identificationFields;
+        // Carregar contexto se existir (mas preservar identificationFields do banco)
+        if (stableExistingForm.ai_context?.businessContext) {
           const { identificationFields: _, ...contextWithoutFields } = stableExistingForm.ai_context.businessContext;
-          return {
+          setBusinessContext(prev => ({
             ...prev,
             ...contextWithoutFields,
-            identificationFields: savedIdentificationFields // Preservar os campos já carregados
-          };
-        });
+            identificationFields: loadedFields
+          }));
+        } else {
+          setBusinessContext(prev => ({
+            ...prev,
+            identificationFields: loadedFields
+          }));
+        }
+      } else {
+        // Sem campos salvos - carregar contexto normalmente
+        if (stableExistingForm.ai_context?.businessContext) {
+          setBusinessContext(prev => ({
+            ...prev,
+            ...stableExistingForm.ai_context.businessContext
+          }));
+        }
       }
     }
   }, [stableExistingForm]);
@@ -1107,7 +1116,14 @@ Responda APENAS com JSON válido neste formato:
       ...(stableExistingForm?.id && { id: stableExistingForm.id }), // Mantém ID se for edição
       name: formName || `Formulário ${new Date().toLocaleDateString('pt-BR')}`,
       description: businessContext.customObjective || businessContext.businessDescription || 'Formulário de qualificação de leads',
-      identification_fields: businessContext.identificationFields.filter(f => f.enabled),
+      // CORREÇÃO: Enviar todos os campos no formato do banco (com field em vez de id)
+      identification_fields: businessContext.identificationFields.map(f => ({
+        field: f.id,
+        label: f.label,
+        placeholder: f.placeholder || '',
+        required: f.required,
+        enabled: f.enabled
+      })),
       questions: generatedQuestions.map(q => ({
         id: q.id,
         text: q.text,
