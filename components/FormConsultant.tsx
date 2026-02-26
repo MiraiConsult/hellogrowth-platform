@@ -155,6 +155,12 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [availableGames, setAvailableGames] = useState<any[]>([]);
   
+  // Estados para o Chat de Ajuste na tela de revisão
+  const [reviewChatMessages, setReviewChatMessages] = useState<ChatMessage[]>([]);
+  const [reviewChatInput, setReviewChatInput] = useState('');
+  const [isReviewChatProcessing, setIsReviewChatProcessing] = useState(false);
+  const [showReviewChat, setShowReviewChat] = useState(true);
+  
   // Estabilizar existingForm para evitar re-renders
   const stableExistingForm = useMemo(() => existingForm, [existingForm?.id]);
   
@@ -1029,7 +1035,11 @@ REGRAS:
 4. Use o tom ${businessContext.formTone}.
 5. Varie os tipos: single_choice, multiple_choice, text.
 6. Forneça 3-5 opções relevantes para perguntas de escolha.
-7. O campo 'insight' deve explicar a ESTRATÉGIA DE VENDAS por trás da pergunta.
+7. **CRUCIAL**: O campo 'insight' deve:
+   - Citar ESPECIFICAMENTE o que o cliente escreveu (ex: "Você mencionou que seu público tem 'medo de agulhas'...")
+   - Explicar como a pergunta ataca essa dor/objeção específica
+   - Revelar a estratégia de vendas por trás da pergunta
+   - Ser didático e educativo, como se estivesse ensinando o dono do negócio
 
 Responda APENAS com JSON válido neste formato:
 {
@@ -1038,7 +1048,7 @@ Responda APENAS com JSON válido neste formato:
       "text": "Texto da pergunta",
       "type": "single_choice",
       "options": ["Opção 1", "Opção 2", "Opção 3"],
-      "insight": "Estratégia de vendas: Por que esta pergunta é crucial para o fechamento?"
+      "insight": "Você mencionou que [citação do input do cliente]. Esta pergunta ataca essa dor porque [explicação estratégica]. Isso facilita o fechamento pois [resultado esperado]."
     }
   ]
 }`;
@@ -1270,6 +1280,191 @@ Responda APENAS com JSON válido neste formato:
     }));
   };
 
+  // Função para processar mensagens do Chat de Ajuste
+  const handleReviewChatMessage = async (message: string) => {
+    if (!message.trim()) return;
+
+    // Adiciona mensagem do usuário
+    const userMessage: ChatMessage = {
+      id: `msg_${Date.now()}`,
+      role: 'user',
+      content: message,
+      timestamp: new Date()
+    };
+    setReviewChatMessages(prev => [...prev, userMessage]);
+    setReviewChatInput('');
+    setIsReviewChatProcessing(true);
+
+    try {
+      const prompt = `Você é um consultor de estratégia de vendas ajudando a refinar um formulário.
+
+CONTEXTO DO NEGÓCIO:
+- Tipo: ${businessContext.businessType}
+- Público: ${businessContext.targetAudience}
+- Dores: ${businessContext.mainPainPoints.join(', ')}
+- Objetivo: ${businessContext.formObjective === 'qualify' ? 'Qualificar leads' : businessContext.customObjective}
+- Critérios de Qualificação: ${businessContext.qualificationCriteria || 'Não especificado'}
+
+PERGUNTAS ATUAIS:
+${generatedQuestions.map((q, idx) => `
+${idx + 1}. ${q.text}
+   Tipo: ${q.type}
+   Insight: ${q.insight}
+   Opções: ${q.options.map(o => o.text).join(', ')}`).join('\n')}
+
+SOLICITAÇÃO DO USUÁRIO:
+${message}
+
+INSTRUÇÕES:
+- Se o usuário pedir explicação sobre uma pergunta, cite ESPECIFICAMENTE o que ele escreveu no contexto (dores, público, etc.) e explique a estratégia de vendas por trás da pergunta.
+- Se o usuário pedir para mudar/adicionar/remover perguntas, retorne o JSON completo das perguntas atualizadas.
+- Se for apenas uma conversa, responda de forma educativa e estratégica.
+- Seja didático e ensine o dono do negócio sobre estratégia de vendas.
+
+Responda em formato JSON:
+{
+  "type": "explanation" | "update_questions" | "conversation",
+  "message": "Sua resposta aqui (pode usar markdown)",
+  "updated_questions": [] // Apenas se type === "update_questions". Formato: [{ text, type, options: [{ id, text }], insight }]
+}`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error('Erro na resposta da IA');
+      }
+
+      const data = await response.json();
+      let aiResponse;
+      
+      try {
+        aiResponse = JSON.parse(data.text);
+      } catch (e) {
+        // Se não conseguir parsear, trata como conversa simples
+        aiResponse = {
+          type: 'conversation',
+          message: data.text
+        };
+      }
+
+      // Se a IA retornou perguntas atualizadas, aplicar
+      if (aiResponse.type === 'update_questions' && aiResponse.updated_questions && Array.isArray(aiResponse.updated_questions)) {
+        const updatedQuestions = aiResponse.updated_questions.map((q: any, idx: number) => ({
+          id: generatedQuestions[idx]?.id || `q_${Date.now()}_${idx}`,
+          text: q.text,
+          type: q.type,
+          options: q.options || [],
+          insight: q.insight || 'Atualizado via chat'
+        }));
+        setGeneratedQuestions(updatedQuestions);
+      }
+
+      // Adicionar resposta da IA
+      const assistantMessage: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: aiResponse.message,
+        timestamp: new Date()
+      };
+      setReviewChatMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Erro ao processar mensagem do chat:', error);
+      const errorMessage: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.',
+        timestamp: new Date()
+      };
+      setReviewChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsReviewChatProcessing(false);
+    }
+  };
+
+  // Mensagem inicial do chat de ajuste quando entra na tela de revisão
+  useEffect(() => {
+    if (currentStep === 'review' && reviewChatMessages.length === 0 && generatedQuestions.length > 0) {
+      generateStrategyExplanation();
+    }
+  }, [currentStep, generatedQuestions.length]);
+
+  const generateStrategyExplanation = async () => {
+    setIsReviewChatProcessing(true);
+    try {
+      const prompt = `Você é um consultor de estratégia de vendas. Analise o contexto abaixo e explique de forma didática a estratégia que você usou para criar as perguntas.
+
+CONTEXTO DO NEGÓCIO:
+- Tipo: ${businessContext.businessType}
+- Público: ${businessContext.targetAudience}
+- Dores mencionadas: ${businessContext.mainPainPoints.join(', ')}
+- Objetivo: ${businessContext.formObjective === 'qualify' ? 'Qualificar leads' : businessContext.customObjective}
+- Critérios de Qualificação: ${businessContext.qualificationCriteria || 'Não especificado'}
+
+PERGUNTAS GERADAS:
+${generatedQuestions.map((q, idx) => `${idx + 1}. ${q.text}`).join('\n')}
+
+INSTRUÇÕES:
+1. Comece com uma saudação amigável
+2. Cite ESPECIFICAMENTE o que o cliente mencionou (ex: "Você mencionou que seu público tem [dor X]...")
+3. Explique qual framework você usou (SPIN, BANT, etc.)
+4. Explique a estratégia geral: qual o "fio condutor" das perguntas?
+5. Termine dizendo que você pode explicar cada pergunta individualmente ou fazer ajustes
+6. Seja didático e educativo
+7. Use emojis para deixar a mensagem mais amigável
+8. Máximo de 200 palavras
+
+Responda APENAS com o texto da mensagem (sem JSON, sem formatação extra).`;
+
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const welcomeMessage: ChatMessage = {
+          id: `msg_${Date.now()}`,
+          role: 'assistant',
+          content: data.text,
+          timestamp: new Date()
+        };
+        setReviewChatMessages([welcomeMessage]);
+      } else {
+        // Fallback para mensagem padrão se a IA falhar
+        const fallbackMessage: ChatMessage = {
+          id: `msg_${Date.now()}`,
+          role: 'assistant',
+          content: `Olá! 👋 Sou seu Consultor de Estratégia de Vendas.\n\nEstou aqui para:\n• Explicar o motivo de cada pergunta gerada\n• Ajustar perguntas em tempo real\n• Sugerir melhorias estratégicas\n\nPergunte qualquer coisa!`,
+          timestamp: new Date()
+        };
+        setReviewChatMessages([fallbackMessage]);
+      }
+    } catch (error) {
+      console.error('Erro ao gerar explicação da estratégia:', error);
+      // Fallback
+      const fallbackMessage: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: `Olá! 👋 Sou seu Consultor de Estratégia de Vendas.\n\nEstou aqui para explicar cada pergunta e fazer ajustes. Pergunte qualquer coisa!`,
+        timestamp: new Date()
+      };
+      setReviewChatMessages([fallbackMessage]);
+    } finally {
+      setIsReviewChatProcessing(false);
+    }
+  };
+
   const handleUpdateIdentificationField = (fieldId: string, property: 'label' | 'placeholder', value: string) => {
     setBusinessContext(prev => ({
       ...prev,
@@ -1394,8 +1589,10 @@ Responda APENAS com JSON válido neste formato:
 
   // Render Review Screen with full editing capabilities
   const renderReviewScreen = () => (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="max-w-4xl mx-auto">
+    <div className="flex-1 flex gap-4 p-6 overflow-hidden">
+      {/* Coluna Principal - Perguntas */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto">
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Revise e edite suas perguntas</h2>
         <p className="text-slate-500 mb-6">Você pode editar textos, modificar opções, mudar tipos e adicionar novas perguntas</p>
         
@@ -1728,7 +1925,98 @@ Responda APENAS com JSON válido neste formato:
           <CheckCircle size={24} />
           Salvar Formulário
         </button>
+        </div>
       </div>
+
+      {/* Sidebar - Chat de Ajuste */}
+      {showReviewChat && (
+        <div className="w-96 bg-white rounded-xl border border-slate-200 flex flex-col shadow-lg">
+          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-emerald-50 to-teal-50">
+            <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+              <Bot size={20} className="text-emerald-500" />
+              Consultor IA
+            </h3>
+            <button onClick={() => setShowReviewChat(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Mensagens do Chat */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {reviewChatMessages.length === 0 ? (
+              <div className="text-center text-slate-500 text-sm py-8">
+                <Lightbulb size={32} className="mx-auto mb-2 text-amber-400" />
+                <p className="font-medium mb-2">Pergunte sobre as perguntas geradas!</p>
+                <div className="text-xs text-left mt-4 space-y-2 bg-slate-50 p-3 rounded-lg">
+                  <p className="font-semibold text-slate-700">Exemplos:</p>
+                  <ul className="space-y-1 text-slate-600">
+                    <li>• "Por que a pergunta 2 foi criada?"</li>
+                    <li>• "Mude a pergunta 3 para um tom mais amigável"</li>
+                    <li>• "Adicione uma pergunta sobre orçamento"</li>
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              reviewChatMessages.map(msg => (
+                <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] p-3 rounded-lg shadow-sm ${
+                    msg.role === 'user' 
+                      ? 'bg-emerald-500 text-white' 
+                      : 'bg-slate-100 text-slate-800'
+                  }`}>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  </div>
+                </div>
+              ))
+            )}
+            {isReviewChatProcessing && (
+              <div className="flex gap-2 justify-start">
+                <div className="bg-slate-100 p-3 rounded-lg shadow-sm">
+                  <Loader2 size={16} className="animate-spin text-emerald-500" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input do Chat */}
+          <div className="p-4 border-t border-slate-200 bg-slate-50">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={reviewChatInput}
+                onChange={(e) => setReviewChatInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && reviewChatInput.trim()) {
+                    e.preventDefault();
+                    handleReviewChatMessage(reviewChatInput);
+                  }
+                }}
+                placeholder="Pergunte ou solicite ajustes..."
+                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                disabled={isReviewChatProcessing}
+              />
+              <button
+                onClick={() => handleReviewChatMessage(reviewChatInput)}
+                disabled={!reviewChatInput.trim() || isReviewChatProcessing}
+                className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Send size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Botão para reabrir chat se fechado */}
+      {!showReviewChat && (
+        <button
+          onClick={() => setShowReviewChat(true)}
+          className="fixed bottom-6 right-6 p-4 bg-emerald-500 text-white rounded-full shadow-lg hover:bg-emerald-600 transition-all hover:scale-110"
+          title="Abrir Consultor IA"
+        >
+          <Bot size={24} />
+        </button>
+      )}
     </div>
   );
 
