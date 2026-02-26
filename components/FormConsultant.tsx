@@ -1349,16 +1349,16 @@ Responda em formato JSON:
       let aiResponse;
       
       try {
-        aiResponse = JSON.parse(data.text);
+        aiResponse = JSON.parse(data.response);
         // Garantir que message sempre tenha valor
         if (!aiResponse.message) {
-          aiResponse.message = aiResponse.text || data.text || 'Resposta recebida.';
+          aiResponse.message = aiResponse.text || data.response || 'Resposta recebida.';
         }
       } catch (e) {
         // Se não conseguir parsear, trata como conversa simples
         aiResponse = {
           type: 'conversation',
-          message: data.text || 'Resposta recebida.'
+          message: data.response || 'Resposta recebida.'
         };
       }
 
@@ -1378,7 +1378,7 @@ Responda em formato JSON:
       const assistantMessage: ChatMessage = {
         id: `msg_${Date.now()}`,
         role: 'assistant',
-        content: aiResponse.message || aiResponse.text || data.text || 'Resposta recebida.',
+        content: aiResponse.message || aiResponse.text || data.response || 'Resposta recebida.',
         timestamp: new Date()
       };
       console.log('[ReviewChat] Resposta da IA:', assistantMessage.content);
@@ -1453,7 +1453,7 @@ Responda APENAS com o texto da mensagem (sem JSON, sem formatação extra).`;
         const welcomeMessage: ChatMessage = {
           id: `msg_${Date.now()}`,
           role: 'assistant',
-          content: data.text,
+          content: data.response || data.text || 'Erro ao obter resposta.',
           timestamp: new Date()
         };
         console.log('[ReviewChat DEBUG] Mensagem criada:', welcomeMessage);
