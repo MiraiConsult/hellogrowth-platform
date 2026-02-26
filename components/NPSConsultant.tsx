@@ -102,6 +102,13 @@ export default function NPSConsultant({
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState(0);
   
+  // Estados para o Chat de Ajuste na tela de revisão
+  const [reviewChatMessages, setReviewChatMessages] = useState<ChatMessage[]>([]);
+  const [reviewChatInput, setReviewChatInput] = useState('');
+  const [isReviewChatProcessing, setIsReviewChatProcessing] = useState(false);
+  const [showReviewChat, setShowReviewChat] = useState(true);
+  const strategyExplanationGenerated = useRef(false);
+  
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const hasInitialized = useRef(false);
@@ -112,6 +119,15 @@ export default function NPSConsultant({
       loadAvailableGames();
     }
   }, [supabase, tenantId]);
+
+  // Mensagem inicial do chat de ajuste quando entra na tela de revisão
+  useEffect(() => {
+    if (currentStep === 'review' && !strategyExplanationGenerated.current && generatedQuestions.length > 0) {
+      console.log('[NPSReviewChat] Gerando explicação estratégica...');
+      strategyExplanationGenerated.current = true;
+      generateStrategyExplanation();
+    }
+  }, [currentStep, generatedQuestions.length]);
 
   const loadAvailableGames = async () => {
     try {
@@ -659,6 +675,276 @@ REGRAS:
       setCurrentStep('evaluation_points');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Função para gerar explicação estratégica inicial no chat de revisão
+  const generateStrategyExplanation = async () => {
+    console.log('[NPSReviewChat DEBUG] Função generateStrategyExplanation iniciada');
+    setIsReviewChatProcessing(true);
+    try {
+      const prompt = `Você é o Consultor HelloGrowth, um consultor simpático e direto. Faça uma saudação curta e amigável para o usuário que acabou de gerar uma pesquisa NPS.
+
+Contexto da pesquisa:
+Objetivo: ${objective}
+Tom: ${tone}
+Pontos de avaliação: ${evaluationPoints.join(', ')}
+Perguntas geradas: ${generatedQuestions.length}
+
+REGRAS:
+- Responda APENAS em texto puro. NUNCA use JSON.
+- Máximo 3-4 frases curtas.
+- Comece com uma saudação amigável ("Olá!" ou "E aí! 👋")
+- Mencione brevemente que criou ${generatedQuestions.length} perguntas usando Loyalty Drivers (fatores que influenciam a lealdade do cliente).
+- Termine convidando a perguntar sobre qualquer pergunta ou pedir ajustes.
+- Tom: amigo consultor, leve e simpático.
+- Use 1-2 emojis no máximo.
+
+Responda agora:`;
+
+      console.log('[NPSReviewChat DEBUG] Preparando chamada para /api/gemini...');
+      
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt })
+      });
+      
+      console.log('[NPSReviewChat DEBUG] Resposta recebida. Status:', response.status);
+
+      if (response.ok) {
+        console.log('[NPSReviewChat DEBUG] Resposta OK! Parseando JSON...');
+        const data = await response.json();
+        console.log('[NPSReviewChat DEBUG] Dados recebidos:', data);
+        
+        let welcomeText = data.response || data.text || '';
+        // Limpar caso a IA retorne JSON mesmo assim
+        welcomeText = welcomeText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        try {
+          const parsed = JSON.parse(welcomeText);
+          welcomeText = parsed.message || parsed.text || welcomeText;
+        } catch (e) {
+          // Já é texto puro, perfeito!
+        }
+        const welcomeMessage: ChatMessage = {
+          id: `msg_${Date.now()}`,
+          role: 'assistant',
+          content: welcomeText || 'Olá! 👋 Sou seu Consultor de Estratégia NPS. Pergunte sobre qualquer pergunta ou peça ajustes!',
+          timestamp: new Date()
+        };
+        console.log('[NPSReviewChat DEBUG] Mensagem de boas-vindas criada:', welcomeMessage.content);
+        setReviewChatMessages([welcomeMessage]);
+      } else {
+        console.error('[NPSReviewChat DEBUG] Resposta com erro:', response.status);
+        // Fallback
+        const fallbackMessage: ChatMessage = {
+          id: `msg_${Date.now()}`,
+          role: 'assistant',
+          content: `Olá! 👋 Sou seu Consultor de Estratégia NPS.\n\nEstou aqui para explicar cada pergunta e fazer ajustes. Pergunte qualquer coisa!`,
+          timestamp: new Date()
+        };
+        setReviewChatMessages([fallbackMessage]);
+      }
+    } catch (error) {
+      console.error('[NPSReviewChat DEBUG] ERRO capturado:', error);
+      console.error('Erro ao gerar explicação da estratégia:', error);
+      // Fallback
+      const fallbackMessage: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: `Olá! 👋 Sou seu Consultor de Estratégia NPS.\n\nEstou aqui para explicar cada pergunta e fazer ajustes. Pergunte qualquer coisa!`,
+        timestamp: new Date()
+      };
+      setReviewChatMessages([fallbackMessage]);
+    } finally {
+      setIsReviewChatProcessing(false);
+    }
+  };
+
+  // Função para processar mensagens do Chat de Ajuste
+  const handleReviewChatMessage = async (message: string) => {
+    if (!message.trim()) return;
+
+    // Adiciona mensagem do usuário
+    const userMessage: ChatMessage = {
+      id: `msg_${Date.now()}`,
+      role: 'user',
+      content: message,
+      timestamp: new Date()
+    };
+    setReviewChatMessages(prev => [...prev, userMessage]);
+    setReviewChatInput('');
+    setIsReviewChatProcessing(true);
+
+    try {
+      // Detectar se é um pedido de mudança
+      const changeKeywords = [
+        'diminua', 'aumente', 'mude', 'altere', 'modifique', 'troque', 
+        'adicione', 'inclua', 'remova', 'delete', 'tire', 'ajuste', 'corrija',
+        'coloque', 'insira', 'acrescente', 'ponha', 'bote', 'crie',
+        'exclua', 'apague', 'substitua', 'reescreva', 'refatore'
+      ];
+      const isChangeRequest = changeKeywords.some(keyword => message.toLowerCase().includes(keyword));
+      
+      console.log('[NPSReviewChat DEBUG] Mensagem:', message);
+      console.log('[NPSReviewChat DEBUG] É pedido de mudança?', isChangeRequest);
+
+      const prompt = isChangeRequest 
+        ? `Você é um assistente que EXECUTA mudanças em perguntas de pesquisa NPS.
+
+PERGUNTAS ATUAIS (JSON):
+${JSON.stringify(generatedQuestions.map(q => ({
+  text: q.text,
+  type: q.type,
+  options: q.options.map(opt => opt.text),
+  insight: q.insight,
+  conditional: q.conditional
+})), null, 2)}
+
+PEDIDO DO USUÁRIO: "${message}"
+
+INSTRUÇÕES CRÍTICAS:
+1. Identifique qual pergunta modificar (ex: "pergunta 3" = índice 2 do array)
+2. Faça a mudança EXATA solicitada:
+   - "diminua valores" = reduza números nas opções
+   - "adicione alternativa" = adicione novo item no array options
+   - "coloque alternativa com valor 2000" = adicione "R$ 2.000" nas options
+   - "remova pergunta" = retire do array
+3. Retorne OBRIGATORIAMENTE um JSON válido neste formato:
+
+{
+  "message": "Pronto! [1 frase curta explicando o que fez]",
+  "updated_questions": [
+    // TODAS as ${generatedQuestions.length} perguntas aqui, incluindo a modificada
+    {"text": "pergunta 1", "type": "single_choice", "options": ["op1", "op2"], "insight": "...", "conditional": "promoter"},
+    {"text": "pergunta 2", "type": "text", "options": [], "insight": "..."},
+    {"text": "pergunta 3 MODIFICADA", "type": "single_choice", "options": ["op1", "op2", "op3 NOVA"], "insight": "..."},
+    // ... resto das perguntas
+  ]
+}
+
+ATENÇÃO: 
+- NÃO escreva texto antes ou depois do JSON
+- NÃO use markdown (\`\`\`json)
+- NÃO explique, apenas RETORNE O JSON
+- O array "updated_questions" DEVE ter ${generatedQuestions.length} itens
+- Mantenha o campo "conditional" se existir (promoter, passive, detractor ou undefined)`
+        : `Você é o Consultor HelloGrowth. Responda de forma curta e amigável.
+
+CONTEXTO:
+- Objetivo: ${objective}
+- Tom: ${tone}
+- Pontos de avaliação: ${evaluationPoints.join(', ')}
+
+PERGUNTAS DO FORMULÁRIO:
+${generatedQuestions.map((q, idx) => `${idx + 1}. ${q.text}${q.conditional ? ` [${q.conditional}]` : ''}\nInsight: ${q.insight}`).join('\n\n')}
+
+PERGUNTA DO USUÁRIO: ${message}
+
+REGRAS:
+- Responda em texto puro (NÃO use JSON)
+- Máximo 2-3 frases
+- NÃO comece com saudações
+- Se perguntarem sobre uma pergunta específica, explique citando os pontos de avaliação e Loyalty Drivers
+- Se perguntarem sobre algo que não foi incluído, reconheça e ofereça adicionar
+
+Responda:`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error('Erro na resposta da IA');
+      }
+
+      const data = await response.json();
+      let rawText = data.response || '';
+      
+      console.log('[NPSReviewChat DEBUG] Resposta bruta:', rawText);
+      
+      // Limpar blocos de código
+      rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
+      let displayMessage = rawText;
+      let updatedQuestions = null;
+      
+      // Tentar parsear como JSON
+      try {
+        const parsed = JSON.parse(rawText);
+        console.log('[NPSReviewChat DEBUG] JSON parseado:', parsed);
+        
+        displayMessage = parsed.message || parsed.text || rawText;
+        
+        if (parsed.updated_questions && Array.isArray(parsed.updated_questions)) {
+          console.log('[NPSReviewChat DEBUG] Perguntas atualizadas encontradas:', parsed.updated_questions.length);
+          updatedQuestions = parsed.updated_questions;
+        }
+      } catch (e) {
+        console.log('[NPSReviewChat DEBUG] Não é JSON, usando texto puro');
+        // Não é JSON, usar texto puro
+      }
+      
+      // Aplicar perguntas atualizadas
+      if (updatedQuestions && Array.isArray(updatedQuestions) && updatedQuestions.length > 0) {
+        console.log('[NPSReviewChat DEBUG] Aplicando perguntas atualizadas...');
+        const mapped = updatedQuestions.map((q: any, idx: number) => {
+          // Processar opções
+          let processedOptions: QuestionOption[] = [];
+          if (q.options && Array.isArray(q.options)) {
+            processedOptions = q.options.map((opt: any, optIdx: number) => {
+              if (typeof opt === 'string') {
+                return { id: `opt_${idx}_${optIdx}`, text: opt };
+              } else if (opt.text) {
+                return { id: opt.id || `opt_${idx}_${optIdx}`, text: opt.text };
+              }
+              return { id: `opt_${idx}_${optIdx}`, text: String(opt) };
+            });
+          }
+          
+          return {
+            id: generatedQuestions[idx]?.id || `q_${Date.now()}_${idx}`,
+            text: q.text,
+            type: q.type || 'single_choice',
+            options: processedOptions,
+            insight: q.insight || generatedQuestions[idx]?.insight || 'Atualizado via chat',
+            conditional: q.conditional
+          };
+        });
+        
+        console.log('[NPSReviewChat DEBUG] Perguntas mapeadas:', mapped.length);
+        setGeneratedQuestions(mapped);
+        displayMessage = displayMessage + ' ✅';
+      }
+
+      // Adicionar resposta da IA
+      const assistantMessage: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: displayMessage || 'Pode me perguntar qualquer coisa sobre as perguntas!',
+        timestamp: new Date()
+      };
+      console.log('[NPSReviewChat] Resposta da IA:', assistantMessage.content);
+      setReviewChatMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Erro ao processar mensagem do chat:', error);
+      const errorMessage: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.',
+        timestamp: new Date()
+      };
+      setReviewChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsReviewChatProcessing(false);
     }
   };
 
@@ -1294,6 +1580,97 @@ REGRAS:
           </button>
         </div>
       </div>
+
+      {/* Chat de Ajuste - Sidebar */}
+      {showReviewChat && (
+        <div className="w-96 border-l border-slate-200 bg-slate-50 flex flex-col">
+          {/* Cabeçalho do Chat */}
+          <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
+                <Bot size={16} className="text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-800 text-sm">Consultor IA</h3>
+                <p className="text-[10px] text-slate-500">Ajuste suas perguntas</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowReviewChat(false)}
+              className="p-1 hover:bg-slate-100 rounded transition-colors"
+            >
+              <X size={16} className="text-slate-400" />
+            </button>
+          </div>
+
+          {/* Mensagens do Chat */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {reviewChatMessages.length === 0 ? (
+              <div className="text-center py-8">
+                <Bot size={48} className="mx-auto text-slate-300 mb-3" />
+                <p className="text-sm text-slate-400">Carregando consultor...</p>
+              </div>
+            ) : (
+              reviewChatMessages.map(msg => (
+                <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] p-3 rounded-lg shadow-sm ${
+                    msg.role === 'user' 
+                      ? 'bg-emerald-500 text-white' 
+                      : 'bg-slate-100 text-slate-800'
+                  }`}>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  </div>
+                </div>
+              ))
+            )}
+            {isReviewChatProcessing && (
+              <div className="flex gap-2 justify-start">
+                <div className="bg-slate-100 p-3 rounded-lg shadow-sm">
+                  <Loader2 size={16} className="animate-spin text-emerald-500" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input do Chat */}
+          <div className="p-4 border-t border-slate-200 bg-slate-50">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={reviewChatInput}
+                onChange={(e) => setReviewChatInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && reviewChatInput.trim()) {
+                    e.preventDefault();
+                    handleReviewChatMessage(reviewChatInput);
+                  }
+                }}
+                placeholder="Pergunte ou solicite ajustes..."
+                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                disabled={isReviewChatProcessing}
+              />
+              <button
+                onClick={() => handleReviewChatMessage(reviewChatInput)}
+                disabled={!reviewChatInput.trim() || isReviewChatProcessing}
+                className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Send size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Botão para reabrir chat se fechado */}
+      {!showReviewChat && (
+        <button
+          onClick={() => setShowReviewChat(true)}
+          className="fixed bottom-6 right-6 p-4 bg-emerald-500 text-white rounded-full shadow-lg hover:bg-emerald-600 transition-all hover:scale-110"
+          title="Abrir Consultor IA"
+        >
+          <Bot size={24} />
+        </button>
+      )}
     </div>
   );
 
