@@ -160,6 +160,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [reviewChatInput, setReviewChatInput] = useState('');
   const [isReviewChatProcessing, setIsReviewChatProcessing] = useState(false);
   const [showReviewChat, setShowReviewChat] = useState(true);
+  const strategyExplanationGenerated = useRef(false);
   
   // Estabilizar existingForm para evitar re-renders
   const stableExistingForm = useMemo(() => existingForm, [existingForm?.id]);
@@ -1349,11 +1350,15 @@ Responda em formato JSON:
       
       try {
         aiResponse = JSON.parse(data.text);
+        // Garantir que message sempre tenha valor
+        if (!aiResponse.message) {
+          aiResponse.message = aiResponse.text || data.text || 'Resposta recebida.';
+        }
       } catch (e) {
         // Se não conseguir parsear, trata como conversa simples
         aiResponse = {
           type: 'conversation',
-          message: data.text
+          message: data.text || 'Resposta recebida.'
         };
       }
 
@@ -1373,9 +1378,10 @@ Responda em formato JSON:
       const assistantMessage: ChatMessage = {
         id: `msg_${Date.now()}`,
         role: 'assistant',
-        content: aiResponse.message,
+        content: aiResponse.message || aiResponse.text || data.text || 'Resposta recebida.',
         timestamp: new Date()
       };
+      console.log('[ReviewChat] Resposta da IA:', assistantMessage.content);
       setReviewChatMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error('Erro ao processar mensagem do chat:', error);
@@ -1393,16 +1399,12 @@ Responda em formato JSON:
 
   // Mensagem inicial do chat de ajuste quando entra na tela de revisão
   useEffect(() => {
-    console.log('[ReviewChat DEBUG] useEffect disparado:', {
-      currentStep,
-      reviewChatMessagesLength: reviewChatMessages.length,
-      generatedQuestionsLength: generatedQuestions.length
-    });
-    if (currentStep === 'review' && reviewChatMessages.length === 0 && generatedQuestions.length > 0) {
-      console.log('[ReviewChat DEBUG] Condições atendidas! Chamando generateStrategyExplanation...');
+    if (currentStep === 'review' && !strategyExplanationGenerated.current && generatedQuestions.length > 0) {
+      console.log('[ReviewChat] Gerando explicação estratégica...');
+      strategyExplanationGenerated.current = true;
       generateStrategyExplanation();
     }
-  }, [currentStep, reviewChatMessages.length, generatedQuestions.length]);
+  }, [currentStep, generatedQuestions.length]);
 
   const generateStrategyExplanation = async () => {
     console.log('[ReviewChat DEBUG] Função generateStrategyExplanation iniciada');
