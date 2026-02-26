@@ -1297,37 +1297,30 @@ Responda APENAS com JSON válido neste formato:
     setIsReviewChatProcessing(true);
 
     try {
-      const prompt = `Você é um consultor de estratégia de vendas ajudando a refinar um formulário.
+      const prompt = `Você é um consultor simpático e direto chamado "Consultor HelloGrowth". Fale de forma curta, amigável e humanizada, como se estivesse conversando com um amigo empreendedor. Use no máximo 3-4 frases curtas por resposta.
 
 CONTEXTO DO NEGÓCIO:
 - Tipo: ${businessContext.businessType}
 - Público: ${businessContext.targetAudience}
 - Dores: ${businessContext.mainPainPoints.join(', ')}
 - Objetivo: ${businessContext.formObjective === 'qualify' ? 'Qualificar leads' : businessContext.customObjective}
-- Critérios de Qualificação: ${businessContext.qualificationCriteria || 'Não especificado'}
 
-PERGUNTAS ATUAIS:
-${generatedQuestions.map((q, idx) => `
-${idx + 1}. ${q.text}
-   Tipo: ${q.type}
-   Insight: ${q.insight}
-   Opções: ${q.options.map(o => o.text).join(', ')}`).join('\n')}
+PERGUNTAS ATUAIS DO FORMULÁRIO:
+${generatedQuestions.map((q, idx) => `${idx + 1}. ${q.text} (${q.type}) - Insight: ${q.insight}`).join('\n')}
 
-SOLICITAÇÃO DO USUÁRIO:
-${message}
+PEDIDO DO USUÁRIO: ${message}
 
-INSTRUÇÕES:
-- Se o usuário pedir explicação sobre uma pergunta, cite ESPECIFICAMENTE o que ele escreveu no contexto (dores, público, etc.) e explique a estratégia de vendas por trás da pergunta.
-- Se o usuário pedir para mudar/adicionar/remover perguntas, retorne o JSON completo das perguntas atualizadas.
-- Se for apenas uma conversa, responda de forma educativa e estratégica.
-- Seja didático e ensine o dono do negócio sobre estratégia de vendas.
+REGRAS IMPORTANTES:
+- NUNCA responda em JSON. Responda APENAS em texto puro, como uma conversa normal.
+- Seja CURTO e DIRETO. Máximo 3-4 frases.
+- Use tom amigável e simpático, como um consultor parceiro.
+- Se pedirem para explicar uma pergunta, explique de forma simples citando o que o cliente escreveu sobre o negócio.
+- Se pedirem para mudar/adicionar/remover perguntas, faça a mudança E explique brevemente o porquê. Neste caso, APÓS sua mensagem, adicione uma linha separada com exatamente este formato:
+[PERGUNTAS_ATUALIZADAS]
+(e então o JSON array das perguntas: [{ "text": "...", "type": "...", "options": [{"id": "...", "text": "..."}], "insight": "..." }])
+- Se NÃO for pedido de mudança, NÃO inclua [PERGUNTAS_ATUALIZADAS].
 
-Responda em formato JSON:
-{
-  "type": "explanation" | "update_questions" | "conversation",
-  "message": "Sua resposta aqui (pode usar markdown)",
-  "updated_questions": [] // Apenas se type === "update_questions". Formato: [{ text, type, options: [{ id, text }], insight }]
-}`;
+Responda agora de forma curta e simpática:`;
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -1346,39 +1339,53 @@ Responda em formato JSON:
       }
 
       const data = await response.json();
-      let aiResponse;
+      let rawText = data.response || '';
+      
+      // Limpar possíveis blocos de código JSON que a IA pode retornar
+      rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
+      // Tentar extrair mensagem se a IA retornou JSON mesmo assim
+      let displayMessage = rawText;
+      let updatedQuestions = null;
       
       try {
-        aiResponse = JSON.parse(data.response);
-        // Garantir que message sempre tenha valor
-        if (!aiResponse.message) {
-          aiResponse.message = aiResponse.text || data.response || 'Resposta recebida.';
+        const parsed = JSON.parse(rawText);
+        // Se veio JSON, extrair só a mensagem
+        displayMessage = parsed.message || parsed.text || rawText;
+        if (parsed.updated_questions && Array.isArray(parsed.updated_questions)) {
+          updatedQuestions = parsed.updated_questions;
         }
       } catch (e) {
-        // Se não conseguir parsear, trata como conversa simples
-        aiResponse = {
-          type: 'conversation',
-          message: data.response || 'Resposta recebida.'
-        };
+        // Não é JSON, verificar se tem [PERGUNTAS_ATUALIZADAS]
+        if (rawText.includes('[PERGUNTAS_ATUALIZADAS]')) {
+          const parts = rawText.split('[PERGUNTAS_ATUALIZADAS]');
+          displayMessage = parts[0].trim();
+          try {
+            updatedQuestions = JSON.parse(parts[1].trim());
+          } catch (e2) {
+            // Ignorar erro de parsing das perguntas
+          }
+        }
+        // Se não é JSON nem tem marcador, usar o texto puro (que é o ideal)
       }
-
+      
       // Se a IA retornou perguntas atualizadas, aplicar
-      if (aiResponse.type === 'update_questions' && aiResponse.updated_questions && Array.isArray(aiResponse.updated_questions)) {
-        const updatedQuestions = aiResponse.updated_questions.map((q: any, idx: number) => ({
+      if (updatedQuestions && Array.isArray(updatedQuestions)) {
+        const mapped = updatedQuestions.map((q: any, idx: number) => ({
           id: generatedQuestions[idx]?.id || `q_${Date.now()}_${idx}`,
           text: q.text,
           type: q.type,
           options: q.options || [],
           insight: q.insight || 'Atualizado via chat'
         }));
-        setGeneratedQuestions(updatedQuestions);
+        setGeneratedQuestions(mapped);
       }
 
       // Adicionar resposta da IA
       const assistantMessage: ChatMessage = {
         id: `msg_${Date.now()}`,
         role: 'assistant',
-        content: aiResponse.message || aiResponse.text || data.response || 'Resposta recebida.',
+        content: displayMessage || 'Pode me perguntar qualquer coisa sobre as perguntas!',
         timestamp: new Date()
       };
       console.log('[ReviewChat] Resposta da IA:', assistantMessage.content);
@@ -1410,29 +1417,23 @@ Responda em formato JSON:
     console.log('[ReviewChat DEBUG] Função generateStrategyExplanation iniciada');
     setIsReviewChatProcessing(true);
     try {
-      const prompt = `Você é um consultor de estratégia de vendas. Analise o contexto abaixo e explique de forma didática a estratégia que você usou para criar as perguntas.
+      const prompt = `Você é o Consultor HelloGrowth, um consultor simpático e direto. Faça uma saudação curta e amigável para o usuário que acabou de gerar um formulário.
 
-CONTEXTO DO NEGÓCIO:
-- Tipo: ${businessContext.businessType}
-- Público: ${businessContext.targetAudience}
-- Dores mencionadas: ${businessContext.mainPainPoints.join(', ')}
-- Objetivo: ${businessContext.formObjective === 'qualify' ? 'Qualificar leads' : businessContext.customObjective}
-- Critérios de Qualificação: ${businessContext.qualificationCriteria || 'Não especificado'}
+Negócio: ${businessContext.businessType}
+Público: ${businessContext.targetAudience}
+Dores: ${businessContext.mainPainPoints.join(', ')}
+Perguntas geradas: ${generatedQuestions.length}
 
-PERGUNTAS GERADAS:
-${generatedQuestions.map((q, idx) => `${idx + 1}. ${q.text}`).join('\n')}
+REGRAS:
+- Responda APENAS em texto puro. NUNCA use JSON.
+- Máximo 4 frases curtas.
+- Comece com "Olá!" ou "E aí!"
+- Mencione brevemente o negócio e diga que criou ${generatedQuestions.length} perguntas estratégicas.
+- Termine convidando a perguntar sobre qualquer pergunta ou pedir ajustes.
+- Tom: amigo consultor, leve e simpático.
+- Use 1-2 emojis no máximo.
 
-INSTRUÇÕES:
-1. Comece com uma saudação amigável
-2. Cite ESPECIFICAMENTE o que o cliente mencionou (ex: "Você mencionou que seu público tem [dor X]...")
-3. Explique qual framework você usou (SPIN, BANT, etc.)
-4. Explique a estratégia geral: qual o "fio condutor" das perguntas?
-5. Termine dizendo que você pode explicar cada pergunta individualmente ou fazer ajustes
-6. Seja didático e educativo
-7. Use emojis para deixar a mensagem mais amigável
-8. Máximo de 200 palavras
-
-Responda APENAS com o texto da mensagem (sem JSON, sem formatação extra).`;
+Responda agora:`;
 
       console.log('[ReviewChat DEBUG] Preparando chamada para /api/gemini...');
       console.log('[ReviewChat DEBUG] Prompt:', prompt.substring(0, 200) + '...');
@@ -1450,10 +1451,19 @@ Responda APENAS com o texto da mensagem (sem JSON, sem formatação extra).`;
         const data = await response.json();
         console.log('[ReviewChat DEBUG] Dados recebidos:', data);
         
+        let welcomeText = data.response || data.text || '';
+        // Limpar caso a IA retorne JSON mesmo assim
+        welcomeText = welcomeText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        try {
+          const parsed = JSON.parse(welcomeText);
+          welcomeText = parsed.message || parsed.text || welcomeText;
+        } catch (e) {
+          // Já é texto puro, perfeito!
+        }
         const welcomeMessage: ChatMessage = {
           id: `msg_${Date.now()}`,
           role: 'assistant',
-          content: data.response || data.text || 'Erro ao obter resposta.',
+          content: welcomeText || 'Olá! \ud83d\udc4b Sou seu Consultor de Estratégia. Pergunte sobre qualquer pergunta ou peça ajustes!',
           timestamp: new Date()
         };
         console.log('[ReviewChat DEBUG] Mensagem criada:', welcomeMessage);
