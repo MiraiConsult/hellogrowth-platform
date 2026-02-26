@@ -825,7 +825,7 @@ INSTRUÇÕES CRÍTICAS:
 
 ATENÇÃO: 
 - NÃO escreva texto antes ou depois do JSON
-- NÃO use markdown (\`\`\`json)
+- NÃO use blocos de código markdown
 - NÃO explique, apenas RETORNE O JSON
 - O array "updated_questions" DEVE ter ${generatedQuestions.length} itens
 - Mantenha o campo "conditional" se existir (promoter, passive, detractor ou undefined)`
