@@ -557,31 +557,36 @@ Vou regenerar as perguntas com o novo tom. Um momento...`
     }, 500);
 
     try {
-      const prompt = `Você é um especialista em pesquisas NPS (Net Promoter Score).
+      const prompt = `Você é um especialista em Customer Experience (CX) e Retenção de Clientes.
+Sua missão é criar uma pesquisa NPS que não apenas meça uma nota, mas identifique os "Drivers de Lealdade" do negócio.
 
-Crie uma pesquisa NPS com as seguintes características:
+CONTEXTO:
+- Negócio: ${businessProfile?.business_name || 'Empresa'}
+- Descrição: ${businessProfile?.description || 'Não informado'}
+- Objetivo da Pesquisa: ${objective}
+- Tom de Voz: ${tone}
+- Pontos que o dono quer avaliar: ${evaluationPoints.join(', ')}
 
-**Objetivo:** ${objective}
-**Tom:** ${tone}
-**Pontos a avaliar:** ${evaluationPoints.join(', ')}
-**Negócio:** ${businessProfile?.business_name || 'Empresa'}
-**Descrição do negócio:** ${businessProfile?.description || 'Não informado'}
+SUA ESTRATÉGIA:
+1. Identifique os 3 pilares críticos para o sucesso deste tipo de negócio (ex: se for restaurante, é sabor/atendimento/ambiente).
+2. A primeira pergunta DEVE ser o NPS padrão (0-10).
+3. Crie 3 perguntas complementares que investiguem esses pilares críticos.
+4. Use lógica condicional:
+   - Para Detratores (0-6): Pergunte sobre a falha específica para agir rápido (Recuperação).
+   - Para Passivos (7-8): Pergunte o que falta para sermos incríveis (Upgrade).
+   - Para Promotores (9-10): Pergunte o que eles mais amam para usarmos no marketing (Expansão).
 
-**Regras importantes:**
-1. A PRIMEIRA pergunta SEMPRE deve ser a pergunta NPS padrão: "Em uma escala de 0 a 10, o quanto você recomendaria [empresa/serviço] para um amigo ou colega?"
-2. Crie 2-4 perguntas complementares que ajudem a entender melhor a experiência do cliente
-3. Inclua perguntas condicionais para promotores (9-10), passivos (7-8) e detratores (0-6)
-4. Use o tom ${tone}
-5. Foque nos pontos: ${evaluationPoints.join(', ')}
-
-Retorne APENAS um JSON válido com este formato:
+REGRAS:
+- Use o tom ${tone}.
+- O campo 'insight' deve explicar qual pilar de retenção está sendo medido.
+- Retorne APENAS JSON válido com este formato:
 {
   "questions": [
     {
       "text": "texto da pergunta",
       "type": "nps" | "single_choice" | "multiple_choice" | "text",
       "options": ["opção 1", "opção 2"],
-      "insight": "por que essa pergunta é importante",
+      "insight": "Pilar de Retenção: Por que isso é vital para manter o cliente?",
       "conditional": "promoter" | "passive" | "detractor" (opcional)
     }
   ]

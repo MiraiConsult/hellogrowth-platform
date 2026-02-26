@@ -215,8 +215,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       setSelectedGameId(stableExistingForm.game_id || null);
       
       // Carregar campos de identificação salvos
-      // CORREÇÃO: O banco salva como initial_fields, o MainApp mapeia para initialFields
-      // O campo identification_fields NÃO EXISTE no objeto passado - por isso nunca carregava!
+      // IMPORTANTE: O banco salva como initial_fields, e o MainApp mapeia para initialFields
       const savedFields = stableExistingForm.initialFields || stableExistingForm.initial_fields || stableExistingForm.identification_fields;
       
       if (savedFields && Array.isArray(savedFields) && savedFields.length > 0) {
@@ -998,7 +997,8 @@ Responda APENAS com um JSON válido no formato:
         productsSection += `\n🎯 IMPORTANTE: Crie perguntas que identifiquem se o cliente tem necessidades/problemas que ESTES produtos resolvem. Use as descrições acima para entender o que cada produto oferece.`;
       }
 
-      const prompt = `Você é um especialista em criação de formulários de qualificação de leads. Crie 5 perguntas estratégicas para um formulário.
+      const prompt = `Você é um estrategista sênior de vendas e copywriter especialista em qualificação de leads. 
+Seu objetivo não é apenas criar perguntas, mas desenhar uma jornada de consciência para o lead.
 
 CONTEXTO DO NEGÓCIO:
 - Tipo: ${businessContext.businessType}
@@ -1010,16 +1010,26 @@ CONTEXTO DO NEGÓCIO:
 🎯 CRITÉRIOS DE QUALIFICAÇÃO (PRIORIDADE MÁXIMA):
 ${businessContext.qualificationCriteria ? businessContext.qualificationCriteria : 'Não especificado'}
 
+SUA MISSÃO:
+Crie 5 perguntas estratégicas seguindo o framework de Venda Consultiva (SPIN Selling). 
+As perguntas devem fazer o lead refletir sobre o problema dele e como o seu negócio é a solução natural.
+
+PASSO A PASSO DO SEU RACIOCÍNIO (Chain of Thought):
+1. Identifique o 'Custo da Inação': O que o lead perde (dinheiro, tempo, saúde) se não resolver o problema hoje?
+2. Mapeie a 'Transformação Real': Além da descrição técnica, qual a mudança de vida que o produto entrega?
+3. Crie perguntas que:
+   - Revelem a profundidade do problema (Implicação).
+   - Façam o lead admitir a necessidade da solução (Necessidade de Solução).
+   - Qualifiquem o lead sem parecer um interrogatório.
+
 REGRAS:
-1. **OBRIGATÓRIO**: Crie perguntas que capturem TODAS as informações dos CRITÉRIOS DE QUALIFICAÇÃO acima
-2. ${selectedProductsInfo.length > 0 ? '**OBRIGATÓRIO**: Crie perguntas que identifiquem se o cliente precisa dos PRODUTOS EM FOCO listados acima' : 'As perguntas devem qualificar o lead para os produtos/serviços do negócio'}
-3. As perguntas devem ser INDIRETAS e naturais, não pareçam um interrogatório de vendas
-4. Cada pergunta deve revelar algo sobre a intenção de compra e qualificação do cliente
-5. Use o tom especificado (${businessContext.formTone})
-6. Varie os tipos: single_choice (escolha única), multiple_choice (múltipla escolha), text (texto livre)
-7. Para perguntas de escolha, forneça 3-5 opções relevantes
-8. Se os critérios mencionam "poder aquisitório" ou "quanto pode gastar", CRIE uma pergunta de faixa de preço
-9. Se os critérios mencionam "urgência" ou "prazo", CRIE uma pergunta sobre timeline
+1. **OBRIGATÓRIO**: Capture TODAS as informações dos CRITÉRIOS DE QUALIFICAÇÃO.
+2. ${selectedProductsInfo.length > 0 ? '**OBRIGATÓRIO**: Identifique se o cliente precisa dos PRODUTOS EM FOCO listados acima.' : 'Qualifique o lead para os produtos/serviços do negócio.'}
+3. As perguntas devem ser INDIRETAS e naturais.
+4. Use o tom ${businessContext.formTone}.
+5. Varie os tipos: single_choice, multiple_choice, text.
+6. Forneça 3-5 opções relevantes para perguntas de escolha.
+7. O campo 'insight' deve explicar a ESTRATÉGIA DE VENDAS por trás da pergunta.
 
 Responda APENAS com JSON válido neste formato:
 {
@@ -1028,7 +1038,7 @@ Responda APENAS com JSON válido neste formato:
       "text": "Texto da pergunta",
       "type": "single_choice",
       "options": ["Opção 1", "Opção 2", "Opção 3"],
-      "insight": "O que essa resposta revela sobre o cliente"
+      "insight": "Estratégia de vendas: Por que esta pergunta é crucial para o fechamento?"
     }
   ]
 }`;
@@ -1116,7 +1126,7 @@ Responda APENAS com JSON válido neste formato:
       ...(stableExistingForm?.id && { id: stableExistingForm.id }), // Mantém ID se for edição
       name: formName || `Formulário ${new Date().toLocaleDateString('pt-BR')}`,
       description: businessContext.customObjective || businessContext.businessDescription || 'Formulário de qualificação de leads',
-      // CORREÇÃO: Enviar todos os campos no formato do banco (com field em vez de id)
+      // Enviar todos os campos (incluindo desabilitados) para preservar configuração
       identification_fields: businessContext.identificationFields.map(f => ({
         field: f.id,
         label: f.label,
