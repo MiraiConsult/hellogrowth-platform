@@ -299,14 +299,31 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
       console.error('Erro ao salvar participação:', error);
     }
 
-    // Calcular ângulo alvo (a seta está no topo = -PI/2)
+    // ===== CÁLCULO DO ÂNGULO ALVO (CORRIGIDO) =====
+    // A seta está no TOPO da roleta (posição -PI/2 ou 270° no sistema Canvas).
+    // Os segmentos são desenhados a partir do ângulo 0 (direita), no sentido horário.
+    // O segmento i ocupa de: rotation + i*segAngle até rotation + (i+1)*segAngle
+    // Para que o CENTRO do segmento selectedIndex fique sob a seta (topo = -PI/2),
+    // precisamos que: finalRotation + selectedIndex*segAngle + segAngle/2 ≡ -PI/2 (mod 2PI)
+    // Ou seja: finalRotation = -PI/2 - selectedIndex*segAngle - segAngle/2
     const segmentAngle = (2 * Math.PI) / prizes.length;
-    // Corrigido: remover o sinal negativo para alinhar com a ordem de desenho dos segmentos
-    const targetAngle = (selectedIndex * segmentAngle + segmentAngle / 2) - Math.PI / 2;
+    const desiredFinalRotation = -(Math.PI / 2) - (selectedIndex * segmentAngle) - (segmentAngle / 2);
+    
+    // Normalizar para valor positivo
+    const normalizedDesired = ((desiredFinalRotation % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+    const normalizedCurrent = ((rotationRef.current % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+    
+    // Diferença angular necessária (sempre positiva, sentido horário)
+    let angleDiff = normalizedDesired - normalizedCurrent;
+    if (angleDiff <= 0) angleDiff += 2 * Math.PI;
     
     // Adicionar voltas extras (8-12 voltas para efeito dramático)
     const extraSpins = (8 + Math.random() * 4) * 2 * Math.PI;
-    const totalRotation = extraSpins + targetAngle - rotationRef.current;
+    const totalRotation = extraSpins + angleDiff;
+    
+    console.log('[SpinWheel DEBUG] Prêmio:', selectedPrize.name, '| Index:', selectedIndex);
+    console.log('[SpinWheel DEBUG] Ângulo desejado:', (normalizedDesired * 180 / Math.PI).toFixed(1) + '°');
+    console.log('[SpinWheel DEBUG] Rotação total:', (totalRotation * 180 / Math.PI).toFixed(1) + '°');
 
     // Animação suave com easing
     const startTime = performance.now();
