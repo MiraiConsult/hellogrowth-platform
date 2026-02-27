@@ -666,7 +666,19 @@ REGRAS:
         conditional: q.conditional
       }));
 
-      setGeneratedQuestions(questions);
+      // Garantir que a pergunta NPS seja sempre a primeira
+      const npsQuestion = questions.find(q => q.type === 'nps');
+      const otherQuestions = questions.filter(q => q.type !== 'nps');
+      const orderedQuestions = npsQuestion ? [npsQuestion, ...otherQuestions] : questions;
+      // Substituir [Nome da Empresa] pelo nome real no texto da pergunta NPS
+      const companyName = businessProfile?.business_name || '';
+      const finalQuestions = orderedQuestions.map(q => {
+        if (q.type === 'nps' && companyName) {
+          return { ...q, text: q.text.replace(/\[Nome da Empresa\]/gi, companyName) };
+        }
+        return q;
+      });
+      setGeneratedQuestions(finalQuestions);
       setCurrentStep('review');
       setCampaignName(`Pesquisa NPS - ${objective}`);
     } catch (error) {
@@ -1015,6 +1027,10 @@ Responda:`;
   const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === generatedQuestions.length - 1) return;
+    // Não permitir mover a pergunta NPS (sempre deve ser a primeira)
+    if (generatedQuestions[index]?.type === 'nps') return;
+    // Não permitir mover para a posição 0 se a primeira pergunta for NPS
+    if (direction === 'up' && index === 1 && generatedQuestions[0]?.type === 'nps') return;
     const newQuestions = [...generatedQuestions];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     [newQuestions[index], newQuestions[targetIndex]] = [newQuestions[targetIndex], newQuestions[index]];
@@ -1162,7 +1178,7 @@ Responda:`;
                   <div className="flex gap-1 items-center">
                     <button
                       onClick={() => handleMoveQuestion(index, 'up')}
-                      disabled={index === 0}
+                      disabled={index === 0 || (index === 1 && generatedQuestions[0]?.type === 'nps')}
                       className="p-1 hover:bg-slate-100 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
                       title="Mover para cima"
                     >

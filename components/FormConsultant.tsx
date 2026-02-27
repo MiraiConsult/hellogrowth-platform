@@ -32,8 +32,8 @@ import {
   Heart,
   ChevronDown,
   ChevronUp,
-  Copy
-} from 'lucide-react';
+  Copy,
+  ArrowUp, ArrowDown} from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 
@@ -1179,6 +1179,26 @@ Responda APENAS com JSON válido neste formato:
     setGeneratedQuestions(prev => prev.filter(q => q.id !== id));
   };
 
+  const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === generatedQuestions.length - 1) return;
+    const newQuestions = [...generatedQuestions];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    [newQuestions[index], newQuestions[targetIndex]] = [newQuestions[targetIndex], newQuestions[index]];
+    setGeneratedQuestions(newQuestions);
+  };
+
+  const handleMoveOption = (questionId: string, optionIndex: number, direction: 'up' | 'down') => {
+    setGeneratedQuestions(prev => prev.map(q => {
+      if (q.id !== questionId) return q;
+      const opts = [...q.options];
+      const targetIndex = direction === 'up' ? optionIndex - 1 : optionIndex + 1;
+      if (targetIndex < 0 || targetIndex >= opts.length) return q;
+      [opts[optionIndex], opts[targetIndex]] = [opts[targetIndex], opts[optionIndex]];
+      return { ...q, options: opts };
+    }));
+  };
+
   const handleEditQuestion = (id: string, field: keyof GeneratedQuestion, value: any) => {
     setGeneratedQuestions(prev => prev.map(q => 
       q.id === id ? { ...q, [field]: value } : q
@@ -1789,6 +1809,24 @@ Responda agora:`;
                       <span className="text-sm text-slate-500">Opções de resposta:</span>
                       {question.options.map((opt, optIdx) => (
                         <div key={opt.id} className="flex items-center gap-2">
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              onClick={() => handleMoveOption(question.id, optIdx, 'up')}
+                              disabled={optIdx === 0}
+                              className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                              title="Mover para cima"
+                            >
+                              <ArrowUp size={12} />
+                            </button>
+                            <button
+                              onClick={() => handleMoveOption(question.id, optIdx, 'down')}
+                              disabled={optIdx === question.options.length - 1}
+                              className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                              title="Mover para baixo"
+                            >
+                              <ArrowDown size={12} />
+                            </button>
+                          </div>
                           <span className="text-slate-400 text-sm w-6">{optIdx + 1}.</span>
                           <input
                             type="text"
@@ -1825,12 +1863,30 @@ Responda agora:`;
                   </div>
                 </div>
                 
-                <button
-                  onClick={() => handleRemoveQuestion(question.id)}
-                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                >
-                  <Trash2 size={18} />
-                </button>
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => handleMoveQuestion(index, 'up')}
+                    disabled={index === 0}
+                    className="p-1.5 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+                    title="Mover pergunta para cima"
+                  >
+                    <ArrowUp size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleMoveQuestion(index, 'down')}
+                    disabled={index === generatedQuestions.length - 1}
+                    className="p-1.5 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+                    title="Mover pergunta para baixo"
+                  >
+                    <ArrowDown size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleRemoveQuestion(question.id)}
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
