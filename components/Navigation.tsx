@@ -43,9 +43,7 @@ interface NavigationProps {
   currentUser?: User;
   activeCompany?: Company | null;
   userCompanies?: UserCompany[];
-  onSwitchCompany?: (companyId: string) => void;,
-  leads = [],
-  npsData = [],
+  onSwitchCompany?: (companyId: string) => void;
   leads?: any[];
   npsData?: any[];
 }
@@ -255,7 +253,9 @@ const Navigation: React.FC<NavigationProps> = ({
   currentUser,
   activeCompany,
   userCompanies = [],
-  onSwitchCompany
+  onSwitchCompany,
+  leads = [],
+  npsData = []
 }) => {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     'helloclient': true,
