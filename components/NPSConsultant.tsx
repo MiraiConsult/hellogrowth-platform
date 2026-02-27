@@ -40,6 +40,7 @@ interface NPSConsultantProps {
   onClose: () => void;
   onSaveCampaign: (campaignData: any) => void;
   existingCampaign?: any;
+  initialBusinessProfile?: any;
 }
 
 type ConsultantStep = 
@@ -69,7 +70,8 @@ export default function NPSConsultant({
   userId,
   onClose,
   onSaveCampaign,
-  existingCampaign
+  existingCampaign,
+  initialBusinessProfile
 }: NPSConsultantProps) {
   const tenantId = useTenantId();
   
@@ -79,8 +81,8 @@ export default function NPSConsultant({
   const [isTyping, setIsTyping] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   
-  const [businessProfile, setBusinessProfile] = useState<any>(null);
-  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [businessProfile, setBusinessProfile] = useState<any>(initialBusinessProfile || null);
+  const [profileLoaded, setProfileLoaded] = useState(!!initialBusinessProfile);
   const [objective, setObjective] = useState('');
   const [tone, setTone] = useState('');
   const [evaluationPoints, setEvaluationPoints] = useState<string[]>([]);
@@ -115,10 +117,20 @@ export default function NPSConsultant({
 
   useEffect(() => {
     if (supabase && tenantId) {
-      loadBusinessProfile();
       loadAvailableGames();
+      // Só busca o perfil se não foi passado como prop
+      if (!initialBusinessProfile) {
+        loadBusinessProfile();
+      }
     }
   }, [supabase, tenantId]);
+  // Sincronizar businessProfile quando initialBusinessProfile muda
+  useEffect(() => {
+    if (initialBusinessProfile) {
+      setBusinessProfile(initialBusinessProfile);
+      setProfileLoaded(true);
+    }
+  }, [initialBusinessProfile]);
 
   // Mensagem inicial do chat de ajuste quando entra na tela de revisão
   useEffect(() => {
