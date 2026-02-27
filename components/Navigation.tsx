@@ -90,7 +90,7 @@ const TICKER_ITEMS = [
     iconClass: 'text-emerald-500',
     borderClass: 'border-emerald-200',
     badgeClass: 'bg-emerald-100 text-emerald-700',
-    view: 'intelligence'
+    view: 'kanban'
   },
   { 
     type: 'risk', 
@@ -102,7 +102,7 @@ const TICKER_ITEMS = [
     iconClass: 'text-red-500',
     borderClass: 'border-red-200',
     badgeClass: 'bg-red-100 text-red-700',
-    view: 'intelligence'
+    view: 'intelligence-center'
   },
   { 
     type: 'sales', 
@@ -114,7 +114,7 @@ const TICKER_ITEMS = [
     iconClass: 'text-blue-500',
     borderClass: 'border-blue-200',
     badgeClass: 'bg-blue-100 text-blue-700',
-    view: 'intelligence'
+    view: 'kanban'
   },
   { 
     type: 'recovery', 
@@ -126,7 +126,7 @@ const TICKER_ITEMS = [
     iconClass: 'text-purple-500',
     borderClass: 'border-purple-200',
     badgeClass: 'bg-purple-100 text-purple-700',
-    view: 'intelligence'
+    view: 'analytics'
   }
 ];
 
