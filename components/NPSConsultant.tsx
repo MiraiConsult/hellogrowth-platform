@@ -11,7 +11,7 @@ import {
   Edit3,
   Plus,
   Trash2,
-  GripVertical,
+  GripVertical, ArrowUp, ArrowDown,
   Send,
   Bot,
   User,
@@ -40,6 +40,7 @@ interface NPSConsultantProps {
   onClose: () => void;
   onSaveCampaign: (campaignData: any) => void;
   existingCampaign?: any;
+  initialBusinessProfile?: any;
 }
 
 type ConsultantStep = 
@@ -69,7 +70,8 @@ export default function NPSConsultant({
   userId,
   onClose,
   onSaveCampaign,
-  existingCampaign
+  existingCampaign,
+  initialBusinessProfile
 }: NPSConsultantProps) {
   const tenantId = useTenantId();
   
@@ -79,8 +81,8 @@ export default function NPSConsultant({
   const [isTyping, setIsTyping] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   
-  const [businessProfile, setBusinessProfile] = useState<any>(null);
-  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [businessProfile, setBusinessProfile] = useState<any>(initialBusinessProfile || null);
+  const [profileLoaded, setProfileLoaded] = useState(!!initialBusinessProfile);
   const [objective, setObjective] = useState('');
   const [tone, setTone] = useState('');
   const [evaluationPoints, setEvaluationPoints] = useState<string[]>([]);
@@ -115,10 +117,20 @@ export default function NPSConsultant({
 
   useEffect(() => {
     if (supabase && tenantId) {
-      loadBusinessProfile();
       loadAvailableGames();
+      // Só busca o perfil se não foi passado como prop
+      if (!initialBusinessProfile) {
+        loadBusinessProfile();
+      }
     }
   }, [supabase, tenantId]);
+  // Sincronizar businessProfile quando initialBusinessProfile muda
+  useEffect(() => {
+    if (initialBusinessProfile) {
+      setBusinessProfile(initialBusinessProfile);
+      setProfileLoaded(true);
+    }
+  }, [initialBusinessProfile]);
 
   // Mensagem inicial do chat de ajuste quando entra na tela de revisão
   useEffect(() => {
@@ -666,7 +678,19 @@ REGRAS:
         conditional: q.conditional
       }));
 
-      setGeneratedQuestions(questions);
+      // Garantir que a pergunta NPS seja sempre a primeira
+      const npsQuestion = questions.find(q => q.type === 'nps');
+      const otherQuestions = questions.filter(q => q.type !== 'nps');
+      const orderedQuestions = npsQuestion ? [npsQuestion, ...otherQuestions] : questions;
+      // Substituir [Nome da Empresa] pelo nome real no texto da pergunta NPS
+      const companyName = businessProfile?.business_name || '';
+      const finalQuestions = orderedQuestions.map(q => {
+        if (q.type === 'nps' && companyName) {
+          return { ...q, text: q.text.replace(/\[Nome da Empresa\]/gi, companyName) };
+        }
+        return q;
+      });
+      setGeneratedQuestions(finalQuestions);
       setCurrentStep('review');
       setCampaignName(`Pesquisa NPS - ${objective}`);
     } catch (error) {
@@ -1012,6 +1036,30 @@ Responda:`;
     ));
   };
 
+  const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === generatedQuestions.length - 1) return;
+    // Não permitir mover a pergunta NPS (sempre deve ser a primeira)
+    if (generatedQuestions[index]?.type === 'nps') return;
+    // Não permitir mover para a posição 0 se a primeira pergunta for NPS
+    if (direction === 'up' && index === 1 && generatedQuestions[0]?.type === 'nps') return;
+    const newQuestions = [...generatedQuestions];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    [newQuestions[index], newQuestions[targetIndex]] = [newQuestions[targetIndex], newQuestions[index]];
+    setGeneratedQuestions(newQuestions);
+  };
+
+  const handleMoveOption = (questionId: string, optionIndex: number, direction: 'up' | 'down') => {
+    setGeneratedQuestions(prev => prev.map(q => {
+      if (q.id !== questionId) return q;
+      const opts = [...q.options];
+      const targetIndex = direction === 'up' ? optionIndex - 1 : optionIndex + 1;
+      if (targetIndex < 0 || targetIndex >= opts.length) return q;
+      [opts[optionIndex], opts[targetIndex]] = [opts[targetIndex], opts[optionIndex]];
+      return { ...q, options: opts };
+    }));
+  };
+
   const renderProgressBar = () => {
     const steps = [
       { id: 'context', label: 'Contexto' },
@@ -1139,7 +1187,23 @@ Responda:`;
 
                 </div>
                 {question.type !== 'nps' && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-1 items-center">
+                    <button
+                      onClick={() => handleMoveQuestion(index, 'up')}
+                      disabled={index === 0 || (index === 1 && generatedQuestions[0]?.type === 'nps')}
+                      className="p-1 hover:bg-slate-100 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                      title="Mover para cima"
+                    >
+                      <ArrowUp className="w-4 h-4 text-slate-500" />
+                    </button>
+                    <button
+                      onClick={() => handleMoveQuestion(index, 'down')}
+                      disabled={index === generatedQuestions.length - 1}
+                      className="p-1 hover:bg-slate-100 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                      title="Mover para baixo"
+                    >
+                      <ArrowDown className="w-4 h-4 text-slate-500" />
+                    </button>
                     <button
                       onClick={() => setEditingQuestionId(editingQuestionId === question.id ? null : question.id)}
                       className="p-1 hover:bg-slate-100 rounded transition-colors"
@@ -1203,7 +1267,25 @@ Responda:`;
                       <label className="block text-xs font-medium text-slate-600 mb-2">Alternativas</label>
                       <div className="space-y-2">
                         {question.options.map((opt, optIndex) => (
-                          <div key={opt.id} className="flex gap-2">
+                          <div key={opt.id} className="flex gap-2 items-center">
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                onClick={() => handleMoveOption(question.id, optIndex, 'up')}
+                                disabled={optIndex === 0}
+                                className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                                title="Mover para cima"
+                              >
+                                <ArrowUp className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => handleMoveOption(question.id, optIndex, 'down')}
+                                disabled={optIndex === question.options.length - 1}
+                                className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                                title="Mover para baixo"
+                              >
+                                <ArrowDown className="w-3 h-3" />
+                              </button>
+                            </div>
                             <input
                               type="text"
                               value={opt.text}

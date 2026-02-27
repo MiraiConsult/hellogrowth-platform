@@ -17,9 +17,10 @@ interface NPSCampaignsProps {
   onViewReport?: (id: string) => void;
   currentUser?: User;
   setCampaigns?: any;
+  businessProfile?: any;
 }
 
-const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, onDeleteCampaign, navigateToAnalytics, onPreview, onViewReport, currentUser }) => {
+const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, onDeleteCampaign, navigateToAnalytics, onPreview, onViewReport, currentUser, businessProfile }) => {
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       'active': 'Ativa',
@@ -435,6 +436,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
         <NPSConsultant
           supabase={supabase}
           userId={currentUser?.id || ''}
+          initialBusinessProfile={businessProfile}
           onClose={() => {
             setShowNPSConsultant(false);
             setEditingCampaign(null);

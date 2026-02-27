@@ -23,10 +23,10 @@ import ProductsManagement from '@/components/ProductsManagement';
 import BusinessProfile from '@/components/BusinessProfile';
 import TeamManagement from '@/components/TeamManagement';
 // CustomerJourney removed
-import Strategic from '@/components/Strategic';
-import Game from '@/components/Game';
-import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User, UserCompany, Company } from '@/types';
-import CompanySwitcher from '@/components/CompanySwitcher';
+import IntelligenceCenter from '@/components/IntelligenceCenter';
+import GameConfig from '@/components/GameConfig';
+import GameParticipations from '@/components/GameParticipations';
+import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { mockSettings } from '@/services/mockData';
 import { supabase } from '@/lib/supabase';
 
@@ -34,42 +34,17 @@ interface MainAppProps {
   currentUser: User;
   onLogout: () => void;
   onUpdatePlan: (plan: PlanType) => void;
-  onSwitchCompany?: (companyId: string) => void;
   daysLeft?: number;
 }
 
-const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, onSwitchCompany, daysLeft }) => {
-  // Estado da empresa ativa
-  const [activeCompany, setActiveCompany] = useState<Company | null>(null);
-  const [userCompanies, setUserCompanies] = useState<UserCompany[]>(currentUser.companies || []);
-
-  // Carregar empresa ativa
-  useEffect(() => {
-    const loadActiveCompany = async () => {
-      if (currentUser.companies && currentUser.companies.length > 0) {
-        const defaultUc = currentUser.companies.find(uc => uc.is_default) || currentUser.companies[0];
-        if (defaultUc?.company) {
-          setActiveCompany(defaultUc.company as Company);
-        }
-        setUserCompanies(currentUser.companies);
-      } else if (currentUser.tenantId) {
-        // Fallback: criar empresa virtual a partir dos dados do usuário
-        setActiveCompany({
-          id: currentUser.tenantId,
-          name: currentUser.companyName || 'Minha Empresa',
-          plan: currentUser.plan,
-        });
-      }
-    };
-    loadActiveCompany();
-  }, [currentUser]);
+const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, daysLeft }) => {
   // If Super Admin, show Admin Panel immediately
   if (currentUser.role === 'super_admin') {
       return <AdminUserManagement onLogout={onLogout} />;
   }
 
   // Sempre inicia no dashboard, independente do plano
-  const [currentView, setCurrentViewRaw] = useState("dashboard");
+  const [currentView, setCurrentViewRaw] = useState('dashboard');
 
   // Proteção de acesso por role - redireciona views não permitidas
   const userRole = currentUser.role || 'admin';
@@ -78,7 +53,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     const viewerAccess = [...allAccess, 'digital-diagnostic', 'settings'];
     const memberAccess = [...allAccess, 'kanban', 'nps', 'database-export', 'ai-chat', 'settings', 'digital-diagnostic'];
     
-    if (userRole === 'admin' || userRole === 'super_admin' || userRole === 'owner') {
+    if (userRole === 'admin' || userRole === 'super_admin') {
       setCurrentViewRaw(view);
     } else if (userRole === 'manager') {
       if (view !== 'team-management' && view !== 'pricing') setCurrentViewRaw(view);
@@ -110,6 +85,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [npsData, setNpsData] = useState<NPSResponse[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [businessProfile, setBusinessProfile] = useState<any>(null);
   const [forms, setForms] = useState<Form[]>([]);
   const [settings, setSettings] = useState<AccountSettings>(mockSettings);
   const [loading, setLoading] = useState(true);
@@ -123,7 +99,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   ).length;
 
   const handleAnalyzeAllLeads = async () => {
-    if (!supabase || !activeCompany?.id || isAnalyzingAll) return;
+    if (!supabase || !currentUser.tenantId || isAnalyzingAll) return;
     
     const pendingLeads = leads.filter(l => 
       l.answers && !l.answers._ai_analysis && l.formSource !== 'Manual'
@@ -143,12 +119,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     const { data: products } = await supabase
       .from('products_services')
       .select('*')
-      .eq('tenant_id', activeCompany.id);
+      .eq('tenant_id', currentUser.tenantId);
     
     const { data: businessProfile } = await supabase
       .from('business_profile')
       .select('*')
-      .eq('tenant_id', activeCompany.id)
+      .eq('tenant_id', currentUser.tenantId)
       .single();
     
     for (let i = 0; i < pendingLeads.length; i++) {
@@ -260,8 +236,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
             .eq('id', currentUser.id)
             .single();
 
-          // Use activeCompany.id if available, otherwise fallback to userData.tenant_id
-          const tenantId = activeCompany?.id || userData?.tenant_id;
+          const tenantId = userData?.tenant_id;
 
           // 2. Se não é owner, buscar settings do owner do tenant
           let ownerSettings = userData;
@@ -282,13 +257,16 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
             supabase.from('leads').select('*').eq('tenant_id', tenantId),
             supabase.from('campaigns').select('*').eq('tenant_id', tenantId),
             supabase.from('forms').select('*').eq('tenant_id', tenantId),
-            supabase.from('nps_responses').select('*').eq('tenant_id', tenantId)
+            supabase.from('nps_responses').select('*').eq('tenant_id', tenantId),
+            supabase.from('business_profile').select('*').eq('tenant_id', tenantId).maybeSingle()
           ]);
 
           const dbLeads = results[0].data;
           const dbCampaigns = results[1].data;
           const dbForms = results[2].data;
           const dbNPS = results[3].data;
+          const dbBizProfile = results[4].data;
+          if (dbBizProfile) setBusinessProfile(dbBizProfile);
           const dbUser = ownerSettings;
 
           // --- PROCESS DATA ---
@@ -470,16 +448,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   };
 
   useEffect(() => {
-    // For public users (form/survey links), always call fetchData
-    // For logged-in users, only call when activeCompany is available
-    if (currentUser.id === 'public' || activeCompany) {
-      fetchData();
-    }
-  }, [currentUser.id, activeCompany]);
+    fetchData();
+  }, [currentUser.id]);
 
   // Supabase Realtime: Listen for new leads being inserted
   useEffect(() => {
-    if (!supabase || !activeCompany?.id) return;
+    if (!supabase || !currentUser.tenantId) return;
 
     const channel = supabase
       .channel('leads-insert-realtime')
@@ -489,7 +463,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           event: 'INSERT',
           schema: 'public',
           table: 'leads',
-          filter: `tenant_id=eq.${activeCompany.id}`
+          filter: `tenant_id=eq.${currentUser.tenantId}`
         },
         (payload) => {
           console.log('Novo lead inserido via Realtime:', payload);
@@ -518,39 +492,19 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeCompany?.id]);
+  }, [currentUser.tenantId]);
 
   // --- CRUD HANDLERS ---
   const handleSaveForm = async (form: Form) => {
     if (!supabase) return;
-    
-    // If game is enabled, get the active game for this tenant
-    let gameId = null;
-    if (form.game_enabled) {
-      const { data: activeGame } = await supabase
-        .from('nps_games')
-        .select('id')
-        .eq('tenant_id', activeCompany?.id || currentUser.tenantId)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      
-      if (activeGame) {
-        gameId = activeGame.id;
-      }
-    }
-    
     const formData = {
       name: form.name,
       description: form.description,
       questions: form.questions,
       initial_fields: form.initialFields,
       active: form.active,
-      game_enabled: form.game_enabled || false,
-      game_id: gameId,
       user_id: currentUser.id,
-      tenant_id: activeCompany?.id || currentUser.tenantId
+      tenant_id: currentUser.tenantId
     };
     
     // Check if form exists in database
@@ -564,16 +518,16 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       if (existingForm) {
         // UPDATE existing form
         await supabase.from('forms').update(formData).eq('id', form.id);
-        await fetchData(); // Reload all data to ensure consistency
+        setForms(prev => prev.map(f => f.id === form.id ? { ...f, ...form } : f));
       } else {
         // INSERT new form (ID doesn't exist in database)
-        await supabase.from('forms').insert([formData]).select().single();
-        await fetchData(); // Reload all data to ensure consistency
+        const { data } = await supabase.from('forms').insert([formData]).select().single();
+        if (data) setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
       }
     } else {
       // INSERT new form (no ID provided)
-      await supabase.from('forms').insert([formData]).select().single();
-      await fetchData(); // Reload all data to ensure consistency
+      const { data } = await supabase.from('forms').insert([formData]).select().single();
+      if (data) setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
     }
   };
 
@@ -639,22 +593,51 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       tone: (campaign as any).tone ?? '',
       evaluation_points: (campaign as any).evaluation_points ?? [],
       user_id: currentUser.id,
-      tenant_id: activeCompany?.id || currentUser.tenantId
+      tenant_id: currentUser.tenantId
     };
 
     if (campaign.id && campaigns.find(c => c.id === campaign.id)) {
-      await supabase.from('campaigns').update(campaignData).eq('id', campaign.id);
+      const { error: updateError } = await supabase.from('campaigns').update(campaignData).eq('id', campaign.id);
+      if (updateError) {
+        console.error('Erro ao atualizar campanha:', updateError);
+        alert('Erro ao salvar campanha: ' + updateError.message);
+        return;
+      }
       setCampaigns(prev => prev.map(c => c.id === campaign.id ? { ...c, ...campaign } : c));
     } else {
-      const { data } = await supabase.from('campaigns').insert([campaignData]).select().single();
+      const { data, error: insertError } = await supabase.from('campaigns').insert([campaignData]).select().single();
+      if (insertError) {
+        console.error('Erro ao inserir campanha:', insertError);
+        alert('Erro ao salvar campanha: ' + insertError.message);
+        return;
+      }
       if (data) setCampaigns(prev => [...prev, { ...data, npsScore: 0, responses: 0, questions: data.questions || [], initialFields: data.initial_fields || [], enableRedirection: data.enable_redirection, google_redirect: data.google_redirect, google_place_id: data.google_place_id, offer_prize: data.offer_prize, game_id: data.game_id, before_google_message: data.before_google_message, after_game_message: data.after_game_message, objective: data.objective, tone: data.tone, evaluation_points: data.evaluation_points }]);
     }
   };
 
   const handleDeleteCampaign = async (id: string) => {
     if (!supabase) return;
-    await supabase.from('campaigns').delete().eq('id', id);
-    setCampaigns(prev => prev.filter(c => c.id !== id));
+    
+    try {
+      // Deletar registros filhos primeiro (evita erro 409 de FK constraint)
+      await supabase.from('nps_responses').delete().eq('campaign_id', id);
+      await supabase.from('nps_game_participations').delete().eq('campaign_id', id);
+      
+      // Deletar a campanha
+      const { error } = await supabase.from('campaigns').delete().eq('id', id);
+      
+      if (error) {
+        console.error('Erro ao deletar campanha:', error);
+        alert('Erro ao excluir campanha. Tente novamente.');
+        return;
+      }
+      
+      // Atualizar estado local
+      setCampaigns(prev => prev.filter(c => c.id !== id));
+    } catch (err) {
+      console.error('Erro inesperado ao deletar campanha:', err);
+      alert('Erro inesperado ao excluir campanha.');
+    }
   };
 
   const handleAddLead = async (lead: Omit<Lead, 'id' | 'date'>) => {
@@ -668,7 +651,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       form_source: lead.formSource,
       form_id: lead.formId,
       user_id: currentUser.id,
-      tenant_id: activeCompany?.id || currentUser.tenantId,
+      tenant_id: currentUser.tenantId,
       answers: lead.answers
     }]).select().single();
     if (data && !error) {
@@ -1078,10 +1061,6 @@ Responda APENAS com JSON válido (sem markdown):
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         userRole={currentUser.role || 'admin'}
-        currentUser={currentUser}
-        activeCompany={activeCompany}
-        userCompanies={userCompanies}
-        onSwitchCompany={onSwitchCompany}
       />
       <main className={`flex-1 relative transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
         {currentUser.plan === 'trial' && daysLeft !== undefined && (
@@ -1131,7 +1110,6 @@ Responda APENAS com JSON válido (sem markdown):
                 onPreview={handlePreviewForm} 
                 onViewReport={(id) => { setReportFormId(id); setCurrentView('form-report'); }}
                 userId={currentUser.id}
-                activeCompany={activeCompany}
                 isAnalyzingAll={isAnalyzingAll}
                 analysisProgress={analysisProgress}
                 pendingAnalysisCount={pendingAnalysisCount}
@@ -1148,6 +1126,7 @@ Responda APENAS com JSON válido (sem markdown):
                 onPreview={handlePreviewSurvey} 
                 onViewReport={(id) => { setReportCampaignId(id); setCurrentView('campaign-report'); }} 
                 currentUser={currentUser}
+                businessProfile={businessProfile}
             />
         )}
         
@@ -1158,7 +1137,15 @@ Responda APENAS com JSON válido (sem markdown):
         />}
         
         {currentView === 'games' && (
-            <Game tenantId={activeCompany?.id || currentUser.tenantId} campaigns={campaigns} />
+            <div className="p-6">
+                <GameConfig tenantId={currentUser.tenantId} />
+            </div>
+        )}
+        
+        {currentView === 'game-participations' && (
+            <div className="p-6">
+                <GameParticipations tenantId={currentUser.tenantId} campaigns={campaigns} />
+            </div>
         )}
         
         {currentView === 'campaign-report' && reportCampaignId && (
@@ -1198,12 +1185,12 @@ Responda APENAS com JSON válido (sem markdown):
 
         {/* NEW VIEWS FOR HELLO GROWTH 2.0 */}
         {currentView === 'intelligence-center' && (
-          <Strategic 
+          <IntelligenceCenter 
             leads={leads}
             npsData={npsData}
+
             onNavigate={handleNavigateWithFilter}
             userId={currentUser.id}
-            activePlan={currentUser.plan}
           />
         )}
 
@@ -1230,7 +1217,7 @@ Responda APENAS com JSON válido (sem markdown):
           />
         )}
         
-
+        {currentView === 'ai-chat' && <AIChat leads={leads} npsData={npsData} activePlan={currentUser.plan} />}
         
         {currentView === 'pricing' && <Pricing currentPlan={currentUser.plan} onSelectPlan={onUpdatePlan} />}
         
