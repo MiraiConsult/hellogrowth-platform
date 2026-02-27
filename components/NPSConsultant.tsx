@@ -248,7 +248,7 @@ O que você gostaria de fazer?`,
       setTimeout(() => {
         addAssistantMessage(
           businessProfile 
-            ? `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.business_name || 'sua empresa'}**.
+            ? `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.company_name || 'sua empresa'}**.
 
 Como já conheço seu negócio, vou criar perguntas estratégicas baseadas no seu perfil.
 
@@ -589,7 +589,7 @@ Vou regenerar as perguntas com o novo tom. Um momento...`
 Sua missão é criar uma pesquisa NPS que não apenas meça uma nota, mas identifique os "Drivers de Lealdade" do negócio.
 
 CONTEXTO:
-- Negócio: ${businessProfile?.business_name || 'Empresa'}
+- Negócio: ${businessProfile?.company_name || 'Empresa'}
 - Descrição: ${businessProfile?.description || 'Não informado'}
 - Objetivo da Pesquisa: ${objective}
 - Tom de Voz: ${tone}
@@ -683,7 +683,7 @@ REGRAS:
       const otherQuestions = questions.filter(q => q.type !== 'nps');
       const orderedQuestions = npsQuestion ? [npsQuestion, ...otherQuestions] : questions;
       // Substituir [Nome da Empresa] pelo nome real no texto da pergunta NPS
-      const companyName = businessProfile?.business_name || '';
+      const companyName = businessProfile?.company_name || '';
       const finalQuestions = orderedQuestions.map(q => {
         if (q.type === 'nps' && companyName) {
           return { ...q, text: q.text.replace(/\[Nome da Empresa\]/gi, companyName) };
