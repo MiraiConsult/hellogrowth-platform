@@ -11,7 +11,7 @@ import {
   Edit3,
   Plus,
   Trash2,
-  GripVertical,
+  GripVertical, ArrowUp, ArrowDown,
   Send,
   Bot,
   User,
@@ -1012,6 +1012,26 @@ Responda:`;
     ));
   };
 
+  const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === generatedQuestions.length - 1) return;
+    const newQuestions = [...generatedQuestions];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    [newQuestions[index], newQuestions[targetIndex]] = [newQuestions[targetIndex], newQuestions[index]];
+    setGeneratedQuestions(newQuestions);
+  };
+
+  const handleMoveOption = (questionId: string, optionIndex: number, direction: 'up' | 'down') => {
+    setGeneratedQuestions(prev => prev.map(q => {
+      if (q.id !== questionId) return q;
+      const opts = [...q.options];
+      const targetIndex = direction === 'up' ? optionIndex - 1 : optionIndex + 1;
+      if (targetIndex < 0 || targetIndex >= opts.length) return q;
+      [opts[optionIndex], opts[targetIndex]] = [opts[targetIndex], opts[optionIndex]];
+      return { ...q, options: opts };
+    }));
+  };
+
   const renderProgressBar = () => {
     const steps = [
       { id: 'context', label: 'Contexto' },
@@ -1139,7 +1159,23 @@ Responda:`;
 
                 </div>
                 {question.type !== 'nps' && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-1 items-center">
+                    <button
+                      onClick={() => handleMoveQuestion(index, 'up')}
+                      disabled={index === 0}
+                      className="p-1 hover:bg-slate-100 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                      title="Mover para cima"
+                    >
+                      <ArrowUp className="w-4 h-4 text-slate-500" />
+                    </button>
+                    <button
+                      onClick={() => handleMoveQuestion(index, 'down')}
+                      disabled={index === generatedQuestions.length - 1}
+                      className="p-1 hover:bg-slate-100 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                      title="Mover para baixo"
+                    >
+                      <ArrowDown className="w-4 h-4 text-slate-500" />
+                    </button>
                     <button
                       onClick={() => setEditingQuestionId(editingQuestionId === question.id ? null : question.id)}
                       className="p-1 hover:bg-slate-100 rounded transition-colors"
@@ -1203,7 +1239,25 @@ Responda:`;
                       <label className="block text-xs font-medium text-slate-600 mb-2">Alternativas</label>
                       <div className="space-y-2">
                         {question.options.map((opt, optIndex) => (
-                          <div key={opt.id} className="flex gap-2">
+                          <div key={opt.id} className="flex gap-2 items-center">
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                onClick={() => handleMoveOption(question.id, optIndex, 'up')}
+                                disabled={optIndex === 0}
+                                className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                                title="Mover para cima"
+                              >
+                                <ArrowUp className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => handleMoveOption(question.id, optIndex, 'down')}
+                                disabled={optIndex === question.options.length - 1}
+                                className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                                title="Mover para baixo"
+                              >
+                                <ArrowDown className="w-3 h-3" />
+                              </button>
+                            </div>
                             <input
                               type="text"
                               value={opt.text}

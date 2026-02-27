@@ -173,6 +173,17 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setCurrentQuestions(newQuestions);
   };
 
+  const handleMoveOption = (questionId: string, optionIndex: number, direction: 'up' | 'down') => {
+    setCurrentQuestions(prev => prev.map(q => {
+      if (q.id !== questionId) return q;
+      const opts = [...(q.options || [])];
+      const targetIndex = direction === 'up' ? optionIndex - 1 : optionIndex + 1;
+      if (targetIndex < 0 || targetIndex >= opts.length) return q;
+      [opts[optionIndex], opts[targetIndex]] = [opts[targetIndex], opts[optionIndex]];
+      return { ...q, options: opts };
+    }));
+  };
+
   // Generate a single script for a specific option
   const handleGenerateScript = async (questionId: string, optionId: string, questionText: string, optionLabel: string) => {
     if (!questionText || !optionLabel) return;
@@ -795,14 +806,32 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                      <div className="pl-4 border-l-2 border-gray-100 mt-4 space-y-4">
                        <p className="text-sm font-semibold text-gray-700">Alternativas e Automações</p>
                        
-                       {q.options?.map((opt) => (
+                       {q.options?.map((opt, optIndex) => (
                          <div key={opt.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200 relative group">
-                           <button 
-                             onClick={() => removeOption(q.id, opt.id)}
-                             className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                           >
-                             <Trash2 size={14} />
-                           </button>
+                           <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                             <button
+                               onClick={() => handleMoveOption(q.id, optIndex, 'up')}
+                               disabled={optIndex === 0}
+                               className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-20 disabled:cursor-not-allowed"
+                               title="Mover para cima"
+                             >
+                               <ArrowUp size={12} />
+                             </button>
+                             <button
+                               onClick={() => handleMoveOption(q.id, optIndex, 'down')}
+                               disabled={optIndex === (q.options?.length ?? 1) - 1}
+                               className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-20 disabled:cursor-not-allowed"
+                               title="Mover para baixo"
+                             >
+                               <ArrowDown size={12} />
+                             </button>
+                             <button 
+                               onClick={() => removeOption(q.id, opt.id)}
+                               className="p-1 text-gray-300 hover:text-red-500 transition-colors"
+                             >
+                               <Trash2 size={14} />
+                             </button>
+                           </div>
                            
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                              <div>
