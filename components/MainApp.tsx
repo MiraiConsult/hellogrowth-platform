@@ -1061,6 +1061,8 @@ Responda APENAS com JSON válido (sem markdown):
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         userRole={currentUser.role || 'admin'}
+        leads={leads}
+        npsData={npsData}
       />
       <main className={`flex-1 relative transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
         {currentUser.plan === 'trial' && daysLeft !== undefined && (

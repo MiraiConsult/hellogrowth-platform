@@ -1,5 +1,5 @@
 // Navigation.tsx - Com Logo HelloGrowth
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, 
   Users, 
@@ -21,7 +21,12 @@ import {
   Crown,
   Brain,
   Package,
-  Gift
+  Gift,
+  AlertTriangle,
+  TrendingUp,
+  DollarSign,
+  Heart,
+  Target
 } from 'lucide-react';
 import { PlanType, Company, UserCompany } from '@/types';
 import CompanySwitcher from '@/components/CompanySwitcher';
@@ -39,6 +44,8 @@ interface NavigationProps {
   activeCompany?: Company | null;
   userCompanies?: UserCompany[];
   onSwitchCompany?: (companyId: string) => void;
+  leads?: any[];
+  npsData?: any[];
 }
 
 type MenuItem = {
@@ -61,6 +68,180 @@ type MenuGroup = {
 
 type NavigationItem = MenuItem | MenuGroup;
 
+
+// ============================================
+// INSIGHT TICKER - Ticker animado no sidebar
+// ============================================
+interface InsightTickerProps {
+  leads: any[];
+  npsData: any[];
+  isCollapsed: boolean;
+  onNavigate: (view: string) => void;
+}
+
+const TICKER_ITEMS = [
+  { 
+    type: 'opportunity', 
+    label: 'Oportunidades', 
+    icon: TrendingUp, 
+    color: 'emerald',
+    bgClass: 'from-emerald-50 to-green-50',
+    textClass: 'text-emerald-700',
+    iconClass: 'text-emerald-500',
+    borderClass: 'border-emerald-200',
+    badgeClass: 'bg-emerald-100 text-emerald-700',
+    view: 'kanban'
+  },
+  { 
+    type: 'risk', 
+    label: 'Riscos', 
+    icon: AlertTriangle, 
+    color: 'red',
+    bgClass: 'from-red-50 to-rose-50',
+    textClass: 'text-red-700',
+    iconClass: 'text-red-500',
+    borderClass: 'border-red-200',
+    badgeClass: 'bg-red-100 text-red-700',
+    view: 'intelligence-center'
+  },
+  { 
+    type: 'sales', 
+    label: 'Vendas', 
+    icon: DollarSign, 
+    color: 'blue',
+    bgClass: 'from-blue-50 to-indigo-50',
+    textClass: 'text-blue-700',
+    iconClass: 'text-blue-500',
+    borderClass: 'border-blue-200',
+    badgeClass: 'bg-blue-100 text-blue-700',
+    view: 'kanban'
+  },
+  { 
+    type: 'recovery', 
+    label: 'Recuperação', 
+    icon: Heart, 
+    color: 'purple',
+    bgClass: 'from-purple-50 to-violet-50',
+    textClass: 'text-purple-700',
+    iconClass: 'text-purple-500',
+    borderClass: 'border-purple-200',
+    badgeClass: 'bg-purple-100 text-purple-700',
+    view: 'analytics'
+  }
+];
+
+const InsightTicker: React.FC<InsightTickerProps> = ({ leads, npsData, isCollapsed, onNavigate }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  // Calcular contadores
+  const counts = useMemo(() => {
+    const promoters = npsData.filter((n: any) => n.status === 'Promotor').length;
+    const highValueLeads = leads.filter((l: any) => l.status === 'Negociação' && Number(l.value || 0) >= 1000).length;
+    
+    const detractors = npsData.filter((n: any) => n.status === 'Detrator').length;
+    const staleLeads = leads.filter((l: any) => {
+      const daysSince = Math.floor((Date.now() - new Date(l.date).getTime()) / (1000 * 60 * 60 * 24));
+      return daysSince > 7 && l.status !== 'Vendido' && l.status !== 'Perdido';
+    }).length;
+    
+    const salesLeads = leads.filter((l: any) => 
+      l.status === 'Novo' || l.status === 'Em Contato' || l.status === 'Negociação' || l.status === 'Vendido'
+    ).length;
+    
+    const neutrals = npsData.filter((n: any) => n.status === 'Neutro').length;
+
+    return {
+      opportunity: promoters + highValueLeads,
+      risk: detractors + staleLeads,
+      sales: salesLeads,
+      recovery: neutrals
+    };
+  }, [leads, npsData]);
+
+  // Auto-rotate ticker a cada 3 segundos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIsAnimating(true);
+      setTimeout(() => {
+        setActiveIndex((prev) => (prev + 1) % TICKER_ITEMS.length);
+        setIsAnimating(false);
+      }, 300);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const currentItem = TICKER_ITEMS[activeIndex];
+  const currentCount = counts[currentItem.type as keyof typeof counts];
+  const Icon = currentItem.icon;
+
+  // Versão colapsada - ícone que rotaciona
+  if (isCollapsed) {
+    return (
+      <div className="flex justify-center mb-3">
+        <button
+          onClick={() => onNavigate(currentItem.view)}
+          className={`w-10 h-10 rounded-xl bg-gradient-to-br ${currentItem.bgClass} border ${currentItem.borderClass} flex items-center justify-center hover:scale-105 transition-all duration-300 relative`}
+          title={`${currentItem.label}: ${currentCount}`}
+        >
+          <Icon size={18} className={`${currentItem.iconClass} transition-all duration-300 ${isAnimating ? 'opacity-0 scale-75' : 'opacity-100 scale-100'}`} />
+          {currentCount > 0 && (
+            <span className={`absolute -top-1 -right-1 w-4 h-4 ${currentItem.badgeClass} rounded-full text-[10px] font-bold flex items-center justify-center`}>
+              {currentCount > 9 ? '9+' : currentCount}
+            </span>
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  // Versão expandida - card com animação
+  return (
+    <div className="mb-3">
+      <button
+        onClick={() => onNavigate(currentItem.view)}
+        className={`w-full bg-gradient-to-br ${currentItem.bgClass} border ${currentItem.borderClass} p-3 rounded-xl hover:shadow-md transition-all duration-300 cursor-pointer group text-left`}
+      >
+        <div className={`transition-all duration-300 ${isAnimating ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`}>
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <Icon size={16} className={currentItem.iconClass} />
+              <span className={`text-xs font-semibold uppercase tracking-wider ${currentItem.textClass}`}>
+                {currentItem.label}
+              </span>
+            </div>
+            <span className={`text-lg font-bold ${currentItem.textClass}`}>
+              {currentCount}
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-500 group-hover:text-slate-600 transition-colors">
+            Clique para ver detalhes
+          </p>
+        </div>
+        {/* Indicadores de posição */}
+        <div className="flex justify-center gap-1 mt-2">
+          {TICKER_ITEMS.map((item, idx) => {
+            const dotColors: Record<string, string> = {
+              emerald: 'bg-emerald-400',
+              red: 'bg-red-400',
+              blue: 'bg-blue-400',
+              purple: 'bg-purple-400'
+            };
+            return (
+              <div 
+                key={idx} 
+                className={`h-1 rounded-full transition-all duration-300 ${
+                  idx === activeIndex ? `w-4 ${dotColors[item.color]}` : 'w-1.5 bg-slate-200'
+                }`} 
+              />
+            );
+          })}
+        </div>
+      </button>
+    </div>
+  );
+};
+
 const Navigation: React.FC<NavigationProps> = ({ 
   currentView, 
   setCurrentView, 
@@ -72,7 +253,9 @@ const Navigation: React.FC<NavigationProps> = ({
   currentUser,
   activeCompany,
   userCompanies = [],
-  onSwitchCompany
+  onSwitchCompany,
+  leads = [],
+  npsData = []
 }) => {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     'helloclient': true,
@@ -375,36 +558,13 @@ const Navigation: React.FC<NavigationProps> = ({
 
       {/* Footer */}
       <div className="p-4 border-t border-slate-100">
-        {(userRole === 'admin' || userRole === 'owner') && (
-          !isCollapsed ? (
-            <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-4 rounded-xl mb-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Crown size={16} className="text-amber-500" />
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Seu Plano</span>
-              </div>
-              <p className="font-bold text-slate-800 capitalize text-lg">
-                {activePlan === 'growth_lifetime' ? 'Lifetime' : activePlan === 'growth' ? 'Growth' : activePlan}
-              </p>
-              <button 
-                onClick={() => setCurrentView('pricing')}
-                className="text-xs text-emerald-600 font-medium mt-2 hover:text-emerald-700 flex items-center gap-1 group"
-              >
-                <Sparkles size={12} className="group-hover:animate-pulse" />
-                Gerenciar Assinatura
-              </button>
-            </div>
-          ) : (
-            <div className="flex justify-center mb-3">
-              <button 
-                onClick={() => setCurrentView('pricing')}
-                className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30 hover:scale-105 transition-transform"
-                title="Gerenciar Plano"
-              >
-                <Crown size={18} />
-              </button>
-            </div>
-          )
-        )}
+        {/* Ticker de Insights Animado */}
+        <InsightTicker 
+          leads={leads} 
+          npsData={npsData} 
+          isCollapsed={isCollapsed} 
+          onNavigate={(view: string) => setCurrentView(view)} 
+        />
         
         <button 
           onClick={onLogout}
