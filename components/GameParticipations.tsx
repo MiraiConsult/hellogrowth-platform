@@ -11,6 +11,7 @@ interface Participation {
   prize_won: string;
   prize_code: string;
   status: 'pending' | 'sent' | 'redeemed';
+  source?: 'pre-sale' | 'post-sale';
   played_at: string;
   sent_at?: string;
   redeemed_at?: string;
@@ -376,6 +377,9 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
                     Campanha
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Origem
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Contato
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -406,6 +410,15 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
                         {participation.campaign_id ? (
                           campaigns.find(c => c.id === participation.campaign_id)?.name || 'Carregando...'
                         ) : 'Direto'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className={`text-xs font-medium px-2 py-1 rounded-md inline-block ${
+                        participation.source === 'pre-sale' 
+                          ? 'text-blue-600 bg-blue-50' 
+                          : 'text-green-600 bg-green-50'
+                      }`}>
+                        {participation.source === 'pre-sale' ? 'Pré-venda' : 'Pós-venda'}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">

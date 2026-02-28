@@ -3,7 +3,7 @@ import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
 import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import Markdown from 'react-markdown';
+import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Pie, Cell, PieChart as RechartsPieChart } from 'recharts';
 import MessageSuggestionsPanel from './MessageSuggestionsPanel';

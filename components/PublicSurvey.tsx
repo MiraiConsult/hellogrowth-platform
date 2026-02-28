@@ -181,13 +181,13 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
     // Redirect Logic
     const placeId = getPlaceId();
     const redirectEnabled = isGoogleRedirectEnabled();
-    const prizeEnabled = isPrizeEnabled();
+    const hasGame = gameData && (campaign as any).game_id;
     
-    // Se tem prêmio habilitado e é promotor (score >= 9), vai para o jogo
-    if (prizeEnabled && finalScore >= 9) {
+    // Se tem game configurado e é promotor (score >= 9), vai para o jogo
+    if (hasGame && finalScore >= 9) {
         setStep('game');
     } else if (redirectEnabled && finalScore >= 9 && placeId) {
-        // Se não tem prêmio mas tem redirect e é promotor, vai direto para redirecting
+        // Se não tem game mas tem redirect e é promotor, vai direto para redirecting
         setStep('redirecting');
         setTimeout(() => {
             const googleUrl = `https://search.google.com/local/writereview?placeid=${placeId}`;
@@ -437,6 +437,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                 clientPhone={respondent.phone}
                 customMessage={gameData.messages?.before || 'Gire a roleta e ganhe prêmios incríveis!'}
                 onComplete={handleGameComplete}
+                source="post-sale"
               />
             </div>
           )}

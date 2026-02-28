@@ -120,8 +120,8 @@ export default function HomePage() {
         setCurrentUser(updatedUser);
         localStorage.setItem('hg_current_user', JSON.stringify(updatedUser));
 
-        // Aguardar um pouco para garantir que o localStorage foi salvo
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Aguardar para garantir que o localStorage foi salvo
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         // Forçar reload para recarregar todos os dados com o novo tenant
         window.location.reload();

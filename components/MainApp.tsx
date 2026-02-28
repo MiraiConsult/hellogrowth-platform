@@ -85,6 +85,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [npsData, setNpsData] = useState<NPSResponse[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [businessProfile, setBusinessProfile] = useState<any>(null);
   const [forms, setForms] = useState<Form[]>([]);
   const [settings, setSettings] = useState<AccountSettings>(mockSettings);
   const [loading, setLoading] = useState(true);
@@ -256,13 +257,16 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
             supabase.from('leads').select('*').eq('tenant_id', tenantId),
             supabase.from('campaigns').select('*').eq('tenant_id', tenantId),
             supabase.from('forms').select('*').eq('tenant_id', tenantId),
-            supabase.from('nps_responses').select('*').eq('tenant_id', tenantId)
+            supabase.from('nps_responses').select('*').eq('tenant_id', tenantId),
+            supabase.from('business_profile').select('*').eq('tenant_id', tenantId).maybeSingle()
           ]);
 
           const dbLeads = results[0].data;
           const dbCampaigns = results[1].data;
           const dbForms = results[2].data;
           const dbNPS = results[3].data;
+          const dbBizProfile = results[4].data;
+          if (dbBizProfile) setBusinessProfile(dbBizProfile);
           const dbUser = ownerSettings;
 
           // --- PROCESS DATA ---
@@ -593,18 +597,47 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     };
 
     if (campaign.id && campaigns.find(c => c.id === campaign.id)) {
-      await supabase.from('campaigns').update(campaignData).eq('id', campaign.id);
+      const { error: updateError } = await supabase.from('campaigns').update(campaignData).eq('id', campaign.id);
+      if (updateError) {
+        console.error('Erro ao atualizar campanha:', updateError);
+        alert('Erro ao salvar campanha: ' + updateError.message);
+        return;
+      }
       setCampaigns(prev => prev.map(c => c.id === campaign.id ? { ...c, ...campaign } : c));
     } else {
-      const { data } = await supabase.from('campaigns').insert([campaignData]).select().single();
+      const { data, error: insertError } = await supabase.from('campaigns').insert([campaignData]).select().single();
+      if (insertError) {
+        console.error('Erro ao inserir campanha:', insertError);
+        alert('Erro ao salvar campanha: ' + insertError.message);
+        return;
+      }
       if (data) setCampaigns(prev => [...prev, { ...data, npsScore: 0, responses: 0, questions: data.questions || [], initialFields: data.initial_fields || [], enableRedirection: data.enable_redirection, google_redirect: data.google_redirect, google_place_id: data.google_place_id, offer_prize: data.offer_prize, game_id: data.game_id, before_google_message: data.before_google_message, after_game_message: data.after_game_message, objective: data.objective, tone: data.tone, evaluation_points: data.evaluation_points }]);
     }
   };
 
   const handleDeleteCampaign = async (id: string) => {
     if (!supabase) return;
-    await supabase.from('campaigns').delete().eq('id', id);
-    setCampaigns(prev => prev.filter(c => c.id !== id));
+    
+    try {
+      // Deletar registros filhos primeiro (evita erro 409 de FK constraint)
+      await supabase.from('nps_responses').delete().eq('campaign_id', id);
+      await supabase.from('nps_game_participations').delete().eq('campaign_id', id);
+      
+      // Deletar a campanha
+      const { error } = await supabase.from('campaigns').delete().eq('id', id);
+      
+      if (error) {
+        console.error('Erro ao deletar campanha:', error);
+        alert('Erro ao excluir campanha. Tente novamente.');
+        return;
+      }
+      
+      // Atualizar estado local
+      setCampaigns(prev => prev.filter(c => c.id !== id));
+    } catch (err) {
+      console.error('Erro inesperado ao deletar campanha:', err);
+      alert('Erro inesperado ao excluir campanha.');
+    }
   };
 
   const handleAddLead = async (lead: Omit<Lead, 'id' | 'date'>) => {
@@ -1028,6 +1061,8 @@ Responda APENAS com JSON válido (sem markdown):
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         userRole={currentUser.role || 'admin'}
+        leads={leads}
+        npsData={npsData}
       />
       <main className={`flex-1 relative transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
         {currentUser.plan === 'trial' && daysLeft !== undefined && (
@@ -1093,6 +1128,7 @@ Responda APENAS com JSON válido (sem markdown):
                 onPreview={handlePreviewSurvey} 
                 onViewReport={(id) => { setReportCampaignId(id); setCurrentView('campaign-report'); }} 
                 currentUser={currentUser}
+                businessProfile={businessProfile}
             />
         )}
         

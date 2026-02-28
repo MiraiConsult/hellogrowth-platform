@@ -11,6 +11,7 @@ import {
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from '@/lib/supabase';
+import ReactMarkdown from 'react-markdown';
 
 interface ActionInsight {
   id: string;
@@ -566,7 +567,9 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
                   </div>
                 ) : (
                   <div className="prose prose-sm max-w-none">
-                    <div className="text-sm text-gray-700 whitespace-pre-wrap">{aiResponse}</div>
+                    <div className="text-sm text-gray-700">
+                      <ReactMarkdown>{aiResponse}</ReactMarkdown>
+                    </div>
                   </div>
                 )}
               </div>

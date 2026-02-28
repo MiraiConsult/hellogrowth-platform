@@ -539,7 +539,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
           // Extrai o valor da resposta
           let answerValue: any;
           if (typeof ans === 'object' && ans !== null) {
-            answerValue = ans.value !== undefined ? ans.value : (ans.answer || ans.text || JSON.stringify(ans));
+            answerValue = ans.value !== undefined ? ans.value : (ans.answer || ans.text || ans.label || ans.resposta || '[Resposta não disponível]');
           } else {
             answerValue = ans;
           }
@@ -605,9 +605,11 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
   };
 
   const handleEmail = async (client: ClientAnalysis) => {
+    // Abrir cliente de email local com mailto:
     const subject = encodeURIComponent(client.emailSubject);
     const body = encodeURIComponent(client.emailBody);
-    window.open(`mailto:${client.email}?subject=${subject}&body=${body}`, '_blank');
+    const mailtoLink = `mailto:${client.email}?subject=${subject}&body=${body}`;
+    window.open(mailtoLink);
     
     // Add to history
     await addToHistory(client.id, client.email, client.type, 'email_sent', undefined, undefined, `${client.emailSubject}\n\n${client.emailBody}`);
@@ -1046,22 +1048,6 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
 
           {/* Right Column - Actions */}
           <div className="space-y-4">
-            {/* Coach IA Button - MOVED HERE */}
-            {selectedClient.type === 'lead' && (
-              <button
-                onClick={() => {
-                  setSalesCoachClient(selectedClient);
-                  setShowSalesCoach(true);
-                  // Add to history
-                  addToHistory(selectedClient.id, selectedClient.email, selectedClient.type, 'coach_used');
-                }}
-                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium px-4 py-3 rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg"
-              >
-                <Sparkles size={18} />
-                Coach de Vendas IA
-              </button>
-            )}
-
             {/* Mark Action Status */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <h3 className="font-bold text-gray-900 mb-3 text-sm">Marcar Status</h3>

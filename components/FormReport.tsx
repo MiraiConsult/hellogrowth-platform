@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Form, Lead } from '@/types';
-import { ArrowLeft, ArrowRight, Users, DollarSign, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, Target, Filter, X, Mail, Phone, FileText, Edit2, Plus, Trash2, Check, AlertCircle, Zap, Send, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Users, DollarSign, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, Target, Filter, X, Mail, Phone, FileText, Edit2, Plus, Trash2, Check, AlertCircle, Zap, Send, RefreshCw, Gift } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -21,9 +21,10 @@ interface FormReportProps {
   supabase?: SupabaseClient;
   userId?: string;
   onLeadUpdate?: (leadId: string, updatedData: any) => void;
+  onLeadDelete?: (leadId: string) => void;
 }
 
-const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, supabase, userId, onLeadUpdate }) => {
+const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, supabase, userId, onLeadUpdate, onLeadDelete }) => {
   const tenantId = useTenantId()
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -114,6 +115,22 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
     };
     fetchProducts();
   }, [supabase, userId]);
+
+  const handleDeleteLead = async (leadId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este lead? Esta ação não pode ser desfeita.')) return;
+    if (!supabase) return;
+    
+    const { error } = await supabase.from('leads').delete().eq('id', leadId);
+    
+    if (error) {
+      console.error('Erro ao deletar lead:', error);
+      alert('Erro ao excluir lead. Tente novamente.');
+      return;
+    }
+    
+    if (onLeadDelete) onLeadDelete(leadId);
+    if (selectedLead?.id === leadId) setSelectedLead(null);
+  };
 
   // Inicializar produtos editados quando seleciona um lead
   useEffect(() => {
@@ -501,6 +518,11 @@ INSTRUÇÕES DE RESPOSTA:
               <span className={`text-xs px-2 py-1 rounded-full border ${form.active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                 {form.active ? 'Ativo' : 'Inativo'}
               </span>
+              {form.game_enabled && (
+                <span className="text-xs px-2 py-1 rounded-full border border-purple-100 text-purple-600 bg-purple-50 flex items-center gap-1">
+                  <Gift size={12} /> Game Ativo
+                </span>
+              )}
             </h1>
             <p className="text-gray-500 text-sm mt-1">Performance de captação e qualificação</p>
           </div>
@@ -653,6 +675,7 @@ INSTRUÇÕES DE RESPOSTA:
               <th className="px-6 py-3 font-medium">Status</th>
               <th className="px-6 py-3 font-medium">Valor Oportunidade</th>
               <th className="px-6 py-3 font-medium">Data</th>
+              <th className="px-6 py-3 font-medium"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -687,11 +710,20 @@ INSTRUÇÕES DE RESPOSTA:
                     {new Date(lead.date || Date.now()).toLocaleDateString('pt-BR')}
                   </div>
                 </td>
+                <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => handleDeleteLead(lead.id)}
+                    className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                    title="Excluir lead"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </td>
               </tr>
             ))}
             {formLeads.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                   Nenhum lead captado por este formulário ainda.
                 </td>
               </tr>

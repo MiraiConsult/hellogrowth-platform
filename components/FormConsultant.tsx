@@ -32,8 +32,8 @@ import {
   Heart,
   ChevronDown,
   ChevronUp,
-  Copy
-} from 'lucide-react';
+  Copy,
+  ArrowUp, ArrowDown} from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 
@@ -151,6 +151,16 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [initialMessageSent, setInitialMessageSent] = useState(false);
   const [isEditingTone, setIsEditingTone] = useState(false); // Modo de edição de tom (reescrever perguntas existentes)
+  const [gameEnabled, setGameEnabled] = useState(false); // Ativar Game no formulário
+  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+  const [availableGames, setAvailableGames] = useState<any[]>([]);
+  
+  // Estados para o Chat de Ajuste na tela de revisão
+  const [reviewChatMessages, setReviewChatMessages] = useState<ChatMessage[]>([]);
+  const [reviewChatInput, setReviewChatInput] = useState('');
+  const [isReviewChatProcessing, setIsReviewChatProcessing] = useState(false);
+  const [showReviewChat, setShowReviewChat] = useState(true);
+  const strategyExplanationGenerated = useRef(false);
   
   // Estabilizar existingForm para evitar re-renders
   const stableExistingForm = useMemo(() => existingForm, [existingForm?.id]);
@@ -208,13 +218,45 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       console.log('Perguntas carregadas:', loadedQuestions);
       setGeneratedQuestions(loadedQuestions);
       setFormName(stableExistingForm.name || '');
+      setGameEnabled(stableExistingForm.game_enabled || false);
+      setSelectedGameId(stableExistingForm.game_id || null);
       
-      // Carregar contexto se existir
-      if (stableExistingForm.ai_context?.businessContext) {
-        setBusinessContext(prev => ({
-          ...prev,
-          ...stableExistingForm.ai_context.businessContext
+      // Carregar campos de identificação salvos
+      // IMPORTANTE: O banco salva como initial_fields, e o MainApp mapeia para initialFields
+      const savedFields = stableExistingForm.initialFields || stableExistingForm.initial_fields || stableExistingForm.identification_fields;
+      
+      if (savedFields && Array.isArray(savedFields) && savedFields.length > 0) {
+        const loadedFields = savedFields.map((field: any) => ({
+          id: field.field || field.id || 'unknown',
+          label: field.label || field.name || '',
+          type: field.type || 'text',
+          enabled: field.enabled !== undefined ? field.enabled : true,
+          required: field.required !== undefined ? field.required : false,
+          placeholder: field.placeholder || `Digite seu ${(field.label || '').toLowerCase()}`
         }));
+        
+        // Carregar contexto se existir (mas preservar identificationFields do banco)
+        if (stableExistingForm.ai_context?.businessContext) {
+          const { identificationFields: _, ...contextWithoutFields } = stableExistingForm.ai_context.businessContext;
+          setBusinessContext(prev => ({
+            ...prev,
+            ...contextWithoutFields,
+            identificationFields: loadedFields
+          }));
+        } else {
+          setBusinessContext(prev => ({
+            ...prev,
+            identificationFields: loadedFields
+          }));
+        }
+      } else {
+        // Sem campos salvos - carregar contexto normalmente
+        if (stableExistingForm.ai_context?.businessContext) {
+          setBusinessContext(prev => ({
+            ...prev,
+            ...stableExistingForm.ai_context.businessContext
+          }));
+        }
       }
     }
   }, [stableExistingForm]);
@@ -251,8 +293,23 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
     if (supabase && userId && tenantId) {
       fetchProducts();
       fetchBusinessProfile();
+      loadAvailableGames();
     }
   }, [supabase, userId, tenantId]);
+
+  const loadAvailableGames = async () => {
+    try {
+      const response = await fetch('/api/games', {
+        headers: { 'x-tenant-id': tenantId || '' }
+      });
+      if (response.ok) {
+        const games = await response.json();
+        setAvailableGames(games.filter((g: any) => g.status === 'active'));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar games:', error);
+    }
+  };
 
   const fetchBusinessProfile = async () => {
     if (!supabase) return;
@@ -947,7 +1004,8 @@ Responda APENAS com um JSON válido no formato:
         productsSection += `\n🎯 IMPORTANTE: Crie perguntas que identifiquem se o cliente tem necessidades/problemas que ESTES produtos resolvem. Use as descrições acima para entender o que cada produto oferece.`;
       }
 
-      const prompt = `Você é um especialista em criação de formulários de qualificação de leads. Crie 5 perguntas estratégicas para um formulário.
+      const prompt = `Você é um estrategista sênior de vendas e copywriter especialista em qualificação de leads. 
+Seu objetivo não é apenas criar perguntas, mas desenhar uma jornada de consciência para o lead.
 
 CONTEXTO DO NEGÓCIO:
 - Tipo: ${businessContext.businessType}
@@ -959,16 +1017,30 @@ CONTEXTO DO NEGÓCIO:
 🎯 CRITÉRIOS DE QUALIFICAÇÃO (PRIORIDADE MÁXIMA):
 ${businessContext.qualificationCriteria ? businessContext.qualificationCriteria : 'Não especificado'}
 
-REGRAS:
-1. **OBRIGATÓRIO**: Crie perguntas que capturem TODAS as informações dos CRITÉRIOS DE QUALIFICAÇÃO acima
-2. ${selectedProductsInfo.length > 0 ? '**OBRIGATÓRIO**: Crie perguntas que identifiquem se o cliente precisa dos PRODUTOS EM FOCO listados acima' : 'As perguntas devem qualificar o lead para os produtos/serviços do negócio'}
-3. As perguntas devem ser INDIRETAS e naturais, não pareçam um interrogatório de vendas
-4. Cada pergunta deve revelar algo sobre a intenção de compra e qualificação do cliente
-5. Use o tom especificado (${businessContext.formTone})
-6. Varie os tipos: single_choice (escolha única), multiple_choice (múltipla escolha), text (texto livre)
-7. Para perguntas de escolha, forneça 3-5 opções relevantes
-8. Se os critérios mencionam "poder aquisitório" ou "quanto pode gastar", CRIE uma pergunta de faixa de preço
-9. Se os critérios mencionam "urgência" ou "prazo", CRIE uma pergunta sobre timeline
+SUA MISSÃO:
+Crie 5 perguntas estratégicas seguindo o framework de Venda Consultiva (SPIN Selling). 
+As perguntas devem fazer o lead refletir sobre o problema dele e como o seu negócio é a solução natural.
+
+PASSO A PASSO DO SEU RACIOCÍNIO (Chain of Thought):
+1. Identifique o 'Custo da Inação': O que o lead perde (dinheiro, tempo, saúde) se não resolver o problema hoje?
+2. Mapeie a 'Transformação Real': Além da descrição técnica, qual a mudança de vida que o produto entrega?
+3. Crie perguntas que:
+   - Revelem a profundidade do problema (Implicação).
+   - Façam o lead admitir a necessidade da solução (Necessidade de Solução).
+   - Qualifiquem o lead sem parecer um interrogatório.
+
+REGRAS CRÍTICAS (NUNCA IGNORE):
+1. **OBRIGATÓRIO E INEGOCIÁVEL**: Para CADA item listado em "CRITÉRIOS DE QUALIFICAÇÃO", você DEVE criar pelo menos UMA pergunta que capture essa informação. Se o usuário pediu "poder aquisitório", DEVE haver uma pergunta sobre orçamento/investimento. Se pediu "urgência", DEVE haver pergunta sobre prazo. NÃO PULE NENHUM CRITÉRIO.
+2. ${selectedProductsInfo.length > 0 ? '**OBRIGATÓRIO**: Identifique se o cliente precisa dos PRODUTOS EM FOCO listados acima.' : 'Qualifique o lead para os produtos/serviços do negócio.'}
+3. As perguntas devem ser INDIRETAS e naturais (não pergunte "qual seu orçamento?", pergunte "qual faixa de investimento você considera ideal?").
+4. Use o tom ${businessContext.formTone}.
+5. Varie os tipos: single_choice, multiple_choice, text.
+6. Forneça 3-5 opções relevantes para perguntas de escolha.
+7. **CRUCIAL**: O campo 'insight' deve:
+   - Citar ESPECIFICAMENTE o que o cliente escreveu (ex: "Você mencionou que seu público tem 'medo de agulhas'...")
+   - Explicar como a pergunta ataca essa dor/objeção específica
+   - Revelar a estratégia de vendas por trás da pergunta
+   - Ser didático e educativo, como se estivesse ensinando o dono do negócio
 
 Responda APENAS com JSON válido neste formato:
 {
@@ -977,7 +1049,7 @@ Responda APENAS com JSON válido neste formato:
       "text": "Texto da pergunta",
       "type": "single_choice",
       "options": ["Opção 1", "Opção 2", "Opção 3"],
-      "insight": "O que essa resposta revela sobre o cliente"
+      "insight": "Você mencionou que [citação do input do cliente]. Esta pergunta ataca essa dor porque [explicação estratégica]. Isso facilita o fechamento pois [resultado esperado]."
     }
   ]
 }`;
@@ -1065,7 +1137,14 @@ Responda APENAS com JSON válido neste formato:
       ...(stableExistingForm?.id && { id: stableExistingForm.id }), // Mantém ID se for edição
       name: formName || `Formulário ${new Date().toLocaleDateString('pt-BR')}`,
       description: businessContext.customObjective || businessContext.businessDescription || 'Formulário de qualificação de leads',
-      identification_fields: businessContext.identificationFields.filter(f => f.enabled),
+      // Enviar todos os campos (incluindo desabilitados) para preservar configuração
+      identification_fields: businessContext.identificationFields.map(f => ({
+        field: f.id,
+        label: f.label,
+        placeholder: f.placeholder || '',
+        required: f.required,
+        enabled: f.enabled
+      })),
       questions: generatedQuestions.map(q => ({
         id: q.id,
         text: q.text,
@@ -1081,6 +1160,8 @@ Responda APENAS com JSON válido neste formato:
         products: products,
         businessContext: businessContext
       },
+      game_enabled: gameEnabled,
+      game_id: selectedGameId || null,
       status: 'active'
     };
 
@@ -1096,6 +1177,26 @@ Responda APENAS com JSON válido neste formato:
   // Question editing functions
   const handleRemoveQuestion = (id: string) => {
     setGeneratedQuestions(prev => prev.filter(q => q.id !== id));
+  };
+
+  const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === generatedQuestions.length - 1) return;
+    const newQuestions = [...generatedQuestions];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    [newQuestions[index], newQuestions[targetIndex]] = [newQuestions[targetIndex], newQuestions[index]];
+    setGeneratedQuestions(newQuestions);
+  };
+
+  const handleMoveOption = (questionId: string, optionIndex: number, direction: 'up' | 'down') => {
+    setGeneratedQuestions(prev => prev.map(q => {
+      if (q.id !== questionId) return q;
+      const opts = [...q.options];
+      const targetIndex = direction === 'up' ? optionIndex - 1 : optionIndex + 1;
+      if (targetIndex < 0 || targetIndex >= opts.length) return q;
+      [opts[optionIndex], opts[targetIndex]] = [opts[targetIndex], opts[optionIndex]];
+      return { ...q, options: opts };
+    }));
   };
 
   const handleEditQuestion = (id: string, field: keyof GeneratedQuestion, value: any) => {
@@ -1196,6 +1297,292 @@ Responda APENAS com JSON válido neste formato:
       ...prev,
       identificationFields: prev.identificationFields.map(f =>
         f.id === fieldId ? { ...f, required: !f.required } : f
+      )
+    }));
+  };
+
+  // Função para processar mensagens do Chat de Ajuste
+  const handleReviewChatMessage = async (message: string) => {
+    if (!message.trim()) return;
+
+    // Adiciona mensagem do usuário
+    const userMessage: ChatMessage = {
+      id: `msg_${Date.now()}`,
+      role: 'user',
+      content: message,
+      timestamp: new Date()
+    };
+    setReviewChatMessages(prev => [...prev, userMessage]);
+    setReviewChatInput('');
+    setIsReviewChatProcessing(true);
+
+    try {
+      // Detectar se é um pedido de mudança
+      const changeKeywords = [
+        'diminua', 'aumente', 'mude', 'altere', 'modifique', 'troque', 
+        'adicione', 'inclua', 'remova', 'delete', 'tire', 'ajuste', 'corrija',
+        'coloque', 'insira', 'acrescente', 'ponha', 'bote', 'crie',
+        'exclua', 'apague', 'substitua', 'reescreva', 'refatore'
+      ];
+      const isChangeRequest = changeKeywords.some(keyword => message.toLowerCase().includes(keyword));
+      
+      console.log('[ReviewChat DEBUG] Mensagem:', message);
+      console.log('[ReviewChat DEBUG] É pedido de mudança?', isChangeRequest);
+
+      const prompt = isChangeRequest 
+        ? `Você é um assistente que EXECUTA mudanças em perguntas de formulário.
+
+PERGUNTAS ATUAIS (JSON):
+${JSON.stringify(generatedQuestions.map(q => ({
+  text: q.text,
+  type: q.type,
+  options: q.options.map(opt => opt.text),
+  insight: q.insight
+})), null, 2)}
+
+PEDIDO DO USUÁRIO: "${message}"
+
+INSTRUÇÕES CRÍTICAS:
+1. Identifique qual pergunta modificar (ex: "pergunta 3" = índice 2 do array)
+2. Faça a mudança EXATA solicitada:
+   - "diminua valores" = reduza números nas opções
+   - "adicione alternativa" = adicione novo item no array options
+   - "coloque alternativa com valor 2000" = adicione "R$ 2.000" nas options
+   - "remova pergunta" = retire do array
+3. Retorne OBRIGATORIAMENTE um JSON válido neste formato:
+
+{
+  "message": "Pronto! [1 frase curta explicando o que fez]",
+  "updated_questions": [
+    // TODAS as ${generatedQuestions.length} perguntas aqui, incluindo a modificada
+    {"text": "pergunta 1", "type": "single_choice", "options": ["op1", "op2"], "insight": "..."},
+    {"text": "pergunta 2", "type": "single_choice", "options": ["op1", "op2"], "insight": "..."},
+    {"text": "pergunta 3 MODIFICADA", "type": "single_choice", "options": ["op1", "op2", "op3 NOVA"], "insight": "..."},
+    // ... resto das perguntas
+  ]
+}
+
+ATENÇÃO: 
+- NÃO escreva texto antes ou depois do JSON
+- NÃO use blocos de código markdown
+- NÃO explique, apenas RETORNE O JSON
+- O array "updated_questions" DEVE ter ${generatedQuestions.length} itens`
+        : `Você é o Consultor HelloGrowth. Responda de forma curta e amigável.
+
+CONTEXTO:
+- Negócio: ${businessContext.businessType}
+- Público: ${businessContext.targetAudience}
+- Critérios pedidos: ${businessContext.qualificationCriteria || 'Não especificado'}
+
+PERGUNTAS DO FORMULÁRIO:
+${generatedQuestions.map((q, idx) => `${idx + 1}. ${q.text}\nInsight: ${q.insight}`).join('\n\n')}
+
+PERGUNTA DO USUÁRIO: ${message}
+
+REGRAS:
+- Responda em texto puro (NÃO use JSON)
+- Máximo 2-3 frases
+- NÃO comece com saudações
+- Se perguntarem sobre uma pergunta específica, explique citando o que o cliente escreveu
+- Se perguntarem sobre algo dos CRITÉRIOS que não foi incluído, reconheça e ofereça adicionar
+
+Responda:`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error('Erro na resposta da IA');
+      }
+
+      const data = await response.json();
+      let rawText = data.response || '';
+      
+      console.log('[ReviewChat DEBUG] Resposta bruta:', rawText);
+      
+      // Limpar blocos de código
+      rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
+      let displayMessage = rawText;
+      let updatedQuestions = null;
+      
+      // Tentar parsear como JSON
+      try {
+        const parsed = JSON.parse(rawText);
+        console.log('[ReviewChat DEBUG] JSON parseado:', parsed);
+        
+        displayMessage = parsed.message || parsed.text || rawText;
+        
+        if (parsed.updated_questions && Array.isArray(parsed.updated_questions)) {
+          console.log('[ReviewChat DEBUG] Perguntas atualizadas encontradas:', parsed.updated_questions.length);
+          updatedQuestions = parsed.updated_questions;
+        }
+      } catch (e) {
+        console.log('[ReviewChat DEBUG] Não é JSON, usando texto puro');
+        // Não é JSON, usar texto puro
+      }
+      
+      // Aplicar perguntas atualizadas
+      if (updatedQuestions && Array.isArray(updatedQuestions) && updatedQuestions.length > 0) {
+        console.log('[ReviewChat DEBUG] Aplicando perguntas atualizadas...');
+        const mapped = updatedQuestions.map((q: any, idx: number) => {
+          // Processar opções
+          let processedOptions: QuestionOption[] = [];
+          if (q.options && Array.isArray(q.options)) {
+            processedOptions = q.options.map((opt: any, optIdx: number) => {
+              if (typeof opt === 'string') {
+                return { id: `opt_${idx}_${optIdx}`, text: opt };
+              } else if (opt.text) {
+                return { id: opt.id || `opt_${idx}_${optIdx}`, text: opt.text };
+              }
+              return { id: `opt_${idx}_${optIdx}`, text: String(opt) };
+            });
+          }
+          
+          return {
+            id: generatedQuestions[idx]?.id || `q_${Date.now()}_${idx}`,
+            text: q.text,
+            type: q.type || 'single_choice',
+            options: processedOptions,
+            insight: q.insight || generatedQuestions[idx]?.insight || 'Atualizado via chat'
+          };
+        });
+        
+        console.log('[ReviewChat DEBUG] Perguntas mapeadas:', mapped.length);
+        setGeneratedQuestions(mapped);
+        displayMessage = displayMessage + ' ✅';
+      }
+
+      // Adicionar resposta da IA
+      const assistantMessage: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: displayMessage || 'Pode me perguntar qualquer coisa sobre as perguntas!',
+        timestamp: new Date()
+      };
+      console.log('[ReviewChat] Resposta da IA:', assistantMessage.content);
+      setReviewChatMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Erro ao processar mensagem do chat:', error);
+      const errorMessage: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.',
+        timestamp: new Date()
+      };
+      setReviewChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsReviewChatProcessing(false);
+    }
+  };
+
+  // Mensagem inicial do chat de ajuste quando entra na tela de revisão
+  useEffect(() => {
+    if (currentStep === 'review' && !strategyExplanationGenerated.current && generatedQuestions.length > 0) {
+      console.log('[ReviewChat] Gerando explicação estratégica...');
+      strategyExplanationGenerated.current = true;
+      generateStrategyExplanation();
+    }
+  }, [currentStep, generatedQuestions.length]);
+
+  const generateStrategyExplanation = async () => {
+    console.log('[ReviewChat DEBUG] Função generateStrategyExplanation iniciada');
+    setIsReviewChatProcessing(true);
+    try {
+      const prompt = `Você é o Consultor HelloGrowth, um consultor simpático e direto. Faça uma saudação curta e amigável para o usuário que acabou de gerar um formulário.
+
+Negócio: ${businessContext.businessType}
+Público: ${businessContext.targetAudience}
+Dores: ${businessContext.mainPainPoints.join(', ')}
+Perguntas geradas: ${generatedQuestions.length}
+
+REGRAS:
+- Responda APENAS em texto puro. NUNCA use JSON.
+- Máximo 3-4 frases curtas.
+- Comece com uma saudação amigável ("Olá!" ou "E aí! 👋")
+- Mencione brevemente o negócio e diga que criou ${generatedQuestions.length} perguntas estratégicas.
+- Termine convidando a perguntar sobre qualquer pergunta ou pedir ajustes.
+- Tom: amigo consultor, leve e simpático.
+- Use 1-2 emojis no máximo.
+
+Responda agora:`;
+
+      console.log('[ReviewChat DEBUG] Preparando chamada para /api/gemini...');
+      console.log('[ReviewChat DEBUG] Prompt:', prompt.substring(0, 200) + '...');
+      
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt })
+      });
+      
+      console.log('[ReviewChat DEBUG] Resposta recebida. Status:', response.status);
+
+      if (response.ok) {
+        console.log('[ReviewChat DEBUG] Resposta OK! Parseando JSON...');
+        const data = await response.json();
+        console.log('[ReviewChat DEBUG] Dados recebidos:', data);
+        
+        let welcomeText = data.response || data.text || '';
+        // Limpar caso a IA retorne JSON mesmo assim
+        welcomeText = welcomeText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        try {
+          const parsed = JSON.parse(welcomeText);
+          welcomeText = parsed.message || parsed.text || welcomeText;
+        } catch (e) {
+          // Já é texto puro, perfeito!
+        }
+        const welcomeMessage: ChatMessage = {
+          id: `msg_${Date.now()}`,
+          role: 'assistant',
+          content: welcomeText || 'Olá! \ud83d\udc4b Sou seu Consultor de Estratégia. Pergunte sobre qualquer pergunta ou peça ajustes!',
+          timestamp: new Date()
+        };
+        console.log('[ReviewChat DEBUG] Mensagem criada:', welcomeMessage);
+        console.log('[ReviewChat DEBUG] Atualizando estado reviewChatMessages...');
+        setReviewChatMessages([welcomeMessage]);
+        console.log('[ReviewChat DEBUG] Estado atualizado com sucesso!');
+      } else {
+        console.log('[ReviewChat DEBUG] Resposta não OK. Usando fallback...');
+        // Fallback para mensagem padrão se a IA falhar
+        const fallbackMessage: ChatMessage = {
+          id: `msg_${Date.now()}`,
+          role: 'assistant',
+          content: `Olá! 👋 Sou seu Consultor de Estratégia de Vendas.\n\nEstou aqui para:\n• Explicar o motivo de cada pergunta gerada\n• Ajustar perguntas em tempo real\n• Sugerir melhorias estratégicas\n\nPergunte qualquer coisa!`,
+          timestamp: new Date()
+        };
+        setReviewChatMessages([fallbackMessage]);
+      }
+    } catch (error) {
+      console.error('[ReviewChat DEBUG] ERRO capturado:', error);
+      console.error('Erro ao gerar explicação da estratégia:', error);
+      // Fallback
+      const fallbackMessage: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: `Olá! 👋 Sou seu Consultor de Estratégia de Vendas.\n\nEstou aqui para explicar cada pergunta e fazer ajustes. Pergunte qualquer coisa!`,
+        timestamp: new Date()
+      };
+      setReviewChatMessages([fallbackMessage]);
+    } finally {
+      setIsReviewChatProcessing(false);
+    }
+  };
+
+  const handleUpdateIdentificationField = (fieldId: string, property: 'label' | 'placeholder', value: string) => {
+    setBusinessContext(prev => ({
+      ...prev,
+      identificationFields: prev.identificationFields.map(f =>
+        f.id === fieldId ? { ...f, [property]: value } : f
       )
     }));
   };
@@ -1315,8 +1702,10 @@ Responda APENAS com JSON válido neste formato:
 
   // Render Review Screen with full editing capabilities
   const renderReviewScreen = () => (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="max-w-4xl mx-auto">
+    <div className="flex-1 flex gap-4 p-6 overflow-hidden">
+      {/* Coluna Principal - Perguntas */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto">
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Revise e edite suas perguntas</h2>
         <p className="text-slate-500 mb-6">Você pode editar textos, modificar opções, mudar tipos e adicionar novas perguntas</p>
         
@@ -1327,29 +1716,54 @@ Responda APENAS com JSON válido neste formato:
             Campos de Identificação
           </h3>
           <p className="text-sm text-slate-500 mb-4">Defina quais informações coletar do cliente no início do formulário</p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {businessContext.identificationFields.map(field => (
-              <div key={field.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={field.enabled}
-                    onChange={() => handleToggleIdentificationField(field.id)}
-                    className="w-5 h-5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
-                  />
-                  <span className={field.enabled ? 'text-slate-800' : 'text-slate-400'}>{field.label}</span>
-                </div>
-                {field.enabled && (
-                  <label className="flex items-center gap-2 text-sm">
+              <div key={field.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <div className="flex items-center gap-4 mb-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={field.enabled}
+                      onChange={() => handleToggleIdentificationField(field.id)}
+                      className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                    />
+                    <span className="text-sm font-medium text-slate-700">Ativo</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={field.required}
                       onChange={() => handleToggleFieldRequired(field.id)}
-                      className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
+                      disabled={!field.enabled}
+                      className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500 disabled:opacity-50"
                     />
-                    <span className="text-slate-600">Obrigatório</span>
+                    <span className="text-sm font-medium text-slate-700">Obrigatório</span>
                   </label>
-                )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Título do campo</label>
+                    <input
+                      type="text"
+                      value={field.label}
+                      onChange={(e) => handleUpdateIdentificationField(field.id, 'label', e.target.value)}
+                      disabled={!field.enabled}
+                      placeholder="Ex: Nome"
+                      className="w-full rounded-lg border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Placeholder (exemplo)</label>
+                    <input
+                      type="text"
+                      value={field.placeholder || ''}
+                      onChange={(e) => handleUpdateIdentificationField(field.id, 'placeholder', e.target.value)}
+                      disabled={!field.enabled}
+                      placeholder="Ex: Digite seu nome"
+                      className="w-full rounded-lg border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                    />
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -1395,6 +1809,24 @@ Responda APENAS com JSON válido neste formato:
                       <span className="text-sm text-slate-500">Opções de resposta:</span>
                       {question.options.map((opt, optIdx) => (
                         <div key={opt.id} className="flex items-center gap-2">
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              onClick={() => handleMoveOption(question.id, optIdx, 'up')}
+                              disabled={optIdx === 0}
+                              className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                              title="Mover para cima"
+                            >
+                              <ArrowUp size={12} />
+                            </button>
+                            <button
+                              onClick={() => handleMoveOption(question.id, optIdx, 'down')}
+                              disabled={optIdx === question.options.length - 1}
+                              className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                              title="Mover para baixo"
+                            >
+                              <ArrowDown size={12} />
+                            </button>
+                          </div>
                           <span className="text-slate-400 text-sm w-6">{optIdx + 1}.</span>
                           <input
                             type="text"
@@ -1431,12 +1863,30 @@ Responda APENAS com JSON válido neste formato:
                   </div>
                 </div>
                 
-                <button
-                  onClick={() => handleRemoveQuestion(question.id)}
-                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                >
-                  <Trash2 size={18} />
-                </button>
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => handleMoveQuestion(index, 'up')}
+                    disabled={index === 0}
+                    className="p-1.5 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+                    title="Mover pergunta para cima"
+                  >
+                    <ArrowUp size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleMoveQuestion(index, 'down')}
+                    disabled={index === generatedQuestions.length - 1}
+                    className="p-1.5 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+                    title="Mover pergunta para baixo"
+                  >
+                    <ArrowDown size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleRemoveQuestion(question.id)}
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -1560,6 +2010,62 @@ Responda APENAS com JSON válido neste formato:
           />
         </div>
 
+        {/* Configuração de Roleta da Sorte (Game) */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-lg font-semibold text-slate-800">🎰 Roleta da Sorte</h3>
+          </div>
+          <p className="text-sm text-slate-500 mb-4">Após o envio do formulário, o cliente poderá girar a roleta e ganhar prêmios</p>
+          
+          <label className="flex items-center gap-2 cursor-pointer mb-4">
+            <input
+              type="checkbox"
+              checked={gameEnabled}
+              onChange={(e) => {
+                setGameEnabled(e.target.checked);
+                if (!e.target.checked) {
+                  setSelectedGameId(null);
+                }
+              }}
+              className="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"
+            />
+            <span className="font-medium text-slate-700">Ativar Roleta da Sorte</span>
+          </label>
+
+          {gameEnabled && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-2">Selecione a Roleta</label>
+                {availableGames.length > 0 ? (
+                  <select
+                    value={selectedGameId || ''}
+                    onChange={(e) => setSelectedGameId(e.target.value || null)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                  >
+                    <option value="">Selecione uma roleta...</option>
+                    {availableGames.map(game => (
+                      <option key={game.id} value={game.id}>
+                        {game.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p className="text-sm text-yellow-800">⚠️ Você ainda não tem nenhuma Roleta da Sorte configurada.</p>
+                    <p className="text-xs text-yellow-700 mt-1">Acesse <strong>Inteligência → Game</strong> para criar uma.</p>
+                  </div>
+                )}
+              </div>
+
+              {selectedGameId && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                  <p className="text-sm text-emerald-800 font-medium">✅ Roleta selecionada: {availableGames.find(g => g.id === selectedGameId)?.name}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Save Button */}
         <button
           onClick={handleSaveForm}
@@ -1568,7 +2074,98 @@ Responda APENAS com JSON válido neste formato:
           <CheckCircle size={24} />
           Salvar Formulário
         </button>
+        </div>
       </div>
+
+      {/* Sidebar - Chat de Ajuste */}
+      {showReviewChat && (
+        <div className="w-96 bg-white rounded-xl border border-slate-200 flex flex-col shadow-lg">
+          <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-emerald-50 to-teal-50">
+            <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+              <Bot size={20} className="text-emerald-500" />
+              Consultor IA
+            </h3>
+            <button onClick={() => setShowReviewChat(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Mensagens do Chat */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {reviewChatMessages.length === 0 ? (
+              <div className="text-center text-slate-500 text-sm py-8">
+                <Lightbulb size={32} className="mx-auto mb-2 text-amber-400" />
+                <p className="font-medium mb-2">Pergunte sobre as perguntas geradas!</p>
+                <div className="text-xs text-left mt-4 space-y-2 bg-slate-50 p-3 rounded-lg">
+                  <p className="font-semibold text-slate-700">Exemplos:</p>
+                  <ul className="space-y-1 text-slate-600">
+                    <li>• "Por que a pergunta 2 foi criada?"</li>
+                    <li>• "Mude a pergunta 3 para um tom mais amigável"</li>
+                    <li>• "Adicione uma pergunta sobre orçamento"</li>
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              reviewChatMessages.map(msg => (
+                <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] p-3 rounded-lg shadow-sm ${
+                    msg.role === 'user' 
+                      ? 'bg-emerald-500 text-white' 
+                      : 'bg-slate-100 text-slate-800'
+                  }`}>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  </div>
+                </div>
+              ))
+            )}
+            {isReviewChatProcessing && (
+              <div className="flex gap-2 justify-start">
+                <div className="bg-slate-100 p-3 rounded-lg shadow-sm">
+                  <Loader2 size={16} className="animate-spin text-emerald-500" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input do Chat */}
+          <div className="p-4 border-t border-slate-200 bg-slate-50">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={reviewChatInput}
+                onChange={(e) => setReviewChatInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && reviewChatInput.trim()) {
+                    e.preventDefault();
+                    handleReviewChatMessage(reviewChatInput);
+                  }
+                }}
+                placeholder="Pergunte ou solicite ajustes..."
+                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                disabled={isReviewChatProcessing}
+              />
+              <button
+                onClick={() => handleReviewChatMessage(reviewChatInput)}
+                disabled={!reviewChatInput.trim() || isReviewChatProcessing}
+                className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Send size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Botão para reabrir chat se fechado */}
+      {!showReviewChat && (
+        <button
+          onClick={() => setShowReviewChat(true)}
+          className="fixed bottom-6 right-6 p-4 bg-emerald-500 text-white rounded-full shadow-lg hover:bg-emerald-600 transition-all hover:scale-110"
+          title="Abrir Consultor IA"
+        >
+          <Bot size={24} />
+        </button>
+      )}
     </div>
   );
 
@@ -1686,7 +2283,26 @@ Responda APENAS com JSON válido neste formato:
           {/* Product Selection */}
           {currentStep === 'products' && businessContext.productSelection === 'manual' && products.length > 0 && (
             <div className="p-6 bg-white border-t border-slate-200">
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => {
+                    const allProductIds = products.map(p => p.id);
+                    setBusinessContext(prev => ({ ...prev, selectedProducts: allProductIds }));
+                  }}
+                  className="flex-1 py-2 px-4 bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition-all text-sm"
+                >
+                  Selecionar Todos
+                </button>
+                <button
+                  onClick={() => {
+                    setBusinessContext(prev => ({ ...prev, selectedProducts: [] }));
+                  }}
+                  className="flex-1 py-2 px-4 bg-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-300 transition-all text-sm"
+                >
+                  Desmarcar Todos
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-4 max-h-96 overflow-y-auto">
                 {products.map(product => (
                   <button
                     key={product.id}

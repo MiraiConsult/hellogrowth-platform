@@ -43,7 +43,8 @@ export async function POST(request: NextRequest) {
       client_email, 
       client_phone, 
       prize_won, 
-      prize_code 
+      prize_code,
+      source 
     } = body;
 
     if (!game_id || !client_name || !prize_won || !prize_code) {
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
         client_phone,
         prize_won,
         prize_code,
+        source: source || 'post-sale',
         status: 'pending'
       })
       .select()

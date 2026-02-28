@@ -6,6 +6,11 @@ export function useTenantId() {
     if (typeof window === 'undefined') return null;
     try {
       const user = JSON.parse(localStorage.getItem('hg_current_user') || '{}');
+      // Check if user has companies and get active company
+      if (user.companies && user.companies.length > 0) {
+        const defaultCompany = user.companies.find((uc: any) => uc.is_default) || user.companies[0];
+        return defaultCompany?.company?.id || user.tenantId || null;
+      }
       return user.tenantId || null;
     } catch {
       return null;
@@ -16,7 +21,13 @@ export function useTenantId() {
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('hg_current_user') || '{}');
-    setTenantId(user.tenantId || null);
+    // Check if user has companies and get active company
+    if (user.companies && user.companies.length > 0) {
+      const defaultCompany = user.companies.find((uc: any) => uc.is_default) || user.companies[0];
+      setTenantId(defaultCompany?.company?.id || user.tenantId || null);
+    } else {
+      setTenantId(user.tenantId || null);
+    }
   }, []);
 
   return tenantId;

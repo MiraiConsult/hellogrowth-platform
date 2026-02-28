@@ -11,7 +11,7 @@ import {
   Edit3,
   Plus,
   Trash2,
-  GripVertical,
+  GripVertical, ArrowUp, ArrowDown,
   Send,
   Bot,
   User,
@@ -40,6 +40,7 @@ interface NPSConsultantProps {
   onClose: () => void;
   onSaveCampaign: (campaignData: any) => void;
   existingCampaign?: any;
+  initialBusinessProfile?: any;
 }
 
 type ConsultantStep = 
@@ -69,7 +70,8 @@ export default function NPSConsultant({
   userId,
   onClose,
   onSaveCampaign,
-  existingCampaign
+  existingCampaign,
+  initialBusinessProfile
 }: NPSConsultantProps) {
   const tenantId = useTenantId();
   
@@ -79,8 +81,8 @@ export default function NPSConsultant({
   const [isTyping, setIsTyping] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   
-  const [businessProfile, setBusinessProfile] = useState<any>(null);
-  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [businessProfile, setBusinessProfile] = useState<any>(initialBusinessProfile || null);
+  const [profileLoaded, setProfileLoaded] = useState(!!initialBusinessProfile);
   const [objective, setObjective] = useState('');
   const [tone, setTone] = useState('');
   const [evaluationPoints, setEvaluationPoints] = useState<string[]>([]);
@@ -102,16 +104,42 @@ export default function NPSConsultant({
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState(0);
   
+  // Estados para o Chat de Ajuste na tela de revisão
+  const [reviewChatMessages, setReviewChatMessages] = useState<ChatMessage[]>([]);
+  const [reviewChatInput, setReviewChatInput] = useState('');
+  const [isReviewChatProcessing, setIsReviewChatProcessing] = useState(false);
+  const [showReviewChat, setShowReviewChat] = useState(true);
+  const strategyExplanationGenerated = useRef(false);
+  
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const hasInitialized = useRef(false);
 
   useEffect(() => {
     if (supabase && tenantId) {
-      loadBusinessProfile();
       loadAvailableGames();
+      // Só busca o perfil se não foi passado como prop
+      if (!initialBusinessProfile) {
+        loadBusinessProfile();
+      }
     }
   }, [supabase, tenantId]);
+  // Sincronizar businessProfile quando initialBusinessProfile muda
+  useEffect(() => {
+    if (initialBusinessProfile) {
+      setBusinessProfile(initialBusinessProfile);
+      setProfileLoaded(true);
+    }
+  }, [initialBusinessProfile]);
+
+  // Mensagem inicial do chat de ajuste quando entra na tela de revisão
+  useEffect(() => {
+    if (currentStep === 'review' && !strategyExplanationGenerated.current && generatedQuestions.length > 0) {
+      console.log('[NPSReviewChat] Gerando explicação estratégica...');
+      strategyExplanationGenerated.current = true;
+      generateStrategyExplanation();
+    }
+  }, [currentStep, generatedQuestions.length]);
 
   const loadAvailableGames = async () => {
     try {
@@ -220,7 +248,7 @@ O que você gostaria de fazer?`,
       setTimeout(() => {
         addAssistantMessage(
           businessProfile 
-            ? `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.business_name || 'sua empresa'}**.
+            ? `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.company_name || 'sua empresa'}**.
 
 Como já conheço seu negócio, vou criar perguntas estratégicas baseadas no seu perfil.
 
@@ -557,31 +585,36 @@ Vou regenerar as perguntas com o novo tom. Um momento...`
     }, 500);
 
     try {
-      const prompt = `Você é um especialista em pesquisas NPS (Net Promoter Score).
+      const prompt = `Você é um especialista em Customer Experience (CX) e Retenção de Clientes.
+Sua missão é criar uma pesquisa NPS que não apenas meça uma nota, mas identifique os "Drivers de Lealdade" do negócio.
 
-Crie uma pesquisa NPS com as seguintes características:
+CONTEXTO:
+- Negócio: ${businessProfile?.company_name || 'Empresa'}
+- Descrição: ${businessProfile?.description || 'Não informado'}
+- Objetivo da Pesquisa: ${objective}
+- Tom de Voz: ${tone}
+- Pontos que o dono quer avaliar: ${evaluationPoints.join(', ')}
 
-**Objetivo:** ${objective}
-**Tom:** ${tone}
-**Pontos a avaliar:** ${evaluationPoints.join(', ')}
-**Negócio:** ${businessProfile?.business_name || 'Empresa'}
-**Descrição do negócio:** ${businessProfile?.description || 'Não informado'}
+SUA ESTRATÉGIA:
+1. Identifique os 3 pilares críticos para o sucesso deste tipo de negócio (ex: se for restaurante, é sabor/atendimento/ambiente).
+2. A primeira pergunta DEVE ser o NPS padrão (0-10).
+3. Crie 3 perguntas complementares que investiguem esses pilares críticos.
+4. Use lógica condicional:
+   - Para Detratores (0-6): Pergunte sobre a falha específica para agir rápido (Recuperação).
+   - Para Passivos (7-8): Pergunte o que falta para sermos incríveis (Upgrade).
+   - Para Promotores (9-10): Pergunte o que eles mais amam para usarmos no marketing (Expansão).
 
-**Regras importantes:**
-1. A PRIMEIRA pergunta SEMPRE deve ser a pergunta NPS padrão: "Em uma escala de 0 a 10, o quanto você recomendaria [empresa/serviço] para um amigo ou colega?"
-2. Crie 2-4 perguntas complementares que ajudem a entender melhor a experiência do cliente
-3. Inclua perguntas condicionais para promotores (9-10), passivos (7-8) e detratores (0-6)
-4. Use o tom ${tone}
-5. Foque nos pontos: ${evaluationPoints.join(', ')}
-
-Retorne APENAS um JSON válido com este formato:
+REGRAS:
+- Use o tom ${tone}.
+- O campo 'insight' deve explicar qual pilar de retenção está sendo medido.
+- Retorne APENAS JSON válido com este formato:
 {
   "questions": [
     {
       "text": "texto da pergunta",
       "type": "nps" | "single_choice" | "multiple_choice" | "text",
       "options": ["opção 1", "opção 2"],
-      "insight": "por que essa pergunta é importante",
+      "insight": "Pilar de Retenção: Por que isso é vital para manter o cliente?",
       "conditional": "promoter" | "passive" | "detractor" (opcional)
     }
   ]
@@ -645,7 +678,19 @@ Retorne APENAS um JSON válido com este formato:
         conditional: q.conditional
       }));
 
-      setGeneratedQuestions(questions);
+      // Garantir que a pergunta NPS seja sempre a primeira
+      const npsQuestion = questions.find(q => q.type === 'nps');
+      const otherQuestions = questions.filter(q => q.type !== 'nps');
+      const orderedQuestions = npsQuestion ? [npsQuestion, ...otherQuestions] : questions;
+      // Substituir [Nome da Empresa] pelo nome real no texto da pergunta NPS
+      const companyName = businessProfile?.company_name || '';
+      const finalQuestions = orderedQuestions.map(q => {
+        if (q.type === 'nps' && companyName) {
+          return { ...q, text: q.text.replace(/\[Nome da Empresa\]/gi, companyName) };
+        }
+        return q;
+      });
+      setGeneratedQuestions(finalQuestions);
       setCurrentStep('review');
       setCampaignName(`Pesquisa NPS - ${objective}`);
     } catch (error) {
@@ -654,6 +699,276 @@ Retorne APENAS um JSON válido com este formato:
       setCurrentStep('evaluation_points');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Função para gerar explicação estratégica inicial no chat de revisão
+  const generateStrategyExplanation = async () => {
+    console.log('[NPSReviewChat DEBUG] Função generateStrategyExplanation iniciada');
+    setIsReviewChatProcessing(true);
+    try {
+      const prompt = `Você é o Consultor HelloGrowth, um consultor simpático e direto. Faça uma saudação curta e amigável para o usuário que acabou de gerar uma pesquisa NPS.
+
+Contexto da pesquisa:
+Objetivo: ${objective}
+Tom: ${tone}
+Pontos de avaliação: ${evaluationPoints.join(', ')}
+Perguntas geradas: ${generatedQuestions.length}
+
+REGRAS:
+- Responda APENAS em texto puro. NUNCA use JSON.
+- Máximo 3-4 frases curtas.
+- Comece com uma saudação amigável ("Olá!" ou "E aí! 👋")
+- Mencione brevemente que criou ${generatedQuestions.length} perguntas usando Loyalty Drivers (fatores que influenciam a lealdade do cliente).
+- Termine convidando a perguntar sobre qualquer pergunta ou pedir ajustes.
+- Tom: amigo consultor, leve e simpático.
+- Use 1-2 emojis no máximo.
+
+Responda agora:`;
+
+      console.log('[NPSReviewChat DEBUG] Preparando chamada para /api/gemini...');
+      
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt })
+      });
+      
+      console.log('[NPSReviewChat DEBUG] Resposta recebida. Status:', response.status);
+
+      if (response.ok) {
+        console.log('[NPSReviewChat DEBUG] Resposta OK! Parseando JSON...');
+        const data = await response.json();
+        console.log('[NPSReviewChat DEBUG] Dados recebidos:', data);
+        
+        let welcomeText = data.response || data.text || '';
+        // Limpar caso a IA retorne JSON mesmo assim
+        welcomeText = welcomeText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        try {
+          const parsed = JSON.parse(welcomeText);
+          welcomeText = parsed.message || parsed.text || welcomeText;
+        } catch (e) {
+          // Já é texto puro, perfeito!
+        }
+        const welcomeMessage: ChatMessage = {
+          id: `msg_${Date.now()}`,
+          role: 'assistant',
+          content: welcomeText || 'Olá! 👋 Sou seu Consultor de Estratégia NPS. Pergunte sobre qualquer pergunta ou peça ajustes!',
+          timestamp: new Date()
+        };
+        console.log('[NPSReviewChat DEBUG] Mensagem de boas-vindas criada:', welcomeMessage.content);
+        setReviewChatMessages([welcomeMessage]);
+      } else {
+        console.error('[NPSReviewChat DEBUG] Resposta com erro:', response.status);
+        // Fallback
+        const fallbackMessage: ChatMessage = {
+          id: `msg_${Date.now()}`,
+          role: 'assistant',
+          content: `Olá! 👋 Sou seu Consultor de Estratégia NPS.\n\nEstou aqui para explicar cada pergunta e fazer ajustes. Pergunte qualquer coisa!`,
+          timestamp: new Date()
+        };
+        setReviewChatMessages([fallbackMessage]);
+      }
+    } catch (error) {
+      console.error('[NPSReviewChat DEBUG] ERRO capturado:', error);
+      console.error('Erro ao gerar explicação da estratégia:', error);
+      // Fallback
+      const fallbackMessage: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: `Olá! 👋 Sou seu Consultor de Estratégia NPS.\n\nEstou aqui para explicar cada pergunta e fazer ajustes. Pergunte qualquer coisa!`,
+        timestamp: new Date()
+      };
+      setReviewChatMessages([fallbackMessage]);
+    } finally {
+      setIsReviewChatProcessing(false);
+    }
+  };
+
+  // Função para processar mensagens do Chat de Ajuste
+  const handleReviewChatMessage = async (message: string) => {
+    if (!message.trim()) return;
+
+    // Adiciona mensagem do usuário
+    const userMessage: ChatMessage = {
+      id: `msg_${Date.now()}`,
+      role: 'user',
+      content: message,
+      timestamp: new Date()
+    };
+    setReviewChatMessages(prev => [...prev, userMessage]);
+    setReviewChatInput('');
+    setIsReviewChatProcessing(true);
+
+    try {
+      // Detectar se é um pedido de mudança
+      const changeKeywords = [
+        'diminua', 'aumente', 'mude', 'altere', 'modifique', 'troque', 
+        'adicione', 'inclua', 'remova', 'delete', 'tire', 'ajuste', 'corrija',
+        'coloque', 'insira', 'acrescente', 'ponha', 'bote', 'crie',
+        'exclua', 'apague', 'substitua', 'reescreva', 'refatore'
+      ];
+      const isChangeRequest = changeKeywords.some(keyword => message.toLowerCase().includes(keyword));
+      
+      console.log('[NPSReviewChat DEBUG] Mensagem:', message);
+      console.log('[NPSReviewChat DEBUG] É pedido de mudança?', isChangeRequest);
+
+      const prompt = isChangeRequest 
+        ? `Você é um assistente que EXECUTA mudanças em perguntas de pesquisa NPS.
+
+PERGUNTAS ATUAIS (JSON):
+${JSON.stringify(generatedQuestions.map(q => ({
+  text: q.text,
+  type: q.type,
+  options: q.options.map(opt => opt.text),
+  insight: q.insight,
+  conditional: q.conditional
+})), null, 2)}
+
+PEDIDO DO USUÁRIO: "${message}"
+
+INSTRUÇÕES CRÍTICAS:
+1. Identifique qual pergunta modificar (ex: "pergunta 3" = índice 2 do array)
+2. Faça a mudança EXATA solicitada:
+   - "diminua valores" = reduza números nas opções
+   - "adicione alternativa" = adicione novo item no array options
+   - "coloque alternativa com valor 2000" = adicione "R$ 2.000" nas options
+   - "remova pergunta" = retire do array
+3. Retorne OBRIGATORIAMENTE um JSON válido neste formato:
+
+{
+  "message": "Pronto! [1 frase curta explicando o que fez]",
+  "updated_questions": [
+    // TODAS as ${generatedQuestions.length} perguntas aqui, incluindo a modificada
+    {"text": "pergunta 1", "type": "single_choice", "options": ["op1", "op2"], "insight": "...", "conditional": "promoter"},
+    {"text": "pergunta 2", "type": "text", "options": [], "insight": "..."},
+    {"text": "pergunta 3 MODIFICADA", "type": "single_choice", "options": ["op1", "op2", "op3 NOVA"], "insight": "..."},
+    // ... resto das perguntas
+  ]
+}
+
+ATENÇÃO: 
+- NÃO escreva texto antes ou depois do JSON
+- NÃO use blocos de código markdown
+- NÃO explique, apenas RETORNE O JSON
+- O array "updated_questions" DEVE ter ${generatedQuestions.length} itens
+- Mantenha o campo "conditional" se existir (promoter, passive, detractor ou undefined)`
+        : `Você é o Consultor HelloGrowth. Responda de forma curta e amigável.
+
+CONTEXTO:
+- Objetivo: ${objective}
+- Tom: ${tone}
+- Pontos de avaliação: ${evaluationPoints.join(', ')}
+
+PERGUNTAS DO FORMULÁRIO:
+${generatedQuestions.map((q, idx) => `${idx + 1}. ${q.text}${q.conditional ? ` [${q.conditional}]` : ''}\nInsight: ${q.insight}`).join('\n\n')}
+
+PERGUNTA DO USUÁRIO: ${message}
+
+REGRAS:
+- Responda em texto puro (NÃO use JSON)
+- Máximo 2-3 frases
+- NÃO comece com saudações
+- Se perguntarem sobre uma pergunta específica, explique citando os pontos de avaliação e Loyalty Drivers
+- Se perguntarem sobre algo que não foi incluído, reconheça e ofereça adicionar
+
+Responda:`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch("/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error('Erro na resposta da IA');
+      }
+
+      const data = await response.json();
+      let rawText = data.response || '';
+      
+      console.log('[NPSReviewChat DEBUG] Resposta bruta:', rawText);
+      
+      // Limpar blocos de código
+      rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
+      let displayMessage = rawText;
+      let updatedQuestions = null;
+      
+      // Tentar parsear como JSON
+      try {
+        const parsed = JSON.parse(rawText);
+        console.log('[NPSReviewChat DEBUG] JSON parseado:', parsed);
+        
+        displayMessage = parsed.message || parsed.text || rawText;
+        
+        if (parsed.updated_questions && Array.isArray(parsed.updated_questions)) {
+          console.log('[NPSReviewChat DEBUG] Perguntas atualizadas encontradas:', parsed.updated_questions.length);
+          updatedQuestions = parsed.updated_questions;
+        }
+      } catch (e) {
+        console.log('[NPSReviewChat DEBUG] Não é JSON, usando texto puro');
+        // Não é JSON, usar texto puro
+      }
+      
+      // Aplicar perguntas atualizadas
+      if (updatedQuestions && Array.isArray(updatedQuestions) && updatedQuestions.length > 0) {
+        console.log('[NPSReviewChat DEBUG] Aplicando perguntas atualizadas...');
+        const mapped = updatedQuestions.map((q: any, idx: number) => {
+          // Processar opções
+          let processedOptions: QuestionOption[] = [];
+          if (q.options && Array.isArray(q.options)) {
+            processedOptions = q.options.map((opt: any, optIdx: number) => {
+              if (typeof opt === 'string') {
+                return { id: `opt_${idx}_${optIdx}`, text: opt };
+              } else if (opt.text) {
+                return { id: opt.id || `opt_${idx}_${optIdx}`, text: opt.text };
+              }
+              return { id: `opt_${idx}_${optIdx}`, text: String(opt) };
+            });
+          }
+          
+          return {
+            id: generatedQuestions[idx]?.id || `q_${Date.now()}_${idx}`,
+            text: q.text,
+            type: q.type || 'single_choice',
+            options: processedOptions,
+            insight: q.insight || generatedQuestions[idx]?.insight || 'Atualizado via chat',
+            conditional: q.conditional
+          };
+        });
+        
+        console.log('[NPSReviewChat DEBUG] Perguntas mapeadas:', mapped.length);
+        setGeneratedQuestions(mapped);
+        displayMessage = displayMessage + ' ✅';
+      }
+
+      // Adicionar resposta da IA
+      const assistantMessage: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: displayMessage || 'Pode me perguntar qualquer coisa sobre as perguntas!',
+        timestamp: new Date()
+      };
+      console.log('[NPSReviewChat] Resposta da IA:', assistantMessage.content);
+      setReviewChatMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Erro ao processar mensagem do chat:', error);
+      const errorMessage: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.',
+        timestamp: new Date()
+      };
+      setReviewChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsReviewChatProcessing(false);
     }
   };
 
@@ -719,6 +1034,30 @@ Retorne APENAS um JSON válido com este formato:
     setGeneratedQuestions(generatedQuestions.map(q => 
       q.id === id ? { ...q, ...updates } : q
     ));
+  };
+
+  const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === generatedQuestions.length - 1) return;
+    // Não permitir mover a pergunta NPS (sempre deve ser a primeira)
+    if (generatedQuestions[index]?.type === 'nps') return;
+    // Não permitir mover para a posição 0 se a primeira pergunta for NPS
+    if (direction === 'up' && index === 1 && generatedQuestions[0]?.type === 'nps') return;
+    const newQuestions = [...generatedQuestions];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    [newQuestions[index], newQuestions[targetIndex]] = [newQuestions[targetIndex], newQuestions[index]];
+    setGeneratedQuestions(newQuestions);
+  };
+
+  const handleMoveOption = (questionId: string, optionIndex: number, direction: 'up' | 'down') => {
+    setGeneratedQuestions(prev => prev.map(q => {
+      if (q.id !== questionId) return q;
+      const opts = [...q.options];
+      const targetIndex = direction === 'up' ? optionIndex - 1 : optionIndex + 1;
+      if (targetIndex < 0 || targetIndex >= opts.length) return q;
+      [opts[optionIndex], opts[targetIndex]] = [opts[targetIndex], opts[optionIndex]];
+      return { ...q, options: opts };
+    }));
   };
 
   const renderProgressBar = () => {
@@ -845,19 +1184,26 @@ Retorne APENAS um JSON válido com este formato:
                       NPS
                     </span>
                   )}
-                  {question.conditional && (
-                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                      question.conditional === 'promoter' ? 'bg-blue-100 text-blue-600' : 
-                      question.conditional === 'passive' ? 'bg-yellow-100 text-yellow-700' : 
-                      'bg-red-100 text-red-600'
-                    }`}>
-                      {question.conditional === 'promoter' ? 'Promotores' : 
-                       question.conditional === 'passive' ? 'Passivos' : 'Detratores'}
-                    </span>
-                  )}
+
                 </div>
                 {question.type !== 'nps' && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-1 items-center">
+                    <button
+                      onClick={() => handleMoveQuestion(index, 'up')}
+                      disabled={index === 0 || (index === 1 && generatedQuestions[0]?.type === 'nps')}
+                      className="p-1 hover:bg-slate-100 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                      title="Mover para cima"
+                    >
+                      <ArrowUp className="w-4 h-4 text-slate-500" />
+                    </button>
+                    <button
+                      onClick={() => handleMoveQuestion(index, 'down')}
+                      disabled={index === generatedQuestions.length - 1}
+                      className="p-1 hover:bg-slate-100 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                      title="Mover para baixo"
+                    >
+                      <ArrowDown className="w-4 h-4 text-slate-500" />
+                    </button>
                     <button
                       onClick={() => setEditingQuestionId(editingQuestionId === question.id ? null : question.id)}
                       className="p-1 hover:bg-slate-100 rounded transition-colors"
@@ -921,7 +1267,25 @@ Retorne APENAS um JSON válido com este formato:
                       <label className="block text-xs font-medium text-slate-600 mb-2">Alternativas</label>
                       <div className="space-y-2">
                         {question.options.map((opt, optIndex) => (
-                          <div key={opt.id} className="flex gap-2">
+                          <div key={opt.id} className="flex gap-2 items-center">
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                onClick={() => handleMoveOption(question.id, optIndex, 'up')}
+                                disabled={optIndex === 0}
+                                className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                                title="Mover para cima"
+                              >
+                                <ArrowUp className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => handleMoveOption(question.id, optIndex, 'down')}
+                                disabled={optIndex === question.options.length - 1}
+                                className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                                title="Mover para baixo"
+                              >
+                                <ArrowDown className="w-3 h-3" />
+                              </button>
+                            </div>
                             <input
                               type="text"
                               value={opt.text}
@@ -975,43 +1339,7 @@ Retorne APENAS um JSON válido com este formato:
                     />
                   </div>
 
-                  {/* Público-alvo (Condicional) */}
-                  {question.type !== 'nps' && (
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-2">Exibir esta pergunta para:</label>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEditQuestion(question.id, { conditional: undefined })}
-                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all ${!question.conditional ? 'bg-slate-800 text-white border-slate-800 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
-                        >
-                          Todos
-                        </button>
-                        <button
-                          onClick={() => handleEditQuestion(question.id, { conditional: 'promoter' })}
-                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all ${question.conditional === 'promoter' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-blue-600 border-blue-200 hover:border-blue-300'}`}
-                        >
-                          Promotores
-                        </button>
-                        <button
-                          onClick={() => handleEditQuestion(question.id, { conditional: 'passive' })}
-                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all ${question.conditional === 'passive' ? 'bg-yellow-500 text-white border-yellow-500 shadow-sm' : 'bg-white text-yellow-600 border-yellow-200 hover:border-yellow-300'}`}
-                        >
-                          Passivos
-                        </button>
-                        <button
-                          onClick={() => handleEditQuestion(question.id, { conditional: 'detractor' })}
-                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all ${question.conditional === 'detractor' ? 'bg-red-600 text-white border-red-600 shadow-sm' : 'bg-white text-red-600 border-red-200 hover:border-red-300'}`}
-                        >
-                          Detratores
-                        </button>
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-2">
-                        {!question.conditional 
-                          ? 'Esta pergunta será exibida para todos os clientes, independente da nota.' 
-                          : `Esta pergunta só aparecerá para clientes que derem nota ${question.conditional === 'promoter' ? '9 ou 10' : question.conditional === 'passive' ? '7 ou 8' : 'de 0 a 6'}.`}
-                      </p>
-                    </div>
-                  )}
+
                 </div>
               ) : (
                 <>
@@ -1289,6 +1617,97 @@ Retorne APENAS um JSON válido com este formato:
           </button>
         </div>
       </div>
+
+      {/* Chat de Ajuste - Sidebar */}
+      {showReviewChat && (
+        <div className="w-96 border-l border-slate-200 bg-slate-50 flex flex-col">
+          {/* Cabeçalho do Chat */}
+          <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
+                <Bot size={16} className="text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-800 text-sm">Consultor IA</h3>
+                <p className="text-[10px] text-slate-500">Ajuste suas perguntas</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowReviewChat(false)}
+              className="p-1 hover:bg-slate-100 rounded transition-colors"
+            >
+              <X size={16} className="text-slate-400" />
+            </button>
+          </div>
+
+          {/* Mensagens do Chat */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {reviewChatMessages.length === 0 ? (
+              <div className="text-center py-8">
+                <Bot size={48} className="mx-auto text-slate-300 mb-3" />
+                <p className="text-sm text-slate-400">Carregando consultor...</p>
+              </div>
+            ) : (
+              reviewChatMessages.map(msg => (
+                <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] p-3 rounded-lg shadow-sm ${
+                    msg.role === 'user' 
+                      ? 'bg-emerald-500 text-white' 
+                      : 'bg-slate-100 text-slate-800'
+                  }`}>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  </div>
+                </div>
+              ))
+            )}
+            {isReviewChatProcessing && (
+              <div className="flex gap-2 justify-start">
+                <div className="bg-slate-100 p-3 rounded-lg shadow-sm">
+                  <Loader2 size={16} className="animate-spin text-emerald-500" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input do Chat */}
+          <div className="p-4 border-t border-slate-200 bg-slate-50">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={reviewChatInput}
+                onChange={(e) => setReviewChatInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && reviewChatInput.trim()) {
+                    e.preventDefault();
+                    handleReviewChatMessage(reviewChatInput);
+                  }
+                }}
+                placeholder="Pergunte ou solicite ajustes..."
+                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                disabled={isReviewChatProcessing}
+              />
+              <button
+                onClick={() => handleReviewChatMessage(reviewChatInput)}
+                disabled={!reviewChatInput.trim() || isReviewChatProcessing}
+                className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Send size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Botão para reabrir chat se fechado */}
+      {!showReviewChat && (
+        <button
+          onClick={() => setShowReviewChat(true)}
+          className="fixed bottom-6 right-6 p-4 bg-emerald-500 text-white rounded-full shadow-lg hover:bg-emerald-600 transition-all hover:scale-110"
+          title="Abrir Consultor IA"
+        >
+          <Bot size={24} />
+        </button>
+      )}
     </div>
   );
 

@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift } from 'lucide-react';
 import FormConsultant from '@/components/FormConsultant';
 import { supabase } from '@/lib/supabase';
 import { Form, FormQuestion, FormOption, Lead, InitialField } from '@/types';
@@ -16,6 +16,7 @@ interface FormBuilderProps {
   onViewReport?: (id: string) => void;
   setForms?: any;
   userId?: string;
+  activeCompany?: { id: string; name: string };
   isAnalyzingAll?: boolean;
   analysisProgress?: { current: number; total: number };
   pendingAnalysisCount?: number;
@@ -36,7 +37,7 @@ const normalizeQuestionType = (type: string): 'text' | 'single' | 'multiple' => 
   return typeMap[type] || 'text';
 };
 
-const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads }) => {
+const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId, activeCompany, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads }) => {
   const [view, setView] = useState<'list' | 'editor' | 'consultant'>('list');
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [showConsultant, setShowConsultant] = useState(false);
@@ -55,6 +56,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [currentFormName, setCurrentFormName] = useState('');
   const [currentFormDescription, setCurrentFormDescription] = useState('');
   const [currentInitialFields, setCurrentInitialFields] = useState<InitialField[]>([]);
+  const [currentGameEnabled, setCurrentGameEnabled] = useState(false);
+  const [currentGameId, setCurrentGameId] = useState<string | null>(null);
+  const [availableGames, setAvailableGames] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingScriptId, setGeneratingScriptId] = useState<string | null>(null); 
 
@@ -89,6 +93,23 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       return form.responses || 0;
   };
 
+  // Fetch available games when view changes to editor
+  useEffect(() => {
+    if (view === 'editor' && activeCompany?.id) {
+      const fetchGames = async () => {
+        const { data, error } = await supabase
+          .from('nps_games')
+          .select('id, name')
+          .eq('tenant_id', activeCompany.id)
+          .order('name');
+        if (data && !error) {
+          setAvailableGames(data);
+        }
+      };
+      fetchGames();
+    }
+  }, [view, activeCompany]);
+
   // Handlers
   const handleCreateNew = () => {
     setEditingFormId(null);
@@ -96,6 +117,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setCurrentFormDescription('');
     setCurrentQuestions([{ id: Date.now().toString(), text: '', type: 'text', options: [] }]);
     setCurrentInitialFields([]);
+    setCurrentGameEnabled(false);
+    setCurrentGameId(null);
     setView('editor');
   };
 
@@ -105,6 +128,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setCurrentFormDescription(form.description || '');
     setCurrentQuestions(form.questions.map(q => ({ ...q, type: normalizeQuestionType(q.type), options: q.options?.map(opt => ({ ...opt, label: typeof opt.label === "object" && opt.label?.text ? opt.label.text : (opt.label || opt.text || "") })) || [] })));
     setCurrentInitialFields(form.initialFields || []);
+    setCurrentGameEnabled(form.game_enabled || false);
+    setCurrentGameId(form.game_id || null);
     setView('editor');
     setMenuOpenId(null);
   };
@@ -146,6 +171,17 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     [newQuestions[index], newQuestions[targetIndex]] = [newQuestions[targetIndex], newQuestions[index]];
     
     setCurrentQuestions(newQuestions);
+  };
+
+  const handleMoveOption = (questionId: string, optionIndex: number, direction: 'up' | 'down') => {
+    setCurrentQuestions(prev => prev.map(q => {
+      if (q.id !== questionId) return q;
+      const opts = [...(q.options || [])];
+      const targetIndex = direction === 'up' ? optionIndex - 1 : optionIndex + 1;
+      if (targetIndex < 0 || targetIndex >= opts.length) return q;
+      [opts[optionIndex], opts[targetIndex]] = [opts[targetIndex], opts[optionIndex]];
+      return { ...q, options: opts };
+    }));
   };
 
   // Generate a single script for a specific option
@@ -365,7 +401,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         responses: existingForm?.responses || 0,
         active: existingForm?.active ?? true,
         createdAt: existingForm?.createdAt || new Date().toISOString(),
-        initialFields: currentInitialFields.length > 0 ? currentInitialFields : undefined
+        initialFields: currentInitialFields.length > 0 ? currentInitialFields : undefined,
+        game_enabled: currentGameEnabled,
+        game_id: currentGameId
     };
 
     // Trigger Parent Handler for DB Save
@@ -486,6 +524,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                  <span className={`text-xs px-2 py-0.5 rounded-full border ${form.active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
                     {form.active ? 'Ativo' : 'Pausado'}
                  </span>
+                 {form.game_enabled && (
+                   <span className="text-xs px-2 py-0.5 rounded-full border border-purple-100 text-purple-600 bg-purple-50 flex items-center gap-1">
+                     <Gift size={10} /> Game Ativo
+                   </span>
+                 )}
                  <span className="text-xs text-gray-400">{form.questions.length} perguntas • {getResponseCount(form)} respostas</span>
                </div>
                
@@ -633,9 +676,58 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                 />
              </div>
           </div>
+          
+          {/* Game Configuration */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-gray-700">Ativar Game (Roleta da Sorte)</h3>
+                <p className="text-xs text-gray-500 mt-1">Após o envio do formulário, o cliente poderá girar a roleta e ganhar prêmios</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCurrentGameEnabled(!currentGameEnabled)}
+                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
+                  currentGameEnabled ? 'bg-pink-500' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    currentGameEnabled ? 'translate-x-9' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            
+            {currentGameEnabled && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Selecione a Roleta</label>
+                <select
+                  value={currentGameId || ''}
+                  onChange={(e) => setCurrentGameId(e.target.value || null)}
+                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 p-2 border bg-white text-gray-900"
+                >
+                  <option value="">Selecione uma roleta...</option>
+                  {availableGames.map(game => (
+                    <option key={game.id} value={game.id}>{game.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Initial Fields Configuration */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 className="text-sm font-medium text-gray-700 mb-4">Campos de Identificação</h3>
+            <p className="text-xs text-gray-500 mb-4">Configure quais dados serão solicitados ao cliente antes das perguntas</p>
+            <InitialFieldsConfig
+              initialFields={currentInitialFields}
+              onChange={setCurrentInitialFields}
+            />
+          </div>
 
           <div className="flex justify-between items-center">
-             <h2 className="text-lg font-bold text-gray-800">Perguntas</h2>
+             <h2 className="text-lg font-bold text-gray-800">Perguntas</h2>>
              <button 
                 onClick={handleAiSuggest}
                 disabled={!currentFormName || isGenerating}
@@ -714,14 +806,32 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                      <div className="pl-4 border-l-2 border-gray-100 mt-4 space-y-4">
                        <p className="text-sm font-semibold text-gray-700">Alternativas e Automações</p>
                        
-                       {q.options?.map((opt) => (
+                       {q.options?.map((opt, optIndex) => (
                          <div key={opt.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200 relative group">
-                           <button 
-                             onClick={() => removeOption(q.id, opt.id)}
-                             className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                           >
-                             <Trash2 size={14} />
-                           </button>
+                           <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                             <button
+                               onClick={() => handleMoveOption(q.id, optIndex, 'up')}
+                               disabled={optIndex === 0}
+                               className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-20 disabled:cursor-not-allowed"
+                               title="Mover para cima"
+                             >
+                               <ArrowUp size={12} />
+                             </button>
+                             <button
+                               onClick={() => handleMoveOption(q.id, optIndex, 'down')}
+                               disabled={optIndex === (q.options?.length ?? 1) - 1}
+                               className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-20 disabled:cursor-not-allowed"
+                               title="Mover para baixo"
+                             >
+                               <ArrowDown size={12} />
+                             </button>
+                             <button 
+                               onClick={() => removeOption(q.id, opt.id)}
+                               className="p-1 text-gray-300 hover:text-red-500 transition-colors"
+                             >
+                               <Trash2 size={14} />
+                             </button>
+                           </div>
                            
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                              <div>
@@ -932,7 +1042,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       responses: existingForm?.responses || 0,
       createdAt: existingForm?.createdAt || new Date().toISOString(),
       // CORREÇÃO: Usa o formato correto de initialFields
-      initialFields: initialFieldsFormatted
+      initialFields: initialFieldsFormatted,
+      game_enabled: formData.game_enabled || false
     };
     onSaveForm(newForm);
   };

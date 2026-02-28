@@ -15,6 +15,7 @@ interface SpinWheelProps {
   clientEmail: string;
   clientPhone: string;
   customMessage?: string;
+  source?: 'pre-sale' | 'post-sale'; // Origem da participação
   onComplete: (prizeCode: string, prizeName: string) => void;
 }
 
@@ -41,6 +42,7 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
   clientEmail, 
   clientPhone,
   customMessage,
+  source,
   onComplete 
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -265,11 +267,10 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
       }
     }
 
-    setWonPrize(selectedPrize);
-
+    // Não setar wonPrize aqui - apenas após animação terminar
     // Gerar código único
     const code = generatePrizeCode(clientName);
-    setPrizeCode(code);
+    // setPrizeCode será setado após animação
 
     // Salvar participação no banco ANTES da animação
     try {
@@ -283,7 +284,8 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
           client_email: clientEmail,
           client_phone: clientPhone,
           prize_won: selectedPrize.name,
-          prize_code: code
+          prize_code: code,
+          source: source || 'post-sale'
         })
       });
 
@@ -297,14 +299,31 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
       console.error('Erro ao salvar participação:', error);
     }
 
-    // Calcular ângulo alvo (a seta está no topo = -PI/2)
+    // ===== CÁLCULO DO ÂNGULO ALVO (CORRIGIDO) =====
+    // A seta está no TOPO da roleta (posição -PI/2 ou 270° no sistema Canvas).
+    // Os segmentos são desenhados a partir do ângulo 0 (direita), no sentido horário.
+    // O segmento i ocupa de: rotation + i*segAngle até rotation + (i+1)*segAngle
+    // Para que o CENTRO do segmento selectedIndex fique sob a seta (topo = -PI/2),
+    // precisamos que: finalRotation + selectedIndex*segAngle + segAngle/2 ≡ -PI/2 (mod 2PI)
+    // Ou seja: finalRotation = -PI/2 - selectedIndex*segAngle - segAngle/2
     const segmentAngle = (2 * Math.PI) / prizes.length;
-    // Corrigido: remover o sinal negativo para alinhar com a ordem de desenho dos segmentos
-    const targetAngle = (selectedIndex * segmentAngle + segmentAngle / 2) - Math.PI / 2;
+    const desiredFinalRotation = -(Math.PI / 2) - (selectedIndex * segmentAngle) - (segmentAngle / 2);
+    
+    // Normalizar para valor positivo
+    const normalizedDesired = ((desiredFinalRotation % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+    const normalizedCurrent = ((rotationRef.current % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+    
+    // Diferença angular necessária (sempre positiva, sentido horário)
+    let angleDiff = normalizedDesired - normalizedCurrent;
+    if (angleDiff <= 0) angleDiff += 2 * Math.PI;
     
     // Adicionar voltas extras (8-12 voltas para efeito dramático)
     const extraSpins = (8 + Math.random() * 4) * 2 * Math.PI;
-    const totalRotation = extraSpins + targetAngle - rotationRef.current;
+    const totalRotation = extraSpins + angleDiff;
+    
+    console.log('[SpinWheel DEBUG] Prêmio:', selectedPrize.name, '| Index:', selectedIndex);
+    console.log('[SpinWheel DEBUG] Ângulo desejado:', (normalizedDesired * 180 / Math.PI).toFixed(1) + '°');
+    console.log('[SpinWheel DEBUG] Rotação total:', (totalRotation * 180 / Math.PI).toFixed(1) + '°');
 
     // Animação suave com easing
     const startTime = performance.now();
@@ -330,6 +349,9 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
         rotationRef.current = endRotation;
         setIsSpinning(false);
         setHasSpun(true);
+        // Setar wonPrize e prizeCode APENAS quando animação terminar
+        setWonPrize(selectedPrize);
+        setPrizeCode(code);
         setShowConfetti(true);
       }
     };
@@ -455,18 +477,23 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
               </div>
               <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-100">
                 <p className="text-gray-600 text-sm">
-                  Seu código de resgate será enviado por <strong className="text-teal-600">WhatsApp</strong> ou <strong className="text-teal-600">Email</strong> após sua avaliação no Google.
+                  {source === 'pre-sale' 
+                    ? 'Seu código de resgate será enviado por WhatsApp ou Email'
+                    : <>Seu código de resgate será enviado por <strong className="text-teal-600">WhatsApp</strong> ou <strong className="text-teal-600">Email</strong> após sua avaliação no Google.</>
+                  }
                 </p>
               </div>
             </div>
 
-            <button
-              onClick={handleContinue}
-              className="w-full py-4 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl font-bold text-lg shadow-md hover:shadow-lg hover:from-teal-700 hover:to-emerald-700 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
-            >
-              <span>Continuar</span>
-              <ArrowIcon />
-            </button>
+            {source === 'post-sale' && (
+              <button
+                onClick={handleContinue}
+                className="w-full py-4 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl font-bold text-lg shadow-md hover:shadow-lg hover:from-teal-700 hover:to-emerald-700 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
+              >
+                <span>Continuar</span>
+                <ArrowIcon />
+              </button>
+            )}
           </div>
         )}
 
