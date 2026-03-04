@@ -281,7 +281,7 @@ const Navigation: React.FC<NavigationProps> = ({
       children: [
         { id: 'kanban', label: 'Oportunidades', icon: Users, requiredPlan: 'client' },
         { id: 'forms', label: 'Formulários', icon: CheckSquare, requiredPlan: 'client' },
-        { id: 'products', label: 'Produtos/Serviços', icon: Package, requiredPlan: 'client' },
+        { id: 'products', label: 'Produtos', icon: Package, requiredPlan: 'client' },
       ]
     },
     {
@@ -293,8 +293,6 @@ const Navigation: React.FC<NavigationProps> = ({
       children: [
         { id: 'nps', label: 'Pesquisas NPS', icon: Star, requiredPlan: 'rating' },
         { id: 'analytics', label: 'Análise Feedback', icon: BarChart3, requiredPlan: 'rating' },
-        { id: 'games', label: 'Roleta da Sorte', icon: Gift, requiredPlan: 'rating' },
-        { id: 'game-participations', label: 'Participantes', icon: Users, requiredPlan: 'rating' },
       ]
     },
     {
@@ -306,13 +304,20 @@ const Navigation: React.FC<NavigationProps> = ({
       children: [
         { id: 'intelligence-center', label: 'Estratégico', icon: Lightbulb, requiredPlan: 'all' },
         { id: 'digital-diagnostic', label: 'Minha Presença Digital', icon: Activity, requiredPlan: 'all' },
-        { id: 'games', label: 'Game', icon: Gift, requiredPlan: 'all', isNew: true, badge: 'Novo' },
         { id: 'business-profile', label: 'Perfil do Negócio', icon: Brain, requiredPlan: 'all' },
       ]
     },
-    { id: 'ai-chat', label: 'HelloIA', icon: MessageSquare, requiredPlan: 'all' },
-    { id: 'database-export', label: 'Banco de Dados', icon: Database, requiredPlan: 'all' },
-    { id: 'business-profile', label: 'Perfil do Negócio', icon: Brain, requiredPlan: 'all' },
+    {
+      id: 'game-group',
+      label: 'Game',
+      icon: Gift,
+      type: 'group',
+      color: 'amber',
+      children: [
+        { id: 'games', label: 'Roleta da Sorte', icon: Gift, requiredPlan: 'rating' },
+        { id: 'game-participations', label: 'Participantes', icon: Users, requiredPlan: 'rating' },
+      ]
+    },
     {
       id: 'settings-group',
       label: 'Configurações',
