@@ -281,7 +281,7 @@ const Navigation: React.FC<NavigationProps> = ({
       children: [
         { id: 'kanban', label: 'Oportunidades', icon: Users, requiredPlan: 'client' },
         { id: 'forms', label: 'Formulários', icon: CheckSquare, requiredPlan: 'client' },
-        { id: 'products', label: 'Produtos/Serviços', icon: Package, requiredPlan: 'client', isNew: true, badge: 'Novo' },
+        { id: 'products', label: 'Produtos', icon: Package, requiredPlan: 'client' },
       ]
     },
     {
@@ -314,7 +314,7 @@ const Navigation: React.FC<NavigationProps> = ({
       type: 'group',
       color: 'amber',
       children: [
-        { id: 'games', label: 'Roleta da Sorte', icon: Gift, requiredPlan: 'rating', isNew: true, badge: 'Novo' },
+        { id: 'games', label: 'Roleta da Sorte', icon: Gift, requiredPlan: 'rating' },
         { id: 'game-participations', label: 'Participantes', icon: Users, requiredPlan: 'rating' },
       ]
     },
