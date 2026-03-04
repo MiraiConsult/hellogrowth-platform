@@ -26,7 +26,8 @@ import {
   TrendingUp,
   DollarSign,
   Heart,
-  Target
+  Target,
+  Bell
 } from 'lucide-react';
 import { PlanType, Company, UserCompany } from '@/types';
 import CompanySwitcher from '@/components/CompanySwitcher';
@@ -357,7 +358,7 @@ const Navigation: React.FC<NavigationProps> = ({
     
     // Member: pode ver leads, enviar mensagens, ver relatórios
     if (userRole === 'member') {
-      const memberAccess = ['kanban', 'nps', 'database-export', 'ai-chat', 'settings', 'digital-diagnostic'];
+      const memberAccess = ['kanban', 'nps', 'database-export', 'ai-chat', 'settings', 'digital-diagnostic', 'report-settings'];
       return memberAccess.includes(itemId);
     }
     
