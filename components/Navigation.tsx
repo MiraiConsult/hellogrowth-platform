@@ -328,6 +328,7 @@ const Navigation: React.FC<NavigationProps> = ({
       children: [
         { id: 'settings', label: 'Configurações', icon: Settings, requiredPlan: 'all' },
         { id: 'team-management', label: 'Gerenciar Equipe', icon: Users, requiredPlan: 'all' },
+        { id: 'report-settings', label: 'Relatórios e Notificações', icon: Bell, requiredPlan: 'all' },
         { id: 'database-export', label: 'Banco de Dados', icon: Database, requiredPlan: 'all' },
         { id: 'tutorial', label: 'Ajuda', icon: HelpCircle, requiredPlan: 'all' },
       ]
