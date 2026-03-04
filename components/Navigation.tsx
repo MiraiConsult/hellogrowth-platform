@@ -304,8 +304,18 @@ const Navigation: React.FC<NavigationProps> = ({
       children: [
         { id: 'intelligence-center', label: 'Estratégico', icon: Lightbulb, requiredPlan: 'all' },
         { id: 'digital-diagnostic', label: 'Minha Presença Digital', icon: Activity, requiredPlan: 'all' },
-        { id: 'games', label: 'Game', icon: Gift, requiredPlan: 'all', isNew: true, badge: 'Novo' },
         { id: 'business-profile', label: 'Perfil do Negócio', icon: Brain, requiredPlan: 'all' },
+      ]
+    },
+    {
+      id: 'game-group',
+      label: 'Game',
+      icon: Gift,
+      type: 'group',
+      color: 'amber',
+      children: [
+        { id: 'games', label: 'Roleta da Sorte', icon: Gift, requiredPlan: 'rating', isNew: true, badge: 'Novo' },
+        { id: 'game-participations', label: 'Participantes', icon: Users, requiredPlan: 'rating' },
       ]
     },
     {
