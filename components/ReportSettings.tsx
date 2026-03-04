@@ -10,13 +10,14 @@ import {
   Loader2, 
   Save,
   Calendar,
-  Info
+  Info,
+  Users,
+  PieChart
 } from 'lucide-react';
-import { User, Company } from '@/types';
+import { User } from '@/types';
 
 interface ReportSettingsProps {
   currentUser?: User;
-  activeCompany?: Company | null;
   userRole?: string;
 }
 
@@ -30,31 +31,74 @@ interface ReportConfig {
   scheduled_time: string;
 }
 
-const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeCompany, userRole = 'admin' }) => {
+const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole = 'admin' }) => {
   const isReadOnly = userRole === 'viewer';
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [message, setMessage] = useState({ text: '', type: 'idle' as 'idle' | 'success' | 'error' });
+  const [companyId, setCompanyId] = useState<string | null>(null);
   
   const [config, setConfig] = useState<ReportConfig>({
     whatsapp_number: '',
-    email_recipient: '',
+    email_recipient: currentUser?.email || '',
     daily_enabled: false,
     weekly_enabled: false,
     monthly_enabled: false,
     scheduled_time: '08:00'
   });
 
+  // Resolve o company_id a partir do usuário logado
+  useEffect(() => {
+    const resolveCompanyId = async () => {
+      if (!currentUser?.id) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Tenta buscar via activeCompanyId do usuário
+        if (currentUser.activeCompanyId) {
+          setCompanyId(currentUser.activeCompanyId);
+          return;
+        }
+
+        // Fallback: busca a empresa padrão do usuário na tabela user_companies
+        const { data } = await supabase
+          .from('user_companies')
+          .select('company_id')
+          .eq('user_id', currentUser.id)
+          .eq('is_default', true)
+          .single();
+
+        if (data?.company_id) {
+          setCompanyId(data.company_id);
+        } else {
+          // Último fallback: usa o tenantId do usuário
+          setCompanyId(currentUser.tenantId || null);
+        }
+      } catch (e) {
+        console.error('Erro ao resolver company_id:', e);
+        setCompanyId(currentUser.tenantId || null);
+      }
+    };
+
+    resolveCompanyId();
+  }, [currentUser?.id]);
+
+  // Carrega as configurações quando o companyId estiver disponível
   useEffect(() => {
     const loadSettings = async () => {
-      if (!activeCompany?.id) return;
+      if (!companyId) {
+        setLoading(false);
+        return;
+      }
       
       try {
         setLoading(true);
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('report_settings')
           .select('*')
-          .eq('company_id', activeCompany.id)
+          .eq('company_id', companyId)
           .single();
 
         if (data) {
@@ -76,7 +120,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
     };
 
     loadSettings();
-  }, [activeCompany?.id]);
+  }, [companyId]);
 
   const handleToggle = (field: keyof ReportConfig) => {
     if (isReadOnly) return;
@@ -91,14 +135,14 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
   };
 
   const handleSave = async () => {
-    if (!activeCompany?.id || isReadOnly) return;
+    if (!companyId || isReadOnly) return;
     
     setSaveStatus('saving');
     setMessage({ text: '', type: 'idle' });
 
     try {
       const payload = {
-        company_id: activeCompany.id,
+        company_id: companyId,
         whatsapp_number: config.whatsapp_number,
         email_recipient: config.email_recipient,
         daily_enabled: config.daily_enabled,
@@ -141,7 +185,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="animate-spin text-primary-600" size={32} />
+        <Loader2 className="animate-spin text-emerald-600" size={32} />
       </div>
     );
   }
@@ -150,7 +194,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
     <div className="p-8 min-h-screen bg-gray-50">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Bell className="text-primary-600" size={24} /> Relatórios e Notificações
+          <Bell className="text-emerald-600" size={24} /> Relatórios e Notificações
         </h1>
         <p className="text-gray-500">Configure o envio automático de KPIs por WhatsApp e E-mail.</p>
       </div>
@@ -163,8 +207,10 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                <MessageSquare size={16} className="text-green-500" /> WhatsApp (Z-API)
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <span className="flex items-center gap-2">
+                  <MessageSquare size={16} className="text-green-500" /> WhatsApp (Z-API)
+                </span>
               </label>
               <input 
                 type="tel" 
@@ -172,13 +218,15 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
                 onChange={(e) => handleInputChange('whatsapp_number', e.target.value)}
                 disabled={isReadOnly}
                 placeholder="Ex: 5511999999999"
-                className="w-full rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 focus:ring-emerald-500 focus:border-emerald-500"
               />
               <p className="text-xs text-gray-500 mt-1">Inclua o código do país (55) e DDD.</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                <Mail size={16} className="text-blue-500" /> E-mail de Destino
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <span className="flex items-center gap-2">
+                  <Mail size={16} className="text-blue-500" /> E-mail de Destino
+                </span>
               </label>
               <input 
                 type="email" 
@@ -186,7 +234,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
                 onChange={(e) => handleInputChange('email_recipient', e.target.value)}
                 disabled={isReadOnly}
                 placeholder="exemplo@email.com"
-                className="w-full rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
           </div>
@@ -200,7 +248,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${config.daily_enabled ? 'bg-primary-100 text-primary-600' : 'bg-gray-200 text-gray-500'}`}>
+                <div className={`p-2 rounded-lg ${config.daily_enabled ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-200 text-gray-500'}`}>
                   <Clock size={20} />
                 </div>
                 <div>
@@ -211,7 +259,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
               <button 
                 onClick={() => handleToggle('daily_enabled')}
                 disabled={isReadOnly}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${config.daily_enabled ? 'bg-primary-600' : 'bg-gray-300'}`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${config.daily_enabled ? 'bg-emerald-600' : 'bg-gray-300'}`}
               >
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.daily_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
@@ -219,7 +267,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${config.weekly_enabled ? 'bg-primary-100 text-primary-600' : 'bg-gray-200 text-gray-500'}`}>
+                <div className={`p-2 rounded-lg ${config.weekly_enabled ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-200 text-gray-500'}`}>
                   <Calendar size={20} />
                 </div>
                 <div>
@@ -230,7 +278,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
               <button 
                 onClick={() => handleToggle('weekly_enabled')}
                 disabled={isReadOnly}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${config.weekly_enabled ? 'bg-primary-600' : 'bg-gray-300'}`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${config.weekly_enabled ? 'bg-emerald-600' : 'bg-gray-300'}`}
               >
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.weekly_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
@@ -238,7 +286,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
 
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${config.monthly_enabled ? 'bg-primary-100 text-primary-600' : 'bg-gray-200 text-gray-500'}`}>
+                <div className={`p-2 rounded-lg ${config.monthly_enabled ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-200 text-gray-500'}`}>
                   <PieChart size={20} />
                 </div>
                 <div>
@@ -249,7 +297,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
               <button 
                 onClick={() => handleToggle('monthly_enabled')}
                 disabled={isReadOnly}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${config.monthly_enabled ? 'bg-primary-600' : 'bg-gray-300'}`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${config.monthly_enabled ? 'bg-emerald-600' : 'bg-gray-300'}`}
               >
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.monthly_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
@@ -259,19 +307,21 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
           <div className="mt-6 pt-6 border-t border-gray-100">
             <div className="flex items-center gap-4">
               <div className="w-1/3">
-                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                  <Clock size={16} /> Horário de Envio
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <span className="flex items-center gap-2">
+                    <Clock size={16} /> Horário de Envio
+                  </span>
                 </label>
                 <input 
                   type="time" 
                   value={config.scheduled_time}
                   onChange={(e) => handleInputChange('scheduled_time', e.target.value)}
                   disabled={isReadOnly}
-                  className="w-full rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 focus:ring-emerald-500 focus:border-emerald-500"
                 />
               </div>
               <div className="flex-1 bg-blue-50 p-3 rounded-lg flex items-start gap-2 border border-blue-100">
-                <Info size={16} className="text-blue-500 mt-0.5" />
+                <Info size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-blue-800">
                   Os relatórios são processados e enviados automaticamente no horário agendado, consolidando os KPIs de Vendas e NPS.
                 </p>
@@ -295,7 +345,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, activeComp
               onClick={handleSave}
               disabled={saveStatus === 'saving'}
               className={`px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all ${
-                saveStatus === 'saving' ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary-600 hover:bg-primary-700 text-white shadow-lg hover:shadow-primary-200'
+                saveStatus === 'saving' ? 'bg-gray-400 cursor-not-allowed text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg hover:shadow-emerald-200'
               }`}
             >
               {saveStatus === 'saving' ? (

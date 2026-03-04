@@ -1255,7 +1255,6 @@ Responda APENAS com JSON válido (sem markdown):
         {currentView === 'report-settings' && (
             <ReportSettings 
                 currentUser={currentUser}
-                activeCompany={activeCompany}
                 userRole={currentUser.role || 'admin'}
             />
         )}
