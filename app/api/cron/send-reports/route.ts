@@ -14,62 +14,62 @@ const ZAPI_INSTANCE_ID = process.env.ZAPI_INSTANCE_ID!;
 const ZAPI_TOKEN = process.env.ZAPI_TOKEN!;
 const ZAPI_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN!;
 
-// Retorna a hora atual no horário de Brasília (UTC-3)
-function getBrasiliaHour(): { hour: number; minute: number; dayOfWeek: number; dayOfMonth: number } {
+// Retorna o intervalo do dia anterior em horário de Brasília (UTC-3)
+function getYesterdayRange(): { startISO: string; endISO: string; dateLabel: string } {
   const now = new Date();
-  const brasiliaOffset = -3 * 60; // UTC-3 em minutos
-  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const brasiliaMinutes = ((utcMinutes + brasiliaOffset) + 1440) % 1440;
-  const hour = Math.floor(brasiliaMinutes / 60);
-  const minute = brasiliaMinutes % 60;
+  // Ajusta para Brasília (UTC-3)
+  const brasiliaOffset = -3 * 60 * 60 * 1000;
+  const brasiliaNow = new Date(now.getTime() + brasiliaOffset);
 
-  // Dia da semana e do mês em Brasília
-  const brasiliaDate = new Date(now.getTime() + brasiliaOffset * 60 * 1000);
-  const dayOfWeek = brasiliaDate.getUTCDay(); // 0=Dom, 1=Seg, ..., 6=Sab
-  const dayOfMonth = brasiliaDate.getUTCDate();
+  // Ontem em Brasília
+  const yesterday = new Date(brasiliaNow);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
 
-  return { hour, minute, dayOfWeek, dayOfMonth };
+  // Início do dia anterior: 00:00:00 Brasília = 03:00:00 UTC
+  const start = new Date(Date.UTC(
+    yesterday.getUTCFullYear(),
+    yesterday.getUTCMonth(),
+    yesterday.getUTCDate(),
+    3, 0, 0, 0 // 00:00 Brasília = 03:00 UTC
+  ));
+
+  // Fim do dia anterior: 23:59:59 Brasília = 02:59:59 UTC do dia atual
+  const end = new Date(Date.UTC(
+    yesterday.getUTCFullYear(),
+    yesterday.getUTCMonth(),
+    yesterday.getUTCDate(),
+    26, 59, 59, 999 // 23:59:59 Brasília = 02:59:59 UTC próximo dia
+  ));
+
+  const dateLabel = yesterday.toLocaleDateString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+
+  return { startISO: start.toISOString(), endISO: end.toISOString(), dateLabel };
 }
 
-// Verifica se o horário configurado bate com o horário atual (tolerância de 5 min)
-function isTimeToSend(scheduledTime: string, currentHour: number, currentMinute: number): boolean {
-  const parts = scheduledTime.split(':');
-  const scheduledHour = parseInt(parts[0], 10);
-  const scheduledMinute = parseInt(parts[1] || '0', 10);
-  const diff = Math.abs((currentHour * 60 + currentMinute) - (scheduledHour * 60 + scheduledMinute));
-  return diff <= 5;
-}
+// Busca KPIs do dia anterior para o tenant
+async function fetchYesterdayKPIs(tenantId: string) {
+  const { startISO, endISO } = getYesterdayRange();
 
-// Busca KPIs do tenant no Supabase
-async function fetchKPIs(tenantId: string, period: 'day' | 'week' | 'month') {
-  const now = new Date();
-  let startDate: Date;
-
-  if (period === 'day') {
-    startDate = new Date(now);
-    startDate.setHours(0, 0, 0, 0);
-  } else if (period === 'week') {
-    startDate = new Date(now);
-    startDate.setDate(now.getDate() - 7);
-  } else {
-    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-  }
-
-  const startISO = startDate.toISOString();
-
-  // Busca leads
+  // Busca leads criados ontem
   const { data: leads } = await supabaseAdmin
     .from('leads')
     .select('id, value, stage, created_at')
-    .eq('tenant_id', tenantId)
-    .gte('created_at', startISO);
+    .eq('company_id', tenantId)
+    .gte('created_at', startISO)
+    .lte('created_at', endISO);
 
-  // Busca respostas NPS
+  // Busca respostas NPS de ontem
   const { data: npsResponses } = await supabaseAdmin
     .from('nps_responses')
     .select('id, score, created_at')
-    .eq('tenant_id', tenantId)
-    .gte('created_at', startISO);
+    .eq('company_id', tenantId)
+    .gte('created_at', startISO)
+    .lte('created_at', endISO);
 
   const totalLeads = leads?.length || 0;
   const totalValue = leads?.reduce((sum, l) => sum + (l.value || 0), 0) || 0;
@@ -90,21 +90,18 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
-// Monta a mensagem do relatório
-function buildReportMessage(
+// Monta a mensagem do relatório diário
+function buildDailyReportMessage(
   companyName: string,
-  period: 'day' | 'week' | 'month',
-  kpis: Awaited<ReturnType<typeof fetchKPIs>>
+  dateLabel: string,
+  kpis: Awaited<ReturnType<typeof fetchYesterdayKPIs>>
 ): string {
-  const periodLabel = period === 'day' ? 'Diário' : period === 'week' ? 'Semanal' : 'Mensal';
-  const dateStr = new Date().toLocaleDateString('pt-BR');
-
   const npsLine = kpis.npsScore !== null
     ? `📊 *NPS:* ${kpis.npsScore} pts (${kpis.npsCount} respostas | ${kpis.promoters} promotores | ${kpis.detractors} detratores)`
     : `📊 *NPS:* Sem respostas no período`;
 
-  return `🚀 *HelloGrowth — Relatório ${periodLabel}*
-📅 ${dateStr}
+  return `🚀 *HelloGrowth — Relatório Diário*
+📅 Dados de ontem: ${dateLabel}
 🏢 ${companyName}
 ━━━━━━━━━━━━━━━━━━━━
 💼 *VENDAS*
@@ -153,7 +150,7 @@ async function sendWhatsAppMessage(phone: string, message: string): Promise<bool
   }
 }
 
-// GET — chamado pelo Vercel Cron a cada hora
+// GET — chamado pelo Vercel Cron todo dia às 12:00 UTC (09:00 Brasília)
 export async function GET(request: NextRequest) {
   // Verificação de segurança: apenas o Vercel Cron pode chamar esta rota
   const authHeader = request.headers.get('authorization');
@@ -163,18 +160,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { hour, minute, dayOfWeek, dayOfMonth } = getBrasiliaHour();
-  const isMonday = dayOfWeek === 1;
-  const isFirstDayOfMonth = dayOfMonth === 1;
-
-  console.log(`[Cron] Executando - Brasília: ${hour}:${String(minute).padStart(2, '0')} | Seg: ${isMonday} | 1º dia: ${isFirstDayOfMonth}`);
+  const { dateLabel } = getYesterdayRange();
+  console.log(`[Cron] Executando relatório diário — dados de: ${dateLabel}`);
 
   try {
-    // Busca todos os registros com pelo menos um tipo de relatório habilitado
+    // Busca todos os clientes com relatório diário habilitado e número de WhatsApp
     const { data: settings, error } = await supabaseAdmin
       .from('report_settings')
       .select('*')
-      .or('daily_enabled.eq.true,weekly_enabled.eq.true,monthly_enabled.eq.true');
+      .eq('daily_enabled', true)
+      .not('whatsapp_number', 'is', null);
 
     if (error) {
       console.error('[Cron] Erro ao buscar configurações:', error);
@@ -182,6 +177,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!settings || settings.length === 0) {
+      console.log('[Cron] Nenhum cliente com relatório diário habilitado');
       return NextResponse.json({ message: 'Nenhum relatório configurado', sent: 0 });
     }
 
@@ -189,13 +185,7 @@ export async function GET(request: NextRequest) {
     const results: any[] = [];
 
     for (const setting of settings) {
-      const tenantId = setting.company_id; // company_id = user.id (tenant_id) no pre-production/main
-      const scheduledTime = setting.scheduled_time?.substring(0, 5) || '08:00';
-
-      // Verifica se é a hora certa para este cliente
-      if (!isTimeToSend(scheduledTime, hour, minute)) {
-        continue;
-      }
+      const tenantId = setting.company_id;
 
       // Busca o nome do usuário/empresa
       const { data: userData } = await supabaseAdmin
@@ -205,50 +195,26 @@ export async function GET(request: NextRequest) {
         .maybeSingle();
 
       const companyName = userData?.name || 'Sua Empresa';
-      const reportsSent: string[] = [];
 
-      // Relatório Diário — envia todos os dias no horário configurado
-      if (setting.daily_enabled && setting.whatsapp_number) {
-        const kpis = await fetchKPIs(tenantId, 'day');
-        const message = buildReportMessage(companyName, 'day', kpis);
-        const sent = await sendWhatsAppMessage(setting.whatsapp_number, message);
-        if (sent) {
-          reportsSent.push('daily');
-          totalSent++;
-        }
-      }
+      // Busca os KPIs do dia anterior
+      const kpis = await fetchYesterdayKPIs(tenantId);
 
-      // Relatório Semanal — apenas às segundas-feiras
-      if (setting.weekly_enabled && isMonday && setting.whatsapp_number) {
-        const kpis = await fetchKPIs(tenantId, 'week');
-        const message = buildReportMessage(companyName, 'week', kpis);
-        const sent = await sendWhatsAppMessage(setting.whatsapp_number, message);
-        if (sent) {
-          reportsSent.push('weekly');
-          totalSent++;
-        }
-      }
+      // Monta e envia a mensagem
+      const message = buildDailyReportMessage(companyName, dateLabel, kpis);
+      const sent = await sendWhatsAppMessage(setting.whatsapp_number, message);
 
-      // Relatório Mensal — apenas no 1º dia do mês
-      if (setting.monthly_enabled && isFirstDayOfMonth && setting.whatsapp_number) {
-        const kpis = await fetchKPIs(tenantId, 'month');
-        const message = buildReportMessage(companyName, 'month', kpis);
-        const sent = await sendWhatsAppMessage(setting.whatsapp_number, message);
-        if (sent) {
-          reportsSent.push('monthly');
-          totalSent++;
-        }
-      }
-
-      if (reportsSent.length > 0) {
-        results.push({ tenantId, companyName, reportsSent, scheduledTime });
-        console.log(`[Cron] ✅ Enviado para ${companyName}: ${reportsSent.join(', ')}`);
+      if (sent) {
+        totalSent++;
+        results.push({ tenantId, companyName, whatsapp: setting.whatsapp_number });
+        console.log(`[Cron] ✅ Enviado para ${companyName} (${setting.whatsapp_number})`);
+      } else {
+        console.error(`[Cron] ❌ Falha ao enviar para ${companyName} (${setting.whatsapp_number})`);
       }
     }
 
     return NextResponse.json({
       message: 'Cron executado com sucesso',
-      brasiliaTime: `${hour}:${String(minute).padStart(2, '0')}`,
+      date: dateLabel,
       totalSent,
       results
     });
