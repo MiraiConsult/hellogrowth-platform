@@ -237,32 +237,43 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       try {
         if (currentUser.id !== 'public') {
           
-          // 1. Buscar tenant_id do usuário atual (ou usar o da empresa selecionada)
+          // 1. Determinar tenant_id: usa o da empresa selecionada ou busca do usuário
           let tenantId = overrideTenantId;
           let userData: any = null;
 
+          // Sempre buscar dados base do usuário atual
+          const { data: currentUserData } = await supabase
+            .from('users')
+            .select('tenant_id, settings, company_name, is_owner')
+            .eq('id', currentUser.id)
+            .single();
+
           if (!tenantId) {
-            const { data: ud } = await supabase
-              .from('users')
-              .select('tenant_id, settings, company_name, is_owner')
-              .eq('id', currentUser.id)
-              .single();
-            userData = ud;
-            tenantId = ud?.tenant_id;
+            // Sem override: usar tenant_id do próprio usuário
+            tenantId = currentUserData?.tenant_id;
+            userData = currentUserData;
           } else {
-            // Buscar settings do owner do tenant selecionado
-            const { data: ownerData } = await supabase
-              .from('users')
-              .select('tenant_id, settings, company_name, is_owner')
-              .eq('tenant_id', tenantId)
-              .eq('is_owner', true)
+            // Com override (troca de empresa): usar company_id como tenant_id
+            // Buscar nome e settings da empresa na tabela companies
+            const { data: companyData } = await supabase
+              .from('companies')
+              .select('*')
+              .eq('id', tenantId)
               .maybeSingle();
-            userData = ownerData;
+            
+            // Montar userData com settings do usuário + nome da empresa selecionada
+            userData = {
+              ...currentUserData,
+              tenant_id: tenantId,
+              company_name: companyData?.name || currentUserData?.company_name,
+              is_owner: true, // Evitar busca extra de owner
+              settings: companyData?.settings || currentUserData?.settings
+            };
           }
 
-          // 2. Se não é owner, buscar settings do owner do tenant
+          // 2. Se não é owner, buscar settings do owner do tenant original
           let ownerSettings = userData;
-          if (userData && !userData.is_owner && tenantId) {
+          if (!overrideTenantId && userData && !userData.is_owner && tenantId) {
             const { data: ownerData } = await supabase
               .from('users')
               .select('settings, company_name')
