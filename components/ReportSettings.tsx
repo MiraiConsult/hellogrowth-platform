@@ -114,7 +114,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
         daily_enabled: config.daily_enabled,
         weekly_enabled: config.weekly_enabled,
         monthly_enabled: config.monthly_enabled,
-        scheduled_time: config.scheduled_time + ':00'
+        scheduled_time: '09:00:00'
       };
 
       let error;
@@ -344,26 +344,25 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
             </div>
           </div>
 
-          {/* Horário de Envio */}
+          {/* Horário Fixo */}
           <div className="mt-6 pt-4 border-t border-gray-100">
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <Clock size={16} className="text-gray-400" /> Horário de Envio
-            </label>
-            <input
-              type="time"
-              value={config.scheduled_time}
-              onChange={(e) => handleInputChange('scheduled_time', e.target.value)}
-              disabled={isReadOnly}
-              className="rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 focus:ring-emerald-500 focus:border-emerald-500"
-            />
+            <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-lg border border-emerald-100">
+              <div className="p-2 rounded-lg bg-emerald-100 text-emerald-600 flex-shrink-0">
+                <Clock size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-emerald-800">Horário de envio: todo dia às 9h da manhã</p>
+                <p className="text-xs text-emerald-600 mt-0.5">O relatório é enviado automaticamente com os dados do dia anterior.</p>
+              </div>
+            </div>
           </div>
 
           {/* Info Box */}
           <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100 flex items-start gap-2">
             <Info size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
             <p className="text-sm text-blue-700">
-              Os relatórios são processados e enviados automaticamente no horário agendado, 
-              consolidando os KPIs de Vendas e NPS.
+              Os relatórios são processados e enviados automaticamente às 9h, 
+              consolidando os KPIs de Vendas e NPS do dia anterior.
             </p>
           </div>
         </div>
