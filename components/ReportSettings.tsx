@@ -12,7 +12,10 @@ import {
   Calendar,
   Info,
   Users,
-  PieChart
+  PieChart,
+  Key,
+  Send,
+  Zap
 } from 'lucide-react';
 import { User } from '@/types';
 
@@ -29,12 +32,16 @@ interface ReportConfig {
   weekly_enabled: boolean;
   monthly_enabled: boolean;
   scheduled_time: string;
+  zapi_instance_id: string;
+  zapi_token: string;
+  zapi_client_token: string;
 }
 
 const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole = 'admin' }) => {
   const isReadOnly = userRole === 'viewer';
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [message, setMessage] = useState({ text: '', type: 'idle' as 'idle' | 'success' | 'error' });
   const [companyId, setCompanyId] = useState<string | null>(null);
   
@@ -44,7 +51,10 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
     daily_enabled: false,
     weekly_enabled: false,
     monthly_enabled: false,
-    scheduled_time: '08:00'
+    scheduled_time: '08:00',
+    zapi_instance_id: '',
+    zapi_token: '',
+    zapi_client_token: ''
   });
 
   // Resolve o company_id a partir do usuário logado
@@ -56,13 +66,11 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
       }
 
       try {
-        // Tenta buscar via activeCompanyId do usuário
         if (currentUser.activeCompanyId) {
           setCompanyId(currentUser.activeCompanyId);
           return;
         }
 
-        // Fallback: busca a empresa padrão do usuário na tabela user_companies
         const { data } = await supabase
           .from('user_companies')
           .select('company_id')
@@ -73,11 +81,9 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
         if (data?.company_id) {
           setCompanyId(data.company_id);
         } else {
-          // Último fallback: usa o tenantId do usuário
           setCompanyId(currentUser.tenantId || null);
         }
       } catch (e) {
-        console.error('Erro ao resolver company_id:', e);
         setCompanyId(currentUser.tenantId || null);
       }
     };
@@ -99,17 +105,20 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
           .from('report_settings')
           .select('*')
           .eq('company_id', companyId)
-          .single();
+          .maybeSingle();
 
         if (data) {
           setConfig({
             id: data.id,
             whatsapp_number: data.whatsapp_number || '',
             email_recipient: data.email_recipient || '',
-            daily_enabled: data.daily_enabled,
-            weekly_enabled: data.weekly_enabled,
-            monthly_enabled: data.monthly_enabled,
-            scheduled_time: data.scheduled_time?.substring(0, 5) || '08:00'
+            daily_enabled: data.daily_enabled || false,
+            weekly_enabled: data.weekly_enabled || false,
+            monthly_enabled: data.monthly_enabled || false,
+            scheduled_time: data.scheduled_time?.substring(0, 5) || '08:00',
+            zapi_instance_id: data.zapi_instance_id || '',
+            zapi_token: data.zapi_token || '',
+            zapi_client_token: data.zapi_client_token || ''
           });
         }
       } catch (e) {
@@ -148,7 +157,10 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
         daily_enabled: config.daily_enabled,
         weekly_enabled: config.weekly_enabled,
         monthly_enabled: config.monthly_enabled,
-        scheduled_time: config.scheduled_time + ':00'
+        scheduled_time: config.scheduled_time + ':00',
+        zapi_instance_id: config.zapi_instance_id,
+        zapi_token: config.zapi_token,
+        zapi_client_token: config.zapi_client_token
       };
 
       let error;
@@ -178,7 +190,46 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
     } catch (e: any) {
       console.error('Erro ao salvar:', e);
       setSaveStatus('error');
-      setMessage({ text: 'Erro ao salvar as configurações.', type: 'error' });
+      setMessage({ text: `Erro ao salvar: ${e.message || 'Tente novamente.'}`, type: 'error' });
+    }
+  };
+
+  const handleTestWhatsApp = async () => {
+    if (!config.zapi_instance_id || !config.zapi_token || !config.whatsapp_number) {
+      setMessage({ text: 'Preencha o número de WhatsApp e as credenciais Z-API antes de testar.', type: 'error' });
+      return;
+    }
+
+    setTestStatus('sending');
+    setMessage({ text: '', type: 'idle' });
+
+    try {
+      const response = await fetch('/api/send-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'test',
+          companyId,
+          whatsappNumber: config.whatsapp_number,
+          zapiInstanceId: config.zapi_instance_id,
+          zapiToken: config.zapi_token,
+          zapiClientToken: config.zapi_client_token
+        })
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Erro ao enviar');
+
+      setTestStatus('sent');
+      setMessage({ text: 'Mensagem de teste enviada com sucesso!', type: 'success' });
+    } catch (e: any) {
+      setTestStatus('error');
+      setMessage({ text: `Erro no teste: ${e.message}`, type: 'error' });
+    } finally {
+      setTimeout(() => {
+        setTestStatus('idle');
+        setMessage({ text: '', type: 'idle' });
+      }, 4000);
     }
   };
 
@@ -200,6 +251,50 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
       </div>
 
       <div className="max-w-4xl space-y-6">
+
+        {/* Card: Credenciais Z-API */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+            <Zap size={20} className="text-green-500" /> Integração Z-API (WhatsApp)
+          </h2>
+          <p className="text-xs text-gray-500 mb-4">Encontre suas credenciais em <a href="https://app.z-api.io" target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline">app.z-api.io</a></p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Instance ID</label>
+              <input 
+                type="text"
+                value={config.zapi_instance_id}
+                onChange={(e) => handleInputChange('zapi_instance_id', e.target.value)}
+                disabled={isReadOnly}
+                placeholder="Ex: 3ED82CA99D..."
+                className="w-full rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Token</label>
+              <input 
+                type="password"
+                value={config.zapi_token}
+                onChange={(e) => handleInputChange('zapi_token', e.target.value)}
+                disabled={isReadOnly}
+                placeholder="Token da instância"
+                className="w-full rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Client Token</label>
+              <input 
+                type="password"
+                value={config.zapi_client_token}
+                onChange={(e) => handleInputChange('zapi_client_token', e.target.value)}
+                disabled={isReadOnly}
+                placeholder="Client Token (Security)"
+                className="w-full rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Card: Destinatários */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -209,7 +304,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 <span className="flex items-center gap-2">
-                  <MessageSquare size={16} className="text-green-500" /> WhatsApp (Z-API)
+                  <MessageSquare size={16} className="text-green-500" /> WhatsApp
                 </span>
               </label>
               <input 
@@ -238,6 +333,29 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
               />
             </div>
           </div>
+
+          {/* Botão de Teste */}
+          {!isReadOnly && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <button
+                onClick={handleTestWhatsApp}
+                disabled={testStatus === 'sending'}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  testStatus === 'sending' 
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                    : 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
+                }`}
+              >
+                {testStatus === 'sending' ? (
+                  <><Loader2 size={16} className="animate-spin" /> Enviando teste...</>
+                ) : testStatus === 'sent' ? (
+                  <><CheckCircle size={16} /> Teste enviado!</>
+                ) : (
+                  <><Send size={16} /> Enviar mensagem de teste no WhatsApp</>
+                )}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Card: Periodicidade */}
@@ -349,15 +467,9 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
               }`}
             >
               {saveStatus === 'saving' ? (
-                <>
-                  <Loader2 size={20} className="animate-spin" />
-                  Salvando...
-                </>
+                <><Loader2 size={20} className="animate-spin" /> Salvando...</>
               ) : (
-                <>
-                  <Save size={20} />
-                  Salvar Configurações
-                </>
+                <><Save size={20} /> Salvar Configurações</>
               )}
             </button>
           )}
