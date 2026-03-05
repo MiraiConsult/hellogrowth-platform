@@ -94,6 +94,10 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [settings, setSettings] = useState<AccountSettings>(mockSettings);
   const [loading, setLoading] = useState(true);
 
+  // --- MULTI-COMPANY STATE ---
+  const [userCompanies, setUserCompanies] = useState<any[]>([]);
+  const [activeCompany, setActiveCompany] = useState<any>(null);
+
   // --- GLOBAL AI ANALYSIS STATE ---
   const [isAnalyzingAll, setIsAnalyzingAll] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState({ current: 0, total: 0 });
@@ -449,6 +453,65 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       } finally {
         setLoading(false);
       }
+  };
+
+  // --- BUSCA EMPRESAS DO USUÁRIO ---
+  useEffect(() => {
+    const fetchUserCompanies = async () => {
+      if (!supabase || !currentUser.id || currentUser.id === 'public') return;
+      try {
+        // Busca empresas vinculadas ao usuário via user_companies
+        const { data: userCompaniesData } = await supabase
+          .from('user_companies')
+          .select('*, company:companies(*)')
+          .eq('user_id', currentUser.id)
+          .eq('status', 'active');
+
+        if (userCompaniesData && userCompaniesData.length > 0) {
+          setUserCompanies(userCompaniesData);
+          // Define empresa ativa: a default ou a primeira
+          const defaultCompany = userCompaniesData.find((uc: any) => uc.is_default) || userCompaniesData[0];
+          if (defaultCompany?.company) {
+            setActiveCompany(defaultCompany.company);
+          }
+        } else {
+          // Fallback: usa o tenant_id do próprio usuário como empresa
+          const { data: userData } = await supabase
+            .from('users')
+            .select('tenant_id, company_name')
+            .eq('id', currentUser.id)
+            .single();
+          if (userData?.tenant_id) {
+            const { data: companyData } = await supabase
+              .from('companies')
+              .select('*')
+              .eq('id', userData.tenant_id)
+              .maybeSingle();
+            if (companyData) {
+              setActiveCompany(companyData);
+              setUserCompanies([{ company_id: companyData.id, company: companyData, is_default: true, role: 'owner' }]);
+            } else if (userData.company_name) {
+              // Empresa não está na tabela companies, cria objeto local
+              const fakeCompany = { id: userData.tenant_id, name: userData.company_name };
+              setActiveCompany(fakeCompany);
+              setUserCompanies([{ company_id: userData.tenant_id, company: fakeCompany, is_default: true, role: 'owner' }]);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao buscar empresas do usuário:', e);
+      }
+    };
+    fetchUserCompanies();
+  }, [currentUser.id]);
+
+  const handleSwitchCompany = async (companyId: string) => {
+    const targetCompany = userCompanies.find((uc: any) => uc.company_id === companyId);
+    if (targetCompany?.company) {
+      setActiveCompany(targetCompany.company);
+      // Recarrega os dados com o novo tenant
+      fetchData();
+    }
   };
 
   useEffect(() => {
@@ -1065,6 +1128,10 @@ Responda APENAS com JSON válido (sem markdown):
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         userRole={currentUser.role || 'admin'}
+        currentUser={currentUser}
+        activeCompany={activeCompany}
+        userCompanies={userCompanies}
+        onSwitchCompany={handleSwitchCompany}
         leads={leads}
         npsData={npsData}
       />
