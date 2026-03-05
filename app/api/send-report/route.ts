@@ -3,7 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 
 export const maxDuration = 30;
 
-// Cria um cliente Supabase com service role para buscar dados sem RLS
+// Credenciais Z-API fixas do servidor (configuradas nas env vars do Vercel)
+const ZAPI_INSTANCE_ID = process.env.ZAPI_INSTANCE_ID!;
+const ZAPI_TOKEN = process.env.ZAPI_TOKEN!;
+const ZAPI_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN!;
+
+// Supabase com service role para buscar dados sem restrição de RLS
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -11,24 +16,22 @@ const supabaseAdmin = createClient(
 
 // Envia mensagem via Z-API
 async function sendWhatsAppMessage(
-  instanceId: string,
-  token: string,
-  clientToken: string,
   phone: string,
   message: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
+    if (!ZAPI_INSTANCE_ID || !ZAPI_TOKEN || !ZAPI_CLIENT_TOKEN) {
+      return { ok: false, error: 'Credenciais Z-API não configuradas no servidor.' };
+    }
+
+    const url = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Client-Token': clientToken
+        'Client-Token': ZAPI_CLIENT_TOKEN
       },
-      body: JSON.stringify({
-        phone,
-        message
-      })
+      body: JSON.stringify({ phone, message })
     });
 
     const data = await response.json();
@@ -58,14 +61,12 @@ async function fetchKPIs(companyId: string, period: 'day' | 'week' | 'month') {
 
   const startISO = startDate.toISOString();
 
-  // Busca leads (oportunidades) do período
   const { data: leads } = await supabaseAdmin
     .from('leads')
     .select('id, value, stage, created_at')
     .eq('company_id', companyId)
     .gte('created_at', startISO);
 
-  // Busca respostas NPS do período
   const { data: npsResponses } = await supabaseAdmin
     .from('nps_responses')
     .select('id, score, created_at')
@@ -80,28 +81,17 @@ async function fetchKPIs(companyId: string, period: 'day' | 'week' | 'month') {
   const npsCount = npsResponses?.length || 0;
   const promoters = npsResponses?.filter(r => r.score >= 9).length || 0;
   const detractors = npsResponses?.filter(r => r.score <= 6).length || 0;
-  const npsScore = npsCount > 0 
-    ? Math.round(((promoters - detractors) / npsCount) * 100) 
+  const npsScore = npsCount > 0
+    ? Math.round(((promoters - detractors) / npsCount) * 100)
     : null;
 
-  return {
-    totalLeads,
-    totalValue,
-    wonLeads,
-    conversionRate,
-    npsCount,
-    npsScore,
-    promoters,
-    detractors
-  };
+  return { totalLeads, totalValue, wonLeads, conversionRate, npsCount, npsScore, promoters, detractors };
 }
 
-// Formata o número de valor em BRL
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
-// Monta a mensagem de relatório
 function buildReportMessage(
   companyName: string,
   period: 'day' | 'week' | 'month',
@@ -133,11 +123,10 @@ ${npsLine}
 _Enviado automaticamente pelo HelloGrowth_`;
 }
 
-// Mensagem de teste
-function buildTestMessage(): string {
+function buildTestMessage(companyName?: string): string {
   return `✅ *HelloGrowth — Teste de Conexão*
 
-Sua integração com o WhatsApp via Z-API está funcionando corretamente! 🎉
+${companyName ? `🏢 ${companyName}\n\n` : ''}Sua integração com o WhatsApp está funcionando corretamente! 🎉
 
 Os relatórios automáticos de KPIs serão enviados neste número conforme a periodicidade configurada.
 
@@ -147,60 +136,42 @@ _HelloGrowth — Plataforma de Gestão Comercial_`;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { type, companyId, whatsappNumber, zapiInstanceId, zapiToken, zapiClientToken } = body;
-
-    if (!zapiInstanceId || !zapiToken || !zapiClientToken) {
-      return NextResponse.json({ error: 'Credenciais Z-API incompletas.' }, { status: 400 });
-    }
+    const { type, companyId, whatsappNumber } = body;
 
     if (!whatsappNumber) {
       return NextResponse.json({ error: 'Número de WhatsApp não informado.' }, { status: 400 });
     }
 
+    // Busca o nome da empresa (se companyId fornecido)
+    let companyName = 'Sua Empresa';
+    if (companyId) {
+      const { data: company } = await supabaseAdmin
+        .from('companies')
+        .select('name')
+        .eq('id', companyId)
+        .single();
+      if (company?.name) companyName = company.name;
+    }
+
     // Teste de conexão
     if (type === 'test') {
-      const result = await sendWhatsAppMessage(
-        zapiInstanceId,
-        zapiToken,
-        zapiClientToken,
-        whatsappNumber,
-        buildTestMessage()
-      );
-
+      const result = await sendWhatsAppMessage(whatsappNumber, buildTestMessage(companyName));
       if (!result.ok) {
         return NextResponse.json({ error: result.error }, { status: 500 });
       }
-
       return NextResponse.json({ success: true, message: 'Mensagem de teste enviada!' });
     }
 
     // Relatório completo
     if (type === 'report' && companyId) {
       const period: 'day' | 'week' | 'month' = body.period || 'day';
-
-      // Busca o nome da empresa
-      const { data: company } = await supabaseAdmin
-        .from('companies')
-        .select('name')
-        .eq('id', companyId)
-        .single();
-
-      const companyName = company?.name || 'Sua Empresa';
       const kpis = await fetchKPIs(companyId, period);
       const message = buildReportMessage(companyName, period, kpis);
 
-      const result = await sendWhatsAppMessage(
-        zapiInstanceId,
-        zapiToken,
-        zapiClientToken,
-        whatsappNumber,
-        message
-      );
-
+      const result = await sendWhatsAppMessage(whatsappNumber, message);
       if (!result.ok) {
         return NextResponse.json({ error: result.error }, { status: 500 });
       }
-
       return NextResponse.json({ success: true, message: 'Relatório enviado com sucesso!' });
     }
 
