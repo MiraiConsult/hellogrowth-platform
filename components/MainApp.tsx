@@ -28,6 +28,7 @@ import GameConfig from '@/components/GameConfig';
 import GameParticipations from '@/components/GameParticipations';
 import ReportSettings from '@/components/ReportSettings';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
+import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
 import { supabase } from '@/lib/supabase';
 
@@ -98,6 +99,11 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [userCompanies, setUserCompanies] = useState<any[]>([]);
   const [activeCompany, setActiveCompany] = useState<any>(null);
 
+  // --- HELPER: retorna o tenant_id da empresa ativa (company switcher) ou fallback ---
+  const getActiveTenant = (): string | undefined => {
+    return activeCompany?.id || currentUser.tenantId;
+  };
+
   // --- GLOBAL AI ANALYSIS STATE ---
   const [isAnalyzingAll, setIsAnalyzingAll] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState({ current: 0, total: 0 });
@@ -107,7 +113,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   ).length;
 
   const handleAnalyzeAllLeads = async () => {
-    if (!supabase || !currentUser.tenantId || isAnalyzingAll) return;
+    if (!supabase || !getActiveTenant() || isAnalyzingAll) return;
     
     const pendingLeads = leads.filter(l => 
       l.answers && !l.answers._ai_analysis && l.formSource !== 'Manual'
@@ -127,12 +133,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     const { data: products } = await supabase
       .from('products_services')
       .select('*')
-      .eq('tenant_id', currentUser.tenantId);
+      .eq('tenant_id', getActiveTenant()!);
     
     const { data: businessProfile } = await supabase
       .from('business_profile')
       .select('*')
-      .eq('tenant_id', currentUser.tenantId)
+      .eq('tenant_id', getActiveTenant()!)
       .single();
     
     for (let i = 0; i < pendingLeads.length; i++) {
@@ -494,10 +500,13 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
         if (userCompaniesData && userCompaniesData.length > 0) {
           setUserCompanies(userCompaniesData);
-          // Define empresa ativa: a default ou a primeira
-          const defaultCompany = userCompaniesData.find((uc: any) => uc.is_default) || userCompaniesData[0];
+          // Define empresa ativa: a que já estava ativa no localStorage, ou a default, ou a primeira
+          const currentActiveId = localStorage.getItem('hg_active_company_id');
+          const alreadyActive = currentActiveId ? userCompaniesData.find((uc: any) => uc.company_id === currentActiveId) : null;
+          const defaultCompany = alreadyActive || userCompaniesData.find((uc: any) => uc.is_default) || userCompaniesData[0];
           if (defaultCompany?.company) {
             setActiveCompany(defaultCompany.company);
+            setActiveTenantId(defaultCompany.company.id);
           }
         } else {
           // Fallback: usa o tenant_id do próprio usuário como empresa
@@ -514,11 +523,13 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
               .maybeSingle();
             if (companyData) {
               setActiveCompany(companyData);
+              setActiveTenantId(companyData.id);
               setUserCompanies([{ company_id: companyData.id, company: companyData, is_default: true, role: 'owner' }]);
             } else if (userData.company_name) {
               // Empresa não está na tabela companies, cria objeto local
               const fakeCompany = { id: userData.tenant_id, name: userData.company_name };
               setActiveCompany(fakeCompany);
+              setActiveTenantId(userData.tenant_id);
               setUserCompanies([{ company_id: userData.tenant_id, company: fakeCompany, is_default: true, role: 'owner' }]);
             }
           }
@@ -534,7 +545,9 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     const targetCompany = userCompanies.find((uc: any) => uc.company_id === companyId);
     if (targetCompany?.company) {
       setActiveCompany(targetCompany.company);
-      // Recarrega os dados usando o tenant_id da empresa selecionada
+      // Atualiza o tenant_id ativo no localStorage e notifica TODOS os componentes
+      setActiveTenantId(companyId);
+      // Recarrega os dados do MainApp usando o tenant_id da empresa selecionada
       await fetchData(companyId);
     }
   };
@@ -545,7 +558,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
   // Supabase Realtime: Listen for new leads being inserted
   useEffect(() => {
-    if (!supabase || !currentUser.tenantId) return;
+    const activeTenant = getActiveTenant();
+    if (!supabase || !activeTenant) return;
 
     const channel = supabase
       .channel('leads-insert-realtime')
@@ -555,7 +569,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           event: 'INSERT',
           schema: 'public',
           table: 'leads',
-          filter: `tenant_id=eq.${currentUser.tenantId}`
+          filter: `tenant_id=eq.${activeTenant}`
         },
         (payload) => {
           console.log('Novo lead inserido via Realtime:', payload);
@@ -584,7 +598,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser.tenantId]);
+  }, [activeCompany?.id, currentUser.tenantId]);
 
   // --- CRUD HANDLERS ---
   const handleSaveForm = async (form: Form) => {
@@ -596,7 +610,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       initial_fields: form.initialFields,
       active: form.active,
       user_id: currentUser.id,
-      tenant_id: currentUser.tenantId
+      tenant_id: getActiveTenant()
     };
     
     // Check if form exists in database
@@ -685,7 +699,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       tone: (campaign as any).tone ?? '',
       evaluation_points: (campaign as any).evaluation_points ?? [],
       user_id: currentUser.id,
-      tenant_id: currentUser.tenantId
+      tenant_id: getActiveTenant()
     };
 
     if (campaign.id && campaigns.find(c => c.id === campaign.id)) {
@@ -743,7 +757,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       form_source: lead.formSource,
       form_id: lead.formId,
       user_id: currentUser.id,
-      tenant_id: currentUser.tenantId,
+      tenant_id: getActiveTenant(),
       answers: lead.answers
     }]).select().single();
     if (data && !error) {
@@ -1236,13 +1250,13 @@ Responda APENAS com JSON válido (sem markdown):
         
         {currentView === 'games' && (
             <div className="p-6">
-                <GameConfig tenantId={currentUser.tenantId} />
+                <GameConfig tenantId={getActiveTenant()!} />
             </div>
         )}
         
         {currentView === 'game-participations' && (
             <div className="p-6">
-                <GameParticipations tenantId={currentUser.tenantId} campaigns={campaigns} />
+                <GameParticipations tenantId={getActiveTenant()!} campaigns={campaigns} />
             </div>
         )}
         
