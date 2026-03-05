@@ -26,6 +26,7 @@ import TeamManagement from '@/components/TeamManagement';
 import IntelligenceCenter from '@/components/IntelligenceCenter';
 import GameConfig from '@/components/GameConfig';
 import GameParticipations from '@/components/GameParticipations';
+import ReportSettings from '@/components/ReportSettings';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { mockSettings } from '@/services/mockData';
 import { supabase } from '@/lib/supabase';
@@ -56,6 +57,9 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     if (userRole === 'admin' || userRole === 'super_admin') {
       setCurrentViewRaw(view);
     } else if (userRole === 'manager') {
+      if (view !== 'team-management' && view !== 'pricing') setCurrentViewRaw(view);
+      else setCurrentViewRaw('dashboard');
+    } else if (userRole === 'member') {
       if (view !== 'team-management' && view !== 'pricing') setCurrentViewRaw(view);
       else setCurrentViewRaw('dashboard');
     } else if (userRole === 'member') {
@@ -1245,6 +1249,13 @@ Responda APENAS com JSON válido (sem markdown):
                 userRole={currentUser.role || 'admin'}
                 userName={currentUser.name}
                 userEmail={currentUser.email}
+            />
+        )}
+
+        {currentView === 'report-settings' && (
+            <ReportSettings 
+                currentUser={currentUser}
+                userRole={currentUser.role || 'admin'}
             />
         )}
 

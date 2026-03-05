@@ -26,7 +26,8 @@ import {
   TrendingUp,
   DollarSign,
   Heart,
-  Target
+  Target,
+  Bell
 } from 'lucide-react';
 import { PlanType, Company, UserCompany } from '@/types';
 import CompanySwitcher from '@/components/CompanySwitcher';
@@ -327,6 +328,7 @@ const Navigation: React.FC<NavigationProps> = ({
       children: [
         { id: 'settings', label: 'Configurações', icon: Settings, requiredPlan: 'all' },
         { id: 'team-management', label: 'Gerenciar Equipe', icon: Users, requiredPlan: 'all' },
+        { id: 'report-settings', label: 'Relatórios e Notificações', icon: Bell, requiredPlan: 'all' },
         { id: 'database-export', label: 'Banco de Dados', icon: Database, requiredPlan: 'all' },
         { id: 'tutorial', label: 'Ajuda', icon: HelpCircle, requiredPlan: 'all' },
       ]
@@ -357,7 +359,7 @@ const Navigation: React.FC<NavigationProps> = ({
     
     // Member: pode ver leads, enviar mensagens, ver relatórios
     if (userRole === 'member') {
-      const memberAccess = ['kanban', 'nps', 'database-export', 'ai-chat', 'settings', 'digital-diagnostic'];
+      const memberAccess = ['kanban', 'nps', 'database-export', 'ai-chat', 'settings', 'digital-diagnostic', 'report-settings'];
       return memberAccess.includes(itemId);
     }
     
