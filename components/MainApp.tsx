@@ -101,7 +101,9 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
   // --- HELPER: retorna o tenant_id da empresa ativa (company switcher) ou fallback ---
   const getActiveTenant = (): string | undefined => {
-    return activeCompany?.id || currentUser.tenantId;
+    // Prioridade: 1) localStorage (persistido entre reloads), 2) activeCompany state, 3) fallback user
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('hg_active_company_id') : null;
+    return saved || activeCompany?.id || currentUser.tenantId;
   };
 
   // --- GLOBAL AI ANALYSIS STATE ---
@@ -236,15 +238,15 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [publicCompanyName, setPublicCompanyName] = useState<string>('');
 
   // --- INITIAL DATA FETCH ---
-  const fetchData = async (overrideTenantId?: string) => {
+  const fetchData = async () => {
       if (!supabase) return;
       setLoading(true);
 
       try {
         if (currentUser.id !== 'public') {
           
-          // 1. Determinar tenant_id: usa o da empresa selecionada ou busca do usuário
-          let tenantId = overrideTenantId;
+          // 1. Determinar tenant_id: verifica localStorage para empresa ativa
+          const savedActiveCompanyId = typeof window !== 'undefined' ? localStorage.getItem('hg_active_company_id') : null;
           let userData: any = null;
 
           // Sempre buscar dados base do usuário atual
@@ -254,32 +256,52 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
             .eq('id', currentUser.id)
             .single();
 
-          if (!tenantId) {
-            // Sem override: usar tenant_id do próprio usuário
-            tenantId = currentUserData?.tenant_id;
-            userData = currentUserData;
-          } else {
-            // Com override (troca de empresa): usar company_id como tenant_id
-            // Buscar nome e settings da empresa na tabela companies
-            const { data: companyData } = await supabase
-              .from('companies')
-              .select('*')
-              .eq('id', tenantId)
+          // Verificar se a empresa salva no localStorage pertence ao usuário
+          let tenantId: string | null = null;
+          
+          if (savedActiveCompanyId && savedActiveCompanyId !== currentUserData?.tenant_id) {
+            // Verificar se o usuário tem acesso a essa empresa
+            const { data: accessCheck } = await supabase
+              .from('user_companies')
+              .select('company_id')
+              .eq('user_id', currentUser.id)
+              .eq('company_id', savedActiveCompanyId)
+              .eq('status', 'active')
               .maybeSingle();
             
-            // Montar userData com settings do usuário + nome da empresa selecionada
-            userData = {
-              ...currentUserData,
-              tenant_id: tenantId,
-              company_name: companyData?.name || currentUserData?.company_name,
-              is_owner: true, // Evitar busca extra de owner
-              settings: companyData?.settings || currentUserData?.settings
-            };
+            if (accessCheck) {
+              // Usuário tem acesso: usar a empresa do localStorage
+              tenantId = savedActiveCompanyId;
+              
+              // Buscar nome e settings da empresa na tabela companies
+              const { data: companyData } = await supabase
+                .from('companies')
+                .select('*')
+                .eq('id', tenantId)
+                .maybeSingle();
+              
+              userData = {
+                ...currentUserData,
+                tenant_id: tenantId,
+                company_name: companyData?.name || currentUserData?.company_name,
+                is_owner: true,
+                settings: companyData?.settings || currentUserData?.settings
+              };
+            } else {
+              // Sem acesso: limpar localStorage e usar tenant padrão
+              localStorage.removeItem('hg_active_company_id');
+              tenantId = currentUserData?.tenant_id;
+              userData = currentUserData;
+            }
+          } else {
+            // Sem empresa salva ou é a mesma do usuário: usar tenant_id padrão
+            tenantId = currentUserData?.tenant_id;
+            userData = currentUserData;
           }
 
           // 2. Se não é owner, buscar settings do owner do tenant original
           let ownerSettings = userData;
-          if (!overrideTenantId && userData && !userData.is_owner && tenantId) {
+          if ((!savedActiveCompanyId || savedActiveCompanyId === currentUserData?.tenant_id) && userData && !userData.is_owner && tenantId) {
             const { data: ownerData } = await supabase
               .from('users')
               .select('settings, company_name')
@@ -542,14 +564,10 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   }, [currentUser.id]);
 
   const handleSwitchCompany = async (companyId: string): Promise<void> => {
-    const targetCompany = userCompanies.find((uc: any) => uc.company_id === companyId);
-    if (targetCompany?.company) {
-      setActiveCompany(targetCompany.company);
-      // Atualiza o tenant_id ativo no localStorage e notifica TODOS os componentes
-      setActiveTenantId(companyId);
-      // Recarrega os dados do MainApp usando o tenant_id da empresa selecionada
-      await fetchData(companyId);
-    }
+    // Salva a empresa selecionada no localStorage e recarrega a página inteira
+    // Isso garante que TODOS os componentes (MainApp + filhos) carreguem dados da empresa correta
+    setActiveTenantId(companyId);
+    window.location.reload();
   };
 
   useEffect(() => {
