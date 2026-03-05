@@ -230,21 +230,35 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [publicCompanyName, setPublicCompanyName] = useState<string>('');
 
   // --- INITIAL DATA FETCH ---
-  const fetchData = async () => {
+  const fetchData = async (overrideTenantId?: string) => {
       if (!supabase) return;
       setLoading(true);
 
       try {
         if (currentUser.id !== 'public') {
           
-          // 1. Buscar tenant_id do usuário atual
-          const { data: userData } = await supabase
-            .from('users')
-            .select('tenant_id, settings, company_name, is_owner')
-            .eq('id', currentUser.id)
-            .single();
+          // 1. Buscar tenant_id do usuário atual (ou usar o da empresa selecionada)
+          let tenantId = overrideTenantId;
+          let userData: any = null;
 
-          const tenantId = userData?.tenant_id;
+          if (!tenantId) {
+            const { data: ud } = await supabase
+              .from('users')
+              .select('tenant_id, settings, company_name, is_owner')
+              .eq('id', currentUser.id)
+              .single();
+            userData = ud;
+            tenantId = ud?.tenant_id;
+          } else {
+            // Buscar settings do owner do tenant selecionado
+            const { data: ownerData } = await supabase
+              .from('users')
+              .select('tenant_id, settings, company_name, is_owner')
+              .eq('tenant_id', tenantId)
+              .eq('is_owner', true)
+              .maybeSingle();
+            userData = ownerData;
+          }
 
           // 2. Se não é owner, buscar settings do owner do tenant
           let ownerSettings = userData;
@@ -509,8 +523,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     const targetCompany = userCompanies.find((uc: any) => uc.company_id === companyId);
     if (targetCompany?.company) {
       setActiveCompany(targetCompany.company);
-      // Recarrega os dados com o novo tenant
-      await fetchData();
+      // Recarrega os dados usando o tenant_id da empresa selecionada
+      await fetchData(companyId);
     }
   };
 
