@@ -452,10 +452,23 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
               )}
             </button>
             <button 
+              onClick={() => {
+                setEditingFormId(null);
+                setCurrentFormName('');
+                setCurrentFormDescription('');
+                setCurrentQuestions([{ id: Date.now().toString(), text: '', type: 'text', options: [] }]);
+                setCurrentInitialFields([]);
+                setView('editor');
+              }}
+              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center gap-2 hover:bg-gray-50 transition-all"
+            >
+              <Edit3 size={18} /> Criar manualmente
+            </button>
+            <button 
               onClick={() => setShowConsultant(true)}
               className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/30 shadow-sm flex items-center gap-2 transition-all"
             >
-              <Plus size={18} /> Novo Formulário
+              <Sparkles size={18} /> Novo Formulário com IA
             </button>
           </div>
         </div>
@@ -570,10 +583,31 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                </div>
             </div>
           ))}
-          <button onClick={() => setShowConsultant(true)} className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-primary-400 hover:text-primary-500 hover:bg-primary-50 transition-all min-h-[200px]">
-             <Plus size={32} className="mb-2" />
-             <span className="font-medium">Criar novo formulário</span>
-          </button>
+          <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center gap-3 min-h-[200px] hover:border-gray-400 transition-all">
+            <Plus size={32} className="text-gray-400" />
+            <span className="font-medium text-gray-400">Criar novo formulário</span>
+            <div className="flex flex-col gap-2 w-full mt-1">
+              <button 
+                onClick={() => setShowConsultant(true)}
+                className="w-full px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg flex items-center justify-center gap-2 hover:shadow-lg transition-all text-sm font-medium"
+              >
+                <Sparkles size={15} /> Com IA
+              </button>
+              <button 
+                onClick={() => {
+                  setEditingFormId(null);
+                  setCurrentFormName('');
+                  setCurrentFormDescription('');
+                  setCurrentQuestions([{ id: Date.now().toString(), text: '', type: 'text', options: [] }]);
+                  setCurrentInitialFields([]);
+                  setView('editor');
+                }}
+                className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-50 transition-all text-sm font-medium"
+              >
+                <Edit3 size={15} /> Manualmente
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* QR Code Modal */}

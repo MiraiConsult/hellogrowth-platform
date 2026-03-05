@@ -34,6 +34,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
 
   const [showNPSConsultant, setShowNPSConsultant] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+  const [manualMode, setManualMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
   // Mass Send State
@@ -205,7 +206,10 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
             <button onClick={() => setIsMassSendOpen(true)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center gap-2 hover:bg-gray-50 font-medium">
                 <Send size={18} /> Disparo em Massa
             </button>
-            <button onClick={() => setShowNPSConsultant(true)} className="px-4 py-2 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-lg flex items-center gap-2 hover:shadow-lg transition-all font-medium">
+            <button onClick={() => { setManualMode(true); setEditingCampaign(null); setShowNPSConsultant(true); }} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center gap-2 hover:bg-gray-50 font-medium">
+                <Edit size={18} /> Criar manualmente
+            </button>
+            <button onClick={() => { setManualMode(false); setShowNPSConsultant(true); }} className="px-4 py-2 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-lg flex items-center gap-2 hover:shadow-lg transition-all font-medium">
                 <Sparkles size={18} /> Nova Campanha com IA
             </button>
         </div>
@@ -277,13 +281,24 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
              </div>
           </div>
         ))}
-        <button 
-            onClick={() => { setEditingCampaign(null); setShowNPSConsultant(true); }} 
-            className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-primary-400 hover:text-primary-500 hover:bg-primary-50 transition-all min-h-[200px]"
-        >
-            <Plus size={32} className="mb-2" />
-            <span className="font-medium">Criar nova campanha</span>
-        </button>
+        <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center gap-3 min-h-[200px] hover:border-gray-400 transition-all">
+            <Plus size={32} className="text-gray-400" />
+            <span className="font-medium text-gray-400">Criar nova campanha</span>
+            <div className="flex flex-col gap-2 w-full mt-1">
+              <button 
+                onClick={() => { setManualMode(false); setEditingCampaign(null); setShowNPSConsultant(true); }}
+                className="w-full px-3 py-2 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-lg flex items-center justify-center gap-2 hover:shadow-lg transition-all text-sm font-medium"
+              >
+                <Sparkles size={15} /> Com IA
+              </button>
+              <button 
+                onClick={() => { setManualMode(true); setEditingCampaign(null); setShowNPSConsultant(true); }}
+                className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-50 transition-all text-sm font-medium"
+              >
+                <Edit size={15} /> Manualmente
+              </button>
+            </div>
+        </div>
       </div>
 
       {/* Mass Send Modal */}
@@ -440,13 +455,16 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
           onClose={() => {
             setShowNPSConsultant(false);
             setEditingCampaign(null);
+            setManualMode(false);
           }}
           onSaveCampaign={(campaignData) => {
             onSaveCampaign(campaignData);
             setShowNPSConsultant(false);
             setEditingCampaign(null);
+            setManualMode(false);
           }}
           existingCampaign={editingCampaign}
+          startInManualMode={manualMode}
         />
       )}
     </div>
