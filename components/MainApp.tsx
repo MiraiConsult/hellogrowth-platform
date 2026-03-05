@@ -505,12 +505,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     fetchUserCompanies();
   }, [currentUser.id]);
 
-  const handleSwitchCompany = async (companyId: string) => {
+  const handleSwitchCompany = async (companyId: string): Promise<void> => {
     const targetCompany = userCompanies.find((uc: any) => uc.company_id === companyId);
     if (targetCompany?.company) {
       setActiveCompany(targetCompany.company);
       // Recarrega os dados com o novo tenant
-      fetchData();
+      await fetchData();
     }
   };
 

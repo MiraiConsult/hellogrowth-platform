@@ -7,7 +7,7 @@ interface CompanySwitcherProps {
   currentUser: User;
   companies: UserCompany[];
   activeCompany: Company | null;
-  onSwitchCompany: (companyId: string) => void;
+  onSwitchCompany: (companyId: string) => void | Promise<void>;
 }
 
 const CompanySwitcher: React.FC<CompanySwitcherProps> = ({
@@ -56,11 +56,15 @@ const CompanySwitcher: React.FC<CompanySwitcherProps> = ({
     setIsOpen(false);
   };
 
-  const handleConfirmSwitch = () => {
+  const handleConfirmSwitch = async () => {
     if (!selectedCompany) return;
     setIsSwitching(true);
     setShowConfirmation(false);
-    onSwitchCompany(selectedCompany.company_id);
+    try {
+      await onSwitchCompany(selectedCompany.company_id);
+    } finally {
+      setIsSwitching(false);
+    }
   };
 
   // Com múltiplas empresas, mostra dropdown
