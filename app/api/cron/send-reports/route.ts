@@ -187,14 +187,14 @@ export async function GET(request: NextRequest) {
     for (const setting of settings) {
       const tenantId = setting.company_id;
 
-      // Busca o nome do usuário/empresa
+      // Busca o nome da empresa do usuário
       const { data: userData } = await supabaseAdmin
         .from('users')
-        .select('name, email')
+        .select('company_name, name, email')
         .eq('id', tenantId)
         .maybeSingle();
 
-      const companyName = userData?.name || 'Sua Empresa';
+      const companyName = userData?.company_name || userData?.name || 'Sua Empresa';
 
       // Busca os KPIs do dia anterior
       const kpis = await fetchYesterdayKPIs(tenantId);
