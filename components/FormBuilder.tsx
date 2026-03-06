@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift } from 'lucide-react';
+import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift, Send } from 'lucide-react';
 import FormConsultant from '@/components/FormConsultant';
+import FormMassDispatchModal from '@/components/FormMassDispatchModal';
 import { supabase } from '@/lib/supabase';
 import { Form, FormQuestion, FormOption, Lead, InitialField } from '@/types';
 import { getFormLink } from '@/lib/utils/getBaseUrl';
@@ -64,6 +65,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [availableProducts, setAvailableProducts] = useState<any[]>([]);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isMassFormSendOpen, setIsMassFormSendOpen] = useState(false);
   const [generatingScriptId, setGeneratingScriptId] = useState<string | null>(null); 
 
   // Stats for Mini Dashboard
@@ -445,6 +447,14 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
             <p className="text-gray-500">Gerencie seus questionários de pré-venda</p>
           </div>
           <div className="flex gap-3">
+            {/* Botão Disparo em Massa */}
+            <button
+              onClick={() => setIsMassFormSendOpen(true)}
+              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center gap-2 hover:bg-gray-50 font-medium"
+            >
+              <Send size={18} /> Disparo em Massa
+              <span className="text-xs bg-emerald-500 text-white px-1.5 py-0.5 rounded-full font-semibold">NOVO</span>
+            </button>
             {/* Botão Analisar com IA */}
             <button 
               onClick={onAnalyzeAllLeads}
@@ -1140,6 +1150,13 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     <>
       {view === 'list' && renderList()}
       {view === 'editor' && renderEditor()}
+      {isMassFormSendOpen && (
+        <FormMassDispatchModal
+          forms={forms}
+          tenantId={tenantId || ''}
+          onClose={() => setIsMassFormSendOpen(false)}
+        />
+      )}
       {showConsultant && (
         <FormConsultant
           supabase={supabase}
