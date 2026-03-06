@@ -32,15 +32,17 @@ export function getBaseUrl(): string {
 }
 
 /**
- * Gera link para pesquisa NPS
+ * Gera link curto para pesquisa NPS
+ * Ex: https://www.hellogrowth.online/s/abc123
  */
 export function getSurveyLink(surveyId: string): string {
-  return `${getBaseUrl()}/?survey=${surveyId}`;
+  return `${getBaseUrl()}/s/${surveyId}`;
 }
 
 /**
- * Gera link para formulário público
+ * Gera link curto para formulário público
+ * Ex: https://www.hellogrowth.online/f/abc123
  */
 export function getFormLink(formId: string): string {
-  return `${getBaseUrl()}/?form=${formId}`;
+  return `${getBaseUrl()}/f/${formId}`;
 }
