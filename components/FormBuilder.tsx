@@ -6,6 +6,7 @@ import { Form, FormQuestion, FormOption, Lead, InitialField } from '@/types';
 import { getFormLink } from '@/lib/utils/getBaseUrl';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import InitialFieldsConfig from '@/components/InitialFieldsConfig';
+import { useTenantId } from '@/hooks/useTenantId';
 
 interface FormBuilderProps {
   forms: Form[];
@@ -38,6 +39,7 @@ const normalizeQuestionType = (type: string): 'text' | 'single' | 'multiple' => 
 };
 
 const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId, activeCompany, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads }) => {
+  const tenantId = useTenantId();
   const [view, setView] = useState<'list' | 'editor' | 'consultant'>('list');
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [showConsultant, setShowConsultant] = useState(false);
@@ -59,6 +61,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [currentGameEnabled, setCurrentGameEnabled] = useState(false);
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
   const [availableGames, setAvailableGames] = useState<any[]>([]);
+  const [availableProducts, setAvailableProducts] = useState<any[]>([]);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingScriptId, setGeneratingScriptId] = useState<string | null>(null); 
 
@@ -93,22 +97,33 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       return form.responses || 0;
   };
 
-  // Fetch available games when view changes to editor
+  // Fetch available games and products when view changes to editor
   useEffect(() => {
-    if (view === 'editor' && activeCompany?.id) {
+    if (view === 'editor' && tenantId) {
       const fetchGames = async () => {
         const { data, error } = await supabase
           .from('nps_games')
           .select('id, name')
-          .eq('tenant_id', activeCompany.id)
+          .eq('tenant_id', tenantId)
           .order('name');
         if (data && !error) {
           setAvailableGames(data);
         }
       };
+      const fetchProducts = async () => {
+        const { data, error } = await supabase
+          .from('products_services')
+          .select('id, name, value')
+          .eq('tenant_id', tenantId)
+          .order('name');
+        if (data && !error) {
+          setAvailableProducts(data);
+        }
+      };
       fetchGames();
+      fetchProducts();
     }
-  }, [view, activeCompany]);
+  }, [view, tenantId]);
 
   // Handlers
   const handleCreateNew = () => {
@@ -119,6 +134,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setCurrentInitialFields([]);
     setCurrentGameEnabled(false);
     setCurrentGameId(null);
+    setSelectedProductIds([]);
     setView('editor');
   };
 
@@ -130,6 +146,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setCurrentInitialFields(form.initialFields || []);
     setCurrentGameEnabled(form.game_enabled || false);
     setCurrentGameId(form.game_id || null);
+    setSelectedProductIds((form as any).product_ids || []);
     setView('editor');
     setMenuOpenId(null);
   };
@@ -392,7 +409,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     const existingForm = editingFormId ? forms.find(f => f.id === editingFormId) : null;
     
     // Prepare the form object
-    const formToSave: Form = {
+    const formToSave: any = {
         id: editingFormId || Date.now().toString(),
         name: currentFormName,
         description: currentFormDescription,
@@ -403,7 +420,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         createdAt: existingForm?.createdAt || new Date().toISOString(),
         initialFields: currentInitialFields.length > 0 ? currentInitialFields : undefined,
         game_enabled: currentGameEnabled,
-        game_id: currentGameId
+        game_id: currentGameId,
+        product_ids: selectedProductIds.length > 0 ? selectedProductIds : undefined
     };
 
     // Trigger Parent Handler for DB Save
@@ -452,10 +470,26 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
               )}
             </button>
             <button 
+              onClick={() => {
+                setEditingFormId(null);
+                setCurrentFormName('');
+                setCurrentFormDescription('');
+                setCurrentQuestions([{ id: Date.now().toString(), text: '', type: 'text', options: [] }]);
+                setCurrentInitialFields([]);
+                setCurrentGameEnabled(false);
+                setCurrentGameId(null);
+                setSelectedProductIds([]);
+                setView('editor');
+              }}
+              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center gap-2 hover:bg-gray-50 transition-all"
+            >
+              <Edit3 size={18} /> Criar manualmente
+            </button>
+            <button 
               onClick={() => setShowConsultant(true)}
               className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/30 shadow-sm flex items-center gap-2 transition-all"
             >
-              <Plus size={18} /> Novo Formulário
+              <Sparkles size={18} /> Novo Formulário com IA
             </button>
           </div>
         </div>
@@ -570,10 +604,34 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                </div>
             </div>
           ))}
-          <button onClick={() => setShowConsultant(true)} className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-primary-400 hover:text-primary-500 hover:bg-primary-50 transition-all min-h-[200px]">
-             <Plus size={32} className="mb-2" />
-             <span className="font-medium">Criar novo formulário</span>
-          </button>
+          <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center gap-3 min-h-[200px] hover:border-gray-400 transition-all">
+            <Plus size={32} className="text-gray-400" />
+            <span className="font-medium text-gray-400">Criar novo formulário</span>
+            <div className="flex flex-col gap-2 w-full mt-1">
+              <button 
+                onClick={() => setShowConsultant(true)}
+                className="w-full px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg flex items-center justify-center gap-2 hover:shadow-lg transition-all text-sm font-medium"
+              >
+                <Sparkles size={15} /> Com IA
+              </button>
+              <button 
+                onClick={() => {
+                  setEditingFormId(null);
+                  setCurrentFormName('');
+                  setCurrentFormDescription('');
+                  setCurrentQuestions([{ id: Date.now().toString(), text: '', type: 'text', options: [] }]);
+                  setCurrentInitialFields([]);
+                  setCurrentGameEnabled(false);
+                  setCurrentGameId(null);
+                  setSelectedProductIds([]);
+                  setView('editor');
+                }}
+                className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center justify-center gap-2 hover:bg-gray-50 transition-all text-sm font-medium"
+              >
+                <Edit3 size={15} /> Manualmente
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* QR Code Modal */}
@@ -645,13 +703,6 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         </div>
 
         <div className="space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <InitialFieldsConfig 
-              initialFields={currentInitialFields}
-              onChange={setCurrentInitialFields}
-            />
-          </div>
-
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Formulário</label>
@@ -725,6 +776,43 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
               onChange={setCurrentInitialFields}
             />
           </div>
+
+          {/* Products/Services Selection */}
+          {availableProducts.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-gray-700">Produtos/Serviços do Formulário</h3>
+                <p className="text-xs text-gray-500 mt-1">Selecione quais produtos/serviços este formulário representa. Serão considerados na análise de leads.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {availableProducts.map(product => (
+                  <label key={product.id} className="flex items-center gap-2 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={selectedProductIds.includes(product.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedProductIds(prev => [...prev, product.id]);
+                        } else {
+                          setSelectedProductIds(prev => prev.filter(id => id !== product.id));
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-gray-800 truncate block">{product.name}</span>
+                      {product.value > 0 && (
+                        <span className="text-xs text-green-600">R$ {product.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      )}
+                    </div>
+                  </label>
+                ))}
+              </div>
+              {selectedProductIds.length > 0 && (
+                <p className="text-xs text-primary-600 mt-3 font-medium">✓ {selectedProductIds.length} produto(s) selecionado(s)</p>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-between items-center">
              <h2 className="text-lg font-bold text-gray-800">Perguntas</h2>>

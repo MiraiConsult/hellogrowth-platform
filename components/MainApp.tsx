@@ -28,6 +28,7 @@ import GameConfig from '@/components/GameConfig';
 import GameParticipations from '@/components/GameParticipations';
 import ReportSettings from '@/components/ReportSettings';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
+import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
 import { supabase } from '@/lib/supabase';
 
@@ -94,6 +95,17 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [settings, setSettings] = useState<AccountSettings>(mockSettings);
   const [loading, setLoading] = useState(true);
 
+  // --- MULTI-COMPANY STATE ---
+  const [userCompanies, setUserCompanies] = useState<any[]>([]);
+  const [activeCompany, setActiveCompany] = useState<any>(null);
+
+  // --- HELPER: retorna o tenant_id da empresa ativa (company switcher) ou fallback ---
+  const getActiveTenant = (): string | undefined => {
+    // Prioridade: 1) localStorage (persistido entre reloads), 2) activeCompany state, 3) fallback user
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('hg_active_company_id') : null;
+    return saved || activeCompany?.id || currentUser.tenantId;
+  };
+
   // --- GLOBAL AI ANALYSIS STATE ---
   const [isAnalyzingAll, setIsAnalyzingAll] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState({ current: 0, total: 0 });
@@ -103,7 +115,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   ).length;
 
   const handleAnalyzeAllLeads = async () => {
-    if (!supabase || !currentUser.tenantId || isAnalyzingAll) return;
+    if (!supabase || !getActiveTenant() || isAnalyzingAll) return;
     
     const pendingLeads = leads.filter(l => 
       l.answers && !l.answers._ai_analysis && l.formSource !== 'Manual'
@@ -123,12 +135,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     const { data: products } = await supabase
       .from('products_services')
       .select('*')
-      .eq('tenant_id', currentUser.tenantId);
+      .eq('tenant_id', getActiveTenant()!);
     
     const { data: businessProfile } = await supabase
       .from('business_profile')
       .select('*')
-      .eq('tenant_id', currentUser.tenantId)
+      .eq('tenant_id', getActiveTenant()!)
       .single();
     
     for (let i = 0; i < pendingLeads.length; i++) {
@@ -233,18 +245,63 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       try {
         if (currentUser.id !== 'public') {
           
-          // 1. Buscar tenant_id do usuário atual
-          const { data: userData } = await supabase
+          // 1. Determinar tenant_id: verifica localStorage para empresa ativa
+          const savedActiveCompanyId = typeof window !== 'undefined' ? localStorage.getItem('hg_active_company_id') : null;
+          let userData: any = null;
+
+          // Sempre buscar dados base do usuário atual
+          const { data: currentUserData } = await supabase
             .from('users')
             .select('tenant_id, settings, company_name, is_owner')
             .eq('id', currentUser.id)
             .single();
 
-          const tenantId = userData?.tenant_id;
+          // Verificar se a empresa salva no localStorage pertence ao usuário
+          let tenantId: string | null = null;
+          
+          if (savedActiveCompanyId && savedActiveCompanyId !== currentUserData?.tenant_id) {
+            // Verificar se o usuário tem acesso a essa empresa
+            const { data: accessCheck } = await supabase
+              .from('user_companies')
+              .select('company_id')
+              .eq('user_id', currentUser.id)
+              .eq('company_id', savedActiveCompanyId)
+              .eq('status', 'active')
+              .maybeSingle();
+            
+            if (accessCheck) {
+              // Usuário tem acesso: usar a empresa do localStorage
+              tenantId = savedActiveCompanyId;
+              
+              // Buscar nome e settings da empresa na tabela companies
+              const { data: companyData } = await supabase
+                .from('companies')
+                .select('*')
+                .eq('id', tenantId)
+                .maybeSingle();
+              
+              userData = {
+                ...currentUserData,
+                tenant_id: tenantId,
+                company_name: companyData?.name || currentUserData?.company_name,
+                is_owner: true,
+                settings: companyData?.settings || currentUserData?.settings
+              };
+            } else {
+              // Sem acesso: limpar localStorage e usar tenant padrão
+              localStorage.removeItem('hg_active_company_id');
+              tenantId = currentUserData?.tenant_id;
+              userData = currentUserData;
+            }
+          } else {
+            // Sem empresa salva ou é a mesma do usuário: usar tenant_id padrão
+            tenantId = currentUserData?.tenant_id;
+            userData = currentUserData;
+          }
 
-          // 2. Se não é owner, buscar settings do owner do tenant
+          // 2. Se não é owner, buscar settings do owner do tenant original
           let ownerSettings = userData;
-          if (userData && !userData.is_owner && tenantId) {
+          if ((!savedActiveCompanyId || savedActiveCompanyId === currentUserData?.tenant_id) && userData && !userData.is_owner && tenantId) {
             const { data: ownerData } = await supabase
               .from('users')
               .select('settings, company_name')
@@ -451,13 +508,76 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }
   };
 
+  // --- BUSCA EMPRESAS DO USUÁRIO ---
+  useEffect(() => {
+    const fetchUserCompanies = async () => {
+      if (!supabase || !currentUser.id || currentUser.id === 'public') return;
+      try {
+        // Busca empresas vinculadas ao usuário via user_companies
+        const { data: userCompaniesData } = await supabase
+          .from('user_companies')
+          .select('*, company:companies(*)')
+          .eq('user_id', currentUser.id)
+          .eq('status', 'active');
+
+        if (userCompaniesData && userCompaniesData.length > 0) {
+          setUserCompanies(userCompaniesData);
+          // Define empresa ativa: a que já estava ativa no localStorage, ou a default, ou a primeira
+          const currentActiveId = localStorage.getItem('hg_active_company_id');
+          const alreadyActive = currentActiveId ? userCompaniesData.find((uc: any) => uc.company_id === currentActiveId) : null;
+          const defaultCompany = alreadyActive || userCompaniesData.find((uc: any) => uc.is_default) || userCompaniesData[0];
+          if (defaultCompany?.company) {
+            setActiveCompany(defaultCompany.company);
+            setActiveTenantId(defaultCompany.company.id);
+          }
+        } else {
+          // Fallback: usa o tenant_id do próprio usuário como empresa
+          const { data: userData } = await supabase
+            .from('users')
+            .select('tenant_id, company_name')
+            .eq('id', currentUser.id)
+            .single();
+          if (userData?.tenant_id) {
+            const { data: companyData } = await supabase
+              .from('companies')
+              .select('*')
+              .eq('id', userData.tenant_id)
+              .maybeSingle();
+            if (companyData) {
+              setActiveCompany(companyData);
+              setActiveTenantId(companyData.id);
+              setUserCompanies([{ company_id: companyData.id, company: companyData, is_default: true, role: 'owner' }]);
+            } else if (userData.company_name) {
+              // Empresa não está na tabela companies, cria objeto local
+              const fakeCompany = { id: userData.tenant_id, name: userData.company_name };
+              setActiveCompany(fakeCompany);
+              setActiveTenantId(userData.tenant_id);
+              setUserCompanies([{ company_id: userData.tenant_id, company: fakeCompany, is_default: true, role: 'owner' }]);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao buscar empresas do usuário:', e);
+      }
+    };
+    fetchUserCompanies();
+  }, [currentUser.id]);
+
+  const handleSwitchCompany = async (companyId: string): Promise<void> => {
+    // Salva a empresa selecionada no localStorage e recarrega a página inteira
+    // Isso garante que TODOS os componentes (MainApp + filhos) carreguem dados da empresa correta
+    setActiveTenantId(companyId);
+    window.location.reload();
+  };
+
   useEffect(() => {
     fetchData();
   }, [currentUser.id]);
 
   // Supabase Realtime: Listen for new leads being inserted
   useEffect(() => {
-    if (!supabase || !currentUser.tenantId) return;
+    const activeTenant = getActiveTenant();
+    if (!supabase || !activeTenant) return;
 
     const channel = supabase
       .channel('leads-insert-realtime')
@@ -467,7 +587,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           event: 'INSERT',
           schema: 'public',
           table: 'leads',
-          filter: `tenant_id=eq.${currentUser.tenantId}`
+          filter: `tenant_id=eq.${activeTenant}`
         },
         (payload) => {
           console.log('Novo lead inserido via Realtime:', payload);
@@ -496,7 +616,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser.tenantId]);
+  }, [activeCompany?.id, currentUser.tenantId]);
 
   // --- CRUD HANDLERS ---
   const handleSaveForm = async (form: Form) => {
@@ -508,7 +628,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       initial_fields: form.initialFields,
       active: form.active,
       user_id: currentUser.id,
-      tenant_id: currentUser.tenantId
+      tenant_id: getActiveTenant()
     };
     
     // Check if form exists in database
@@ -597,7 +717,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       tone: (campaign as any).tone ?? '',
       evaluation_points: (campaign as any).evaluation_points ?? [],
       user_id: currentUser.id,
-      tenant_id: currentUser.tenantId
+      tenant_id: getActiveTenant()
     };
 
     if (campaign.id && campaigns.find(c => c.id === campaign.id)) {
@@ -655,7 +775,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       form_source: lead.formSource,
       form_id: lead.formId,
       user_id: currentUser.id,
-      tenant_id: currentUser.tenantId,
+      tenant_id: getActiveTenant(),
       answers: lead.answers
     }]).select().single();
     if (data && !error) {
@@ -1065,6 +1185,10 @@ Responda APENAS com JSON válido (sem markdown):
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         userRole={currentUser.role || 'admin'}
+        currentUser={currentUser}
+        activeCompany={activeCompany}
+        userCompanies={userCompanies}
+        onSwitchCompany={handleSwitchCompany}
         leads={leads}
         npsData={npsData}
       />
@@ -1144,13 +1268,13 @@ Responda APENAS com JSON válido (sem markdown):
         
         {currentView === 'games' && (
             <div className="p-6">
-                <GameConfig tenantId={currentUser.tenantId} />
+                <GameConfig tenantId={getActiveTenant()!} />
             </div>
         )}
         
         {currentView === 'game-participations' && (
             <div className="p-6">
-                <GameParticipations tenantId={currentUser.tenantId} campaigns={campaigns} />
+                <GameParticipations tenantId={getActiveTenant()!} campaigns={campaigns} />
             </div>
         )}
         

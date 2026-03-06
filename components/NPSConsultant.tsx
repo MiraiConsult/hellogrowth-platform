@@ -41,6 +41,7 @@ interface NPSConsultantProps {
   onSaveCampaign: (campaignData: any) => void;
   existingCampaign?: any;
   initialBusinessProfile?: any;
+  startInManualMode?: boolean;
 }
 
 type ConsultantStep = 
@@ -71,7 +72,8 @@ export default function NPSConsultant({
   onClose,
   onSaveCampaign,
   existingCampaign,
-  initialBusinessProfile
+  initialBusinessProfile,
+  startInManualMode = false
 }: NPSConsultantProps) {
   const tenantId = useTenantId();
   
@@ -245,22 +247,39 @@ O que você gostaria de fazer?`,
     } else if (profileLoaded) {
       // Modo de criação - só dispara após o perfil ter sido carregado (ou falhar)
       hasInitialized.current = true;
-      setTimeout(() => {
-        addAssistantMessage(
-          businessProfile 
-            ? `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.company_name || 'sua empresa'}**.
+      
+      if (startInManualMode) {
+        // Modo manual: vai direto para a tela de revisão com campanha em branco
+        setTimeout(() => {
+          setGeneratedQuestions([
+            {
+              id: `nps_${Date.now()}`,
+              text: 'De 0 a 10, qual a probabilidade de você nos recomendar a um amigo ou familiar?',
+              type: 'nps',
+              options: [],
+              insight: 'Pergunta NPS padrão'
+            }
+          ]);
+          setCurrentStep('review');
+        }, 100);
+      } else {
+        setTimeout(() => {
+          addAssistantMessage(
+            businessProfile 
+              ? `Olá! 👋 Sou seu consultor de crescimento da **${businessProfile.company_name || 'sua empresa'}**.
 
 Como já conheço seu negócio, vou criar perguntas estratégicas baseadas no seu perfil.
 
 Vamos criar uma pesquisa NPS que transforma feedback em crescimento?`
-            : `Olá! 👋 Vou te ajudar a criar uma pesquisa NPS personalizada.
+              : `Olá! 👋 Vou te ajudar a criar uma pesquisa NPS personalizada.
 
 Vamos começar?`,
-          [
-            { label: '✨ Usar meu perfil e começar!', value: 'start', icon: Sparkles }
-          ]
-        );
-      }, 300);
+            [
+              { label: '✨ Usar meu perfil e começar!', value: 'start', icon: Sparkles }
+            ]
+          );
+        }, 300);
+      }
     }
   }, [currentStep, businessProfile, existingCampaign, profileLoaded]);
 

@@ -38,7 +38,9 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [message, setMessage] = useState({ text: '', type: 'idle' as 'idle' | 'success' | 'error' });
-  const [companyId, setCompanyId] = useState<string | null>(null);
+  
+  // No pre-production/main, o company_id é o próprio user.id (que é o tenant_id)
+  const companyId = currentUser?.id || null;
   
   const [config, setConfig] = useState<ReportConfig>({
     whatsapp_number: '',
@@ -48,40 +50,6 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
     monthly_enabled: false,
     scheduled_time: '08:00'
   });
-
-  // Resolve o company_id a partir do usuário logado
-  useEffect(() => {
-    const resolveCompanyId = async () => {
-      if (!currentUser?.id) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        if ((currentUser as any).activeCompanyId) {
-          setCompanyId((currentUser as any).activeCompanyId);
-          return;
-        }
-
-        const { data } = await supabase
-          .from('user_companies')
-          .select('company_id')
-          .eq('user_id', currentUser.id)
-          .eq('is_default', true)
-          .single();
-
-        if (data?.company_id) {
-          setCompanyId(data.company_id);
-        } else {
-          setCompanyId((currentUser as any).tenantId || null);
-        }
-      } catch (e) {
-        setCompanyId((currentUser as any).tenantId || null);
-      }
-    };
-
-    resolveCompanyId();
-  }, [currentUser?.id]);
 
   // Carrega as configurações quando o companyId estiver disponível
   useEffect(() => {
@@ -146,7 +114,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
         daily_enabled: config.daily_enabled,
         weekly_enabled: config.weekly_enabled,
         monthly_enabled: config.monthly_enabled,
-        scheduled_time: config.scheduled_time + ':00'
+        scheduled_time: '09:00:00'
       };
 
       let error;
@@ -312,16 +280,20 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
                   <Clock size={20} />
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900">Relatório Diário</p>
-                  <p className="text-xs text-gray-500">Resumo das atividades das últimas 24h.</p>
+                  <p className="font-medium text-gray-900">Relatório Diário</p>
+                  <p className="text-sm text-gray-500">Resumo das atividades das últimas 24h.</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => handleToggle('daily_enabled')}
                 disabled={isReadOnly}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${config.daily_enabled ? 'bg-emerald-600' : 'bg-gray-300'}`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  config.daily_enabled ? 'bg-emerald-500' : 'bg-gray-300'
+                } ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.daily_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  config.daily_enabled ? 'translate-x-6' : 'translate-x-1'
+                }`} />
               </button>
             </div>
 
@@ -331,16 +303,20 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
                   <Calendar size={20} />
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900">Relatório Semanal</p>
-                  <p className="text-xs text-gray-500">Enviado toda segunda-feira com o fechamento da semana.</p>
+                  <p className="font-medium text-gray-900">Relatório Semanal</p>
+                  <p className="text-sm text-gray-500">Enviado toda segunda-feira com o fechamento da semana.</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => handleToggle('weekly_enabled')}
                 disabled={isReadOnly}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${config.weekly_enabled ? 'bg-emerald-600' : 'bg-gray-300'}`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  config.weekly_enabled ? 'bg-emerald-500' : 'bg-gray-300'
+                } ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.weekly_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  config.weekly_enabled ? 'translate-x-6' : 'translate-x-1'
+                }`} />
               </button>
             </div>
 
@@ -350,72 +326,82 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
                   <PieChart size={20} />
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900">Relatório Mensal</p>
-                  <p className="text-xs text-gray-500">Enviado no 1º dia do mês com o balanço do mês anterior.</p>
+                  <p className="font-medium text-gray-900">Relatório Mensal</p>
+                  <p className="text-sm text-gray-500">Enviado no 1º dia do mês com o balanço do mês anterior.</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => handleToggle('monthly_enabled')}
                 disabled={isReadOnly}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${config.monthly_enabled ? 'bg-emerald-600' : 'bg-gray-300'}`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  config.monthly_enabled ? 'bg-emerald-500' : 'bg-gray-300'
+                } ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${config.monthly_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  config.monthly_enabled ? 'translate-x-6' : 'translate-x-1'
+                }`} />
               </button>
             </div>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-gray-100">
-            <div className="flex items-center gap-4">
-              <div className="w-1/3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  <span className="flex items-center gap-2">
-                    <Clock size={16} /> Horário de Envio
-                  </span>
-                </label>
-                <input 
-                  type="time" 
-                  value={config.scheduled_time}
-                  onChange={(e) => handleInputChange('scheduled_time', e.target.value)}
-                  disabled={isReadOnly}
-                  className="w-full rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 focus:ring-emerald-500 focus:border-emerald-500"
-                />
+          {/* Horário Fixo */}
+          <div className="mt-6 pt-4 border-t border-gray-100">
+            <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-lg border border-emerald-100">
+              <div className="p-2 rounded-lg bg-emerald-100 text-emerald-600 flex-shrink-0">
+                <Clock size={20} />
               </div>
-              <div className="flex-1 bg-blue-50 p-3 rounded-lg flex items-start gap-2 border border-blue-100">
-                <Info size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-blue-800">
-                  Os relatórios são processados e enviados automaticamente no horário agendado, consolidando os KPIs de Vendas e NPS.
-                </p>
+              <div>
+                <p className="text-sm font-semibold text-emerald-800">Horário de envio: todo dia às 9h da manhã</p>
+                <p className="text-xs text-emerald-600 mt-0.5">O relatório é enviado automaticamente com os dados do dia anterior.</p>
               </div>
             </div>
           </div>
+
+          {/* Info Box */}
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100 flex items-start gap-2">
+            <Info size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-blue-700">
+              Os relatórios são processados e enviados automaticamente às 9h, 
+              consolidando os KPIs de Vendas e NPS do dia anterior.
+            </p>
+          </div>
         </div>
 
-        {/* Barra de Ações */}
-        <div className="flex items-center justify-between pt-4">
-          <div>
-            {message.text && (
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                {message.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
-                <span className="text-sm font-medium">{message.text}</span>
-              </div>
-            )}
+        {/* Mensagem de Status */}
+        {message.text && (
+          <div className={`flex items-center gap-2 p-3 rounded-lg ${
+            message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 
+            message.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : ''
+          }`}>
+            {message.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+            <span className="text-sm">{message.text}</span>
           </div>
-          {!isReadOnly && (
-            <button 
+        )}
+
+        {/* Botão Salvar */}
+        {!isReadOnly && (
+          <div className="flex justify-end">
+            <button
               onClick={handleSave}
               disabled={saveStatus === 'saving'}
-              className={`px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all ${
-                saveStatus === 'saving' ? 'bg-gray-400 cursor-not-allowed text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg hover:shadow-emerald-200'
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white transition-all ${
+                saveStatus === 'saving'
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : saveStatus === 'saved'
+                  ? 'bg-green-500 hover:bg-green-600'
+                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-lg hover:shadow-xl'
               }`}
             >
               {saveStatus === 'saving' ? (
-                <><Loader2 size={20} className="animate-spin" /> Salvando...</>
+                <><Loader2 size={18} className="animate-spin" /> Salvando...</>
+              ) : saveStatus === 'saved' ? (
+                <><CheckCircle size={18} /> Salvo!</>
               ) : (
-                <><Save size={20} /> Salvar Configurações</>
+                <><Save size={18} /> Salvar Configurações</>
               )}
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
