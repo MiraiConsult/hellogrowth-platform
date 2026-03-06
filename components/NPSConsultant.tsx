@@ -616,7 +616,7 @@ CONTEXTO:
 
 SUA ESTRATÉGIA:
 1. Identifique os 3 pilares críticos para o sucesso deste tipo de negócio (ex: se for restaurante, é sabor/atendimento/ambiente).
-2. A primeira pergunta DEVE ser o NPS padrão (0-10).
+2. A primeira pergunta DEVE ser do tipo "nps" (0-10). O texto dela será substituído automaticamente pelo padrão fixo, então escreva qualquer texto genérico para ela.
 3. Crie 3 perguntas complementares que investiguem esses pilares críticos de forma geral, sem segmentar por tipo de respondente.
 
 REGRAS:
@@ -697,11 +697,12 @@ REGRAS:
       const npsQuestion = questions.find(q => q.type === 'nps');
       const otherQuestions = questions.filter(q => q.type !== 'nps');
       const orderedQuestions = npsQuestion ? [npsQuestion, ...otherQuestions] : questions;
-      // Substituir [Nome da Empresa] pelo nome real no texto da pergunta NPS
-      const companyName = businessProfile?.company_name || '';
+      // Sempre usar o texto padrão fixo para a pergunta NPS, independente do tom
+      const companyName = businessProfile?.company_name || 'nossa empresa';
+      const npsFixedText = `Em uma escala de 0 a 10, o quanto você recomendaria a ${companyName} para amigos ou familiares?`;
       const finalQuestions = orderedQuestions.map(q => {
-        if (q.type === 'nps' && companyName) {
-          return { ...q, text: q.text.replace(/\[Nome da Empresa\]/gi, companyName) };
+        if (q.type === 'nps') {
+          return { ...q, text: npsFixedText };
         }
         return q;
       });
