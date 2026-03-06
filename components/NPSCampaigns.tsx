@@ -7,6 +7,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from '@/lib/supabase';
 import InitialFieldsConfig from '@/components/InitialFieldsConfig';
 import NPSConsultant from '@/components/NPSConsultant';
+import MassDispatchModal from '@/components/MassDispatchModal';
 
 interface NPSCampaignsProps {
   campaigns: Campaign[];
@@ -39,12 +40,6 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   
   // Mass Send State
   const [isMassSendOpen, setIsMassSendOpen] = useState(false);
-  const [massSendCampaignId, setMassSendCampaignId] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [parsedContacts, setParsedContacts] = useState<{name: string, contact: string}[]>([]);
-  const [sendProgress, setSendProgress] = useState(0);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // QR Code State
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -79,78 +74,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
 
   // Funções antigas do editor removidas - agora usa apenas NPSConsultant
 
-  // CSV Parsing Logic
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-        const text = event.target?.result as string;
-        // Simple CSV parser: Assumes "Name,Contact" format
-        const lines = text.split('\n');
-        const contacts: {name: string, contact: string}[] = [];
-        
-        lines.forEach(line => {
-            const [name, contact] = line.split(',');
-            if (name && contact) {
-                contacts.push({ 
-                    name: name.trim(), 
-                    contact: contact.trim().replace(/\r/g, '') 
-                });
-            }
-        });
-
-        if (contacts.length > 0) {
-            setParsedContacts(contacts);
-        } else {
-            alert("Nenhum contato válido encontrado. Use o formato: Nome, Telefone");
-        }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleMassSend = () => {
-     if (parsedContacts.length === 0) return;
-
-     setIsUploading(true);
-     setSendProgress(0);
-     
-     // Simulate sending process item by item
-     const total = parsedContacts.length;
-     let current = 0;
-
-     const interval = setInterval(() => {
-         current += 1;
-         const percentage = Math.round((current / total) * 100);
-         setSendProgress(percentage);
-
-         if (current >= total) {
-             clearInterval(interval);
-             setIsUploading(false);
-             setUploadSuccess(true);
-         }
-     }, 50); // Speed of simulation
-  };
-
-  const closeMassSend = () => {
-      setIsMassSendOpen(false);
-      setUploadSuccess(false);
-      setMassSendCampaignId('');
-      setParsedContacts([]);
-      setSendProgress(0);
-  }
-
-  const downloadTemplate = () => {
-      const csvContent = "data:text/csv;charset=utf-8,Nome,Telefone\nMaria Silva,11999999999\nJoão Souza,11988888888";
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", "modelo_importacao.csv");
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-  };
+  const closeMassSend = () => setIsMassSendOpen(false);
 
   const handleOpenQr = (id: string, name: string) => {
     const link = getSurveyLink(id);
@@ -303,111 +227,11 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
 
       {/* Mass Send Modal */}
       {isMassSendOpen && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <h3 className="text-lg font-bold text-gray-900">Disparo em Massa</h3>
-                    <button onClick={closeMassSend} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
-                </div>
-                <div className="p-6 space-y-4">
-                    {uploadSuccess ? (
-                        <div className="text-center py-6 animate-in fade-in">
-                            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <Check size={32} />
-                            </div>
-                            <h4 className="font-bold text-lg text-gray-900">Envio Concluído!</h4>
-                            <p className="text-sm text-gray-500 mt-2">
-                                A campanha foi enviada para <strong>{parsedContacts.length} contatos</strong> com sucesso.
-                            </p>
-                            <button onClick={closeMassSend} className="mt-6 px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium">Fechar</button>
-                        </div>
-                    ) : (
-                        <>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Selecione a Campanha</label>
-                                <select 
-                                    className="w-full border border-gray-300 rounded-lg p-2.5"
-                                    value={massSendCampaignId}
-                                    onChange={(e) => setMassSendCampaignId(e.target.value)}
-                                >
-                                    <option value="">Selecione...</option>
-                                    {campaigns.filter(c => c.status === 'Ativa').map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            
-                            {parsedContacts.length === 0 ? (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Upload da Lista (.csv)</label>
-                                    <div 
-                                        className="border-2 border-dashed border-gray-300 rounded-lg p-8 flex flex-col items-center justify-center text-center hover:bg-gray-50 transition-colors cursor-pointer group"
-                                        onClick={() => fileInputRef.current?.click()}
-                                    >
-                                        <FileSpreadsheet size={32} className="text-gray-400 mb-2 group-hover:text-primary-500" />
-                                        <p className="text-sm text-gray-600 font-medium">Clique para selecionar o arquivo</p>
-                                        <p className="text-xs text-gray-400 mt-1">Formato: Nome, Telefone/Email</p>
-                                        <input 
-                                            type="file" 
-                                            ref={fileInputRef} 
-                                            className="hidden" 
-                                            accept=".csv"
-                                            onChange={handleFileUpload}
-                                        />
-                                    </div>
-                                    <button onClick={downloadTemplate} className="text-xs text-primary-600 mt-2 hover:underline flex items-center gap-1">
-                                        <Download size={12} /> Baixar modelo de exemplo
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <div className="flex items-center gap-2 text-green-700 font-bold text-sm">
-                                            <Check size={16} /> {parsedContacts.length} Contatos Encontrados
-                                        </div>
-                                        <button onClick={() => setParsedContacts([])} className="text-xs text-red-500 hover:underline">Remover</button>
-                                    </div>
-                                    <div className="max-h-32 overflow-y-auto text-xs text-gray-600 space-y-1 bg-white p-2 rounded border border-gray-100">
-                                        {parsedContacts.slice(0, 10).map((c, i) => (
-                                            <div key={i} className="flex justify-between">
-                                                <span>{c.name}</span>
-                                                <span className="text-gray-400">{c.contact}</span>
-                                            </div>
-                                        ))}
-                                        {parsedContacts.length > 10 && <div className="text-center italic text-gray-400 mt-1">...e mais {parsedContacts.length - 10}</div>}
-                                    </div>
-                                </div>
-                            )}
-
-                            {isUploading && (
-                                <div>
-                                    <div className="flex justify-between text-xs mb-1">
-                                        <span>Enviando...</span>
-                                        <span>{sendProgress}%</span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                        <div className="bg-green-600 h-2.5 rounded-full transition-all duration-75" style={{ width: `${sendProgress}%` }}></div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {!isUploading && (
-                                <div className="pt-2">
-                                    <button 
-                                        onClick={handleMassSend}
-                                        disabled={!massSendCampaignId || parsedContacts.length === 0}
-                                        className="w-full py-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
-                                    >
-                                        <Send size={18} />
-                                        Enviar Campanha
-                                    </button>
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
-            </div>
-        </div>
+        <MassDispatchModal
+          campaigns={campaigns}
+          tenantId={tenantId || ''}
+          onClose={closeMassSend}
+        />
       )}
 
       {/* QR Code Modal */}
