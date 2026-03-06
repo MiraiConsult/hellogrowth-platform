@@ -617,15 +617,12 @@ CONTEXTO:
 SUA ESTRATÉGIA:
 1. Identifique os 3 pilares críticos para o sucesso deste tipo de negócio (ex: se for restaurante, é sabor/atendimento/ambiente).
 2. A primeira pergunta DEVE ser o NPS padrão (0-10).
-3. Crie 3 perguntas complementares que investiguem esses pilares críticos.
-4. Use lógica condicional:
-   - Para Detratores (0-6): Pergunte sobre a falha específica para agir rápido (Recuperação).
-   - Para Passivos (7-8): Pergunte o que falta para sermos incríveis (Upgrade).
-   - Para Promotores (9-10): Pergunte o que eles mais amam para usarmos no marketing (Expansão).
+3. Crie 3 perguntas complementares que investiguem esses pilares críticos de forma geral, sem segmentar por tipo de respondente.
 
 REGRAS:
 - Use o tom ${tone}.
 - O campo 'insight' deve explicar qual pilar de retenção está sendo medido.
+- NÃO use o campo 'conditional' — todas as perguntas são exibidas para todos os respondentes.
 - Retorne APENAS JSON válido com este formato:
 {
   "questions": [
@@ -633,8 +630,7 @@ REGRAS:
       "text": "texto da pergunta",
       "type": "nps" | "single_choice" | "multiple_choice" | "text",
       "options": ["opção 1", "opção 2"],
-      "insight": "Pilar de Retenção: Por que isso é vital para manter o cliente?",
-      "conditional": "promoter" | "passive" | "detractor" (opcional)
+      "insight": "Pilar de Retenção: Por que isso é vital para manter o cliente?"
     }
   ]
 }`;
@@ -871,7 +867,7 @@ ATENÇÃO:
 - NÃO use blocos de código markdown
 - NÃO explique, apenas RETORNE O JSON
 - O array "updated_questions" DEVE ter ${generatedQuestions.length} itens
-- Mantenha o campo "conditional" se existir (promoter, passive, detractor ou undefined)`
+- NÃO inclua o campo "conditional" nas perguntas`
         : `Você é o Consultor HelloGrowth. Responda de forma curta e amigável.
 
 CONTEXTO:
@@ -880,7 +876,7 @@ CONTEXTO:
 - Pontos de avaliação: ${evaluationPoints.join(', ')}
 
 PERGUNTAS DO FORMULÁRIO:
-${generatedQuestions.map((q, idx) => `${idx + 1}. ${q.text}${q.conditional ? ` [${q.conditional}]` : ''}\nInsight: ${q.insight}`).join('\n\n')}
+${generatedQuestions.map((q, idx) => `${idx + 1}. ${q.text}\nInsight: ${q.insight}`).join('\n\n')}
 
 PERGUNTA DO USUÁRIO: ${message}
 
