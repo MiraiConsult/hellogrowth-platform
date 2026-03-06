@@ -184,26 +184,6 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
           </div>
           )}
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <MapPin size={20} className="text-purple-500" /> Integrações HelloRating
-            </h2>
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="auto-redirect" className="rounded text-primary-600" checked={localSettings.autoRedirect} onChange={(e) => handleInputChange('autoRedirect', e.target.checked)} disabled={isReadOnly} />
-                <label htmlFor="auto-redirect" className="text-sm text-gray-700">Ativar redirecionamento automático para Promotores</label>
-              </div>
-              {!isReadOnly && (
-                <div className="mt-4 flex justify-end">
-                  <button onClick={handleSaveAccountDetails} disabled={saveStatus === 'saving'} className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${saveStatus === 'saved' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-primary-600 text-white hover:bg-primary-700'}`}>
-                    {saveStatus === 'saving' && <Loader2 size={18} className="animate-spin" />}
-                    {saveStatus === 'saved' && <CheckCircle size={18} />}
-                    {saveStatus === 'idle' ? 'Salvar Integrações' : saveStatus === 'saving' ? 'Salvando...' : 'Salvo!'}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         <div className="space-y-6">
