@@ -127,8 +127,9 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
           <p className="text-gray-500">Gerencie seus links de pesquisa NPS e feedback</p>
         </div>
         <div className="flex gap-2">
-            <button onClick={() => setIsMassSendOpen(true)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center gap-2 hover:bg-gray-50 font-medium">
+            <button onClick={() => setIsMassSendOpen(true)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center gap-2 hover:bg-gray-50 font-medium relative">
                 <Send size={18} /> Disparo em Massa
+                <span className="text-xs bg-green-500 text-white px-1.5 py-0.5 rounded-full font-semibold">NOVO</span>
             </button>
             <button onClick={() => { setManualMode(true); setEditingCampaign(null); setShowNPSConsultant(true); }} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center gap-2 hover:bg-gray-50 font-medium">
                 <Edit size={18} /> Criar manualmente
