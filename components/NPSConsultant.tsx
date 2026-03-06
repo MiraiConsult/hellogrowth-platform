@@ -451,7 +451,7 @@ Vou regenerar as perguntas com o novo tom. Um momento...`
       ]);
     } else if (value === 'custom') {
       // TODO: Implementar tela de configuração customizada
-      addAssistantMessage('⚠️ Configuração customizada ainda não implementada. Usando padrão: Nome + E-mail');
+      addAssistantMessage('✏️ Você poderá personalizar os campos de identificação diretamente na tela de edição da pesquisa, na etapa de Revisão.');
       setInitialFields([
         { field: 'name', label: 'Nome', placeholder: 'Digite seu nome', required: true, enabled: true },
         { field: 'email', label: 'E-mail', placeholder: 'Digite seu e-mail', required: true, enabled: true },
