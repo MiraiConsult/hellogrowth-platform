@@ -628,7 +628,10 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       initial_fields: form.initialFields,
       active: form.active,
       user_id: currentUser.id,
-      tenant_id: getActiveTenant()
+      tenant_id: getActiveTenant(),
+      game_enabled: form.game_enabled || false,
+      game_id: form.game_id || null,
+      product_ids: (form as any).product_ids || null
     };
     
     // Check if form exists in database

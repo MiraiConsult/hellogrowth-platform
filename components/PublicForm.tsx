@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, InitialField } from '@/types';
 import { CheckCircle, ArrowRight, ArrowLeft, Check, ShieldCheck, X, Sparkles } from 'lucide-react';
 import SpinWheel from './SpinWheel';
@@ -42,9 +42,26 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAnalyzingScreen, setShowAnalyzingScreen] = useState(false);
   const [showGame, setShowGame] = useState(false);
+  const [gameData, setGameData] = useState<any>(null);
+  const [loadingGame, setLoadingGame] = useState(false);
 
   const [patientData, setPatientData] = useState({ name: '', email: '', phone: '' });
   const [showIntro, setShowIntro] = useState(true);
+
+  // Carregar dados do game (prêmios reais) quando o form tem game_id
+  useEffect(() => {
+    const gameId = form.game_id;
+    if (gameId && form.game_enabled && !gameData && !loadingGame) {
+      setLoadingGame(true);
+      fetch(`/api/games?id=${gameId}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data) setGameData(data);
+        })
+        .catch(err => console.error('Erro ao carregar game:', err))
+        .finally(() => setLoadingGame(false));
+    }
+  }, [form.game_id, form.game_enabled]);
 
   const initialFields: InitialField[] = form.initialFields || [
     { field: 'name', label: 'Nome Completo', placeholder: 'Seu nome', required: true, enabled: true },
@@ -206,27 +223,33 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   }
 
   // Mostrar roleta se game_enabled
-  if (showGame) {
-    // Prêmios padrão para formulário de pré-venda (TODO: buscar do banco)
-    const defaultPrizes = [
-      { name: '10% de desconto', probability: 30, color: '#10B981' },
-      { name: '15% de desconto', probability: 25, color: '#14B8A6' },
-      { name: '20% de desconto', probability: 20, color: '#0D9488' },
-      { name: 'Brinde exclusivo', probability: 15, color: '#059669' },
-      { name: 'Consulta gratuita', probability: 10, color: '#0EA5E9' }
-    ];
-    
+  if (showGame && gameData) {
     return (
       <SpinWheel
-        prizes={defaultPrizes}
-        gameId={form.game_id || form.id || 'form-game'}
+        prizes={gameData.prizes || []}
+        gameId={gameData.id}
         clientName={patientData.name}
         clientEmail={patientData.email}
         clientPhone={patientData.phone}
-        customMessage="Parabéns! Gire a roleta e ganhe um prêmio especial!"
+        customMessage={gameData.messages?.before || 'Parabéns! Gire a roleta e ganhe um prêmio especial!'}
         source="pre-sale"
         onComplete={() => setIsCompleted(true)}
       />
+    );
+  }
+
+  // Se showGame mas gameData ainda não carregou, mostrar loading
+  if (showGame && !gameData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" style={{ colorScheme: 'light' }}>
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-20 h-20 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+            <Sparkles size={40} />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Preparando sua surpresa...</h2>
+          <p className="text-gray-600">Aguarde um momento!</p>
+        </div>
+      </div>
     );
   }
 
