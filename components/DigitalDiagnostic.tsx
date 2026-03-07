@@ -72,9 +72,12 @@ interface DigitalDiagnosticProps {
   userId: string;
   settings: AccountSettings;
   npsData: any[];
+  businessProfile?: any;
 }
 
-const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, settings, npsData }) => {
+const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, settings, npsData, businessProfile }) => {
+  // Usar o Place ID do Perfil do Negócio como fonte principal
+  const effectivePlaceId = businessProfile?.google_place_id || settings.placeId || '';
   const tenantId = useTenantId()
 
   const [diagnostics, setDiagnostics] = useState<DiagnosticData[]>([]);
@@ -370,8 +373,8 @@ Forneça de 3 a 5 recomendações priorizadas.
   };
 
   const handleRunDiagnostic = async () => {
-    if (!settings.placeId) {
-      setError('Configure o Google Place ID nas configurações para analisar sua presença digital.');
+    if (!effectivePlaceId) {
+      setError('Configure o Google Place ID no Perfil do Negócio para analisar sua presença digital.');
       return;
     }
 
@@ -381,9 +384,9 @@ Forneça de 3 a 5 recomendações priorizadas.
     try {
       // Step 1: Fetch Google Place data
       setAnalysisStep('Buscando dados do Google...');
-      console.log('Starting diagnostic for Place ID:', settings.placeId);
+      console.log('Starting diagnostic for Place ID:', effectivePlaceId);
       
-      const placeData = await fetchGooglePlaceData(settings.placeId);
+      const placeData = await fetchGooglePlaceData(effectivePlaceId);
       
       if (!placeData || !placeData.name) {
         console.log('No place data returned, using mock data');
@@ -564,14 +567,14 @@ Forneça de 3 a 5 recomendações priorizadas.
       )}
 
       {/* No Place ID configured */}
-      {!settings.placeId && (
+      {!effectivePlaceId && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 mb-6">
           <div className="flex items-start gap-4">
             <AlertTriangle className="text-yellow-600 mt-1" size={24} />
             <div>
               <h3 className="font-semibold text-yellow-800 mb-2">Configure seu Google Place ID</h3>
               <p className="text-yellow-700 mb-4">
-                Para analisar sua presença digital, você precisa configurar o Google Place ID nas configurações.
+                Para analisar sua presença digital, configure o Google Place ID no <strong>Perfil do Negócio</strong>.
               </p>
               <a 
                 href="#" 
@@ -842,7 +845,7 @@ Forneça de 3 a 5 recomendações priorizadas.
       )}
 
       {/* No diagnostics yet */}
-      {!latestDiagnostic && !isAnalyzing && settings.placeId && (
+      {!latestDiagnostic && !isAnalyzing && effectivePlaceId && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
           <Globe className="mx-auto text-gray-300 mb-4" size={48} />
           <h3 className="text-lg font-semibold text-gray-800 mb-2">Nenhum diagnóstico realizado</h3>

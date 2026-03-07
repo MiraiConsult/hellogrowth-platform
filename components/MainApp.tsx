@@ -1329,6 +1329,7 @@ Responda APENAS com JSON válido (sem markdown):
             userId={currentUser.id}
             settings={settings}
             npsData={npsData}
+            businessProfile={businessProfile}
           />
         )}
 
