@@ -437,10 +437,14 @@ Forneça de 3 a 5 recomendações priorizadas.
 
       // Step 3: Save to database
       setAnalysisStep('Salvando diagnóstico...');
-      const { error: saveError } = await supabase
+      // Garantir que tenantId está resolvido antes do insert
+      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', userId).single();
+      const resolvedTenantId = userData?.tenant_id || tenantId || userId;
+      console.log('Saving diagnostic with tenant_id:', resolvedTenantId, 'user_id:', userId);
+      const { error: saveError, data: savedData } = await supabase
         .from('digital_diagnostics')
         .insert({
-          user_id: userId, tenant_id: tenantId,
+          user_id: userId, tenant_id: resolvedTenantId,
           place_data: placeData,
           ai_analysis: aiAnalysis,
           score_reputation: aiAnalysis.scores.reputation,
@@ -449,9 +453,14 @@ Forneça de 3 a 5 recomendações priorizadas.
           overall_score: aiAnalysis.scores.overall,
           details: placeData,
           recommendations: aiAnalysis.recommendations
-        });
+        })
+        .select();
 
-      if (saveError) throw saveError;
+      if (saveError) {
+        console.error('Error saving diagnostic:', saveError);
+        throw saveError;
+      }
+      console.log('Diagnostic saved successfully:', savedData);
 
       // Refresh diagnostics list
       await fetchDiagnostics();
