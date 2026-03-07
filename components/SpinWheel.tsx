@@ -252,27 +252,57 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
     if (isSpinning || hasSpun) return;
     setIsSpinning(true);
 
-    // Selecionar prêmio baseado em probabilidade
+    // ===== NOVA LÓGICA: sortear ângulo aleatório baseado em probabilidade =====
+    // 1. Selecionar prêmio por probabilidade
     const random = Math.random();
     let cumulative = 0;
-    let selectedPrize = prizes[0];
     let selectedIndex = 0;
-
     for (let i = 0; i < prizes.length; i++) {
       cumulative += prizes[i].probability / 100;
       if (random <= cumulative) {
-        selectedPrize = prizes[i];
         selectedIndex = i;
         break;
       }
     }
 
-    // Não setar wonPrize aqui - apenas após animação terminar
-    // Gerar código único
+    const segmentAngle = (2 * Math.PI) / prizes.length;
     const code = generatePrizeCode(clientName);
-    // setPrizeCode será setado após animação
 
-    // Salvar participação no banco ANTES da animação
+    // 2. Calcular ângulo final para que o segmento selectedIndex fique sob a seta (topo = -PI/2)
+    //    O segmento i começa em: rotation + i * segmentAngle
+    //    O centro do segmento i está em: rotation + i * segmentAngle + segmentAngle/2
+    //    Para que o centro fique no topo (-PI/2):
+    //    rotation + i * segmentAngle + segmentAngle/2 = -PI/2 + k*2PI
+    //    rotation = -PI/2 - i * segmentAngle - segmentAngle/2
+    //    Adicionar offset aleatório DENTRO do segmento (±40% do segmento) para parecer natural
+    const randomOffset = (Math.random() - 0.5) * segmentAngle * 0.4;
+    const targetRotation = -(Math.PI / 2) - (selectedIndex * segmentAngle) - (segmentAngle / 2) + randomOffset;
+
+    // 3. Normalizar e calcular diferença a partir da rotação atual
+    const normalizedTarget = ((targetRotation % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+    const normalizedCurrent = ((rotationRef.current % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+    let angleDiff = normalizedTarget - normalizedCurrent;
+    if (angleDiff <= 0) angleDiff += 2 * Math.PI;
+
+    // 4. Adicionar voltas extras (8-12 voltas)
+    const extraSpins = (8 + Math.floor(Math.random() * 5)) * 2 * Math.PI;
+    const totalRotation = extraSpins + angleDiff;
+    const startRotation = rotationRef.current;
+    const endRotation = startRotation + totalRotation;
+
+    // 5. Verificar qual prêmio realmente ficará sob a seta no ângulo final
+    //    ângulo final normalizado:
+    const finalNorm = ((endRotation % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+    //    A seta aponta para -PI/2 (topo). No sistema de rotação, o segmento sob a seta
+    //    é aquele cujo startAngle <= (-PI/2 - finalNorm + 2PI) % 2PI < endAngle
+    //    Simplificando: ângulo relativo da seta na roleta = (-PI/2 - finalNorm + 4PI) % 2PI
+    const arrowAngleInWheel = ((-Math.PI / 2 - endRotation) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+    const actualIndex = Math.floor(arrowAngleInWheel / segmentAngle) % prizes.length;
+    const selectedPrize = prizes[actualIndex];
+
+    console.log('[SpinWheel] Sorteado index:', selectedIndex, '| Prêmio calculado index:', actualIndex, '| Prêmio:', selectedPrize.name);
+
+    // 6. Salvar participação no banco com o prêmio REAL (baseado no ângulo final)
     try {
       const response = await fetch('/api/game-participations', {
         method: 'POST',
@@ -288,59 +318,23 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
           source: source || 'post-sale'
         })
       });
-
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Erro ao salvar participação:', response.status, errorText);
-      } else {
-        console.log('Participação salva com sucesso!');
+        console.error('Erro ao salvar participação:', response.status, await response.text());
       }
     } catch (error) {
       console.error('Erro ao salvar participação:', error);
     }
 
-    // ===== CÁLCULO DO ÂNGULO ALVO (CORRIGIDO) =====
-    // A seta está no TOPO da roleta (posição -PI/2 ou 270° no sistema Canvas).
-    // Os segmentos são desenhados a partir do ângulo 0 (direita), no sentido horário.
-    // O segmento i ocupa de: rotation + i*segAngle até rotation + (i+1)*segAngle
-    // Para que o CENTRO do segmento selectedIndex fique sob a seta (topo = -PI/2),
-    // precisamos que: finalRotation + selectedIndex*segAngle + segAngle/2 ≡ -PI/2 (mod 2PI)
-    // Ou seja: finalRotation = -PI/2 - selectedIndex*segAngle - segAngle/2
-    const segmentAngle = (2 * Math.PI) / prizes.length;
-    const desiredFinalRotation = -(Math.PI / 2) - (selectedIndex * segmentAngle) - (segmentAngle / 2);
-    
-    // Normalizar para valor positivo
-    const normalizedDesired = ((desiredFinalRotation % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
-    const normalizedCurrent = ((rotationRef.current % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
-    
-    // Diferença angular necessária (sempre positiva, sentido horário)
-    let angleDiff = normalizedDesired - normalizedCurrent;
-    if (angleDiff <= 0) angleDiff += 2 * Math.PI;
-    
-    // Adicionar voltas extras (8-12 voltas para efeito dramático)
-    const extraSpins = (8 + Math.random() * 4) * 2 * Math.PI;
-    const totalRotation = extraSpins + angleDiff;
-    
-    console.log('[SpinWheel DEBUG] Prêmio:', selectedPrize.name, '| Index:', selectedIndex);
-    console.log('[SpinWheel DEBUG] Ângulo desejado:', (normalizedDesired * 180 / Math.PI).toFixed(1) + '°');
-    console.log('[SpinWheel DEBUG] Rotação total:', (totalRotation * 180 / Math.PI).toFixed(1) + '°');
-
-    // Animação suave com easing
+    // 7. Animar a roleta
     const startTime = performance.now();
-    const duration = 5000; // 5 segundos
-    const startRotation = rotationRef.current;
-    const endRotation = startRotation + totalRotation;
+    const duration = 5000;
 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      
-      // Easing: cubic ease-out para desaceleração natural
       const eased = 1 - Math.pow(1 - progress, 3);
-      
       const newRotation = startRotation + totalRotation * eased;
       rotationRef.current = newRotation;
-      
       drawWheel(newRotation);
 
       if (progress < 1) {
@@ -349,7 +343,6 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
         rotationRef.current = endRotation;
         setIsSpinning(false);
         setHasSpun(true);
-        // Setar wonPrize e prizeCode APENAS quando animação terminar
         setWonPrize(selectedPrize);
         setPrizeCode(code);
         setShowConfetti(true);
