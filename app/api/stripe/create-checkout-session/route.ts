@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
     const priceKey = getPriceKey(plan, addons || { game: false, mpd: false });
     const priceBRL = PRICING_DATA[userCount][priceKey];
     
-    console.log('Price calculation:', { priceKey, priceBRL, userCount });
+    console.log('Price calculation:', { priceKey, pricePerUser: priceBRL, userCount, totalPrice: priceBRL * userCount });
 
     if (!priceBRL) {
       console.error('Invalid price configuration:', { priceKey, userCount, availableKeys: Object.keys(PRICING_DATA[userCount] || {}) });
@@ -148,8 +148,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert BRL to cents
-    const priceCents = Math.round(priceBRL * 100);
+    // Convert BRL to cents - total price = price per user × number of users
+    const totalPriceBRL = priceBRL * userCount;
+    const priceCents = Math.round(totalPriceBRL * 100);
 
     // Initialize Stripe
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -168,7 +169,7 @@ export async function POST(request: NextRequest) {
 
     // Get plan name for display
     const planName = getPlanName(plan, addons || { game: false, mpd: false });
-    const description = `${planName} - ${userCount} usuário${userCount > 1 ? 's' : ''}`;
+    const description = `${planName} - ${userCount} usuário${userCount > 1 ? 's' : ''} (R$ ${priceBRL.toFixed(2).replace('.', ',')} por usuário/mês)`;
 
     // Create Checkout Session with dynamic pricing
     console.log('Creating Stripe session with price:', priceCents, 'cents');
@@ -200,7 +201,8 @@ export async function POST(request: NextRequest) {
         userCount: userCount.toString(),
         addons: JSON.stringify(addons || {}),
         priceKey,
-        priceBRL: priceBRL.toString(),
+        pricePerUserBRL: priceBRL.toString(),
+        totalPriceBRL: totalPriceBRL.toString(),
       },
     });
 
