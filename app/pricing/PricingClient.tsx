@@ -436,13 +436,13 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
                   <div className="mb-6">
                     <div className="flex items-baseline gap-2">
                       <span className="text-4xl font-bold text-gray-900">
-                        R$ {price.toFixed(2).replace('.', ',')}
+                        R$ {(price * userCount).toFixed(2).replace('.', ',')}
                       </span>
                       <span className="text-gray-600">/mês</span>
                     </div>
                     {userCount > 1 && (
                       <p className="text-gray-500 text-xs mt-1">
-                        R$ {(price * userCount).toFixed(2).replace('.', ',')} total para {userCount} usuários
+                        R$ {price.toFixed(2).replace('.', ',')} por empresa/mês
                       </p>
                     )}
                     {userCount > 1 && economy > 0 && (
