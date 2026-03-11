@@ -663,26 +663,28 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       product_ids: (form as any).product_ids || null
     };
     
-    // Check if form exists in database
-    if (form.id) {
-      const { data: existingForm } = await supabase
-        .from('forms')
-        .select('id')
-        .eq('id', form.id)
-        .single();
-      
-      if (existingForm) {
-        // UPDATE existing form
-        await supabase.from('forms').update(formData).eq('id', form.id);
-        setForms(prev => prev.map(f => f.id === form.id ? { ...f, ...form } : f));
-      } else {
-        // INSERT new form (ID doesn't exist in database)
-        const { data } = await supabase.from('forms').insert([formData]).select().single();
-        if (data) setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
+    // Verificar se o ID é um UUID válido (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+    // IDs temporários gerados com Date.now() não são UUIDs válidos
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isValidUUID = form.id && uuidRegex.test(form.id);
+    
+    if (isValidUUID) {
+      // UPDATE: ID é UUID válido, formulário já existe no banco
+      const { error: updateError } = await supabase.from('forms').update(formData).eq('id', form.id);
+      if (updateError) {
+        console.error('Erro ao atualizar formulário:', updateError);
+        alert('Erro ao salvar formulário: ' + updateError.message);
+        return;
       }
+      setForms(prev => prev.map(f => f.id === form.id ? { ...f, ...form } : f));
     } else {
-      // INSERT new form (no ID provided)
-      const { data } = await supabase.from('forms').insert([formData]).select().single();
+      // INSERT: ID ausente ou temporário (Date.now()) - deixar banco gerar UUID
+      const { data, error: insertError } = await supabase.from('forms').insert([formData]).select().single();
+      if (insertError) {
+        console.error('Erro ao inserir formulário:', insertError);
+        alert('Erro ao salvar formulário: ' + insertError.message);
+        return;
+      }
       if (data) setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
     }
   };
