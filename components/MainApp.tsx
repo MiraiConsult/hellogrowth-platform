@@ -472,12 +472,28 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
              };
               setPublicCampaign(safeCampaign);
               
-              const { data: owner } = await supabase.from('users').select('settings, company_name').eq('id', campaign.user_id).single();
-              if (owner) {
-                   const realName = owner.company_name || owner.settings?.companyName || 'Sua Empresa';
-                   setPublicCompanyName(realName);
-                   const ownerSettings = { ...mockSettings, ...owner.settings, companyName: realName, placeId: owner.settings?.placeId };
-                   setPublicSettings(ownerSettings);
+              // Buscar nome da empresa pelo business_profile do tenant da campanha
+              // Isso garante que cada loja/empresa mostre seu próprio nome
+              const campaignTenantId = campaign.tenant_id || campaign.user_id;
+              const { data: bizProfile } = await supabase
+                .from('business_profile')
+                .select('name, google_place_id')
+                .eq('tenant_id', campaignTenantId)
+                .maybeSingle();
+              
+              if (bizProfile?.name) {
+                setPublicCompanyName(bizProfile.name);
+                const ownerSettings = { ...mockSettings, companyName: bizProfile.name, placeId: bizProfile.google_place_id || mockSettings.placeId };
+                setPublicSettings(ownerSettings);
+              } else {
+                // Fallback: buscar pelo user_id se não tiver business_profile
+                const { data: owner } = await supabase.from('users').select('settings, company_name').eq('id', campaign.user_id).single();
+                if (owner) {
+                  const realName = owner.company_name || owner.settings?.companyName || 'Sua Empresa';
+                  setPublicCompanyName(realName);
+                  const ownerSettings = { ...mockSettings, ...owner.settings, companyName: realName, placeId: owner.settings?.placeId };
+                  setPublicSettings(ownerSettings);
+                }
               }
           }
         } else if (formId) {
@@ -494,9 +510,22 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
             };
             setPublicForm(safeForm);
             
-            const { data: owner } = await supabase.from('users').select('company_name, settings').eq('id', form.user_id).single();
-            if (owner) {
-              setPublicCompanyName(owner.company_name || owner.settings?.companyName || 'Sua Empresa');
+            // Buscar nome da empresa pelo business_profile do tenant do formulário
+            const formTenantId = form.tenant_id || form.user_id;
+            const { data: formBizProfile } = await supabase
+              .from('business_profile')
+              .select('name')
+              .eq('tenant_id', formTenantId)
+              .maybeSingle();
+            
+            if (formBizProfile?.name) {
+              setPublicCompanyName(formBizProfile.name);
+            } else {
+              // Fallback: buscar pelo user_id
+              const { data: owner } = await supabase.from('users').select('company_name, settings').eq('id', form.user_id).single();
+              if (owner) {
+                setPublicCompanyName(owner.company_name || owner.settings?.companyName || 'Sua Empresa');
+              }
             }
           }
         }
@@ -1330,6 +1359,7 @@ Responda APENAS com JSON válido (sem markdown):
         {currentView === 'digital-diagnostic' && (
           <DigitalDiagnostic 
             userId={currentUser.id}
+            activeTenantId={getActiveTenant()}
             settings={settings}
             npsData={npsData}
             businessProfile={businessProfile}

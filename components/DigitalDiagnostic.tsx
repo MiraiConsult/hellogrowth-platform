@@ -70,15 +70,18 @@ interface DiagnosticData {
 
 interface DigitalDiagnosticProps {
   userId: string;
+  activeTenantId?: string; // tenant_id da empresa ativa (para isolamento multi-tenant)
   settings: AccountSettings;
   npsData: any[];
   businessProfile?: any;
 }
 
-const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, settings, npsData, businessProfile }) => {
+const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, activeTenantId, settings, npsData, businessProfile }) => {
   // Usar o Place ID do Perfil do Negócio como fonte principal
   const effectivePlaceId = businessProfile?.google_place_id || settings.placeId || '';
-  const tenantId = useTenantId()
+  const tenantIdFromHook = useTenantId();
+  // Priorizar activeTenantId passado como prop (garante isolamento por empresa)
+  const tenantId = activeTenantId || tenantIdFromHook
 
   const [diagnostics, setDiagnostics] = useState<DiagnosticData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,22 +90,25 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, 
   const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch existing diagnostics
+  // Fetch existing diagnostics - re-buscar quando a empresa ativa mudar
   useEffect(() => {
     fetchDiagnostics();
-  }, [userId]);
+  }, [userId, activeTenantId]);
 
   const fetchDiagnostics = async () => {
     if (!supabase) return;
     setIsLoading(true);
     try {
-      // Buscar tenant_id do usuário
-      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', userId).single();
-      const tenantId = userData?.tenant_id || userId;
+      // Usar activeTenantId se disponível, senão buscar do banco
+      let resolvedTenantId = activeTenantId || tenantId;
+      if (!resolvedTenantId) {
+        const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', userId).single();
+        resolvedTenantId = userData?.tenant_id || userId;
+      }
       const { data, error } = await supabase
         .from('digital_diagnostics')
         .select('*')
-        .eq('tenant_id', tenantId)
+        .eq('tenant_id', resolvedTenantId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
