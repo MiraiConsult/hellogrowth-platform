@@ -659,8 +659,9 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       user_id: currentUser.id,
       tenant_id: getActiveTenant(),
       game_enabled: form.game_enabled || false,
-      game_id: form.game_id || null,
-      product_ids: (form as any).product_ids || null
+      game_id: form.game_id || null
+      // product_ids: requer migração 004 no Supabase antes de habilitar
+      // product_ids: (form as any).product_ids || null
     };
     
     // Verificar se o ID é um UUID válido (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
