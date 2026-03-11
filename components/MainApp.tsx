@@ -477,13 +477,13 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
               const campaignTenantId = campaign.tenant_id || campaign.user_id;
               const { data: bizProfile } = await supabase
                 .from('business_profile')
-                .select('name, google_place_id')
+                .select('company_name, google_place_id')
                 .eq('tenant_id', campaignTenantId)
                 .maybeSingle();
               
-              if (bizProfile?.name) {
-                setPublicCompanyName(bizProfile.name);
-                const ownerSettings = { ...mockSettings, companyName: bizProfile.name, placeId: bizProfile.google_place_id || mockSettings.placeId };
+              if (bizProfile?.company_name) {
+                setPublicCompanyName(bizProfile.company_name);
+                const ownerSettings = { ...mockSettings, companyName: bizProfile.company_name, placeId: bizProfile.google_place_id || mockSettings.placeId };
                 setPublicSettings(ownerSettings);
               } else {
                 // Fallback: buscar pelo user_id se não tiver business_profile
@@ -514,12 +514,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
             const formTenantId = form.tenant_id || form.user_id;
             const { data: formBizProfile } = await supabase
               .from('business_profile')
-              .select('name')
+              .select('company_name')
               .eq('tenant_id', formTenantId)
               .maybeSingle();
             
-            if (formBizProfile?.name) {
-              setPublicCompanyName(formBizProfile.name);
+            if (formBizProfile?.company_name) {
+              setPublicCompanyName(formBizProfile.company_name);
             } else {
               // Fallback: buscar pelo user_id
               const { data: owner } = await supabase.from('users').select('company_name, settings').eq('id', form.user_id).single();

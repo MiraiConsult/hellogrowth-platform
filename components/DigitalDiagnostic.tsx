@@ -416,10 +416,11 @@ Forneça de 3 a 5 recomendações priorizadas.
         
         // Save to database
         setAnalysisStep('Salvando diagnóstico...');
+        const mockTenantId = activeTenantId || tenantId || userId;
         const { error: saveError } = await supabase
           .from('digital_diagnostics')
           .insert({
-            user_id: userId, tenant_id: tenantId,
+            user_id: userId, tenant_id: mockTenantId,
             place_data: mockPlaceData,
             ai_analysis: aiAnalysis,
             score_reputation: aiAnalysis.scores.reputation,
@@ -443,9 +444,8 @@ Forneça de 3 a 5 recomendações priorizadas.
 
       // Step 3: Save to database
       setAnalysisStep('Salvando diagnóstico...');
-      // Garantir que tenantId está resolvido antes do insert
-      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', userId).single();
-      const resolvedTenantId = userData?.tenant_id || tenantId || userId;
+      // Usar activeTenantId (empresa ativa) para garantir isolamento por loja
+      const resolvedTenantId = activeTenantId || tenantId || userId;
       console.log('Saving diagnostic with tenant_id:', resolvedTenantId, 'user_id:', userId);
       const { error: saveError, data: savedData } = await supabase
         .from('digital_diagnostics')
