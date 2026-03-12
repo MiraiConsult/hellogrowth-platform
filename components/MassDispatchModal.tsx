@@ -64,8 +64,8 @@ const MassDispatchModal: React.FC<MassDispatchModalProps> = ({ campaigns, tenant
     setLoadingClients(true);
     const load = async () => {
       const [leadsRes, npsRes] = await Promise.all([
-        supabase.from('leads').select('id, name, email, phone').eq('company_id', tenantId),
-        supabase.from('nps_responses').select('id, customer_name, customer_email, customer_phone').eq('company_id', tenantId)
+        supabase.from('leads').select('id, name, email, phone').eq('tenant_id', tenantId),
+        supabase.from('nps_responses').select('id, customer_name, customer_email, customer_phone').eq('tenant_id', tenantId)
       ]);
 
       const leads: Recipient[] = (leadsRes.data || []).map((l: any) => ({
