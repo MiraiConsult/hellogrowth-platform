@@ -99,12 +99,10 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, 
     if (!supabase) return;
     setIsLoading(true);
     try {
-      // Usar activeTenantId se disponível, senão buscar do banco
-      let resolvedTenantId = activeTenantId || tenantId;
-      if (!resolvedTenantId) {
-        const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', userId).single();
-        resolvedTenantId = userData?.tenant_id || userId;
-      }
+      // Prioridade: 1) activeTenantId (prop), 2) localStorage, 3) tenantId do hook, 4) userId
+      // NUNCA buscar users.tenant_id pois sempre retorna o tenant principal (empresa mãe)
+      const localStorageTenantId = typeof window !== 'undefined' ? localStorage.getItem('hg_active_company_id') : null;
+      const resolvedTenantId = activeTenantId || localStorageTenantId || tenantId || userId;
       const { data, error } = await supabase
         .from('digital_diagnostics')
         .select('*')
