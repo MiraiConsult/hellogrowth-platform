@@ -24,6 +24,51 @@ body {
       rgb(var(--background-end-rgb))
     )
     rgb(var(--background-start-rgb));
+  /* Safari/iOS text size fix */
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Safari font smoothing */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Safari flex/grid fixes */
+*,
+*::before,
+*::after {
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+}
+
+/* Fix Safari 100vh issue - use fill-available */
+.h-screen {
+  height: 100vh;
+  height: -webkit-fill-available;
+}
+
+.min-h-screen {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+}
+
+/* Fix Safari momentum scrolling */
+.overflow-y-auto,
+.overflow-y-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fix Safari flexbox gap support */
+@supports not (gap: 1rem) {
+  .flex > * + * {
+    margin-left: 0.25rem;
+  }
+}
+
+/* Fix Safari position:fixed inside flex containers */
+.fixed {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 
 @layer utilities {

@@ -1211,7 +1211,7 @@ Responda APENAS com JSON válido (sem markdown):
   }
 
   return (
-    <div className="flex min-h-screen font-sans text-slate-800 bg-gray-50">
+    <div className="flex min-h-screen font-sans text-slate-800 bg-gray-50 overflow-x-hidden">
       <Navigation 
         currentView={currentView} 
         setCurrentView={setCurrentView} 

@@ -461,6 +461,7 @@ const Navigation: React.FC<NavigationProps> = ({
         transition-all duration-300 ease-in-out
         ${isCollapsed ? 'w-20' : 'w-64'}
       `}
+      style={{ WebkitTransform: 'translateZ(0)', transform: 'translateZ(0)', WebkitBackfaceVisibility: 'hidden', backfaceVisibility: 'hidden' }}
     >
       {/* Header com Logo */}
       <div className={`p-5 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} relative`}>
