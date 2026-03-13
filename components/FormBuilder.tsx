@@ -562,7 +562,15 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                  </div>
                </div>
                <h3 className="text-lg font-bold text-gray-900 mb-1">{form.name}</h3>
-               <p className="text-sm text-gray-500 mb-4 line-clamp-2">{form.description || 'Sem descrição definida.'}</p>
+               <div className="relative group/desc mb-4">
+                 <p className="text-sm text-gray-500 line-clamp-2 cursor-default">{form.description || 'Sem descrição definida.'}</p>
+                 {form.description && form.description.length > 80 && (
+                   <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/desc:block w-72 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-xl leading-relaxed pointer-events-none">
+                     {form.description}
+                     <div className="absolute -top-1.5 left-4 w-3 h-3 bg-gray-900 rotate-45"></div>
+                   </div>
+                 )}
+               </div>
                
                <div className="flex items-center gap-2 mb-4">
                  <span className={`text-xs px-2 py-0.5 rounded-full border ${form.active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
