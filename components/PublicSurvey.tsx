@@ -82,10 +82,12 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
   const displayCompanyName = companyName || settings?.companyName || 'Nossa Empresa';
 
   // Get Google Place ID from multiple possible sources
+  // Prioridade: settings.placeId (business_profile atualizado em tempo real) > campaign.google_place_id (pode estar desatualizado)
+  // Isso garante que o redirecionamento funcione mesmo que a campanha tenha sido criada antes do Place ID ser cadastrado
   const getPlaceId = (): string => {
-    return (campaign as any).googlePlaceId || 
+    return settings?.placeId || 
+           (campaign as any).googlePlaceId || 
            (campaign as any).google_place_id || 
-           settings?.placeId || 
            '';
   };
 

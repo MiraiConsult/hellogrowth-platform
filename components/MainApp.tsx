@@ -483,8 +483,15 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
               
               if (bizProfile?.company_name) {
                 setPublicCompanyName(bizProfile.company_name);
-                const ownerSettings = { ...mockSettings, companyName: bizProfile.company_name, placeId: bizProfile.google_place_id || mockSettings.placeId };
+                // Sempre usar o Place ID mais atualizado: business_profile tem prioridade sobre o salvo na campanha
+                // Isso garante que o redirecionamento funcione mesmo que a campanha tenha sido criada antes do Place ID ser cadastrado
+                const currentPlaceId = bizProfile.google_place_id || safeCampaign.google_place_id || '';
+                const ownerSettings = { ...mockSettings, companyName: bizProfile.company_name, placeId: currentPlaceId };
                 setPublicSettings(ownerSettings);
+                // Se o business_profile tem Place ID mas a campanha não, atualizar o safeCampaign
+                if (bizProfile.google_place_id) {
+                  setPublicCampaign({ ...safeCampaign, google_place_id: bizProfile.google_place_id, google_redirect: safeCampaign.google_redirect || !!bizProfile.google_place_id });
+                }
               } else {
                 // Fallback: buscar pelo user_id se não tiver business_profile
                 const { data: owner } = await supabase.from('users').select('settings, company_name').eq('id', campaign.user_id).single();
