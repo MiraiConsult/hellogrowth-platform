@@ -235,14 +235,17 @@ export async function POST(request: NextRequest) {
     // =====================================================================
     // MODELO B: Trial sem cartão
     // - Sem cartão obrigatório (payment_method_collection=if_required)
-    // - Cliente digita o cupom TRIAL30B manualmente (100% off, once)
-    // - No dia 31, Stripe tenta cobrar, não tem cartão → assinatura vai para past_due
-    // - Webhook detecta e bloqueia o acesso no sistema
-    // - Cliente precisa cadastrar cartão para continuar
+    // - Cupom 100% off forever aplicado AUTOMATICAMENTE via discounts
+    // - Como é 100% off forever, o Stripe não pede cartão
+    // - Você gerencia manualmente depois (remove o cupom quando quiser cobrar)
     // =====================================================================
     if (trial_model === 'model_b') {
       sessionOptions.payment_method_collection = 'if_required';
-      console.log('Model B trial: checkout without card required (payment_method_collection=if_required)');
+      // Aplicar cupom forever automaticamente - remove allow_promotion_codes
+      // e usa discounts com o coupon ID diretamente
+      delete sessionOptions.allow_promotion_codes;
+      sessionOptions.discounts = [{ coupon: 'foHOUrVn' }];
+      console.log('Model B trial: checkout without card, 100% off forever coupon applied automatically');
     }
 
     // Create Checkout Session

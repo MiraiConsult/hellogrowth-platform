@@ -343,8 +343,8 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
           <div className="max-w-2xl mx-auto mb-6 bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-center gap-3">
             <Clock className="text-amber-600 flex-shrink-0" size={24} />
             <div>
-              <p className="text-amber-800 font-semibold">Trial Gratuito — 30 dias sem cartão</p>
-              <p className="text-amber-700 text-sm">Escolha seu plano, clique em assinar e use o cupom <strong>TRIAL30B</strong> no checkout para ativar 30 dias grátis sem precisar de cartão. No dia 31, o acesso é bloqueado automaticamente.</p>
+              <p className="text-amber-800 font-semibold">Trial Gratuito — sem cartão</p>
+              <p className="text-amber-700 text-sm">Escolha seu plano e clique em assinar. O desconto de 100% será aplicado automaticamente — você só precisa informar seu e-mail, sem cartão.</p>
             </div>
           </div>
         )}
