@@ -231,6 +231,36 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // ================================================================
+        // Para Modelo B Conversão: Checkout pago via Payment Link enviado pelo admin
+        // O cliente do Modelo B finalmente pagou. Ativar a assinatura.
+        // ================================================================
+        if (trialModel === 'model_b_conversion' && session.subscription) {
+          const userId = metadata?.userId;
+          const companyId = metadata?.companyId;
+
+          if (companyId) {
+            // Atualizar empresa específica
+            await supabase
+              .from('companies')
+              .update({
+                stripe_customer_id: session.customer,
+                stripe_subscription_id: session.subscription,
+                subscription_status: 'active',
+                trial_end_at: null, // Limpar trial pois agora é assinante
+              })
+              .eq('id', companyId);
+            console.log(`Model B converted to paid: company ${companyId}`);
+          } else if (customerEmail) {
+            // Fallback: buscar pelo e-mail
+            await activateCompanySubscription(
+              session.customer,
+              session.subscription,
+              customerEmail
+            );
+          }
+        }
+
         // Para assinatura normal (sem trial): Ativar imediatamente
         // (o setup-tenants já cuida da criação, mas pode não ter os IDs do Stripe)
         if (trialModel === 'none' && session.subscription && customerEmail) {

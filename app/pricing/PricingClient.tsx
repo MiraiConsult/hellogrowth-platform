@@ -196,7 +196,21 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
       return;
     }
 
-    // New subscription flow
+    // Modelo B: redirecionar para formulário interno (sem Stripe, sem cartão)
+    if (trialModel === 'model_b') {
+      const trialEndAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const addons = selectedPlans[plan];
+      const params = new URLSearchParams({
+        plan,
+        user_count: userCount.toString(),
+        addons: JSON.stringify(addons),
+        trial_end_at: trialEndAt,
+      });
+      window.location.href = `/pricing/trial-setup?${params.toString()}`;
+      return;
+    }
+
+    // New subscription flow (Modelo A ou normal)
     try {
       setIsLoading(plan);
       const response = await fetch('/api/stripe/create-checkout-session', {
@@ -216,10 +230,6 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
       }
 
       const data = await response.json();
-
-      // Modelo A, Modelo B ou normal: redirecionar para checkout Stripe
-      // Modelo B agora usa payment_method_collection=if_required (sem cartão obrigatório)
-      // O cliente digita o cupom TRIAL30B (100% off, once) manualmente no checkout
       const { url } = data;
       if (url) window.location.href = url;
       else throw new Error('No checkout URL returned');
