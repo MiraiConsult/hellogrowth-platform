@@ -1,54 +1,81 @@
-import React, { useState, useEffect, useCallback } from 'react';
+'use client';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { User, PlanType } from '@/types';
 import {
   Plus, Trash2, LogOut, Loader2, Users, Edit, X, Save, RefreshCw,
   Key, CheckCircle, AlertTriangle, Clock, Gift, CreditCard, Send,
-  ExternalLink, Filter, ChevronDown, ChevronUp, Mail, Building2,
-  TrendingUp, AlertCircle
+  ExternalLink, Filter, Mail, Building2, TrendingUp, AlertCircle,
+  Search, ChevronDown, ChevronRight, MoreVertical, Copy, Eye,
+  Package, Settings, Zap, Star, Shield, UserPlus, BarChart3,
+  DollarSign, Activity, ArrowUpRight, Check, Ban, Play
 } from 'lucide-react';
 
-interface AdminUserManagementProps {
-  onLogout: () => void;
-}
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-interface TrialCompany {
+interface Company {
   id: string;
   name: string;
   plan: string;
-  plan_addons?: string;
+  plan_addons?: any;
   subscription_status: string;
-  trial_model: string;
-  trial_start_at?: string;
-  trial_end_at?: string;
-  stripe_customer_id?: string;
-  stripe_subscription_id?: string;
-  created_at: string;
+  trial_model?: string | null;
+  trial_start_at?: string | null;
+  trial_end_at?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  max_users?: number;
   settings?: Record<string, any>;
-  owner?: {
-    id: string;
-    name: string;
-    email: string;
-    plan: string;
-  } | null;
+  created_at: string;
+  userRole?: string;
+  isDefault?: boolean;
   daysRemaining?: number | null;
   paymentLinkSentAt?: string | null;
   paymentLinkUrl?: string | null;
 }
 
-interface SendPaymentLinkConfig {
-  company: TrialCompany;
+interface Client {
+  id: string;
+  name: string;
+  email: string;
   plan: string;
-  userCount: number;
-  addons: { game: boolean; mpd: boolean };
-  customNote: string;
+  companyName?: string;
+  createdAt: string;
+  settings?: Record<string, any>;
+  companies: Company[];
+  primaryCompany: Company | null;
+  consolidatedStatus: string;
+  consolidatedTrialModel: string | null;
+  consolidatedDaysRemaining: number | null;
 }
 
-const PLAN_OPTIONS = [
-  { value: 'hello_client', label: 'Hello Client' },
-  { value: 'hello_rating', label: 'Hello Rating' },
-  { value: 'hello_growth', label: 'Hello Growth' },
-];
+interface AdminUserManagementProps {
+  onLogout: () => void;
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const PLAN_LABELS: Record<string, string> = {
+  trial: 'Trial',
+  client: 'Hello Client',
+  rating: 'Hello Rating',
+  growth: 'Hello Growth',
+  growth_lifetime: 'Lifetime',
+  hello_client: 'Hello Client',
+  hello_rating: 'Hello Rating',
+  hello_growth: 'Hello Growth',
+};
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
+  active: { label: 'Ativo', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
+  trialing: { label: 'Em Trial', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200', dot: 'bg-blue-500' },
+  trial_expired: { label: 'Trial Expirado', color: 'text-red-700', bg: 'bg-red-50 border-red-200', dot: 'bg-red-500' },
+  past_due: { label: 'Pagamento Atrasado', color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200', dot: 'bg-orange-500' },
+  canceled: { label: 'Cancelado', color: 'text-gray-600', bg: 'bg-gray-100 border-gray-200', dot: 'bg-gray-400' },
+  growth: { label: 'Hello Growth', color: 'text-violet-700', bg: 'bg-violet-50 border-violet-200', dot: 'bg-violet-500' },
+  rating: { label: 'Hello Rating', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200', dot: 'bg-blue-500' },
+  client: { label: 'Hello Client', color: 'text-indigo-700', bg: 'bg-indigo-50 border-indigo-200', dot: 'bg-indigo-500' },
+  growth_lifetime: { label: 'Lifetime', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', dot: 'bg-amber-500' },
+};
 
 const PRICING_DATA: Record<number, Record<string, number>> = {
   1: { hello_client: 99.90, hello_rating: 99.90, hello_growth: 149.90, hc_game: 129.90, hc_mpd: 129.90, hc_game_mpd: 149.90, hr_game: 129.90, hr_mpd: 129.90, hr_game_mpd: 149.90, hg_game: 189.90, hg_mpd: 189.90, hg_game_mpd: 199.90 },
@@ -81,943 +108,1039 @@ function calcPrice(plan: string, userCount: number, addons: { game: boolean; mpd
   return (PRICING_DATA[count]?.[key] || 0) * count;
 }
 
-const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'trials'>('users');
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isCreating, setIsCreating] = useState(false);
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
-  // Trials state
-  const [trials, setTrials] = useState<TrialCompany[]>([]);
-  const [trialsLoading, setTrialsLoading] = useState(false);
-  const [trialFilter, setTrialFilter] = useState<'all' | 'model_a' | 'model_b'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'trialing' | 'trial_expired' | 'active'>('all');
+function StatusBadge({ status, daysRemaining }: { status: string; daysRemaining?: number | null }) {
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG['active'];
+  const urgent = status === 'trialing' && daysRemaining !== null && daysRemaining !== undefined && daysRemaining <= 7;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${urgent ? 'bg-orange-50 text-orange-700 border-orange-200' : cfg.bg + ' ' + cfg.color}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${urgent ? 'bg-orange-500' : cfg.dot}`} />
+      {urgent ? `${daysRemaining}d restantes` : cfg.label}
+    </span>
+  );
+}
 
-  // Payment Link modal
-  const [paymentLinkModal, setPaymentLinkModal] = useState<SendPaymentLinkConfig | null>(null);
-  const [sendingLink, setSendingLink] = useState(false);
-  const [sentLinkResult, setSentLinkResult] = useState<{ url: string; emailSent: boolean } | null>(null);
+function ModelBadge({ model }: { model: string | null }) {
+  if (!model) return null;
+  if (model === 'model_b') return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-teal-100 text-teal-700 border border-teal-200">B</span>;
+  if (model === 'model_a') return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200">A</span>;
+  return null;
+}
 
-  // Edit State
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
-
-  // New User Form State
-  const [newUser, setNewUser] = useState({
-    name: '',
-    email: '',
-    companyName: '',
-    plan: 'trial' as PlanType
-  });
-  const [trialModel, setTrialModel] = useState<'none' | 'model_a' | 'model_b'>('none');
-  const [trialPlan, setTrialPlan] = useState<string>('hello_growth');
-  const [trialDays, setTrialDays] = useState<number>(30);
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-
-  const fetchUsers = async () => {
-    setIsLoading(true);
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error("Error fetching users:", error);
-    } else if (data) {
-      const mappedUsers: User[] = data.map((u: any) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        password: u.password,
-        plan: u.plan,
-        createdAt: u.created_at,
-        companyName: u.company_name
-      }));
-      setUsers(mappedUsers);
-    }
-    setIsLoading(false);
+function PlanBadge({ plan }: { plan: string }) {
+  const labels: Record<string, { label: string; color: string }> = {
+    growth: { label: 'Growth', color: 'bg-violet-100 text-violet-700' },
+    hello_growth: { label: 'Growth', color: 'bg-violet-100 text-violet-700' },
+    rating: { label: 'Rating', color: 'bg-blue-100 text-blue-700' },
+    hello_rating: { label: 'Rating', color: 'bg-blue-100 text-blue-700' },
+    client: { label: 'Client', color: 'bg-indigo-100 text-indigo-700' },
+    hello_client: { label: 'Client', color: 'bg-indigo-100 text-indigo-700' },
+    trial: { label: 'Trial', color: 'bg-gray-100 text-gray-600' },
+    growth_lifetime: { label: 'Lifetime', color: 'bg-amber-100 text-amber-700' },
   };
+  const cfg = labels[plan] || { label: plan, color: 'bg-gray-100 text-gray-600' };
+  return <span className={`px-2 py-0.5 rounded text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>;
+}
 
-  const fetchTrials = useCallback(async () => {
-    setTrialsLoading(true);
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) => {
+  // ── State ──
+  const [clients, setClients] = useState<Client[]>([]);
+  const [stats, setStats] = useState<any>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [planFilter, setPlanFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [modelFilter, setModelFilter] = useState('all');
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [editModal, setEditModal] = useState<'client' | 'company' | 'new_client' | 'new_company' | 'payment_link' | null>(null);
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  const [paymentLinkResult, setPaymentLinkResult] = useState<{ url: string; emailSent: boolean } | null>(null);
+  const [sendingLink, setSendingLink] = useState(false);
+
+  // ── Form states ──
+  const [clientForm, setClientForm] = useState({ name: '', email: '', plan: 'trial', companyName: '', password: '' });
+  const [companyForm, setCompanyForm] = useState({
+    name: '', plan: 'hello_growth', subscriptionStatus: 'trialing',
+    trialModel: 'model_b', trialEndAt: '', maxUsers: 1,
+    addons: { game: false, mpd: false },
+    stripeCustomerId: '', stripeSubscriptionId: '',
+  });
+  const [newClientTrialModel, setNewClientTrialModel] = useState<'none' | 'model_a' | 'model_b'>('none');
+  const [newClientTrialPlan, setNewClientTrialPlan] = useState('hello_growth');
+  const [newClientTrialDays, setNewClientTrialDays] = useState(30);
+  const [paymentLinkForm, setPaymentLinkForm] = useState({
+    plan: 'hello_growth', userCount: 1, addons: { game: false, mpd: false }, customNote: '',
+  });
+
+  // ── Fetch ──
+  const fetchClients = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const response = await fetch('/api/admin/trials');
-      if (response.ok) {
-        const data = await response.json();
-        setTrials(data.trials || []);
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (planFilter !== 'all') params.set('plan', planFilter);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (modelFilter !== 'all') params.set('model', modelFilter);
+
+      const res = await fetch(`/api/admin/clients?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setClients(data.clients || []);
+        setStats(data.stats || {});
       }
     } catch (err) {
-      console.error('Error fetching trials:', err);
+      console.error('Error fetching clients:', err);
     } finally {
-      setTrialsLoading(false);
+      setIsLoading(false);
     }
-  }, []);
+  }, [search, planFilter, statusFilter, modelFilter]);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    const timer = setTimeout(fetchClients, 300);
+    return () => clearTimeout(timer);
+  }, [fetchClients]);
 
-  useEffect(() => {
-    if (activeTab === 'trials') {
-      fetchTrials();
-    }
-  }, [activeTab, fetchTrials]);
+  // ── Toast ──
+  const showToast = (type: 'success' | 'error', text: string) => {
+    setToast({ type, text });
+    setTimeout(() => setToast(null), 4000);
+  };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsCreating(true);
-    setMessage(null);
-
+  // ── Create Client ──
+  const handleCreateClient = async () => {
+    if (!clientForm.email || !clientForm.name) return showToast('error', 'Nome e e-mail são obrigatórios.');
+    setIsSaving(true);
     try {
-      // Se for Modelo B, usar a API de setup-trial
-      if (newUser.plan === 'trial' && trialModel === 'model_b') {
-        const trialEndAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
-        const response = await fetch('/api/onboarding/setup-trial', {
+      if (clientForm.plan === 'trial' && newClientTrialModel === 'model_b') {
+        const trialEndAt = new Date(Date.now() + newClientTrialDays * 24 * 60 * 60 * 1000).toISOString();
+        const res = await fetch('/api/onboarding/setup-trial', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            email: newUser.email.toLowerCase().trim(),
-            companies: [newUser.companyName],
-            plan: trialPlan,
+            email: clientForm.email.toLowerCase().trim(),
+            companies: [clientForm.companyName || clientForm.name],
+            plan: newClientTrialPlan,
             userCount: 1,
             addons: { game: false, mpd: false },
             trial_model: 'model_b',
             trial_end_at: trialEndAt,
-            // Sobrescrever nome do usuário se fornecido
-            userName: newUser.name || undefined,
+            userName: clientForm.name,
           }),
         });
-        const data = await response.json();
-        if (!response.ok) {
-          if (data.error === 'EMAIL_EXISTS') throw new Error('Este e-mail já está cadastrado.');
-          throw new Error(data.error || 'Erro ao criar conta Modelo B.');
-        }
-        setMessage({ type: 'success', text: `Conta Modelo B criada! Acesso: ${newUser.email} / 12345. Trial de ${trialDays} dias.` });
-        setNewUser({ name: '', email: '', companyName: '', plan: 'trial' });
-        setTrialModel('none');
-        setTrialDays(30);
-        fetchUsers();
-        // Atualizar lista de trials se estiver na aba
-        if (activeTab === 'trials') fetchTrials();
-        return;
-      }
-
-      // Fluxo padrão (Modelo A ou sem modelo)
-      const { data: existing } = await supabase.from('users').select('id').eq('email', newUser.email).single();
-      if (existing) {
-        throw new Error("Este email já está cadastrado.");
-      }
-
-      const newTenantId = crypto.randomUUID();
-      const userData: any = {
-        name: newUser.name,
-        email: newUser.email,
-        company_name: newUser.companyName,
-        plan: newUser.plan,
-        tenant_id: newTenantId,
-        role: 'admin',
-        is_owner: true,
-        settings: {
-          companyName: newUser.companyName,
-          adminEmail: newUser.email,
-          phone: '',
-          website: '',
-          autoRedirect: true,
-          ...(newUser.plan === 'trial' && trialModel === 'model_a' ? { trial_model: 'model_a' } : {}),
-        }
-      };
-
-      let { data: createdUser, error } = await supabase.from('users').insert([{
-        ...userData,
-        password: '12345',
-      }]).select().single();
-
-      if (error && (error.message?.includes('Could not find') || error.message?.includes('column'))) {
-        const retry = await supabase.from('users').insert([userData]).select().single();
-        error = retry.error;
-        createdUser = retry.data;
-      }
-
-      if (error) throw error;
-
-      // Se for Modelo A, criar company com trial_model
-      if (newUser.plan === 'trial' && trialModel === 'model_a' && createdUser) {
-        const trialEndAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
-        const companyId = crypto.randomUUID();
-        await supabase.from('companies').insert([{
-          id: companyId,
-          name: newUser.companyName,
-          plan: trialPlan.replace('hello_', '') || 'growth',
-          plan_addons: JSON.stringify({ game: false, mpd: false }),
-          subscription_status: 'trialing',
-          trial_start_at: new Date().toISOString(),
-          trial_end_at: trialEndAt,
-          trial_model: 'model_a',
-          created_by: createdUser.id,
-          settings: {
-            companyName: newUser.companyName,
-            adminEmail: newUser.email,
-            autoRedirect: true,
-            trial_model: 'model_a',
-          }
-        }]);
-        await supabase.from('user_companies').insert([{
-          user_id: createdUser.id,
-          company_id: companyId,
-          role: 'owner',
-        }]);
-      }
-
-      setMessage({ type: 'success', text: 'Usuário criado com sucesso (Senha padrão: 12345)' });
-      setNewUser({ name: '', email: '', companyName: '', plan: 'trial' });
-      setTrialModel('none');
-      setTrialDays(30);
-      fetchUsers();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Erro ao criar usuário.' });
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  const handleDeleteUser = async (id: string) => {
-    if (!window.confirm("Tem certeza que deseja excluir este usuário? Todos os dados vinculados podem ser afetados.")) return;
-    try {
-      const { error } = await supabase.from('users').delete().eq('id', id);
-      if (error) throw error;
-      setUsers(prev => prev.filter(u => u.id !== id));
-    } catch {
-      alert("Erro ao excluir usuário.");
-    }
-  };
-
-  const handleUpdateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUser) return;
-    setIsUpdating(true);
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ name: editingUser.name, email: editingUser.email, company_name: editingUser.companyName, plan: editingUser.plan })
-        .eq('id', editingUser.id);
-      if (error) throw error;
-      setUsers(prev => prev.map(u => u.id === editingUser.id ? editingUser : u));
-      setEditingUser(null);
-      alert("Usuário atualizado com sucesso!");
-    } catch (err: any) {
-      alert("Erro ao atualizar usuário: " + err.message);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleResetPassword = async (userId: string) => {
-    if (!window.confirm("Deseja resetar a senha deste usuário para '12345'?")) return;
-    setIsResetting(true);
-    try {
-      const { error } = await supabase.from('users').update({ password: '12345' }).eq('id', userId);
-      if (error && (error.message?.includes('Could not find') || error.message?.includes('column'))) {
-        alert("Aviso: A coluna de senha não existe no banco de dados.");
-      } else if (error) {
-        throw error;
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error === 'EMAIL_EXISTS' ? 'E-mail já cadastrado.' : data.error);
+        showToast('success', `Conta Modelo B criada! Login: ${clientForm.email} / 12345`);
       } else {
-        alert("Senha resetada para '12345' com sucesso!");
+        // Verificar se email já existe
+        const { data: existing } = await supabase.from('users').select('id').eq('email', clientForm.email.toLowerCase()).single();
+        if (existing) throw new Error('E-mail já cadastrado.');
+
+        const userData: any = {
+          name: clientForm.name,
+          email: clientForm.email.toLowerCase().trim(),
+          company_name: clientForm.companyName || clientForm.name,
+          plan: clientForm.plan,
+          tenant_id: crypto.randomUUID(),
+          role: 'admin',
+          is_owner: true,
+          password: '12345',
+          settings: {
+            companyName: clientForm.companyName || clientForm.name,
+            adminEmail: clientForm.email.toLowerCase().trim(),
+            autoRedirect: true,
+            ...(clientForm.plan === 'trial' && newClientTrialModel === 'model_a' ? { trial_model: 'model_a' } : {}),
+          }
+        };
+
+        const { data: createdUser, error } = await supabase.from('users').insert([userData]).select().single();
+        if (error) throw error;
+
+        // Se Modelo A, criar empresa
+        if (clientForm.plan === 'trial' && newClientTrialModel === 'model_a' && createdUser) {
+          const trialEndAt = new Date(Date.now() + newClientTrialDays * 24 * 60 * 60 * 1000).toISOString();
+          const companyId = crypto.randomUUID();
+          await supabase.from('companies').insert([{
+            id: companyId,
+            name: clientForm.companyName || clientForm.name,
+            plan: newClientTrialPlan.replace('hello_', '') || 'growth',
+            plan_addons: JSON.stringify({ game: false, mpd: false }),
+            subscription_status: 'trialing',
+            trial_start_at: new Date().toISOString(),
+            trial_end_at: trialEndAt,
+            trial_model: 'model_a',
+            created_by: createdUser.id,
+            settings: { companyName: clientForm.companyName || clientForm.name, adminEmail: clientForm.email, autoRedirect: true, trial_model: 'model_a' }
+          }]);
+          await supabase.from('user_companies').insert([{
+            user_id: createdUser.id, company_id: companyId, role: 'owner', is_default: true, status: 'active', accepted_at: new Date().toISOString()
+          }]);
+        }
+
+        showToast('success', `Cliente criado! Login: ${clientForm.email} / 12345`);
       }
-      if (editingUser) setEditingUser({ ...editingUser, password: '12345' });
+
+      setEditModal(null);
+      setClientForm({ name: '', email: '', plan: 'trial', companyName: '', password: '' });
+      setNewClientTrialModel('none');
+      fetchClients();
     } catch (err: any) {
-      alert("Erro ao resetar senha: " + err.message);
+      showToast('error', err.message || 'Erro ao criar cliente.');
     } finally {
-      setIsResetting(false);
+      setIsSaving(false);
     }
   };
 
-  const openPaymentLinkModal = (company: TrialCompany) => {
-    // Mapear o plano da empresa para o formato do seletor
-    let plan = company.plan;
-    if (plan === 'client') plan = 'hello_client';
-    else if (plan === 'rating') plan = 'hello_rating';
-    else if (plan === 'growth') plan = 'hello_growth';
-
-    setPaymentLinkModal({
-      company,
-      plan,
-      userCount: 1,
-      addons: { game: false, mpd: false },
-      customNote: '',
-    });
-    setSentLinkResult(null);
+  // ── Update Client ──
+  const handleUpdateClient = async () => {
+    if (!selectedClient) return;
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/admin/clients', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedClient.id,
+          userData: {
+            name: clientForm.name,
+            email: clientForm.email,
+            plan: clientForm.plan,
+            companyName: clientForm.companyName,
+            ...(clientForm.password ? { password: clientForm.password } : {}),
+          },
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      showToast('success', 'Cliente atualizado com sucesso!');
+      setEditModal(null);
+      fetchClients();
+    } catch (err: any) {
+      showToast('error', err.message || 'Erro ao atualizar.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleSendPaymentLink = async () => {
-    if (!paymentLinkModal) return;
+  // ── Update Company ──
+  const handleUpdateCompany = async () => {
+    if (!selectedClient || !editingCompany) return;
+    setIsSaving(true);
+    try {
+      const addons = companyForm.addons;
+      const res = await fetch('/api/admin/clients', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedClient.id,
+          companyUpdates: {
+            companyId: editingCompany.id,
+            name: companyForm.name,
+            plan: companyForm.plan.replace('hello_', ''),
+            planAddons: addons,
+            subscriptionStatus: companyForm.subscriptionStatus,
+            trialModel: companyForm.trialModel || null,
+            trialEndAt: companyForm.trialEndAt || null,
+            maxUsers: companyForm.maxUsers,
+            stripeCustomerId: companyForm.stripeCustomerId || null,
+            stripeSubscriptionId: companyForm.stripeSubscriptionId || null,
+          },
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      showToast('success', 'Empresa atualizada!');
+      setEditModal(null);
+      fetchClients();
+    } catch (err: any) {
+      showToast('error', err.message || 'Erro ao atualizar empresa.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ── Add Company ──
+  const handleAddCompany = async () => {
+    if (!selectedClient) return;
+    setIsSaving(true);
+    try {
+      const trialEndAt = companyForm.trialEndAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const res = await fetch('/api/admin/clients', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedClient.id,
+          addCompany: {
+            name: companyForm.name,
+            plan: companyForm.plan.replace('hello_', ''),
+            planAddons: companyForm.addons,
+            subscriptionStatus: companyForm.subscriptionStatus,
+            trialModel: companyForm.trialModel || null,
+            trialEndAt,
+            maxUsers: companyForm.maxUsers,
+          },
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      showToast('success', 'Empresa adicionada!');
+      setEditModal(null);
+      fetchClients();
+    } catch (err: any) {
+      showToast('error', err.message || 'Erro ao adicionar empresa.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ── Remove Company ──
+  const handleRemoveCompany = async (client: Client, companyId: string) => {
+    if (!confirm('Remover esta empresa? Os dados serão perdidos.')) return;
+    try {
+      const res = await fetch('/api/admin/clients', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: client.id, removeCompanyId: companyId }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      showToast('success', 'Empresa removida.');
+      fetchClients();
+    } catch (err: any) {
+      showToast('error', err.message || 'Erro ao remover empresa.');
+    }
+  };
+
+  // ── Delete Client ──
+  const handleDeleteClient = async (client: Client) => {
+    if (!confirm(`Excluir permanentemente "${client.name}"? Esta ação não pode ser desfeita.`)) return;
+    try {
+      const res = await fetch(`/api/admin/clients?userId=${client.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error);
+      showToast('success', 'Cliente excluído.');
+      if (expandedClient === client.id) setExpandedClient(null);
+      fetchClients();
+    } catch (err: any) {
+      showToast('error', err.message || 'Erro ao excluir.');
+    }
+  };
+
+  // ── Reset Password ──
+  const handleResetPassword = async (client: Client) => {
+    if (!confirm(`Resetar senha de "${client.email}" para '12345'?`)) return;
+    try {
+      const { error } = await supabase.from('users').update({ password: '12345' }).eq('id', client.id);
+      if (error) throw error;
+      showToast('success', 'Senha resetada para 12345.');
+    } catch (err: any) {
+      showToast('error', err.message || 'Erro ao resetar senha.');
+    }
+  };
+
+  // ── Payment Link ──
+  const handleSendPaymentLink = async (company: Company) => {
     setSendingLink(true);
     try {
-      const response = await fetch('/api/stripe/send-payment-link', {
+      const res = await fetch('/api/stripe/send-payment-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: paymentLinkModal.company.owner?.id,
-          companyId: paymentLinkModal.company.id,
-          plan: paymentLinkModal.plan,
-          userCount: paymentLinkModal.userCount,
-          addons: paymentLinkModal.addons,
-          customNote: paymentLinkModal.customNote,
+          userId: selectedClient?.id,
+          companyId: company.id,
+          plan: paymentLinkForm.plan,
+          userCount: paymentLinkForm.userCount,
+          addons: paymentLinkForm.addons,
+          customNote: paymentLinkForm.customNote,
         }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Erro ao gerar link');
-      setSentLinkResult({ url: data.paymentUrl, emailSent: data.emailSent });
-      fetchTrials(); // Atualizar lista
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao gerar link');
+      setPaymentLinkResult({ url: data.paymentUrl, emailSent: data.emailSent });
+      fetchClients();
     } catch (err: any) {
-      alert('Erro ao gerar link de pagamento: ' + err.message);
+      showToast('error', err.message || 'Erro ao gerar link de pagamento.');
     } finally {
       setSendingLink(false);
     }
   };
 
-  const filteredTrials = trials.filter(t => {
-    if (trialFilter !== 'all' && t.trial_model !== trialFilter) return false;
-    if (statusFilter !== 'all' && t.subscription_status !== statusFilter) return false;
-    return true;
-  });
-
-  const getStatusBadge = (status: string, daysRemaining: number | null | undefined) => {
-    const base = 'px-2 py-1 rounded-full text-xs font-bold border';
-    if (status === 'active') return <span className={`${base} bg-emerald-100 text-emerald-700 border-emerald-200`}>Ativo</span>;
-    if (status === 'trialing') {
-      const urgent = daysRemaining !== null && daysRemaining !== undefined && daysRemaining <= 7;
-      return <span className={`${base} ${urgent ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
-        Trial {daysRemaining !== null ? `(${daysRemaining}d)` : ''}
-      </span>;
-    }
-    if (status === 'trial_expired') return <span className={`${base} bg-red-100 text-red-700 border-red-200`}>Expirado</span>;
-    if (status === 'past_due') return <span className={`${base} bg-yellow-100 text-yellow-700 border-yellow-200`}>Inadimplente</span>;
-    if (status === 'canceled') return <span className={`${base} bg-gray-100 text-gray-600 border-gray-200`}>Cancelado</span>;
-    return <span className={`${base} bg-gray-100 text-gray-600 border-gray-200`}>{status}</span>;
+  // ── Open Modals ──
+  const openEditClient = (client: Client) => {
+    setSelectedClient(client);
+    setClientForm({
+      name: client.name,
+      email: client.email,
+      plan: client.plan,
+      companyName: client.companyName || '',
+      password: '',
+    });
+    setEditModal('client');
   };
 
-  const getModelBadge = (model: string) => {
-    if (model === 'model_a') return <span className="px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200">Modelo A</span>;
-    if (model === 'model_b') return <span className="px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-700 border border-teal-200">Modelo B</span>;
-    return null;
+  const openEditCompany = (client: Client, company: Company) => {
+    setSelectedClient(client);
+    setEditingCompany(company);
+    const addons = typeof company.plan_addons === 'string'
+      ? JSON.parse(company.plan_addons || '{}')
+      : (company.plan_addons || {});
+    setCompanyForm({
+      name: company.name,
+      plan: company.plan.startsWith('hello_') ? company.plan : `hello_${company.plan}`,
+      subscriptionStatus: company.subscription_status,
+      trialModel: company.trial_model || '',
+      trialEndAt: company.trial_end_at ? company.trial_end_at.split('T')[0] : '',
+      maxUsers: company.max_users || 1,
+      addons: { game: addons.game || false, mpd: addons.mpd || false },
+      stripeCustomerId: company.stripe_customer_id || '',
+      stripeSubscriptionId: company.stripe_subscription_id || '',
+    });
+    setEditModal('company');
   };
 
-  // Summary stats
-  const trialStats = {
-    total: trials.length,
-    modelA: trials.filter(t => t.trial_model === 'model_a').length,
-    modelB: trials.filter(t => t.trial_model === 'model_b').length,
-    trialing: trials.filter(t => t.subscription_status === 'trialing').length,
-    expired: trials.filter(t => t.subscription_status === 'trial_expired').length,
-    converted: trials.filter(t => t.subscription_status === 'active').length,
-    urgentB: trials.filter(t => t.trial_model === 'model_b' && t.subscription_status === 'trialing' && (t.daysRemaining ?? 999) <= 7).length,
+  const openAddCompany = (client: Client) => {
+    setSelectedClient(client);
+    setCompanyForm({
+      name: '', plan: 'hello_growth', subscriptionStatus: 'trialing',
+      trialModel: 'model_b', trialEndAt: '', maxUsers: 1,
+      addons: { game: false, mpd: false },
+      stripeCustomerId: '', stripeSubscriptionId: '',
+    });
+    setEditModal('new_company');
   };
+
+  const openPaymentLink = (client: Client, company: Company) => {
+    setSelectedClient(client);
+    setEditingCompany(company);
+    let plan = company.plan;
+    if (!plan.startsWith('hello_')) plan = `hello_${plan}`;
+    setPaymentLinkForm({ plan, userCount: company.max_users || 1, addons: { game: false, mpd: false }, customNote: '' });
+    setPaymentLinkResult(null);
+    setEditModal('payment_link');
+  };
+
+  // ── Render ──
+  const paymentPrice = calcPrice(paymentLinkForm.plan, paymentLinkForm.userCount, paymentLinkForm.addons);
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
-      {/* Admin Navbar */}
-      <nav className="bg-gray-900 text-white p-4 shadow-lg">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
+    <div className="min-h-screen bg-gray-950 text-gray-100">
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium transition-all ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+          {toast.type === 'success' ? <Check size={16} /> : <AlertTriangle size={16} />}
+          {toast.text}
+        </div>
+      )}
+
+      {/* Header */}
+      <header className="bg-gray-900 border-b border-gray-800 px-6 py-4">
+        <div className="max-w-screen-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center font-bold">A</div>
-            <span className="font-bold text-lg">Painel Administrativo</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex gap-1 bg-gray-800 rounded-lg p-1">
-              <button
-                onClick={() => setActiveTab('users')}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === 'users' ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}
-              >
-                <span className="flex items-center gap-1.5"><Users size={14} /> Usuários</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('trials')}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === 'trials' ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}
-              >
-                <span className="flex items-center gap-1.5">
-                  <Clock size={14} /> Trials
-                  {trialStats.urgentB > 0 && (
-                    <span className="bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{trialStats.urgentB}</span>
-                  )}
-                </span>
-              </button>
+            <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
+              <Zap size={16} className="text-white" />
             </div>
-            <button onClick={onLogout} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
-              <LogOut size={18} /> Sair
+            <div>
+              <h1 className="text-lg font-bold text-white">HelloGrowth Admin</h1>
+              <p className="text-xs text-gray-400">Painel de Gestão de Clientes</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { setClientForm({ name: '', email: '', plan: 'trial', companyName: '', password: '' }); setNewClientTrialModel('none'); setEditModal('new_client'); }}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              <UserPlus size={16} /> Novo Cliente
+            </button>
+            <button onClick={onLogout} className="flex items-center gap-2 text-gray-400 hover:text-white text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors">
+              <LogOut size={16} /> Sair
             </button>
           </div>
         </div>
-      </nav>
+      </header>
 
-      {/* USERS TAB */}
-      {activeTab === 'users' && (
-        <div className="flex-1 max-w-7xl mx-auto w-full p-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Create User Form */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-md p-6 sticky top-8">
-              <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                <Plus size={20} className="text-primary-600" /> Novo Usuário
-              </h2>
-              <form onSubmit={handleCreateUser} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
-                  <input type="text" required value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
-                  <input type="text" required value={newUser.companyName} onChange={e => setNewUser({ ...newUser, companyName: e.target.value })} className="w-full border border-gray-300 rounded-lg p-2.5" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email (Login)</label>
-                  <input type="email" required value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} className="w-full border border-gray-300 rounded-lg p-2.5" />
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-sm text-gray-500 flex items-center gap-2">
-                  <Key size={16} /> Senha padrão será: <strong>12345</strong>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Plano Inicial</label>
-                  <select value={newUser.plan} onChange={e => { setNewUser({ ...newUser, plan: e.target.value as PlanType }); if (e.target.value !== 'trial') setTrialModel('none'); }} className="w-full border border-gray-300 rounded-lg p-2.5">
-                    <option value="trial">Trial (Teste)</option>
-                    <option value="client">HelloClient (Pré)</option>
-                    <option value="rating">HelloRating (Pós)</option>
-                    <option value="growth">HelloGrowth (Completo)</option>
-                    <option value="growth_lifetime">Lifetime (Vitalício)</option>
-                  </select>
-                </div>
+      <main className="max-w-screen-2xl mx-auto px-6 py-6 space-y-6">
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+          {[
+            { label: 'Total Clientes', value: stats.total || 0, icon: <Users size={14} />, color: 'text-gray-300' },
+            { label: 'Ativos', value: stats.active || 0, icon: <CheckCircle size={14} />, color: 'text-emerald-400' },
+            { label: 'Em Trial', value: stats.trialing || 0, icon: <Clock size={14} />, color: 'text-blue-400' },
+            { label: 'Expirados', value: stats.trial_expired || 0, icon: <AlertCircle size={14} />, color: 'text-red-400' },
+            { label: 'Modelo A', value: stats.model_a || 0, icon: <Star size={14} />, color: 'text-purple-400' },
+            { label: 'Modelo B', value: stats.model_b || 0, icon: <Gift size={14} />, color: 'text-teal-400' },
+            { label: 'Urgente (B)', value: stats.urgent_b || 0, icon: <AlertTriangle size={14} />, color: 'text-orange-400' },
+            { label: 'MRR Est.', value: `R$ ${(stats.mrr || 0).toFixed(0)}`, icon: <DollarSign size={14} />, color: 'text-amber-400' },
+          ].map((kpi, i) => (
+            <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className={`flex items-center gap-1.5 text-xs mb-2 ${kpi.color}`}>
+                {kpi.icon}
+                <span className="text-gray-400 truncate">{kpi.label}</span>
+              </div>
+              <p className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</p>
+            </div>
+          ))}
+        </div>
 
-                {/* Campos extras para Trial */}
-                {newUser.plan === 'trial' && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Modelo de Trial</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(['none', 'model_a', 'model_b'] as const).map(m => (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => setTrialModel(m)}
-                            className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-colors ${
-                              trialModel === m
-                                ? m === 'model_b' ? 'bg-teal-600 text-white border-teal-600' : m === 'model_a' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-600 text-white border-gray-600'
-                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                            }`}
-                          >
-                            {m === 'none' ? 'Nenhum' : m === 'model_a' ? 'Modelo A' : 'Modelo B'}
+        {/* Filters */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* Search */}
+            <div className="relative flex-1 min-w-[200px]">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Buscar por nome, e-mail ou empresa..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            {/* Plan Filter */}
+            <select value={planFilter} onChange={e => setPlanFilter(e.target.value)} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-emerald-500">
+              <option value="all">Todos os Planos</option>
+              <option value="trial">Trial</option>
+              <option value="client">Hello Client</option>
+              <option value="rating">Hello Rating</option>
+              <option value="growth">Hello Growth</option>
+              <option value="growth_lifetime">Lifetime</option>
+            </select>
+
+            {/* Status Filter */}
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-emerald-500">
+              <option value="all">Todos os Status</option>
+              <option value="active">Ativos</option>
+              <option value="trialing">Em Trial</option>
+              <option value="trial_expired">Trial Expirado</option>
+              <option value="past_due">Pagamento Atrasado</option>
+              <option value="canceled">Cancelados</option>
+            </select>
+
+            {/* Model Filter */}
+            <select value={modelFilter} onChange={e => setModelFilter(e.target.value)} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-emerald-500">
+              <option value="all">Todos os Modelos</option>
+              <option value="model_a">Modelo A</option>
+              <option value="model_b">Modelo B</option>
+              <option value="no_model">Sem Modelo</option>
+            </select>
+
+            <button onClick={fetchClients} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg transition-colors">
+              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+              Atualizar
+            </button>
+
+            <span className="text-xs text-gray-500 ml-auto">{clients.length} cliente{clients.length !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+
+        {/* Clients Table */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="animate-spin text-emerald-500" size={32} />
+            </div>
+          ) : clients.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+              <Users size={40} className="mb-3 opacity-30" />
+              <p className="font-medium">Nenhum cliente encontrado</p>
+              <p className="text-sm mt-1">Tente ajustar os filtros ou criar um novo cliente</p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-800">
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3 w-8"></th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3">Cliente</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Plano</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Status</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Modelo</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Empresas</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Cadastro</th>
+                  <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {clients.map(client => (
+                  <React.Fragment key={client.id}>
+                    <tr
+                      className={`hover:bg-gray-800/50 transition-colors cursor-pointer ${expandedClient === client.id ? 'bg-gray-800/30' : ''}`}
+                      onClick={() => setExpandedClient(expandedClient === client.id ? null : client.id)}
+                    >
+                      <td className="px-6 py-4">
+                        <ChevronRight size={14} className={`text-gray-500 transition-transform ${expandedClient === client.id ? 'rotate-90' : ''}`} />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-sm flex-shrink-0">
+                            {client.name?.[0]?.toUpperCase() || '?'}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-white">{client.name}</p>
+                            <p className="text-xs text-gray-400">{client.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <PlanBadge plan={client.plan} />
+                      </td>
+                      <td className="px-4 py-4">
+                        <StatusBadge status={client.consolidatedStatus} daysRemaining={client.consolidatedDaysRemaining} />
+                      </td>
+                      <td className="px-4 py-4">
+                        <ModelBadge model={client.consolidatedTrialModel} />
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-sm text-gray-300">{client.companies.length} empresa{client.companies.length !== 1 ? 's' : ''}</span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-xs text-gray-500">{new Date(client.createdAt).toLocaleDateString('pt-BR')}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => openEditClient(client)} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors" title="Editar cliente">
+                            <Edit size={14} />
                           </button>
-                        ))}
-                      </div>
-                    </div>
+                          <button onClick={() => openAddCompany(client)} className="p-1.5 text-gray-400 hover:text-emerald-400 hover:bg-gray-700 rounded-lg transition-colors" title="Adicionar empresa">
+                            <Building2 size={14} />
+                          </button>
+                          <button onClick={() => handleResetPassword(client)} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-700 rounded-lg transition-colors" title="Resetar senha">
+                            <Key size={14} />
+                          </button>
+                          <button onClick={() => handleDeleteClient(client)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-colors" title="Excluir cliente">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
 
-                    {trialModel !== 'none' && (
-                      <>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Plano do Trial</label>
-                          <select value={trialPlan} onChange={e => setTrialPlan(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5">
-                            <option value="hello_client">Hello Client (Pré-venda)</option>
-                            <option value="hello_rating">Hello Rating (Pós-venda)</option>
-                            <option value="hello_growth">Hello Growth (Completo)</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Duração do Trial (dias)</label>
-                          <input
-                            type="number"
-                            min={1}
-                            max={90}
-                            value={trialDays}
-                            onChange={e => setTrialDays(parseInt(e.target.value) || 30)}
-                            className="w-full border border-gray-300 rounded-lg p-2.5"
-                          />
-                        </div>
-                        {trialModel === 'model_b' && (
-                          <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 text-xs text-teal-700">
-                            <strong>Modelo B:</strong> Conta criada sem cobrança. Você poderá enviar o link de pagamento quando quiser pela aba <strong>Trials</strong>.
+                    {/* Expanded Row — Companies */}
+                    {expandedClient === client.id && (
+                      <tr>
+                        <td colSpan={8} className="bg-gray-800/20 px-6 py-4">
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                                <Building2 size={12} /> Empresas vinculadas
+                              </h4>
+                              <button
+                                onClick={() => openAddCompany(client)}
+                                className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 font-medium"
+                              >
+                                <Plus size={12} /> Adicionar empresa
+                              </button>
+                            </div>
+
+                            {client.companies.length === 0 ? (
+                              <p className="text-xs text-gray-500 italic">Nenhuma empresa vinculada.</p>
+                            ) : (
+                              <div className="grid gap-2">
+                                {client.companies.map(company => {
+                                  const addons = typeof company.plan_addons === 'string'
+                                    ? JSON.parse(company.plan_addons || '{}')
+                                    : (company.plan_addons || {});
+                                  return (
+                                    <div key={company.id} className="bg-gray-900 border border-gray-700 rounded-xl p-4 flex items-center gap-4">
+                                      <div className="w-8 h-8 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400 flex-shrink-0">
+                                        <Building2 size={14} />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <p className="text-sm font-semibold text-white truncate">{company.name}</p>
+                                          <PlanBadge plan={company.plan} />
+                                          <StatusBadge status={company.subscription_status} daysRemaining={company.daysRemaining} />
+                                          {company.trial_model && <ModelBadge model={company.trial_model} />}
+                                          {addons.game && <span className="px-1.5 py-0.5 bg-purple-900/50 text-purple-300 text-xs rounded border border-purple-700">Game</span>}
+                                          {addons.mpd && <span className="px-1.5 py-0.5 bg-blue-900/50 text-blue-300 text-xs rounded border border-blue-700">MPD</span>}
+                                        </div>
+                                        <div className="flex items-center gap-4 mt-1">
+                                          {company.trial_end_at && (
+                                            <span className="text-xs text-gray-500">
+                                              Vence: {new Date(company.trial_end_at).toLocaleDateString('pt-BR')}
+                                            </span>
+                                          )}
+                                          {company.stripe_subscription_id && (
+                                            <span className="text-xs text-gray-500 font-mono truncate max-w-[120px]" title={company.stripe_subscription_id}>
+                                              sub: {company.stripe_subscription_id.slice(0, 12)}...
+                                            </span>
+                                          )}
+                                          {company.paymentLinkSentAt && (
+                                            <span className="text-xs text-teal-500">
+                                              Link enviado: {new Date(company.paymentLinkSentAt).toLocaleDateString('pt-BR')}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1 flex-shrink-0">
+                                        <button onClick={() => openEditCompany(client, company)} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors" title="Editar empresa">
+                                          <Edit size={13} />
+                                        </button>
+                                        {company.trial_model === 'model_b' && (
+                                          <button onClick={() => openPaymentLink(client, company)} className="flex items-center gap-1 px-2.5 py-1.5 bg-teal-600/20 hover:bg-teal-600/40 text-teal-400 text-xs font-semibold rounded-lg border border-teal-600/30 transition-colors">
+                                            <CreditCard size={12} /> Enviar Link
+                                          </button>
+                                        )}
+                                        {client.companies.length > 1 && (
+                                          <button onClick={() => handleRemoveCompany(client, company.id)} className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-colors" title="Remover empresa">
+                                            <Trash2 size={13} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                        )}
-                        {trialModel === 'model_a' && (
-                          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs text-purple-700">
-                            <strong>Modelo A:</strong> Conta criada em trial. O cliente precisará assinar pelo fluxo normal de pricing.
-                          </div>
-                        )}
-                      </>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </main>
+
+      {/* ── Modals ── */}
+
+      {/* New Client Modal */}
+      {editModal === 'new_client' && (
+        <Modal title="Novo Cliente" onClose={() => setEditModal(null)}>
+          <div className="space-y-4">
+            <FormField label="Nome Completo">
+              <input type="text" value={clientForm.name} onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))} className={inputCls} placeholder="João Silva" />
+            </FormField>
+            <FormField label="E-mail (Login)">
+              <input type="email" value={clientForm.email} onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))} className={inputCls} placeholder="joao@empresa.com" />
+            </FormField>
+            <FormField label="Empresa Principal">
+              <input type="text" value={clientForm.companyName} onChange={e => setClientForm(f => ({ ...f, companyName: e.target.value }))} className={inputCls} placeholder="Nome da empresa" />
+            </FormField>
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-400 flex items-center gap-2">
+              <Key size={14} /> Senha padrão: <strong className="text-white">12345</strong>
+            </div>
+            <FormField label="Plano Inicial">
+              <select value={clientForm.plan} onChange={e => { setClientForm(f => ({ ...f, plan: e.target.value })); if (e.target.value !== 'trial') setNewClientTrialModel('none'); }} className={inputCls}>
+                <option value="trial">Trial (Teste)</option>
+                <option value="client">Hello Client</option>
+                <option value="rating">Hello Rating</option>
+                <option value="growth">Hello Growth</option>
+                <option value="growth_lifetime">Lifetime (Vitalício)</option>
+              </select>
+            </FormField>
+
+            {clientForm.plan === 'trial' && (
+              <>
+                <FormField label="Modelo de Trial">
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['none', 'model_a', 'model_b'] as const).map(m => (
+                      <button key={m} type="button" onClick={() => setNewClientTrialModel(m)}
+                        className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-colors ${newClientTrialModel === m
+                          ? m === 'model_b' ? 'bg-teal-600 text-white border-teal-500' : m === 'model_a' ? 'bg-purple-600 text-white border-purple-500' : 'bg-gray-600 text-white border-gray-500'
+                          : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'}`}>
+                        {m === 'none' ? 'Nenhum' : m === 'model_a' ? 'Modelo A' : 'Modelo B'}
+                      </button>
+                    ))}
+                  </div>
+                </FormField>
+
+                {newClientTrialModel !== 'none' && (
+                  <>
+                    <FormField label="Plano do Trial">
+                      <select value={newClientTrialPlan} onChange={e => setNewClientTrialPlan(e.target.value)} className={inputCls}>
+                        <option value="hello_client">Hello Client</option>
+                        <option value="hello_rating">Hello Rating</option>
+                        <option value="hello_growth">Hello Growth</option>
+                      </select>
+                    </FormField>
+                    <FormField label="Duração (dias)">
+                      <input type="number" min={1} max={90} value={newClientTrialDays} onChange={e => setNewClientTrialDays(parseInt(e.target.value) || 30)} className={inputCls} />
+                    </FormField>
+                    {newClientTrialModel === 'model_b' && (
+                      <div className="bg-teal-900/30 border border-teal-700/50 rounded-lg p-3 text-xs text-teal-300">
+                        <strong>Modelo B:</strong> Conta criada sem cobrança. Envie o link de pagamento pela aba de empresas do cliente.
+                      </div>
                     )}
                   </>
                 )}
+              </>
+            )}
 
-                {message && (
-                  <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${message.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                    {message.type === 'success' ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
-                    {message.text}
-                  </div>
-                )}
-                <button type="submit" disabled={isCreating} className="w-full bg-primary-600 text-white font-bold py-3 rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
-                  {isCreating ? <Loader2 className="animate-spin" /> : 'Criar Login'}
-                </button>
-              </form>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setEditModal(null)} className={btnSecondary}>Cancelar</button>
+              <button onClick={handleCreateClient} disabled={isSaving} className={btnPrimary}>
+                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+                Criar Cliente
+              </button>
             </div>
           </div>
-
-          {/* Users List */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl shadow-md overflow-hidden">
-              <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Users size={20} className="text-gray-500" /> Usuários Cadastrados ({users.length})
-                </h2>
-                <button onClick={fetchUsers} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100">
-                  <RefreshCw size={16} />
-                </button>
-              </div>
-              {isLoading ? (
-                <div className="p-12 text-center text-gray-500">
-                  <Loader2 className="animate-spin mx-auto mb-2" size={32} />
-                  Carregando usuários...
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 text-gray-500 uppercase font-bold text-xs">
-                      <tr>
-                        <th className="px-6 py-3">Usuário / Empresa</th>
-                        <th className="px-6 py-3">Plano</th>
-                        <th className="px-6 py-3">Data Cadastro</th>
-                        <th className="px-6 py-3 text-right">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {users.map((user) => (
-                        <tr key={user.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4">
-                            <p className="font-bold text-gray-900">{user.name}</p>
-                            <p className="text-xs text-gray-500">{user.email}</p>
-                            <p className="text-xs text-primary-600 font-medium">{user.companyName}</p>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-2 py-1 rounded-full text-xs font-bold border capitalize ${user.plan === 'growth_lifetime' ? 'bg-gray-800 text-yellow-400 border-gray-700' : user.plan === 'growth' ? 'bg-purple-100 text-purple-700 border-purple-200' : user.plan === 'trial' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
-                              {user.plan === 'growth_lifetime' ? 'Lifetime' : user.plan}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-gray-500">{new Date(user.createdAt).toLocaleDateString('pt-BR')}</td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex justify-end gap-2">
-                              <button onClick={() => setEditingUser(user)} className="text-gray-400 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 transition-colors" title="Editar Usuário">
-                                <Edit size={18} />
-                              </button>
-                              <button onClick={() => handleDeleteUser(user.id)} className="text-gray-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-colors" title="Excluir Usuário">
-                                <Trash2 size={18} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {users.length === 0 && (
-                        <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-500">Nenhum usuário encontrado.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
-      {/* TRIALS TAB */}
-      {activeTab === 'trials' && (
-        <div className="flex-1 max-w-7xl mx-auto w-full p-8 space-y-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-            {[
-              { label: 'Total Trials', value: trialStats.total, color: 'bg-gray-100 text-gray-700', icon: <Users size={16} /> },
-              { label: 'Modelo A', value: trialStats.modelA, color: 'bg-purple-100 text-purple-700', icon: <CreditCard size={16} /> },
-              { label: 'Modelo B', value: trialStats.modelB, color: 'bg-teal-100 text-teal-700', icon: <Gift size={16} /> },
-              { label: 'Em Trial', value: trialStats.trialing, color: 'bg-blue-100 text-blue-700', icon: <Clock size={16} /> },
-              { label: 'Expirados', value: trialStats.expired, color: 'bg-red-100 text-red-700', icon: <AlertCircle size={16} /> },
-              { label: 'Convertidos', value: trialStats.converted, color: 'bg-emerald-100 text-emerald-700', icon: <TrendingUp size={16} /> },
-              { label: 'Urgente (B)', value: trialStats.urgentB, color: 'bg-orange-100 text-orange-700', icon: <AlertTriangle size={16} /> },
-            ].map((stat) => (
-              <div key={stat.label} className={`${stat.color} rounded-xl p-4 flex flex-col gap-1`}>
-                <div className="flex items-center gap-1 opacity-70">{stat.icon}<span className="text-xs font-medium">{stat.label}</span></div>
-                <span className="text-2xl font-bold">{stat.value}</span>
-              </div>
-            ))}
+      {/* Edit Client Modal */}
+      {editModal === 'client' && selectedClient && (
+        <Modal title={`Editar Cliente — ${selectedClient.name}`} onClose={() => setEditModal(null)}>
+          <div className="space-y-4">
+            <FormField label="Nome Completo">
+              <input type="text" value={clientForm.name} onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))} className={inputCls} />
+            </FormField>
+            <FormField label="E-mail (Login)">
+              <input type="email" value={clientForm.email} onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))} className={inputCls} />
+            </FormField>
+            <FormField label="Empresa Principal">
+              <input type="text" value={clientForm.companyName} onChange={e => setClientForm(f => ({ ...f, companyName: e.target.value }))} className={inputCls} />
+            </FormField>
+            <FormField label="Plano de Acesso">
+              <select value={clientForm.plan} onChange={e => setClientForm(f => ({ ...f, plan: e.target.value }))} className={inputCls}>
+                <option value="trial">Trial</option>
+                <option value="client">Hello Client</option>
+                <option value="rating">Hello Rating</option>
+                <option value="growth">Hello Growth</option>
+                <option value="growth_lifetime">Lifetime</option>
+              </select>
+            </FormField>
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
+              <p className="text-xs text-gray-400 mb-2 flex items-center gap-1.5"><Key size={12} /> Nova Senha (deixe vazio para não alterar)</p>
+              <input type="text" value={clientForm.password} onChange={e => setClientForm(f => ({ ...f, password: e.target.value }))} className={inputCls} placeholder="Nova senha..." />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setEditModal(null)} className={btnSecondary}>Cancelar</button>
+              <button onClick={handleUpdateClient} disabled={isSaving} className={btnPrimary}>
+                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                Salvar Alterações
+              </button>
+            </div>
           </div>
+        </Modal>
+      )}
 
-          {/* Filters */}
-          <div className="bg-white rounded-xl shadow-md p-4 flex flex-wrap gap-4 items-center">
-            <div className="flex items-center gap-2">
-              <Filter size={16} className="text-gray-400" />
-              <span className="text-sm font-medium text-gray-600">Filtros:</span>
-            </div>
-            <div className="flex gap-2">
-              {(['all', 'model_a', 'model_b'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setTrialFilter(f)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${trialFilter === f ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                >
-                  {f === 'all' ? 'Todos' : f === 'model_a' ? 'Modelo A' : 'Modelo B'}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              {(['all', 'trialing', 'trial_expired', 'active'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setStatusFilter(f)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${statusFilter === f ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                >
-                  {f === 'all' ? 'Todos Status' : f === 'trialing' ? 'Em Trial' : f === 'trial_expired' ? 'Expirados' : 'Ativos'}
-                </button>
-              ))}
-            </div>
-            <button onClick={fetchTrials} className="ml-auto flex items-center gap-1.5 text-gray-500 hover:text-gray-700 text-sm">
-              <RefreshCw size={14} /> Atualizar
+      {/* Edit Company Modal */}
+      {editModal === 'company' && editingCompany && (
+        <Modal title={`Editar Empresa — ${editingCompany.name}`} onClose={() => setEditModal(null)} wide>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Nome da Empresa" className="col-span-2">
+              <input type="text" value={companyForm.name} onChange={e => setCompanyForm(f => ({ ...f, name: e.target.value }))} className={inputCls} />
+            </FormField>
+            <FormField label="Plano">
+              <select value={companyForm.plan} onChange={e => setCompanyForm(f => ({ ...f, plan: e.target.value }))} className={inputCls}>
+                <option value="hello_client">Hello Client</option>
+                <option value="hello_rating">Hello Rating</option>
+                <option value="hello_growth">Hello Growth</option>
+              </select>
+            </FormField>
+            <FormField label="Status da Assinatura">
+              <select value={companyForm.subscriptionStatus} onChange={e => setCompanyForm(f => ({ ...f, subscriptionStatus: e.target.value }))} className={inputCls}>
+                <option value="trialing">Em Trial</option>
+                <option value="active">Ativo</option>
+                <option value="trial_expired">Trial Expirado</option>
+                <option value="past_due">Pagamento Atrasado</option>
+                <option value="canceled">Cancelado</option>
+              </select>
+            </FormField>
+            <FormField label="Modelo de Trial">
+              <select value={companyForm.trialModel} onChange={e => setCompanyForm(f => ({ ...f, trialModel: e.target.value }))} className={inputCls}>
+                <option value="">Nenhum</option>
+                <option value="model_a">Modelo A</option>
+                <option value="model_b">Modelo B</option>
+              </select>
+            </FormField>
+            <FormField label="Vencimento do Trial">
+              <input type="date" value={companyForm.trialEndAt} onChange={e => setCompanyForm(f => ({ ...f, trialEndAt: e.target.value }))} className={inputCls} />
+            </FormField>
+            <FormField label="Máx. Usuários">
+              <input type="number" min={1} max={50} value={companyForm.maxUsers} onChange={e => setCompanyForm(f => ({ ...f, maxUsers: parseInt(e.target.value) || 1 }))} className={inputCls} />
+            </FormField>
+            <FormField label="Add-ons">
+              <div className="flex gap-3 mt-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={companyForm.addons.game} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, game: e.target.checked } }))} className="w-4 h-4 rounded" />
+                  <span className="text-sm text-gray-300">Game</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={companyForm.addons.mpd} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, mpd: e.target.checked } }))} className="w-4 h-4 rounded" />
+                  <span className="text-sm text-gray-300">MPD</span>
+                </label>
+              </div>
+            </FormField>
+            <FormField label="Stripe Customer ID" className="col-span-2">
+              <input type="text" value={companyForm.stripeCustomerId} onChange={e => setCompanyForm(f => ({ ...f, stripeCustomerId: e.target.value }))} className={inputCls} placeholder="cus_..." />
+            </FormField>
+            <FormField label="Stripe Subscription ID" className="col-span-2">
+              <input type="text" value={companyForm.stripeSubscriptionId} onChange={e => setCompanyForm(f => ({ ...f, stripeSubscriptionId: e.target.value }))} className={inputCls} placeholder="sub_..." />
+            </FormField>
+          </div>
+          <div className="flex gap-3 pt-4 mt-2 border-t border-gray-800">
+            <button onClick={() => setEditModal(null)} className={btnSecondary}>Cancelar</button>
+            <button onClick={handleUpdateCompany} disabled={isSaving} className={btnPrimary}>
+              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Salvar Empresa
             </button>
           </div>
-
-          {/* Trials Table */}
-          <div className="bg-white rounded-xl shadow-md overflow-hidden">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <Clock size={20} className="text-gray-500" /> Clientes em Trial ({filteredTrials.length})
-              </h2>
-            </div>
-            {trialsLoading ? (
-              <div className="p-12 text-center text-gray-500">
-                <Loader2 className="animate-spin mx-auto mb-2" size={32} />
-                Carregando trials...
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-gray-50 text-gray-500 uppercase font-bold text-xs">
-                    <tr>
-                      <th className="px-6 py-3">Empresa / Usuário</th>
-                      <th className="px-6 py-3">Modelo</th>
-                      <th className="px-6 py-3">Status</th>
-                      <th className="px-6 py-3">Plano</th>
-                      <th className="px-6 py-3">Vencimento</th>
-                      <th className="px-6 py-3 text-right">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {filteredTrials.map((trial) => (
-                      <tr key={trial.id} className={`hover:bg-gray-50 ${trial.trial_model === 'model_b' && trial.subscription_status === 'trialing' && (trial.daysRemaining ?? 999) <= 7 ? 'bg-orange-50' : ''}`}>
-                        <td className="px-6 py-4">
-                          <div className="flex items-start gap-2">
-                            <Building2 size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
-                            <div>
-                              <p className="font-bold text-gray-900">{trial.name}</p>
-                              {trial.owner && (
-                                <>
-                                  <p className="text-xs text-gray-500">{trial.owner.name}</p>
-                                  <p className="text-xs text-primary-600">{trial.owner.email}</p>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">{getModelBadge(trial.trial_model)}</td>
-                        <td className="px-6 py-4">{getStatusBadge(trial.subscription_status, trial.daysRemaining)}</td>
-                        <td className="px-6 py-4">
-                          <span className="text-xs text-gray-600 capitalize">{trial.plan}</span>
-                        </td>
-                        <td className="px-6 py-4">
-                          {trial.trial_end_at ? (
-                            <div>
-                              <p className="text-xs font-medium text-gray-700">
-                                {new Date(trial.trial_end_at).toLocaleDateString('pt-BR')}
-                              </p>
-                              {trial.daysRemaining !== null && trial.daysRemaining !== undefined && (
-                                <p className={`text-xs ${trial.daysRemaining <= 7 ? 'text-orange-600 font-bold' : 'text-gray-400'}`}>
-                                  {trial.daysRemaining > 0 ? `${trial.daysRemaining} dias restantes` : 'Expirado'}
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            {/* Botão de Payment Link apenas para Modelo B */}
-                            {trial.trial_model === 'model_b' && trial.owner && (
-                              <div className="flex flex-col items-end gap-1">
-                                <button
-                                  onClick={() => openPaymentLinkModal(trial)}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-xs font-bold rounded-lg hover:bg-teal-700 transition-colors"
-                                  title="Enviar Link de Pagamento"
-                                >
-                                  <Send size={12} /> Enviar Link
-                                </button>
-                                {trial.paymentLinkSentAt && (
-                                  <p className="text-xs text-gray-400">
-                                    Enviado {new Date(trial.paymentLinkSentAt).toLocaleDateString('pt-BR')}
-                                  </p>
-                                )}
-                                {trial.paymentLinkUrl && (
-                                  <a
-                                    href={trial.paymentLinkUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-teal-600 hover:underline flex items-center gap-0.5"
-                                  >
-                                    <ExternalLink size={10} /> Ver link
-                                  </a>
-                                )}
-                              </div>
-                            )}
-                            {trial.trial_model === 'model_a' && (
-                              <span className="text-xs text-gray-400 italic">Auto-billing</span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredTrials.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                          {trialsLoading ? 'Carregando...' : 'Nenhum trial encontrado com os filtros selecionados.'}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Edit User Modal */}
-      {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
-                <Edit size={20} className="text-blue-600" /> Editar Usuário
-              </h3>
-              <button onClick={() => setEditingUser(null)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
-            </div>
-            <div className="p-6">
-              <form onSubmit={handleUpdateUser} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
-                  <input type="text" value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} className="w-full border border-gray-300 rounded-lg p-2" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
-                  <input type="text" value={editingUser.companyName} onChange={(e) => setEditingUser({ ...editingUser, companyName: e.target.value })} className="w-full border border-gray-300 rounded-lg p-2" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input type="email" value={editingUser.email} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} className="w-full border border-gray-300 rounded-lg p-2" required />
-                </div>
-                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Key size={16} className="text-yellow-600" />
-                    <h4 className="font-bold text-yellow-800 text-sm">Segurança</h4>
-                  </div>
-                  <p className="text-xs text-yellow-700 mb-3">Não é possível ver a senha atual. Você pode resetá-la para o padrão <strong>12345</strong>.</p>
-                  <button type="button" onClick={() => handleResetPassword(editingUser.id)} disabled={isResetting} className="w-full py-2 bg-yellow-100 text-yellow-900 rounded-lg text-sm font-bold hover:bg-yellow-200 border border-yellow-200 flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
-                    {isResetting ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                    Resetar Senha para '12345'
-                  </button>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Plano (Acesso)</label>
-                  <select value={editingUser.plan} onChange={(e) => setEditingUser({ ...editingUser, plan: e.target.value as PlanType })} className="w-full border border-gray-300 rounded-lg p-2">
-                    <option value="trial">Trial (Teste)</option>
-                    <option value="client">HelloClient (Pré)</option>
-                    <option value="rating">HelloRating (Pós)</option>
-                    <option value="growth">HelloGrowth (Completo)</option>
-                    <option value="growth_lifetime">Lifetime (Vitalício)</option>
-                  </select>
-                </div>
-                <div className="flex gap-3 pt-4 border-t border-gray-100">
-                  <button type="button" onClick={() => setEditingUser(null)} className="flex-1 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancelar</button>
-                  <button type="submit" disabled={isUpdating} className="flex-1 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center justify-center gap-2">
-                    {isUpdating ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                    Salvar Alterações
-                  </button>
-                </div>
-              </form>
-            </div>
+      {/* Add Company Modal */}
+      {editModal === 'new_company' && selectedClient && (
+        <Modal title={`Nova Empresa — ${selectedClient.name}`} onClose={() => setEditModal(null)} wide>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Nome da Empresa" className="col-span-2">
+              <input type="text" value={companyForm.name} onChange={e => setCompanyForm(f => ({ ...f, name: e.target.value }))} className={inputCls} placeholder="Nome da empresa" />
+            </FormField>
+            <FormField label="Plano">
+              <select value={companyForm.plan} onChange={e => setCompanyForm(f => ({ ...f, plan: e.target.value }))} className={inputCls}>
+                <option value="hello_client">Hello Client</option>
+                <option value="hello_rating">Hello Rating</option>
+                <option value="hello_growth">Hello Growth</option>
+              </select>
+            </FormField>
+            <FormField label="Status Inicial">
+              <select value={companyForm.subscriptionStatus} onChange={e => setCompanyForm(f => ({ ...f, subscriptionStatus: e.target.value }))} className={inputCls}>
+                <option value="trialing">Em Trial</option>
+                <option value="active">Ativo</option>
+              </select>
+            </FormField>
+            <FormField label="Modelo de Trial">
+              <select value={companyForm.trialModel} onChange={e => setCompanyForm(f => ({ ...f, trialModel: e.target.value }))} className={inputCls}>
+                <option value="">Nenhum</option>
+                <option value="model_a">Modelo A</option>
+                <option value="model_b">Modelo B</option>
+              </select>
+            </FormField>
+            <FormField label="Vencimento do Trial">
+              <input type="date" value={companyForm.trialEndAt} onChange={e => setCompanyForm(f => ({ ...f, trialEndAt: e.target.value }))} className={inputCls} />
+            </FormField>
+            <FormField label="Máx. Usuários">
+              <input type="number" min={1} max={50} value={companyForm.maxUsers} onChange={e => setCompanyForm(f => ({ ...f, maxUsers: parseInt(e.target.value) || 1 }))} className={inputCls} />
+            </FormField>
+            <FormField label="Add-ons">
+              <div className="flex gap-3 mt-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={companyForm.addons.game} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, game: e.target.checked } }))} className="w-4 h-4 rounded" />
+                  <span className="text-sm text-gray-300">Game</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={companyForm.addons.mpd} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, mpd: e.target.checked } }))} className="w-4 h-4 rounded" />
+                  <span className="text-sm text-gray-300">MPD</span>
+                </label>
+              </div>
+            </FormField>
           </div>
-        </div>
+          <div className="flex gap-3 pt-4 mt-2 border-t border-gray-800">
+            <button onClick={() => setEditModal(null)} className={btnSecondary}>Cancelar</button>
+            <button onClick={handleAddCompany} disabled={isSaving || !companyForm.name} className={btnPrimary}>
+              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+              Adicionar Empresa
+            </button>
+          </div>
+        </Modal>
       )}
 
       {/* Payment Link Modal */}
-      {paymentLinkModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-teal-50">
-              <h3 className="font-bold text-lg text-teal-900 flex items-center gap-2">
-                <Send size={20} className="text-teal-600" /> Enviar Link de Pagamento
-              </h3>
-              <button onClick={() => { setPaymentLinkModal(null); setSentLinkResult(null); }} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
-            </div>
-            <div className="p-6 space-y-5">
-              {/* Customer Info */}
-              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                <p className="text-xs text-gray-500 mb-1">Cliente</p>
-                <p className="font-bold text-gray-900">{paymentLinkModal.company.name}</p>
-                {paymentLinkModal.company.owner && (
-                  <p className="text-sm text-gray-600">{paymentLinkModal.company.owner.email}</p>
-                )}
+      {editModal === 'payment_link' && editingCompany && selectedClient && (
+        <Modal title="Enviar Link de Pagamento" onClose={() => { setEditModal(null); setPaymentLinkResult(null); }}>
+          {paymentLinkResult ? (
+            <div className="space-y-4">
+              <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-xl p-4 text-center">
+                <CheckCircle size={32} className="text-emerald-400 mx-auto mb-2" />
+                <p className="text-emerald-300 font-semibold">Link gerado com sucesso!</p>
               </div>
-
-              {sentLinkResult ? (
-                /* Success state */
-                <div className="space-y-4">
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle size={18} className="text-emerald-600" />
-                      <p className="font-bold text-emerald-800">Link gerado com sucesso!</p>
-                    </div>
-                    {sentLinkResult.emailSent ? (
-                      <p className="text-sm text-emerald-700">O e-mail foi enviado automaticamente para o cliente.</p>
-                    ) : (
-                      <p className="text-sm text-emerald-700">Copie o link abaixo e envie manualmente para o cliente.</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Link de Pagamento</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value={sentLinkResult.url}
-                        className="flex-1 border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 font-mono"
-                      />
-                      <button
-                        onClick={() => { navigator.clipboard.writeText(sentLinkResult.url); alert('Link copiado!'); }}
-                        className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-bold hover:bg-gray-800"
-                      >
-                        Copiar
-                      </button>
-                    </div>
-                  </div>
-                  <a
-                    href={sentLinkResult.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 w-full py-2.5 border border-teal-600 text-teal-700 rounded-xl font-bold hover:bg-teal-50 transition-colors text-sm"
-                  >
-                    <ExternalLink size={16} /> Abrir Link no Stripe
-                  </a>
-                  <button
-                    onClick={() => { setPaymentLinkModal(null); setSentLinkResult(null); }}
-                    className="w-full py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors text-sm"
-                  >
-                    Fechar
+              <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
+                <p className="text-xs text-gray-400 mb-2">Link de Pagamento:</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-emerald-400 font-mono flex-1 truncate">{paymentLinkResult.url}</p>
+                  <button onClick={() => { navigator.clipboard.writeText(paymentLinkResult.url); showToast('success', 'Link copiado!'); }} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors">
+                    <Copy size={14} />
                   </button>
+                  <a href={paymentLinkResult.url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors">
+                    <ExternalLink size={14} />
+                  </a>
                 </div>
-              ) : (
-                /* Configuration form */
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Plano</label>
-                    <select
-                      value={paymentLinkModal.plan}
-                      onChange={e => setPaymentLinkModal({ ...paymentLinkModal, plan: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg p-2.5"
-                    >
-                      {PLAN_OPTIONS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Número de Usuários</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={10}
-                      value={paymentLinkModal.userCount}
-                      onChange={e => setPaymentLinkModal({ ...paymentLinkModal, userCount: parseInt(e.target.value) || 1 })}
-                      className="w-full border border-gray-300 rounded-lg p-2.5"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Add-ons</label>
-                    <div className="flex gap-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={paymentLinkModal.addons.game}
-                          onChange={e => setPaymentLinkModal({ ...paymentLinkModal, addons: { ...paymentLinkModal.addons, game: e.target.checked } })}
-                          className="w-4 h-4 rounded"
-                        />
-                        <span className="text-sm text-gray-700">Game</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={paymentLinkModal.addons.mpd}
-                          onChange={e => setPaymentLinkModal({ ...paymentLinkModal, addons: { ...paymentLinkModal.addons, mpd: e.target.checked } })}
-                          className="w-4 h-4 rounded"
-                        />
-                        <span className="text-sm text-gray-700">MPD</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Price Preview */}
-                  <div className="bg-teal-50 border border-teal-200 rounded-xl p-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-teal-700 font-medium">Valor mensal:</span>
-                      <span className="text-xl font-bold text-teal-800">
-                        R$ {calcPrice(paymentLinkModal.plan, paymentLinkModal.userCount, paymentLinkModal.addons).toFixed(2).replace('.', ',')}
-                      </span>
-                    </div>
-                    <p className="text-xs text-teal-600 mt-1">
-                      {paymentLinkModal.userCount} usuário{paymentLinkModal.userCount > 1 ? 's' : ''} × R$ {((calcPrice(paymentLinkModal.plan, paymentLinkModal.userCount, paymentLinkModal.addons)) / paymentLinkModal.userCount).toFixed(2).replace('.', ',')} / usuário
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nota personalizada para o e-mail (opcional)</label>
-                    <textarea
-                      value={paymentLinkModal.customNote}
-                      onChange={e => setPaymentLinkModal({ ...paymentLinkModal, customNote: e.target.value })}
-                      placeholder="Ex: Seu trial expira em 3 dias. Aproveite o desconto especial!"
-                      rows={3}
-                      className="w-full border border-gray-300 rounded-lg p-2.5 text-sm resize-none"
-                    />
-                  </div>
-
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => { setPaymentLinkModal(null); setSentLinkResult(null); }}
-                      className="flex-1 py-2.5 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 font-medium"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSendPaymentLink}
-                      disabled={sendingLink || !paymentLinkModal.company.owner}
-                      className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {sendingLink ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                      {sendingLink ? 'Gerando...' : 'Gerar Link'}
-                    </button>
-                  </div>
-                  {!paymentLinkModal.company.owner && (
-                    <p className="text-xs text-red-600 text-center">Usuário dono não encontrado para esta empresa.</p>
-                  )}
-                </div>
-              )}
+              </div>
+              <button onClick={() => { setEditModal(null); setPaymentLinkResult(null); }} className={`w-full ${btnPrimary}`}>
+                <Check size={16} /> Concluído
+              </button>
             </div>
-          </div>
-        </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm">
+                <p className="text-gray-400 text-xs mb-1">Cliente</p>
+                <p className="text-white font-semibold">{selectedClient.name}</p>
+                <p className="text-gray-400 text-xs">{selectedClient.email}</p>
+              </div>
+              <FormField label="Plano">
+                <select value={paymentLinkForm.plan} onChange={e => setPaymentLinkForm(f => ({ ...f, plan: e.target.value }))} className={inputCls}>
+                  <option value="hello_client">Hello Client</option>
+                  <option value="hello_rating">Hello Rating</option>
+                  <option value="hello_growth">Hello Growth</option>
+                </select>
+              </FormField>
+              <FormField label="Número de Usuários">
+                <input type="number" min={1} max={10} value={paymentLinkForm.userCount} onChange={e => setPaymentLinkForm(f => ({ ...f, userCount: parseInt(e.target.value) || 1 }))} className={inputCls} />
+              </FormField>
+              <FormField label="Add-ons">
+                <div className="flex gap-4 mt-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={paymentLinkForm.addons.game} onChange={e => setPaymentLinkForm(f => ({ ...f, addons: { ...f.addons, game: e.target.checked } }))} className="w-4 h-4 rounded" />
+                    <span className="text-sm text-gray-300">Game</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={paymentLinkForm.addons.mpd} onChange={e => setPaymentLinkForm(f => ({ ...f, addons: { ...f.addons, mpd: e.target.checked } }))} className="w-4 h-4 rounded" />
+                    <span className="text-sm text-gray-300">MPD</span>
+                  </label>
+                </div>
+              </FormField>
+              <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-lg p-3 flex items-center justify-between">
+                <span className="text-sm text-gray-300">Valor mensal total:</span>
+                <span className="text-lg font-bold text-emerald-400">R$ {paymentPrice.toFixed(2).replace('.', ',')}</span>
+              </div>
+              <FormField label="Nota personalizada (opcional)">
+                <textarea value={paymentLinkForm.customNote} onChange={e => setPaymentLinkForm(f => ({ ...f, customNote: e.target.value }))} className={`${inputCls} h-20 resize-none`} placeholder="Mensagem para o cliente..." />
+              </FormField>
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setEditModal(null)} className={btnSecondary}>Cancelar</button>
+                <button onClick={() => handleSendPaymentLink(editingCompany)} disabled={sendingLink} className={btnPrimary}>
+                  {sendingLink ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
+                  Gerar Link
+                </button>
+              </div>
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   );
 };
+
+// ─── Shared UI helpers ────────────────────────────────────────────────────────
+
+const inputCls = 'w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30';
+const btnPrimary = 'flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+const btnSecondary = 'flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm font-medium px-4 py-2.5 rounded-lg transition-colors';
+
+function FormField({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={className}>
+      <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Modal({ title, children, onClose, wide = false }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className={`bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[90vh] overflow-y-auto`}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+          <h2 className="text-base font-bold text-white">{title}</h2>
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="px-6 py-5">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 export default AdminUserManagement;
