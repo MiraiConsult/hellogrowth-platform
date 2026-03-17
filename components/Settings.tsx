@@ -135,30 +135,9 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
     } catch (e: any) { setPasswordStatus('error'); setPasswordMessage({ text: 'Erro ao atualizar.', type: 'error' }); }
   };
 
-  const handleOpenPortal = async () => {
-    if (!currentUser?.id) return;
-    setPortalLoading(true);
-    setPortalError('');
-    try {
-      const res = await fetch('/api/stripe/portal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUser.id,
-          returnUrl: window.location.href,
-        }),
-      });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        setPortalError(data.error || 'Erro ao abrir o portal de assinatura.');
-      }
-    } catch (e: any) {
-      setPortalError('Erro ao conectar com o Stripe. Tente novamente.');
-    } finally {
-      setPortalLoading(false);
-    }
+  const handleOpenPortal = () => {
+    // Redirect to pricing page which handles plan changes
+    window.location.href = '/pricing';
   };
 
   const isLifetime = activePlan === 'growth_lifetime';
@@ -378,14 +357,9 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
                     {subscriptionInfo.stripeConnected ? (
                       <button
                         onClick={handleOpenPortal}
-                        disabled={portalLoading}
-                        className="w-full py-2.5 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                        className="w-full py-2.5 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
                       >
-                        {portalLoading ? (
-                          <><Loader2 size={16} className="animate-spin" /> Abrindo portal...</>
-                        ) : (
-                          <><ExternalLink size={16} /> Gerenciar Assinatura</>
-                        )}
+                        <ExternalLink size={16} /> Gerenciar Assinatura
                       </button>
                     ) : (
                       <button
@@ -398,7 +372,7 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
 
                     {subscriptionInfo.stripeConnected && (
                       <p className="text-xs text-center text-gray-400">
-                        Gerencie plano, pagamento, add-ons e cancelamento pelo portal seguro do Stripe
+                        Altere o plano, adicione empresas, contrate adicionais ou cancele
                       </p>
                     )}
                   </div>
