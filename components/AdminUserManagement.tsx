@@ -1,16 +1,14 @@
 'use client';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
   Plus, Trash2, LogOut, Loader2, Users, Edit, X, Save, RefreshCw,
-  Key, CheckCircle, AlertTriangle, Clock, Gift, CreditCard, Send,
-  ExternalLink, Filter, Mail, Building2, TrendingUp, AlertCircle,
-  Search, ChevronDown, ChevronRight, MoreVertical, Copy, Eye,
-  Package, Settings, Zap, Star, Shield, UserPlus, BarChart3,
-  DollarSign, Activity, ArrowUpRight, Check, Ban, Play
+  Key, CheckCircle, AlertTriangle, Clock, Gift, CreditCard,
+  ExternalLink, Building2, AlertCircle, Search, ChevronRight, Copy,
+  Zap, Star, UserPlus, DollarSign, Check, Moon, Sun
 } from 'lucide-react';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Company {
   id: string;
@@ -52,28 +50,92 @@ interface AdminUserManagementProps {
   onLogout: () => void;
 }
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// ─── Theme tokens ─────────────────────────────────────────────────────────────
 
-const PLAN_LABELS: Record<string, string> = {
-  trial: 'Trial',
-  client: 'Hello Client',
-  rating: 'Hello Rating',
-  growth: 'Hello Growth',
-  growth_lifetime: 'Lifetime',
-  hello_client: 'Hello Client',
-  hello_rating: 'Hello Rating',
-  hello_growth: 'Hello Growth',
+const DARK = {
+  bg: 'bg-gray-950',
+  surface: 'bg-gray-900',
+  surfaceHover: 'hover:bg-gray-800/50',
+  surfaceExpanded: 'bg-gray-800/30',
+  surfaceInner: 'bg-gray-900',
+  border: 'border-gray-800',
+  borderInner: 'border-gray-700',
+  text: 'text-white',
+  textSub: 'text-gray-400',
+  textMuted: 'text-gray-500',
+  label: 'text-gray-400',
+  input: 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500 focus:border-emerald-500 focus:ring-emerald-500/30',
+  btnSecondary: 'bg-gray-800 hover:bg-gray-700 border-gray-700 text-gray-300',
+  header: 'bg-gray-900 border-gray-800',
+  kpi: 'bg-gray-900 border-gray-800',
+  filterBar: 'bg-gray-900 border-gray-800',
+  table: 'bg-gray-900 border-gray-800',
+  thead: 'text-gray-500',
+  divider: 'divide-gray-800',
+  expandBg: 'bg-gray-800/20',
+  companyCard: 'bg-gray-900 border-gray-700',
+  modalBg: 'bg-gray-900 border-gray-700',
+  modalHeader: 'border-gray-800',
+  securityBox: 'bg-gray-800 border-gray-700',
+  securityText: 'text-gray-400',
+  paymentBox: 'bg-emerald-900/20 border-emerald-700/40',
+  paymentText: 'text-emerald-400',
+  successBox: 'bg-emerald-900/30 border-emerald-700/50',
+  linkBox: 'bg-gray-800 border-gray-700',
+  linkText: 'text-emerald-400',
+  modelBBox: 'bg-teal-900/30 border-teal-700/50 text-teal-300',
+  stripeBox: 'text-teal-500',
+  avatar: 'bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border-emerald-500/30 text-emerald-400',
+  sendLinkBtn: 'bg-teal-600/20 hover:bg-teal-600/40 text-teal-400 border-teal-600/30',
+  overlay: 'bg-black/70',
 };
+
+const LIGHT = {
+  bg: 'bg-slate-50',
+  surface: 'bg-white',
+  surfaceHover: 'hover:bg-slate-50',
+  surfaceExpanded: 'bg-slate-50/80',
+  surfaceInner: 'bg-white',
+  border: 'border-slate-200',
+  borderInner: 'border-slate-200',
+  text: 'text-slate-900',
+  textSub: 'text-slate-500',
+  textMuted: 'text-slate-400',
+  label: 'text-slate-500',
+  input: 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:ring-emerald-500/20',
+  btnSecondary: 'bg-white hover:bg-slate-50 border-slate-300 text-slate-600',
+  header: 'bg-white border-slate-200',
+  kpi: 'bg-white border-slate-200',
+  filterBar: 'bg-white border-slate-200',
+  table: 'bg-white border-slate-200',
+  thead: 'text-slate-500',
+  divider: 'divide-slate-100',
+  expandBg: 'bg-slate-50',
+  companyCard: 'bg-slate-50 border-slate-200',
+  modalBg: 'bg-white border-slate-200',
+  modalHeader: 'border-slate-100',
+  securityBox: 'bg-amber-50 border-amber-200',
+  securityText: 'text-amber-700',
+  paymentBox: 'bg-emerald-50 border-emerald-200',
+  paymentText: 'text-emerald-700',
+  successBox: 'bg-emerald-50 border-emerald-200',
+  linkBox: 'bg-slate-50 border-slate-200',
+  linkText: 'text-emerald-600',
+  modelBBox: 'bg-teal-50 border-teal-200 text-teal-700',
+  stripeBox: 'text-teal-600',
+  avatar: 'bg-gradient-to-br from-emerald-100 to-teal-100 border-emerald-200 text-emerald-600',
+  sendLinkBtn: 'bg-teal-50 hover:bg-teal-100 text-teal-700 border-teal-200',
+  overlay: 'bg-slate-900/50',
+};
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
   active: { label: 'Ativo', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
   trialing: { label: 'Em Trial', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200', dot: 'bg-blue-500' },
   trial_expired: { label: 'Trial Expirado', color: 'text-red-700', bg: 'bg-red-50 border-red-200', dot: 'bg-red-500' },
   past_due: { label: 'Pagamento Atrasado', color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200', dot: 'bg-orange-500' },
-  canceled: { label: 'Cancelado', color: 'text-gray-600', bg: 'bg-gray-100 border-gray-200', dot: 'bg-gray-400' },
-  growth: { label: 'Hello Growth', color: 'text-violet-700', bg: 'bg-violet-50 border-violet-200', dot: 'bg-violet-500' },
-  rating: { label: 'Hello Rating', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200', dot: 'bg-blue-500' },
-  client: { label: 'Hello Client', color: 'text-indigo-700', bg: 'bg-indigo-50 border-indigo-200', dot: 'bg-indigo-500' },
+  canceled: { label: 'Cancelado', color: 'text-slate-600', bg: 'bg-slate-100 border-slate-200', dot: 'bg-slate-400' },
   growth_lifetime: { label: 'Lifetime', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', dot: 'bg-amber-500' },
 };
 
@@ -108,7 +170,7 @@ function calcPrice(plan: string, userCount: number, addons: { game: boolean; mpd
   return (PRICING_DATA[count]?.[key] || 0) * count;
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Shared Badge Components (theme-agnostic, use fixed Tailwind classes) ─────
 
 function StatusBadge({ status, daysRemaining }: { status: string; daysRemaining?: number | null }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG['active'];
@@ -136,16 +198,20 @@ function PlanBadge({ plan }: { plan: string }) {
     hello_rating: { label: 'Rating', color: 'bg-blue-100 text-blue-700' },
     client: { label: 'Client', color: 'bg-indigo-100 text-indigo-700' },
     hello_client: { label: 'Client', color: 'bg-indigo-100 text-indigo-700' },
-    trial: { label: 'Trial', color: 'bg-gray-100 text-gray-600' },
+    trial: { label: 'Trial', color: 'bg-slate-100 text-slate-600' },
     growth_lifetime: { label: 'Lifetime', color: 'bg-amber-100 text-amber-700' },
   };
-  const cfg = labels[plan] || { label: plan, color: 'bg-gray-100 text-gray-600' };
+  const cfg = labels[plan] || { label: plan, color: 'bg-slate-100 text-slate-600' };
   return <span className={`px-2 py-0.5 rounded text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) => {
+  // ── Theme ──
+  const [isDark, setIsDark] = useState(true);
+  const t = isDark ? DARK : LIGHT;
+
   // ── State ──
   const [clients, setClients] = useState<Client[]>([]);
   const [stats, setStats] = useState<any>({});
@@ -187,7 +253,6 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       if (planFilter !== 'all') params.set('plan', planFilter);
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (modelFilter !== 'all') params.set('model', modelFilter);
-
       const res = await fetch(`/api/admin/clients?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -206,7 +271,6 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
     return () => clearTimeout(timer);
   }, [fetchClients]);
 
-  // ── Toast ──
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
     setTimeout(() => setToast(null), 4000);
@@ -237,10 +301,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         if (!res.ok) throw new Error(data.error === 'EMAIL_EXISTS' ? 'E-mail já cadastrado.' : data.error);
         showToast('success', `Conta Modelo B criada! Login: ${clientForm.email} / 12345`);
       } else {
-        // Verificar se email já existe
         const { data: existing } = await supabase.from('users').select('id').eq('email', clientForm.email.toLowerCase()).single();
         if (existing) throw new Error('E-mail já cadastrado.');
-
         const userData: any = {
           name: clientForm.name,
           email: clientForm.email.toLowerCase().trim(),
@@ -257,11 +319,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             ...(clientForm.plan === 'trial' && newClientTrialModel === 'model_a' ? { trial_model: 'model_a' } : {}),
           }
         };
-
         const { data: createdUser, error } = await supabase.from('users').insert([userData]).select().single();
         if (error) throw error;
-
-        // Se Modelo A, criar empresa
         if (clientForm.plan === 'trial' && newClientTrialModel === 'model_a' && createdUser) {
           const trialEndAt = new Date(Date.now() + newClientTrialDays * 24 * 60 * 60 * 1000).toISOString();
           const companyId = crypto.randomUUID();
@@ -281,10 +340,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             user_id: createdUser.id, company_id: companyId, role: 'owner', is_default: true, status: 'active', accepted_at: new Date().toISOString()
           }]);
         }
-
         showToast('success', `Cliente criado! Login: ${clientForm.email} / 12345`);
       }
-
       setEditModal(null);
       setClientForm({ name: '', email: '', plan: 'trial', companyName: '', password: '' });
       setNewClientTrialModel('none');
@@ -316,7 +373,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      showToast('success', 'Cliente atualizado com sucesso!');
+      showToast('success', 'Cliente atualizado!');
       setEditModal(null);
       fetchClients();
     } catch (err: any) {
@@ -331,7 +388,6 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
     if (!selectedClient || !editingCompany) return;
     setIsSaving(true);
     try {
-      const addons = companyForm.addons;
       const res = await fetch('/api/admin/clients', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -341,7 +397,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             companyId: editingCompany.id,
             name: companyForm.name,
             plan: companyForm.plan.replace('hello_', ''),
-            planAddons: addons,
+            planAddons: companyForm.addons,
             subscriptionStatus: companyForm.subscriptionStatus,
             trialModel: companyForm.trialModel || null,
             trialEndAt: companyForm.trialEndAt || null,
@@ -468,22 +524,14 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   // ── Open Modals ──
   const openEditClient = (client: Client) => {
     setSelectedClient(client);
-    setClientForm({
-      name: client.name,
-      email: client.email,
-      plan: client.plan,
-      companyName: client.companyName || '',
-      password: '',
-    });
+    setClientForm({ name: client.name, email: client.email, plan: client.plan, companyName: client.companyName || '', password: '' });
     setEditModal('client');
   };
 
   const openEditCompany = (client: Client, company: Company) => {
     setSelectedClient(client);
     setEditingCompany(company);
-    const addons = typeof company.plan_addons === 'string'
-      ? JSON.parse(company.plan_addons || '{}')
-      : (company.plan_addons || {});
+    const addons = typeof company.plan_addons === 'string' ? JSON.parse(company.plan_addons || '{}') : (company.plan_addons || {});
     setCompanyForm({
       name: company.name,
       plan: company.plan.startsWith('hello_') ? company.plan : `hello_${company.plan}`,
@@ -500,12 +548,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
 
   const openAddCompany = (client: Client) => {
     setSelectedClient(client);
-    setCompanyForm({
-      name: '', plan: 'hello_growth', subscriptionStatus: 'trialing',
-      trialModel: 'model_b', trialEndAt: '', maxUsers: 1,
-      addons: { game: false, mpd: false },
-      stripeCustomerId: '', stripeSubscriptionId: '',
-    });
+    setCompanyForm({ name: '', plan: 'hello_growth', subscriptionStatus: 'trialing', trialModel: 'model_b', trialEndAt: '', maxUsers: 1, addons: { game: false, mpd: false }, stripeCustomerId: '', stripeSubscriptionId: '' });
     setEditModal('new_company');
   };
 
@@ -519,62 +562,74 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
     setEditModal('payment_link');
   };
 
-  // ── Render ──
   const paymentPrice = calcPrice(paymentLinkForm.plan, paymentLinkForm.userCount, paymentLinkForm.addons);
 
+  // ── Helpers ──
+  const inputCls = `w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 ${t.input}`;
+  const btnPrimary = `flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed`;
+  const btnSecondary = `flex items-center justify-center gap-2 border ${t.btnSecondary} text-sm font-medium px-4 py-2.5 rounded-lg transition-colors`;
+
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className={`min-h-screen ${t.bg} transition-colors duration-200`}>
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium transition-all ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
           {toast.type === 'success' ? <Check size={16} /> : <AlertTriangle size={16} />}
           {toast.text}
         </div>
       )}
 
       {/* Header */}
-      <header className="bg-gray-900 border-b border-gray-800 px-6 py-4">
+      <header className={`${t.header} border-b px-6 py-4 sticky top-0 z-30`}>
         <div className="max-w-screen-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-sm">
               <Zap size={16} className="text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-white">HelloGrowth Admin</h1>
-              <p className="text-xs text-gray-400">Painel de Gestão de Clientes</p>
+              <h1 className={`text-lg font-bold ${t.text}`}>HelloGrowth Admin</h1>
+              <p className={`text-xs ${t.textMuted}`}>Painel de Gestão de Clientes</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {/* Theme Toggle */}
+            <button
+              onClick={() => setIsDark(!isDark)}
+              className={`p-2 rounded-lg border ${t.btnSecondary} transition-colors`}
+              title={isDark ? 'Modo claro' : 'Modo escuro'}
+            >
+              {isDark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
             <button
               onClick={() => { setClientForm({ name: '', email: '', plan: 'trial', companyName: '', password: '' }); setNewClientTrialModel('none'); setEditModal('new_client'); }}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
             >
               <UserPlus size={16} /> Novo Cliente
             </button>
-            <button onClick={onLogout} className="flex items-center gap-2 text-gray-400 hover:text-white text-sm px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors">
+            <button onClick={onLogout} className={`flex items-center gap-2 ${t.textSub} hover:${t.text} text-sm px-3 py-2 rounded-lg hover:${isDark ? 'bg-gray-800' : 'bg-slate-100'} transition-colors`}>
               <LogOut size={16} /> Sair
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-screen-2xl mx-auto px-6 py-6 space-y-6">
+      <main className="max-w-screen-2xl mx-auto px-6 py-6 space-y-5">
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
           {[
-            { label: 'Total Clientes', value: stats.total || 0, icon: <Users size={14} />, color: 'text-gray-300' },
-            { label: 'Ativos', value: stats.active || 0, icon: <CheckCircle size={14} />, color: 'text-emerald-400' },
-            { label: 'Em Trial', value: stats.trialing || 0, icon: <Clock size={14} />, color: 'text-blue-400' },
-            { label: 'Expirados', value: stats.trial_expired || 0, icon: <AlertCircle size={14} />, color: 'text-red-400' },
-            { label: 'Modelo A', value: stats.model_a || 0, icon: <Star size={14} />, color: 'text-purple-400' },
-            { label: 'Modelo B', value: stats.model_b || 0, icon: <Gift size={14} />, color: 'text-teal-400' },
-            { label: 'Urgente (B)', value: stats.urgent_b || 0, icon: <AlertTriangle size={14} />, color: 'text-orange-400' },
-            { label: 'MRR Est.', value: `R$ ${(stats.mrr || 0).toFixed(0)}`, icon: <DollarSign size={14} />, color: 'text-amber-400' },
+            { label: 'Total', value: stats.total || 0, icon: <Users size={14} />, color: isDark ? 'text-slate-300' : 'text-slate-600' },
+            { label: 'Ativos', value: stats.active || 0, icon: <CheckCircle size={14} />, color: 'text-emerald-600' },
+            { label: 'Em Trial', value: stats.trialing || 0, icon: <Clock size={14} />, color: 'text-blue-600' },
+            { label: 'Expirados', value: stats.trial_expired || 0, icon: <AlertCircle size={14} />, color: 'text-red-500' },
+            { label: 'Modelo A', value: stats.model_a || 0, icon: <Star size={14} />, color: 'text-purple-600' },
+            { label: 'Modelo B', value: stats.model_b || 0, icon: <Gift size={14} />, color: 'text-teal-600' },
+            { label: 'Urgente (B)', value: stats.urgent_b || 0, icon: <AlertTriangle size={14} />, color: 'text-orange-500' },
+            { label: 'MRR Est.', value: `R$ ${(stats.mrr || 0).toFixed(0)}`, icon: <DollarSign size={14} />, color: 'text-amber-600' },
           ].map((kpi, i) => (
-            <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <div key={i} className={`${t.kpi} border rounded-xl p-4 shadow-sm`}>
               <div className={`flex items-center gap-1.5 text-xs mb-2 ${kpi.color}`}>
                 {kpi.icon}
-                <span className="text-gray-400 truncate">{kpi.label}</span>
+                <span className={`${t.textMuted} truncate`}>{kpi.label}</span>
               </div>
               <p className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</p>
             </div>
@@ -582,65 +637,42 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         </div>
 
         {/* Filters */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div className={`${t.filterBar} border rounded-xl p-4 shadow-sm`}>
           <div className="flex flex-wrap gap-3 items-center">
-            {/* Search */}
             <div className="relative flex-1 min-w-[200px]">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Search size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
               <input
                 type="text"
                 placeholder="Buscar por nome, e-mail ou empresa..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                className={`w-full border rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-1 ${t.input}`}
               />
             </div>
-
-            {/* Plan Filter */}
-            <select value={planFilter} onChange={e => setPlanFilter(e.target.value)} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-emerald-500">
-              <option value="all">Todos os Planos</option>
-              <option value="trial">Trial</option>
-              <option value="client">Hello Client</option>
-              <option value="rating">Hello Rating</option>
-              <option value="growth">Hello Growth</option>
-              <option value="growth_lifetime">Lifetime</option>
-            </select>
-
-            {/* Status Filter */}
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-emerald-500">
-              <option value="all">Todos os Status</option>
-              <option value="active">Ativos</option>
-              <option value="trialing">Em Trial</option>
-              <option value="trial_expired">Trial Expirado</option>
-              <option value="past_due">Pagamento Atrasado</option>
-              <option value="canceled">Cancelados</option>
-            </select>
-
-            {/* Model Filter */}
-            <select value={modelFilter} onChange={e => setModelFilter(e.target.value)} className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-emerald-500">
-              <option value="all">Todos os Modelos</option>
-              <option value="model_a">Modelo A</option>
-              <option value="model_b">Modelo B</option>
-              <option value="no_model">Sem Modelo</option>
-            </select>
-
-            <button onClick={fetchClients} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg transition-colors">
-              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-              Atualizar
+            {[
+              { value: planFilter, onChange: setPlanFilter, options: [['all','Todos os Planos'],['trial','Trial'],['client','Hello Client'],['rating','Hello Rating'],['growth','Hello Growth'],['growth_lifetime','Lifetime']] },
+              { value: statusFilter, onChange: setStatusFilter, options: [['all','Todos os Status'],['active','Ativos'],['trialing','Em Trial'],['trial_expired','Trial Expirado'],['past_due','Pagamento Atrasado'],['canceled','Cancelados']] },
+              { value: modelFilter, onChange: setModelFilter, options: [['all','Todos os Modelos'],['model_a','Modelo A'],['model_b','Modelo B'],['no_model','Sem Modelo']] },
+            ].map((sel, i) => (
+              <select key={i} value={sel.value} onChange={e => sel.onChange(e.target.value)} className={`border rounded-lg px-3 py-2 text-sm focus:outline-none ${t.input}`}>
+                {sel.options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            ))}
+            <button onClick={fetchClients} className={`flex items-center gap-2 border ${t.btnSecondary} text-sm px-3 py-2 rounded-lg transition-colors`}>
+              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} /> Atualizar
             </button>
-
-            <span className="text-xs text-gray-500 ml-auto">{clients.length} cliente{clients.length !== 1 ? 's' : ''}</span>
+            <span className={`text-xs ${t.textMuted} ml-auto`}>{clients.length} cliente{clients.length !== 1 ? 's' : ''}</span>
           </div>
         </div>
 
-        {/* Clients Table */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        {/* Table */}
+        <div className={`${t.table} border rounded-xl overflow-hidden shadow-sm`}>
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="animate-spin text-emerald-500" size={32} />
             </div>
           ) : clients.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+            <div className={`flex flex-col items-center justify-center py-20 ${t.textMuted}`}>
               <Users size={40} className="mb-3 opacity-30" />
               <p className="font-medium">Nenhum cliente encontrado</p>
               <p className="text-sm mt-1">Tente ajustar os filtros ou criar um novo cliente</p>
@@ -648,139 +680,106 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
           ) : (
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3 w-8"></th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3">Cliente</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Plano</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Status</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Modelo</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Empresas</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">Cadastro</th>
-                  <th className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3">Ações</th>
+                <tr className={`border-b ${t.border}`}>
+                  {['', 'Cliente', 'Plano', 'Status', 'Modelo', 'Empresas', 'Cadastro', ''].map((h, i) => (
+                    <th key={i} className={`text-left text-xs font-semibold ${t.thead} uppercase tracking-wider px-${i === 0 || i === 7 ? '6' : '4'} py-3 ${i === 7 ? 'text-right' : ''}`}>{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800">
+              <tbody className={`divide-y ${t.divider}`}>
                 {clients.map(client => (
                   <React.Fragment key={client.id}>
                     <tr
-                      className={`hover:bg-gray-800/50 transition-colors cursor-pointer ${expandedClient === client.id ? 'bg-gray-800/30' : ''}`}
+                      className={`${t.surfaceHover} transition-colors cursor-pointer ${expandedClient === client.id ? t.surfaceExpanded : ''}`}
                       onClick={() => setExpandedClient(expandedClient === client.id ? null : client.id)}
                     >
                       <td className="px-6 py-4">
-                        <ChevronRight size={14} className={`text-gray-500 transition-transform ${expandedClient === client.id ? 'rotate-90' : ''}`} />
+                        <ChevronRight size={14} className={`${t.textMuted} transition-transform ${expandedClient === client.id ? 'rotate-90' : ''}`} />
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-sm flex-shrink-0">
+                          <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-bold text-sm flex-shrink-0 ${t.avatar}`}>
                             {client.name?.[0]?.toUpperCase() || '?'}
                           </div>
                           <div>
-                            <p className="text-sm font-semibold text-white">{client.name}</p>
-                            <p className="text-xs text-gray-400">{client.email}</p>
+                            <p className={`text-sm font-semibold ${t.text}`}>{client.name}</p>
+                            <p className={`text-xs ${t.textSub}`}>{client.email}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
-                        <PlanBadge plan={client.plan} />
-                      </td>
-                      <td className="px-4 py-4">
-                        <StatusBadge status={client.consolidatedStatus} daysRemaining={client.consolidatedDaysRemaining} />
-                      </td>
-                      <td className="px-4 py-4">
-                        <ModelBadge model={client.consolidatedTrialModel} />
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="text-sm text-gray-300">{client.companies.length} empresa{client.companies.length !== 1 ? 's' : ''}</span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="text-xs text-gray-500">{new Date(client.createdAt).toLocaleDateString('pt-BR')}</span>
-                      </td>
+                      <td className="px-4 py-4"><PlanBadge plan={client.plan} /></td>
+                      <td className="px-4 py-4"><StatusBadge status={client.consolidatedStatus} daysRemaining={client.consolidatedDaysRemaining} /></td>
+                      <td className="px-4 py-4"><ModelBadge model={client.consolidatedTrialModel} /></td>
+                      <td className="px-4 py-4"><span className={`text-sm ${t.textSub}`}>{client.companies.length} empresa{client.companies.length !== 1 ? 's' : ''}</span></td>
+                      <td className="px-4 py-4"><span className={`text-xs ${t.textMuted}`}>{new Date(client.createdAt).toLocaleDateString('pt-BR')}</span></td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => openEditClient(client)} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors" title="Editar cliente">
+                          <button onClick={() => openEditClient(client)} className={`p-1.5 ${t.textMuted} hover:${t.text} hover:${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg transition-colors`} title="Editar">
                             <Edit size={14} />
                           </button>
-                          <button onClick={() => openAddCompany(client)} className="p-1.5 text-gray-400 hover:text-emerald-400 hover:bg-gray-700 rounded-lg transition-colors" title="Adicionar empresa">
+                          <button onClick={() => openAddCompany(client)} className={`p-1.5 ${t.textMuted} hover:text-emerald-600 hover:${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg transition-colors`} title="Adicionar empresa">
                             <Building2 size={14} />
                           </button>
-                          <button onClick={() => handleResetPassword(client)} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-700 rounded-lg transition-colors" title="Resetar senha">
+                          <button onClick={() => handleResetPassword(client)} className={`p-1.5 ${t.textMuted} hover:text-amber-600 hover:${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg transition-colors`} title="Resetar senha">
                             <Key size={14} />
                           </button>
-                          <button onClick={() => handleDeleteClient(client)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-colors" title="Excluir cliente">
+                          <button onClick={() => handleDeleteClient(client)} className={`p-1.5 ${t.textMuted} hover:text-red-500 hover:${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg transition-colors`} title="Excluir">
                             <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
                     </tr>
 
-                    {/* Expanded Row — Companies */}
+                    {/* Expanded Companies */}
                     {expandedClient === client.id && (
                       <tr>
-                        <td colSpan={8} className="bg-gray-800/20 px-6 py-4">
+                        <td colSpan={8} className={`${t.expandBg} px-6 py-4`}>
                           <div className="space-y-3">
                             <div className="flex items-center justify-between mb-2">
-                              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                              <h4 className={`text-xs font-semibold ${t.textMuted} uppercase tracking-wider flex items-center gap-2`}>
                                 <Building2 size={12} /> Empresas vinculadas
                               </h4>
-                              <button
-                                onClick={() => openAddCompany(client)}
-                                className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 font-medium"
-                              >
+                              <button onClick={() => openAddCompany(client)} className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-500 font-medium">
                                 <Plus size={12} /> Adicionar empresa
                               </button>
                             </div>
-
                             {client.companies.length === 0 ? (
-                              <p className="text-xs text-gray-500 italic">Nenhuma empresa vinculada.</p>
+                              <p className={`text-xs ${t.textMuted} italic`}>Nenhuma empresa vinculada.</p>
                             ) : (
                               <div className="grid gap-2">
                                 {client.companies.map(company => {
-                                  const addons = typeof company.plan_addons === 'string'
-                                    ? JSON.parse(company.plan_addons || '{}')
-                                    : (company.plan_addons || {});
+                                  const addons = typeof company.plan_addons === 'string' ? JSON.parse(company.plan_addons || '{}') : (company.plan_addons || {});
                                   return (
-                                    <div key={company.id} className="bg-gray-900 border border-gray-700 rounded-xl p-4 flex items-center gap-4">
-                                      <div className="w-8 h-8 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400 flex-shrink-0">
+                                    <div key={company.id} className={`${t.companyCard} border rounded-xl p-4 flex items-center gap-4`}>
+                                      <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-slate-200'} border flex items-center justify-center ${t.textMuted} flex-shrink-0`}>
                                         <Building2 size={14} />
                                       </div>
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                          <p className="text-sm font-semibold text-white truncate">{company.name}</p>
+                                          <p className={`text-sm font-semibold ${t.text} truncate`}>{company.name}</p>
                                           <PlanBadge plan={company.plan} />
                                           <StatusBadge status={company.subscription_status} daysRemaining={company.daysRemaining} />
                                           {company.trial_model && <ModelBadge model={company.trial_model} />}
-                                          {addons.game && <span className="px-1.5 py-0.5 bg-purple-900/50 text-purple-300 text-xs rounded border border-purple-700">Game</span>}
-                                          {addons.mpd && <span className="px-1.5 py-0.5 bg-blue-900/50 text-blue-300 text-xs rounded border border-blue-700">MPD</span>}
+                                          {addons.game && <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded border border-purple-200">Game</span>}
+                                          {addons.mpd && <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded border border-blue-200">MPD</span>}
                                         </div>
-                                        <div className="flex items-center gap-4 mt-1">
-                                          {company.trial_end_at && (
-                                            <span className="text-xs text-gray-500">
-                                              Vence: {new Date(company.trial_end_at).toLocaleDateString('pt-BR')}
-                                            </span>
-                                          )}
-                                          {company.stripe_subscription_id && (
-                                            <span className="text-xs text-gray-500 font-mono truncate max-w-[120px]" title={company.stripe_subscription_id}>
-                                              sub: {company.stripe_subscription_id.slice(0, 12)}...
-                                            </span>
-                                          )}
-                                          {company.paymentLinkSentAt && (
-                                            <span className="text-xs text-teal-500">
-                                              Link enviado: {new Date(company.paymentLinkSentAt).toLocaleDateString('pt-BR')}
-                                            </span>
-                                          )}
+                                        <div className="flex items-center gap-4 mt-1 flex-wrap">
+                                          {company.trial_end_at && <span className={`text-xs ${t.textMuted}`}>Vence: {new Date(company.trial_end_at).toLocaleDateString('pt-BR')}</span>}
+                                          {company.stripe_subscription_id && <span className={`text-xs ${t.textMuted} font-mono truncate max-w-[120px]`}>sub: {company.stripe_subscription_id.slice(0, 12)}...</span>}
+                                          {company.paymentLinkSentAt && <span className="text-xs text-teal-600">Link enviado: {new Date(company.paymentLinkSentAt).toLocaleDateString('pt-BR')}</span>}
                                         </div>
                                       </div>
                                       <div className="flex items-center gap-1 flex-shrink-0">
-                                        <button onClick={() => openEditCompany(client, company)} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors" title="Editar empresa">
+                                        <button onClick={() => openEditCompany(client, company)} className={`p-1.5 ${t.textMuted} hover:${t.text} hover:${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg transition-colors`} title="Editar empresa">
                                           <Edit size={13} />
                                         </button>
                                         {company.trial_model === 'model_b' && (
-                                          <button onClick={() => openPaymentLink(client, company)} className="flex items-center gap-1 px-2.5 py-1.5 bg-teal-600/20 hover:bg-teal-600/40 text-teal-400 text-xs font-semibold rounded-lg border border-teal-600/30 transition-colors">
+                                          <button onClick={() => openPaymentLink(client, company)} className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${t.sendLinkBtn}`}>
                                             <CreditCard size={12} /> Enviar Link
                                           </button>
                                         )}
                                         {client.companies.length > 1 && (
-                                          <button onClick={() => handleRemoveCompany(client, company.id)} className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-colors" title="Remover empresa">
+                                          <button onClick={() => handleRemoveCompany(client, company.id)} className={`p-1.5 ${t.textMuted} hover:text-red-500 hover:${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg transition-colors`} title="Remover empresa">
                                             <Trash2 size={13} />
                                           </button>
                                         )}
@@ -804,23 +803,17 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
 
       {/* ── Modals ── */}
 
-      {/* New Client Modal */}
+      {/* New Client */}
       {editModal === 'new_client' && (
-        <Modal title="Novo Cliente" onClose={() => setEditModal(null)}>
+        <Modal title="Novo Cliente" onClose={() => setEditModal(null)} t={t}>
           <div className="space-y-4">
-            <FormField label="Nome Completo">
-              <input type="text" value={clientForm.name} onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))} className={inputCls} placeholder="João Silva" />
-            </FormField>
-            <FormField label="E-mail (Login)">
-              <input type="email" value={clientForm.email} onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))} className={inputCls} placeholder="joao@empresa.com" />
-            </FormField>
-            <FormField label="Empresa Principal">
-              <input type="text" value={clientForm.companyName} onChange={e => setClientForm(f => ({ ...f, companyName: e.target.value }))} className={inputCls} placeholder="Nome da empresa" />
-            </FormField>
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs text-gray-400 flex items-center gap-2">
-              <Key size={14} /> Senha padrão: <strong className="text-white">12345</strong>
+            <FormField label="Nome Completo" t={t}><input type="text" value={clientForm.name} onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))} className={inputCls} placeholder="João Silva" /></FormField>
+            <FormField label="E-mail (Login)" t={t}><input type="email" value={clientForm.email} onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))} className={inputCls} placeholder="joao@empresa.com" /></FormField>
+            <FormField label="Empresa Principal" t={t}><input type="text" value={clientForm.companyName} onChange={e => setClientForm(f => ({ ...f, companyName: e.target.value }))} className={inputCls} placeholder="Nome da empresa" /></FormField>
+            <div className={`${t.securityBox} border rounded-lg p-3 text-xs ${t.securityText} flex items-center gap-2`}>
+              <Key size={14} /> Senha padrão: <strong className={t.text}>12345</strong>
             </div>
-            <FormField label="Plano Inicial">
+            <FormField label="Plano Inicial" t={t}>
               <select value={clientForm.plan} onChange={e => { setClientForm(f => ({ ...f, plan: e.target.value })); if (e.target.value !== 'trial') setNewClientTrialModel('none'); }} className={inputCls}>
                 <option value="trial">Trial (Teste)</option>
                 <option value="client">Hello Client</option>
@@ -829,36 +822,34 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                 <option value="growth_lifetime">Lifetime (Vitalício)</option>
               </select>
             </FormField>
-
             {clientForm.plan === 'trial' && (
               <>
-                <FormField label="Modelo de Trial">
+                <FormField label="Modelo de Trial" t={t}>
                   <div className="grid grid-cols-3 gap-2">
                     {(['none', 'model_a', 'model_b'] as const).map(m => (
                       <button key={m} type="button" onClick={() => setNewClientTrialModel(m)}
                         className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-colors ${newClientTrialModel === m
-                          ? m === 'model_b' ? 'bg-teal-600 text-white border-teal-500' : m === 'model_a' ? 'bg-purple-600 text-white border-purple-500' : 'bg-gray-600 text-white border-gray-500'
-                          : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'}`}>
+                          ? m === 'model_b' ? 'bg-teal-600 text-white border-teal-500' : m === 'model_a' ? 'bg-purple-600 text-white border-purple-500' : 'bg-slate-600 text-white border-slate-500'
+                          : `${isDark ? 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500' : 'bg-white text-slate-500 border-slate-300 hover:border-slate-400'}`}`}>
                         {m === 'none' ? 'Nenhum' : m === 'model_a' ? 'Modelo A' : 'Modelo B'}
                       </button>
                     ))}
                   </div>
                 </FormField>
-
                 {newClientTrialModel !== 'none' && (
                   <>
-                    <FormField label="Plano do Trial">
+                    <FormField label="Plano do Trial" t={t}>
                       <select value={newClientTrialPlan} onChange={e => setNewClientTrialPlan(e.target.value)} className={inputCls}>
                         <option value="hello_client">Hello Client</option>
                         <option value="hello_rating">Hello Rating</option>
                         <option value="hello_growth">Hello Growth</option>
                       </select>
                     </FormField>
-                    <FormField label="Duração (dias)">
+                    <FormField label="Duração (dias)" t={t}>
                       <input type="number" min={1} max={90} value={newClientTrialDays} onChange={e => setNewClientTrialDays(parseInt(e.target.value) || 30)} className={inputCls} />
                     </FormField>
                     {newClientTrialModel === 'model_b' && (
-                      <div className="bg-teal-900/30 border border-teal-700/50 rounded-lg p-3 text-xs text-teal-300">
+                      <div className={`${t.modelBBox} border rounded-lg p-3 text-xs`}>
                         <strong>Modelo B:</strong> Conta criada sem cobrança. Envie o link de pagamento pela aba de empresas do cliente.
                       </div>
                     )}
@@ -866,32 +857,24 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                 )}
               </>
             )}
-
             <div className="flex gap-3 pt-2">
               <button onClick={() => setEditModal(null)} className={btnSecondary}>Cancelar</button>
               <button onClick={handleCreateClient} disabled={isSaving} className={btnPrimary}>
-                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
-                Criar Cliente
+                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />} Criar Cliente
               </button>
             </div>
           </div>
         </Modal>
       )}
 
-      {/* Edit Client Modal */}
+      {/* Edit Client */}
       {editModal === 'client' && selectedClient && (
-        <Modal title={`Editar Cliente — ${selectedClient.name}`} onClose={() => setEditModal(null)}>
+        <Modal title={`Editar — ${selectedClient.name}`} onClose={() => setEditModal(null)} t={t}>
           <div className="space-y-4">
-            <FormField label="Nome Completo">
-              <input type="text" value={clientForm.name} onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))} className={inputCls} />
-            </FormField>
-            <FormField label="E-mail (Login)">
-              <input type="email" value={clientForm.email} onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))} className={inputCls} />
-            </FormField>
-            <FormField label="Empresa Principal">
-              <input type="text" value={clientForm.companyName} onChange={e => setClientForm(f => ({ ...f, companyName: e.target.value }))} className={inputCls} />
-            </FormField>
-            <FormField label="Plano de Acesso">
+            <FormField label="Nome Completo" t={t}><input type="text" value={clientForm.name} onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))} className={inputCls} /></FormField>
+            <FormField label="E-mail (Login)" t={t}><input type="email" value={clientForm.email} onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /></FormField>
+            <FormField label="Empresa Principal" t={t}><input type="text" value={clientForm.companyName} onChange={e => setClientForm(f => ({ ...f, companyName: e.target.value }))} className={inputCls} /></FormField>
+            <FormField label="Plano de Acesso" t={t}>
               <select value={clientForm.plan} onChange={e => setClientForm(f => ({ ...f, plan: e.target.value }))} className={inputCls}>
                 <option value="trial">Trial</option>
                 <option value="client">Hello Client</option>
@@ -900,208 +883,139 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                 <option value="growth_lifetime">Lifetime</option>
               </select>
             </FormField>
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-              <p className="text-xs text-gray-400 mb-2 flex items-center gap-1.5"><Key size={12} /> Nova Senha (deixe vazio para não alterar)</p>
+            <div className={`${t.securityBox} border rounded-lg p-3`}>
+              <p className={`text-xs ${t.securityText} mb-2 flex items-center gap-1.5`}><Key size={12} /> Nova Senha (deixe vazio para não alterar)</p>
               <input type="text" value={clientForm.password} onChange={e => setClientForm(f => ({ ...f, password: e.target.value }))} className={inputCls} placeholder="Nova senha..." />
             </div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setEditModal(null)} className={btnSecondary}>Cancelar</button>
               <button onClick={handleUpdateClient} disabled={isSaving} className={btnPrimary}>
-                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                Salvar Alterações
+                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Salvar
               </button>
             </div>
           </div>
         </Modal>
       )}
 
-      {/* Edit Company Modal */}
+      {/* Edit Company */}
       {editModal === 'company' && editingCompany && (
-        <Modal title={`Editar Empresa — ${editingCompany.name}`} onClose={() => setEditModal(null)} wide>
+        <Modal title={`Empresa — ${editingCompany.name}`} onClose={() => setEditModal(null)} t={t} wide>
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Nome da Empresa" className="col-span-2">
-              <input type="text" value={companyForm.name} onChange={e => setCompanyForm(f => ({ ...f, name: e.target.value }))} className={inputCls} />
-            </FormField>
-            <FormField label="Plano">
-              <select value={companyForm.plan} onChange={e => setCompanyForm(f => ({ ...f, plan: e.target.value }))} className={inputCls}>
-                <option value="hello_client">Hello Client</option>
-                <option value="hello_rating">Hello Rating</option>
-                <option value="hello_growth">Hello Growth</option>
-              </select>
-            </FormField>
-            <FormField label="Status da Assinatura">
-              <select value={companyForm.subscriptionStatus} onChange={e => setCompanyForm(f => ({ ...f, subscriptionStatus: e.target.value }))} className={inputCls}>
-                <option value="trialing">Em Trial</option>
-                <option value="active">Ativo</option>
-                <option value="trial_expired">Trial Expirado</option>
-                <option value="past_due">Pagamento Atrasado</option>
-                <option value="canceled">Cancelado</option>
-              </select>
-            </FormField>
-            <FormField label="Modelo de Trial">
-              <select value={companyForm.trialModel} onChange={e => setCompanyForm(f => ({ ...f, trialModel: e.target.value }))} className={inputCls}>
-                <option value="">Nenhum</option>
-                <option value="model_a">Modelo A</option>
-                <option value="model_b">Modelo B</option>
-              </select>
-            </FormField>
-            <FormField label="Vencimento do Trial">
-              <input type="date" value={companyForm.trialEndAt} onChange={e => setCompanyForm(f => ({ ...f, trialEndAt: e.target.value }))} className={inputCls} />
-            </FormField>
-            <FormField label="Máx. Usuários">
-              <input type="number" min={1} max={50} value={companyForm.maxUsers} onChange={e => setCompanyForm(f => ({ ...f, maxUsers: parseInt(e.target.value) || 1 }))} className={inputCls} />
-            </FormField>
-            <FormField label="Add-ons">
+            <FormField label="Nome da Empresa" t={t} className="col-span-2"><input type="text" value={companyForm.name} onChange={e => setCompanyForm(f => ({ ...f, name: e.target.value }))} className={inputCls} /></FormField>
+            <FormField label="Plano" t={t}><select value={companyForm.plan} onChange={e => setCompanyForm(f => ({ ...f, plan: e.target.value }))} className={inputCls}><option value="hello_client">Hello Client</option><option value="hello_rating">Hello Rating</option><option value="hello_growth">Hello Growth</option></select></FormField>
+            <FormField label="Status" t={t}><select value={companyForm.subscriptionStatus} onChange={e => setCompanyForm(f => ({ ...f, subscriptionStatus: e.target.value }))} className={inputCls}><option value="trialing">Em Trial</option><option value="active">Ativo</option><option value="trial_expired">Trial Expirado</option><option value="past_due">Pagamento Atrasado</option><option value="canceled">Cancelado</option></select></FormField>
+            <FormField label="Modelo de Trial" t={t}><select value={companyForm.trialModel} onChange={e => setCompanyForm(f => ({ ...f, trialModel: e.target.value }))} className={inputCls}><option value="">Nenhum</option><option value="model_a">Modelo A</option><option value="model_b">Modelo B</option></select></FormField>
+            <FormField label="Vencimento do Trial" t={t}><input type="date" value={companyForm.trialEndAt} onChange={e => setCompanyForm(f => ({ ...f, trialEndAt: e.target.value }))} className={inputCls} /></FormField>
+            <FormField label="Máx. Usuários" t={t}><input type="number" min={1} max={50} value={companyForm.maxUsers} onChange={e => setCompanyForm(f => ({ ...f, maxUsers: parseInt(e.target.value) || 1 }))} className={inputCls} /></FormField>
+            <FormField label="Add-ons" t={t}>
               <div className="flex gap-3 mt-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={companyForm.addons.game} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, game: e.target.checked } }))} className="w-4 h-4 rounded" />
-                  <span className="text-sm text-gray-300">Game</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={companyForm.addons.mpd} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, mpd: e.target.checked } }))} className="w-4 h-4 rounded" />
-                  <span className="text-sm text-gray-300">MPD</span>
-                </label>
+                {[['game', 'Game'], ['mpd', 'MPD']].map(([k, l]) => (
+                  <label key={k} className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={(companyForm.addons as any)[k]} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, [k]: e.target.checked } }))} className="w-4 h-4 rounded accent-emerald-500" />
+                    <span className={`text-sm ${t.textSub}`}>{l}</span>
+                  </label>
+                ))}
               </div>
             </FormField>
-            <FormField label="Stripe Customer ID" className="col-span-2">
-              <input type="text" value={companyForm.stripeCustomerId} onChange={e => setCompanyForm(f => ({ ...f, stripeCustomerId: e.target.value }))} className={inputCls} placeholder="cus_..." />
-            </FormField>
-            <FormField label="Stripe Subscription ID" className="col-span-2">
-              <input type="text" value={companyForm.stripeSubscriptionId} onChange={e => setCompanyForm(f => ({ ...f, stripeSubscriptionId: e.target.value }))} className={inputCls} placeholder="sub_..." />
-            </FormField>
+            <FormField label="Stripe Customer ID" t={t} className="col-span-2"><input type="text" value={companyForm.stripeCustomerId} onChange={e => setCompanyForm(f => ({ ...f, stripeCustomerId: e.target.value }))} className={inputCls} placeholder="cus_..." /></FormField>
+            <FormField label="Stripe Subscription ID" t={t} className="col-span-2"><input type="text" value={companyForm.stripeSubscriptionId} onChange={e => setCompanyForm(f => ({ ...f, stripeSubscriptionId: e.target.value }))} className={inputCls} placeholder="sub_..." /></FormField>
           </div>
-          <div className="flex gap-3 pt-4 mt-2 border-t border-gray-800">
+          <div className={`flex gap-3 pt-4 mt-2 border-t ${t.modalHeader}`}>
             <button onClick={() => setEditModal(null)} className={btnSecondary}>Cancelar</button>
             <button onClick={handleUpdateCompany} disabled={isSaving} className={btnPrimary}>
-              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-              Salvar Empresa
+              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Salvar Empresa
             </button>
           </div>
         </Modal>
       )}
 
-      {/* Add Company Modal */}
+      {/* Add Company */}
       {editModal === 'new_company' && selectedClient && (
-        <Modal title={`Nova Empresa — ${selectedClient.name}`} onClose={() => setEditModal(null)} wide>
+        <Modal title={`Nova Empresa — ${selectedClient.name}`} onClose={() => setEditModal(null)} t={t} wide>
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Nome da Empresa" className="col-span-2">
-              <input type="text" value={companyForm.name} onChange={e => setCompanyForm(f => ({ ...f, name: e.target.value }))} className={inputCls} placeholder="Nome da empresa" />
-            </FormField>
-            <FormField label="Plano">
-              <select value={companyForm.plan} onChange={e => setCompanyForm(f => ({ ...f, plan: e.target.value }))} className={inputCls}>
-                <option value="hello_client">Hello Client</option>
-                <option value="hello_rating">Hello Rating</option>
-                <option value="hello_growth">Hello Growth</option>
-              </select>
-            </FormField>
-            <FormField label="Status Inicial">
-              <select value={companyForm.subscriptionStatus} onChange={e => setCompanyForm(f => ({ ...f, subscriptionStatus: e.target.value }))} className={inputCls}>
-                <option value="trialing">Em Trial</option>
-                <option value="active">Ativo</option>
-              </select>
-            </FormField>
-            <FormField label="Modelo de Trial">
-              <select value={companyForm.trialModel} onChange={e => setCompanyForm(f => ({ ...f, trialModel: e.target.value }))} className={inputCls}>
-                <option value="">Nenhum</option>
-                <option value="model_a">Modelo A</option>
-                <option value="model_b">Modelo B</option>
-              </select>
-            </FormField>
-            <FormField label="Vencimento do Trial">
-              <input type="date" value={companyForm.trialEndAt} onChange={e => setCompanyForm(f => ({ ...f, trialEndAt: e.target.value }))} className={inputCls} />
-            </FormField>
-            <FormField label="Máx. Usuários">
-              <input type="number" min={1} max={50} value={companyForm.maxUsers} onChange={e => setCompanyForm(f => ({ ...f, maxUsers: parseInt(e.target.value) || 1 }))} className={inputCls} />
-            </FormField>
-            <FormField label="Add-ons">
+            <FormField label="Nome da Empresa" t={t} className="col-span-2"><input type="text" value={companyForm.name} onChange={e => setCompanyForm(f => ({ ...f, name: e.target.value }))} className={inputCls} placeholder="Nome da empresa" /></FormField>
+            <FormField label="Plano" t={t}><select value={companyForm.plan} onChange={e => setCompanyForm(f => ({ ...f, plan: e.target.value }))} className={inputCls}><option value="hello_client">Hello Client</option><option value="hello_rating">Hello Rating</option><option value="hello_growth">Hello Growth</option></select></FormField>
+            <FormField label="Status Inicial" t={t}><select value={companyForm.subscriptionStatus} onChange={e => setCompanyForm(f => ({ ...f, subscriptionStatus: e.target.value }))} className={inputCls}><option value="trialing">Em Trial</option><option value="active">Ativo</option></select></FormField>
+            <FormField label="Modelo de Trial" t={t}><select value={companyForm.trialModel} onChange={e => setCompanyForm(f => ({ ...f, trialModel: e.target.value }))} className={inputCls}><option value="">Nenhum</option><option value="model_a">Modelo A</option><option value="model_b">Modelo B</option></select></FormField>
+            <FormField label="Vencimento do Trial" t={t}><input type="date" value={companyForm.trialEndAt} onChange={e => setCompanyForm(f => ({ ...f, trialEndAt: e.target.value }))} className={inputCls} /></FormField>
+            <FormField label="Máx. Usuários" t={t}><input type="number" min={1} max={50} value={companyForm.maxUsers} onChange={e => setCompanyForm(f => ({ ...f, maxUsers: parseInt(e.target.value) || 1 }))} className={inputCls} /></FormField>
+            <FormField label="Add-ons" t={t}>
               <div className="flex gap-3 mt-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={companyForm.addons.game} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, game: e.target.checked } }))} className="w-4 h-4 rounded" />
-                  <span className="text-sm text-gray-300">Game</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={companyForm.addons.mpd} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, mpd: e.target.checked } }))} className="w-4 h-4 rounded" />
-                  <span className="text-sm text-gray-300">MPD</span>
-                </label>
+                {[['game', 'Game'], ['mpd', 'MPD']].map(([k, l]) => (
+                  <label key={k} className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={(companyForm.addons as any)[k]} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, [k]: e.target.checked } }))} className="w-4 h-4 rounded accent-emerald-500" />
+                    <span className={`text-sm ${t.textSub}`}>{l}</span>
+                  </label>
+                ))}
               </div>
             </FormField>
           </div>
-          <div className="flex gap-3 pt-4 mt-2 border-t border-gray-800">
+          <div className={`flex gap-3 pt-4 mt-2 border-t ${t.modalHeader}`}>
             <button onClick={() => setEditModal(null)} className={btnSecondary}>Cancelar</button>
             <button onClick={handleAddCompany} disabled={isSaving || !companyForm.name} className={btnPrimary}>
-              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-              Adicionar Empresa
+              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Adicionar Empresa
             </button>
           </div>
         </Modal>
       )}
 
-      {/* Payment Link Modal */}
+      {/* Payment Link */}
       {editModal === 'payment_link' && editingCompany && selectedClient && (
-        <Modal title="Enviar Link de Pagamento" onClose={() => { setEditModal(null); setPaymentLinkResult(null); }}>
+        <Modal title="Enviar Link de Pagamento" onClose={() => { setEditModal(null); setPaymentLinkResult(null); }} t={t}>
           {paymentLinkResult ? (
             <div className="space-y-4">
-              <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-xl p-4 text-center">
-                <CheckCircle size={32} className="text-emerald-400 mx-auto mb-2" />
-                <p className="text-emerald-300 font-semibold">Link gerado com sucesso!</p>
+              <div className={`${t.successBox} border rounded-xl p-4 text-center`}>
+                <CheckCircle size={32} className="text-emerald-500 mx-auto mb-2" />
+                <p className="text-emerald-600 font-semibold">Link gerado com sucesso!</p>
               </div>
-              <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-2">Link de Pagamento:</p>
+              <div className={`${t.linkBox} border rounded-lg p-3`}>
+                <p className={`text-xs ${t.textMuted} mb-2`}>Link de Pagamento:</p>
                 <div className="flex items-center gap-2">
-                  <p className="text-xs text-emerald-400 font-mono flex-1 truncate">{paymentLinkResult.url}</p>
-                  <button onClick={() => { navigator.clipboard.writeText(paymentLinkResult.url); showToast('success', 'Link copiado!'); }} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors">
-                    <Copy size={14} />
-                  </button>
-                  <a href={paymentLinkResult.url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors">
-                    <ExternalLink size={14} />
-                  </a>
+                  <p className={`text-xs ${t.linkText} font-mono flex-1 truncate`}>{paymentLinkResult.url}</p>
+                  <button onClick={() => { navigator.clipboard.writeText(paymentLinkResult.url); showToast('success', 'Link copiado!'); }} className={`p-1.5 ${t.textMuted} hover:${t.text} rounded transition-colors`}><Copy size={14} /></button>
+                  <a href={paymentLinkResult.url} target="_blank" rel="noopener noreferrer" className={`p-1.5 ${t.textMuted} hover:${t.text} rounded transition-colors`}><ExternalLink size={14} /></a>
                 </div>
               </div>
-              <button onClick={() => { setEditModal(null); setPaymentLinkResult(null); }} className={`w-full ${btnPrimary}`}>
-                <Check size={16} /> Concluído
-              </button>
+              <button onClick={() => { setEditModal(null); setPaymentLinkResult(null); }} className={`w-full ${btnPrimary}`}><Check size={16} /> Concluído</button>
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm">
-                <p className="text-gray-400 text-xs mb-1">Cliente</p>
-                <p className="text-white font-semibold">{selectedClient.name}</p>
-                <p className="text-gray-400 text-xs">{selectedClient.email}</p>
+              <div className={`${t.linkBox} border rounded-lg p-3 text-sm`}>
+                <p className={`${t.textMuted} text-xs mb-1`}>Cliente</p>
+                <p className={`${t.text} font-semibold`}>{selectedClient.name}</p>
+                <p className={`${t.textMuted} text-xs`}>{selectedClient.email}</p>
               </div>
-              <FormField label="Plano">
+              <FormField label="Plano" t={t}>
                 <select value={paymentLinkForm.plan} onChange={e => setPaymentLinkForm(f => ({ ...f, plan: e.target.value }))} className={inputCls}>
                   <option value="hello_client">Hello Client</option>
                   <option value="hello_rating">Hello Rating</option>
                   <option value="hello_growth">Hello Growth</option>
                 </select>
               </FormField>
-              <FormField label="Número de Usuários">
+              <FormField label="Número de Usuários" t={t}>
                 <input type="number" min={1} max={10} value={paymentLinkForm.userCount} onChange={e => setPaymentLinkForm(f => ({ ...f, userCount: parseInt(e.target.value) || 1 }))} className={inputCls} />
               </FormField>
-              <FormField label="Add-ons">
+              <FormField label="Add-ons" t={t}>
                 <div className="flex gap-4 mt-1">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={paymentLinkForm.addons.game} onChange={e => setPaymentLinkForm(f => ({ ...f, addons: { ...f.addons, game: e.target.checked } }))} className="w-4 h-4 rounded" />
-                    <span className="text-sm text-gray-300">Game</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={paymentLinkForm.addons.mpd} onChange={e => setPaymentLinkForm(f => ({ ...f, addons: { ...f.addons, mpd: e.target.checked } }))} className="w-4 h-4 rounded" />
-                    <span className="text-sm text-gray-300">MPD</span>
-                  </label>
+                  {[['game', 'Game'], ['mpd', 'MPD']].map(([k, l]) => (
+                    <label key={k} className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={(paymentLinkForm.addons as any)[k]} onChange={e => setPaymentLinkForm(f => ({ ...f, addons: { ...f.addons, [k]: e.target.checked } }))} className="w-4 h-4 rounded accent-emerald-500" />
+                      <span className={`text-sm ${t.textSub}`}>{l}</span>
+                    </label>
+                  ))}
                 </div>
               </FormField>
-              <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-lg p-3 flex items-center justify-between">
-                <span className="text-sm text-gray-300">Valor mensal total:</span>
-                <span className="text-lg font-bold text-emerald-400">R$ {paymentPrice.toFixed(2).replace('.', ',')}</span>
+              <div className={`${t.paymentBox} border rounded-lg p-3 flex items-center justify-between`}>
+                <span className={`text-sm ${t.textSub}`}>Valor mensal total:</span>
+                <span className={`text-lg font-bold ${t.paymentText}`}>R$ {paymentPrice.toFixed(2).replace('.', ',')}</span>
               </div>
-              <FormField label="Nota personalizada (opcional)">
+              <FormField label="Nota personalizada (opcional)" t={t}>
                 <textarea value={paymentLinkForm.customNote} onChange={e => setPaymentLinkForm(f => ({ ...f, customNote: e.target.value }))} className={`${inputCls} h-20 resize-none`} placeholder="Mensagem para o cliente..." />
               </FormField>
               <div className="flex gap-3 pt-2">
                 <button onClick={() => setEditModal(null)} className={btnSecondary}>Cancelar</button>
                 <button onClick={() => handleSendPaymentLink(editingCompany)} disabled={sendingLink} className={btnPrimary}>
-                  {sendingLink ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-                  Gerar Link
+                  {sendingLink ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />} Gerar Link
                 </button>
               </div>
             </div>
@@ -1114,26 +1028,22 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
 
 // ─── Shared UI helpers ────────────────────────────────────────────────────────
 
-const inputCls = 'w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30';
-const btnPrimary = 'flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-const btnSecondary = 'flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm font-medium px-4 py-2.5 rounded-lg transition-colors';
-
-function FormField({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
+function FormField({ label, children, className = '', t }: { label: string; children: React.ReactNode; className?: string; t: typeof DARK }) {
   return (
     <div className={className}>
-      <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">{label}</label>
+      <label className={`block text-xs font-semibold ${t.label} uppercase tracking-wider mb-1.5`}>{label}</label>
       {children}
     </div>
   );
 }
 
-function Modal({ title, children, onClose, wide = false }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
+function Modal({ title, children, onClose, wide = false, t }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean; t: typeof DARK }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className={`bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[90vh] overflow-y-auto`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <h2 className="text-base font-bold text-white">{title}</h2>
-          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${t.overlay} backdrop-blur-sm`}>
+      <div className={`${t.modalBg} border rounded-2xl shadow-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[90vh] overflow-y-auto`}>
+        <div className={`flex items-center justify-between px-6 py-4 border-b ${t.modalHeader}`}>
+          <h2 className={`text-base font-bold ${t.text}`}>{title}</h2>
+          <button onClick={onClose} className={`p-1.5 ${t.textMuted} hover:${t.text} hover:${t.surface === 'bg-white' ? 'bg-slate-100' : 'bg-gray-800'} rounded-lg transition-colors`}>
             <X size={16} />
           </button>
         </div>
