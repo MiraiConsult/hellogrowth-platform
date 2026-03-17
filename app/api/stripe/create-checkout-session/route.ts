@@ -173,11 +173,12 @@ export async function POST(request: NextRequest) {
     const planName = getPlanName(plan, addons || { game: false, mpd: false });
     const description = `${planName} - ${userCount} usuário${userCount > 1 ? 's' : ''} (R$ ${priceBRL.toFixed(2).replace('.', ',')} por usuário/mês)`;
 
-    // (model_b_convert removido - fluxo unificado no model_b abaixo)
-
     // =====================================================================
-    // MODELO A: Trial com cartão (30 dias grátis, cobrança automática no dia 31)
-    // Ou fluxo normal sem trial
+    // Checkout padrão - igual para todos os modelos (A, B e sem trial)
+    // - Cartão sempre obrigatório
+    // - Cliente digita o cupão manualmente (allow_promotion_codes=true)
+    // - MODELO A: cliente usa cupão TRIAL30 (100% off, 1 mês) - cobrança automática no dia 31
+    // - MODELO B: cliente usa cupão TRIAL30B (100% off forever) - você gerencia manualmente depois
     // =====================================================================
     const sessionOptions: any = {
       mode: 'subscription',
@@ -213,42 +214,7 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // =====================================================================
-    // MODELO A: Trial com cartão
-    // - Cartão obrigatório (payment_method_collection=always)
-    // - 30 dias grátis via trial_period_days
-    // - No dia 31, cobrança automática
-    // - Cliente digita o cupom TRIAL30 manualmente no checkout (allow_promotion_codes=true)
-    // =====================================================================
-    if (trial_model === 'model_a') {
-      sessionOptions.subscription_data = {
-        trial_period_days: 30,
-        trial_settings: {
-          end_behavior: {
-            missing_payment_method: 'cancel',
-          },
-        },
-      };
-      console.log('Model A trial: 30-day free trial with card required (payment_method_collection=always)');
-    }
-
-    // =====================================================================
-    // MODELO B: Trial sem cartão
-    // - Sem cartão obrigatório (payment_method_collection=if_required)
-    // - Cupom 100% off forever aplicado AUTOMATICAMENTE via discounts
-    // - payment_method_types removido para não forçar cartao
-    // - Você gerencia manualmente depois (remove o cupom quando quiser cobrar)
-    // =====================================================================
-    if (trial_model === 'model_b') {
-      sessionOptions.payment_method_collection = 'if_required';
-      // Remover payment_method_types para não forçar cartão
-      delete sessionOptions.payment_method_types;
-      // Aplicar cupom forever automaticamente - remove allow_promotion_codes
-      // e usa discounts com o coupon ID diretamente
-      delete sessionOptions.allow_promotion_codes;
-      sessionOptions.discounts = [{ coupon: 'foHOUrVn' }];
-      console.log('Model B trial: checkout without card, 100% off forever coupon applied automatically');
-    }
+    console.log('Checkout session options:', { trial_model, payment_method_collection: 'always', allow_promotion_codes: true });
 
     // Create Checkout Session
     console.log('Creating Stripe session with price:', priceCents, 'cents');
