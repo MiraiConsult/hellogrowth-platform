@@ -3,8 +3,20 @@
 import React, { useState, useEffect } from 'react';
 import Auth from '@/components/Auth';
 import MainApp from '@/components/MainApp';
+import TrialExpiredScreen from '@/components/TrialExpiredScreen';
 import { User, PlanType, Company, UserCompany } from '@/types';
 import { supabase } from '@/lib/supabase';
+
+// Verifica se o trial do Modelo B expirou
+function isTrialExpired(user: User): boolean {
+  // Apenas bloqueia o Modelo B (sem cartão)
+  // O Modelo A é gerenciado pelo Stripe (cancela automaticamente)
+  if (user.trialModel !== 'model_b') return false;
+  if (!user.trialEndAt) return false;
+  if (user.subscriptionStatus === 'active') return false; // Já pagou
+  const trialEnd = new Date(user.trialEndAt);
+  return new Date() > trialEnd;
+}
 
 export default function HomePage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -183,13 +195,32 @@ export default function HomePage() {
 
   if (!currentUser) return null;
 
+  // Verificar se o trial do Modelo B expirou
+  if (isTrialExpired(currentUser)) {
+    return (
+      <TrialExpiredScreen
+        currentUser={currentUser}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // Calcular dias restantes do trial (para banner informativo)
+  let daysLeft: number | undefined = undefined;
+  if (currentUser.trialModel === 'model_b' && currentUser.trialEndAt) {
+    const trialEnd = new Date(currentUser.trialEndAt);
+    const now = new Date();
+    const diff = trialEnd.getTime() - now.getTime();
+    daysLeft = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  }
+
   return (
     <MainApp
       currentUser={currentUser}
       onLogout={handleLogout}
       onUpdatePlan={handleUpdatePlan}
       onSwitchCompany={handleSwitchCompany}
-      daysLeft={undefined}
+      daysLeft={daysLeft}
     />
   );
 }

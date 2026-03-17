@@ -13,6 +13,10 @@ export interface User {
   role?: 'admin' | 'manager' | 'member' | 'viewer' | 'super_admin'; // Role do usuário
   companies?: UserCompany[]; // Empresas às quais o usuário pertence
   activeCompanyId?: string; // ID da empresa ativa no momento
+  // Trial fields
+  trialEndAt?: string; // Data de expiração do trial (ISO string)
+  trialModel?: 'none' | 'model_a' | 'model_b'; // Modelo de trial
+  subscriptionStatus?: 'trialing' | 'active' | 'canceled' | 'past_due' | 'trial_expired'; // Status da assinatura
 }
 
 // Multi-tenant: Empresa
@@ -25,9 +29,10 @@ export interface Company {
   plan_addons?: string[];
   stripe_customer_id?: string;
   stripe_subscription_id?: string;
-  subscription_status?: 'trialing' | 'active' | 'canceled' | 'past_due';
+  subscription_status?: 'trialing' | 'active' | 'canceled' | 'past_due' | 'trial_expired';
   trial_start_at?: string;
   trial_end_at?: string;
+  trial_model?: 'none' | 'model_a' | 'model_b';
   settings?: Record<string, any>;
   google_place_id?: string;
   max_users?: number;

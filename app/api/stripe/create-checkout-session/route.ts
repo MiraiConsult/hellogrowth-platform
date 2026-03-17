@@ -66,7 +66,6 @@ const PRICING_DATA: Record<number, Record<string, number>> = {
 
 // Helper function to get the price key based on plan and addons
 function getPriceKey(plan: string, addons: { game: boolean; mpd: boolean }): string {
-  // Map plan names to their codes
   const planCodeMap: Record<string, string> = {
     'hello_client': 'hc',
     'hello_rating': 'hr',
@@ -77,7 +76,7 @@ function getPriceKey(plan: string, addons: { game: boolean; mpd: boolean }): str
   
   if (!planCode) {
     console.error('Invalid plan:', plan);
-    return plan; // fallback to original plan name
+    return plan;
   }
   
   if (addons.game && addons.mpd) {
@@ -115,9 +114,12 @@ function getPlanName(plan: string, addons: { game: boolean; mpd: boolean }): str
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { plan, userCount, addons } = body;
+    // trial_model: 'none' | 'model_a' | 'model_b'
+    // model_a = trial com cartão (30 dias grátis, cartão obrigatório, cobrança automática no dia 31)
+    // model_b = trial sem cartão (30 dias livres, acesso bloqueado após expiração, cupom de desconto na conversão)
+    const { plan, userCount, addons, trial_model } = body;
     
-    console.log('Received checkout request:', { plan, userCount, addons });
+    console.log('Received checkout request:', { plan, userCount, addons, trial_model });
 
     if (!plan || !userCount) {
       return NextResponse.json(
@@ -171,9 +173,37 @@ export async function POST(request: NextRequest) {
     const planName = getPlanName(plan, addons || { game: false, mpd: false });
     const description = `${planName} - ${userCount} usuário${userCount > 1 ? 's' : ''} (R$ ${priceBRL.toFixed(2).replace('.', ',')} por usuário/mês)`;
 
-    // Create Checkout Session with dynamic pricing
-    console.log('Creating Stripe session with price:', priceCents, 'cents');
-    const session = await stripe.checkout.sessions.create({
+    // =====================================================================
+    // MODELO B: Trial sem cartão
+    // Não cria sessão Stripe agora. Retorna dados para criar conta de trial
+    // diretamente no banco. O cliente paga depois de 30 dias via /pricing.
+    // =====================================================================
+    if (trial_model === 'model_b') {
+      const trialEndAt = new Date();
+      trialEndAt.setDate(trialEndAt.getDate() + 30);
+      
+      console.log('Model B trial: creating free trial without payment method');
+      return NextResponse.json({
+        trial_model: 'model_b',
+        trial_end_at: trialEndAt.toISOString(),
+        redirect_to_setup: true,
+        metadata: {
+          plan,
+          userCount: userCount.toString(),
+          addons: JSON.stringify(addons || {}),
+          priceKey,
+          pricePerUserBRL: priceBRL.toString(),
+          totalPriceBRL: totalPriceBRL.toString(),
+          trial_model: 'model_b',
+        },
+      });
+    }
+
+    // =====================================================================
+    // MODELO A: Trial com cartão (30 dias grátis, cobrança automática no dia 31)
+    // Ou fluxo normal sem trial
+    // =====================================================================
+    const sessionOptions: any = {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
@@ -192,19 +222,40 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-	      success_url: `${baseUrl}/pricing/setup?session_id={CHECKOUT_SESSION_ID}`,
-	      cancel_url: `${baseUrl}/pricing/canceled`,
-	      allow_promotion_codes: true,
-	      payment_method_collection: 'if_required',
-	      metadata: {
+      success_url: `${baseUrl}/pricing/setup?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/pricing/canceled`,
+      allow_promotion_codes: true,
+      payment_method_collection: 'if_required',
+      metadata: {
         plan,
         userCount: userCount.toString(),
         addons: JSON.stringify(addons || {}),
         priceKey,
         pricePerUserBRL: priceBRL.toString(),
         totalPriceBRL: totalPriceBRL.toString(),
+        trial_model: trial_model || 'none',
       },
-    });
+    };
+
+    // Modelo A: Exige cartão e cria trial de 30 dias no Stripe
+    // O cliente cadastra o cartão mas não é cobrado por 30 dias
+    // No dia 31, a cobrança inicia automaticamente
+    if (trial_model === 'model_a') {
+      sessionOptions.payment_method_collection = 'always';
+      sessionOptions.subscription_data = {
+        trial_period_days: 30,
+        trial_settings: {
+          end_behavior: {
+            missing_payment_method: 'cancel',
+          },
+        },
+      };
+      console.log('Model A trial: 30-day free trial with card required');
+    }
+
+    // Create Checkout Session
+    console.log('Creating Stripe session with price:', priceCents, 'cents');
+    const session = await stripe.checkout.sessions.create(sessionOptions);
 
     console.log('Stripe session created successfully:', session.id);
     return NextResponse.json({ sessionId: session.id, url: session.url });

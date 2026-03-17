@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Check, X, Sparkles, Users, Mail, ArrowLeft, RefreshCw, Crown } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Check, X, Sparkles, Users, Mail, ArrowLeft, RefreshCw, Crown, Gift, Clock } from 'lucide-react';
 
 // Pricing data structure based on the user's table
 const PRICING_DATA: Record<number, Record<string, number>> = {
@@ -35,6 +36,10 @@ interface CurrentSubscription {
 }
 
 export default function PricingClient({ showCanceledMessage: initialShowCanceledMessage }: PricingClientProps) {
+  const searchParams = useSearchParams();
+  // trial_model pode ser passado via URL: ?trial_model=model_a ou ?trial_model=model_b
+  const urlTrialModel = searchParams?.get('trial_model') as 'model_a' | 'model_b' | null;
+  const [trialModel, setTrialModel] = useState<'none' | 'model_a' | 'model_b'>(urlTrialModel || 'none');
   const [userCount, setUserCount] = useState<number>(1);
   const [selectedPlans, setSelectedPlans] = useState<{
     hello_client: { game: boolean; mpd: boolean };
@@ -197,7 +202,12 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
       const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan, userCount, addons: selectedPlans[plan] }),
+        body: JSON.stringify({ 
+          plan, 
+          userCount, 
+          addons: selectedPlans[plan],
+          trial_model: trialModel !== 'none' ? trialModel : undefined,
+        }),
       });
 
       if (!response.ok) {
@@ -205,7 +215,22 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
         throw new Error(error.error || 'Failed to create checkout session');
       }
 
-      const { url } = await response.json();
+      const data = await response.json();
+
+      // Modelo B: trial sem cartão - redirecionar para página de setup de trial
+      if (data.trial_model === 'model_b' && data.redirect_to_setup) {
+        const params = new URLSearchParams({
+          plan,
+          user_count: userCount.toString(),
+          addons: JSON.stringify(selectedPlans[plan]),
+          trial_end_at: data.trial_end_at,
+        });
+        window.location.href = `/pricing/trial-setup?${params.toString()}`;
+        return;
+      }
+
+      // Modelo A ou normal: redirecionar para checkout Stripe
+      const { url } = data;
       if (url) window.location.href = url;
       else throw new Error('No checkout URL returned');
     } catch (error) {
@@ -310,6 +335,26 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
             <div>
               <p className="text-yellow-800 font-medium">Pagamento cancelado</p>
               <p className="text-yellow-700 text-sm">Você pode escolher um plano quando estiver pronto.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Trial Model Banner */}
+        {trialModel === 'model_a' && !isManageMode && (
+          <div className="max-w-2xl mx-auto mb-6 bg-emerald-50 border-2 border-emerald-200 rounded-xl p-4 flex items-center gap-3">
+            <Gift className="text-emerald-600 flex-shrink-0" size={24} />
+            <div>
+              <p className="text-emerald-800 font-semibold">Trial com Cartão — 30 dias grátis</p>
+              <p className="text-emerald-700 text-sm">Cadastre seu cartão e use o cupom <strong>NCPA2mKC</strong> no checkout. Você não será cobrado por 30 dias. A cobrança inicia automaticamente no 31º dia.</p>
+            </div>
+          </div>
+        )}
+        {trialModel === 'model_b' && !isManageMode && (
+          <div className="max-w-2xl mx-auto mb-6 bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-center gap-3">
+            <Clock className="text-amber-600 flex-shrink-0" size={24} />
+            <div>
+              <p className="text-amber-800 font-semibold">Trial Gratuito — 30 dias sem cartão</p>
+              <p className="text-amber-700 text-sm">Escolha seu plano e ative 30 dias grátis sem precisar de cartão. Após o período, você receberá um cupom de desconto para assinar.</p>
             </div>
           </div>
         )}
@@ -541,6 +586,16 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
                       '✓ Plano atual'
                     ) : isManageMode ? (
                       'Alterar para este plano'
+                    ) : trialModel === 'model_a' ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Gift size={18} />
+                        Iniciar trial com cartão
+                      </span>
+                    ) : trialModel === 'model_b' ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Clock size={18} />
+                        Ativar 30 dias grátis
+                      </span>
                     ) : (
                       'Assinar agora'
                     )}

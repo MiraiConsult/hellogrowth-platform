@@ -139,6 +139,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         let activeCompanyId = data.tenant_id;
         let activePlan = data.plan;
         let activeCompanyName = data.company_name;
+        let activeTrialEndAt: string | null = null;
+        let activeTrialModel: string = 'none';
+        let activeSubscriptionStatus: string = 'active';
         
         try {
           const { data: ucData } = await supabase
@@ -157,6 +160,10 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
               activeCompanyName = defaultCompany.company.name || data.company_name;
               userRole = defaultCompany.role || userRole;
               isOwner = defaultCompany.role === 'owner';
+              // Capturar dados de trial da empresa ativa
+              activeTrialEndAt = defaultCompany.company.trial_end_at || null;
+              activeTrialModel = defaultCompany.company.trial_model || 'none';
+              activeSubscriptionStatus = defaultCompany.company.subscription_status || 'active';
             }
           }
         } catch (err) {
@@ -175,7 +182,10 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           isOwner: isOwner,
           role: userRole,
           companies: userCompanies,
-          activeCompanyId: activeCompanyId
+          activeCompanyId: activeCompanyId,
+          trialEndAt: activeTrialEndAt || undefined,
+          trialModel: (activeTrialModel as 'none' | 'model_a' | 'model_b') || 'none',
+          subscriptionStatus: (activeSubscriptionStatus as any) || 'active',
         };
 
         onLogin(user);

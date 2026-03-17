@@ -1235,13 +1235,17 @@ Responda APENAS com JSON válido (sem markdown):
         npsData={npsData}
       />
       <main className={`flex-1 relative transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
-        {currentUser.plan === 'trial' && daysLeft !== undefined && (
-          <div className="bg-emerald-600 text-white px-4 py-2 text-sm font-medium flex justify-between items-center sticky top-0 z-20">
+        {(currentUser.plan === 'trial' || currentUser.trialModel === 'model_b') && daysLeft !== undefined && (
+          <div className={`text-white px-4 py-2 text-sm font-medium flex justify-between items-center sticky top-0 z-20 ${daysLeft <= 3 ? 'bg-red-600' : daysLeft <= 7 ? 'bg-orange-500' : 'bg-emerald-600'}`}>
             <div className="flex items-center gap-2">
-              <span className="bg-emerald-500 px-2 py-0.5 rounded text-xs uppercase font-bold tracking-wider">Teste Grátis</span>
-              <span>Você tem <strong>{daysLeft} dias restantes</strong>.</span>
+              <span className={`px-2 py-0.5 rounded text-xs uppercase font-bold tracking-wider ${daysLeft <= 3 ? 'bg-red-500' : daysLeft <= 7 ? 'bg-orange-400' : 'bg-emerald-500'}`}>Trial</span>
+              {daysLeft === 0 ? (
+                <span>Seu trial <strong>expira hoje</strong>! Assine para manter o acesso.</span>
+              ) : (
+                <span>Você tem <strong>{daysLeft} dia{daysLeft !== 1 ? 's' : ''} restante{daysLeft !== 1 ? 's' : ''}</strong> de trial gratuito.</span>
+              )}
             </div>
-            <button onClick={() => setCurrentView('pricing')} className="bg-white text-indigo-600 px-3 py-1 rounded text-xs font-bold">Assinar Agora</button>
+            <button onClick={() => window.location.href = '/pricing'} className="bg-white text-emerald-700 px-3 py-1 rounded text-xs font-bold hover:bg-emerald-50 transition-colors">Assinar Agora</button>
           </div>
         )}
         
