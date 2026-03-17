@@ -155,6 +155,11 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
       return;
     }
 
+    if (profile.business_description.length > 1000) {
+      showNotification('error', 'A descrição do negócio ultrapassou o limite de 1000 caracteres. Reduza o texto antes de salvar.');
+      return;
+    }
+
     setSaving(true);
     try {
       const updatedProfile = {
@@ -379,11 +384,35 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
               onChange={(e) => setProfile({ ...profile, business_description: e.target.value })}
               placeholder="Descreva o que sua empresa faz, quais serviços oferece e o que a torna especial. Quanto mais detalhes, melhor a IA vai te entender..."
               rows={4}
-              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              maxLength={1000}
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                profile.business_description.length > 1000
+                  ? 'border-red-400 focus:ring-red-400 focus:border-red-400'
+                  : 'border-slate-200'
+              }`}
             />
-            <p className="text-xs text-slate-400 mt-1">
-              {profile.business_description.length}/500 caracteres (mínimo recomendado: 50)
-            </p>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-xs text-slate-400">
+                Mínimo recomendado: 50 caracteres
+              </p>
+              <p className={`text-xs font-medium ${
+                profile.business_description.length > 1000
+                  ? 'text-red-500'
+                  : profile.business_description.length > 900
+                  ? 'text-amber-500'
+                  : 'text-slate-400'
+              }`}>
+                {profile.business_description.length}/1000
+                {profile.business_description.length > 1000 && (
+                  <span className="ml-1">⚠ Limite excedido</span>
+                )}
+              </p>
+            </div>
+            {profile.business_description.length > 1000 && (
+              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                ⚠ A descrição ultrapassou o limite de 1000 caracteres. Reduza o texto para salvar.
+              </p>
+            )}
           </div>
         </div>
       )}
