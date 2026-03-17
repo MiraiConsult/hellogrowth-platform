@@ -345,7 +345,7 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
             <Gift className="text-emerald-600 flex-shrink-0" size={24} />
             <div>
               <p className="text-emerald-800 font-semibold">Trial com Cartão — 30 dias grátis</p>
-              <p className="text-emerald-700 text-sm">Cadastre seu cartão e use o cupom <strong>NCPA2mKC</strong> no checkout. Você não será cobrado por 30 dias. A cobrança inicia automaticamente no 31º dia.</p>
+              <p className="text-emerald-700 text-sm">Cadastre seu cartão e tenha <strong>30 dias grátis</strong>. Você não será cobrado durante o período de trial. A cobrança inicia automaticamente no 31º dia.</p>
             </div>
           </div>
         )}
@@ -354,7 +354,7 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
             <Clock className="text-amber-600 flex-shrink-0" size={24} />
             <div>
               <p className="text-amber-800 font-semibold">Trial Gratuito — 30 dias sem cartão</p>
-              <p className="text-amber-700 text-sm">Escolha seu plano e ative 30 dias grátis sem precisar de cartão. Após o período, você receberá um cupom de desconto para assinar.</p>
+              <p className="text-amber-700 text-sm">Escolha seu plano e ative 30 dias grátis sem precisar de cartão. No dia 31, o acesso é bloqueado e você pode assinar normalmente para continuar.</p>
             </div>
           </div>
         )}

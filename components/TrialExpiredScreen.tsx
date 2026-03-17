@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Lock, Clock, CreditCard, ArrowRight, LogOut, Gift } from 'lucide-react';
+import { Lock, Clock, CreditCard, ArrowRight, LogOut } from 'lucide-react';
 import { User } from '@/types';
 
 interface TrialExpiredScreenProps {
@@ -11,8 +11,7 @@ interface TrialExpiredScreenProps {
 
 const TrialExpiredScreen: React.FC<TrialExpiredScreenProps> = ({ currentUser, onLogout }) => {
   const handleActivateSubscription = () => {
-    // Redirecionar para a página de preços para ativar assinatura
-    // O cupom JLRn112F (30% off) pode ser usado no checkout
+    // Redirecionar para a página de preços para assinar o plano
     window.location.href = '/pricing';
   };
 
@@ -47,7 +46,7 @@ const TrialExpiredScreen: React.FC<TrialExpiredScreenProps> = ({ currentUser, on
               Período de Trial Encerrado
             </h1>
             <p className="text-red-100 text-sm">
-              Seu acesso gratuito expirou
+              Seus 30 dias gratuitos chegaram ao fim
             </p>
           </div>
 
@@ -57,7 +56,7 @@ const TrialExpiredScreen: React.FC<TrialExpiredScreenProps> = ({ currentUser, on
             <div className="bg-slate-50 rounded-2xl p-5 mb-6">
               <div className="flex items-center gap-3 mb-3">
                 <Clock size={20} className="text-slate-500" />
-                <span className="font-semibold text-slate-700">Detalhes do Trial</span>
+                <span className="font-semibold text-slate-700">Informações da conta</span>
               </div>
               <div className="space-y-2 text-sm text-slate-600">
                 <div className="flex justify-between">
@@ -77,20 +76,10 @@ const TrialExpiredScreen: React.FC<TrialExpiredScreenProps> = ({ currentUser, on
               </div>
             </div>
 
-            {/* Coupon info */}
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
-              <div className="flex items-center gap-2 mb-2">
-                <Gift size={18} className="text-amber-600" />
-                <span className="font-semibold text-amber-800">Oferta especial para você!</span>
-              </div>
-              <p className="text-amber-700 text-sm mb-3">
-                Como agradecimento pelo seu período de trial, use o cupom abaixo para obter <strong>30% de desconto</strong> no primeiro mês:
-              </p>
-              <div className="bg-white border-2 border-amber-300 rounded-xl p-3 text-center">
-                <span className="text-2xl font-mono font-bold text-amber-700 tracking-widest">JLRn112F</span>
-              </div>
-              <p className="text-amber-600 text-xs mt-2 text-center">
-                Aplique este cupom no checkout para 30% de desconto
+            {/* Message */}
+            <div className="text-center mb-6">
+              <p className="text-slate-600 text-base leading-relaxed">
+                Para continuar usando o HelloGrowth, assine o plano que você escolheu durante o cadastro.
               </p>
             </div>
 
@@ -107,7 +96,7 @@ const TrialExpiredScreen: React.FC<TrialExpiredScreenProps> = ({ currentUser, on
               className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl font-bold text-lg shadow-lg hover:from-emerald-600 hover:to-teal-700 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 mb-3"
             >
               <CreditCard size={22} />
-              Ativar Assinatura
+              Assinar agora
               <ArrowRight size={20} />
             </button>
 

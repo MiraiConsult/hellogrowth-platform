@@ -240,6 +240,7 @@ export async function POST(request: NextRequest) {
     // Modelo A: Exige cartão e cria trial de 30 dias no Stripe
     // O cliente cadastra o cartão mas não é cobrado por 30 dias
     // No dia 31, a cobrança inicia automaticamente
+    // O promotion code TRIAL30 (promo_1TC1db0JQvL5ZxK9) é aplicado automaticamente
     if (trial_model === 'model_a') {
       sessionOptions.payment_method_collection = 'always';
       sessionOptions.subscription_data = {
@@ -250,7 +251,14 @@ export async function POST(request: NextRequest) {
           },
         },
       };
-      console.log('Model A trial: 30-day free trial with card required');
+      // Aplicar o promotion code TRIAL30 automaticamente (100% off na 1ª cobrança)
+      // Isso garante que o cliente não seja cobrado no 1º mês mesmo que o trial expire antes
+      sessionOptions.discounts = [
+        { promotion_code: 'promo_1TC1db0JQvL5ZxK9' },
+      ];
+      // Desabilitar allow_promotion_codes pois já aplicamos o desconto automaticamente
+      delete sessionOptions.allow_promotion_codes;
+      console.log('Model A trial: 30-day free trial with card required + TRIAL30 promo code applied');
     }
 
     // Create Checkout Session
