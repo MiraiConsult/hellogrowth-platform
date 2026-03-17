@@ -182,8 +182,8 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         companyId: targetCompanyId || '',
       },
-      // Expirar em 30 dias
-      expires_at: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60),
+      // Expirar em 23 horas (limite máximo do Stripe Checkout Session é 24h)
+      expires_at: Math.floor(Date.now() / 1000) + (23 * 60 * 60),
     });
 
     const paymentUrl = session.url;
