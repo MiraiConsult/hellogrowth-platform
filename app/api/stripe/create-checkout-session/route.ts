@@ -174,15 +174,20 @@ export async function POST(request: NextRequest) {
     const description = `${planName} - ${userCount} usuário${userCount > 1 ? 's' : ''} (R$ ${priceBRL.toFixed(2).replace('.', ',')} por usuário/mês)`;
 
     // =====================================================================
-    // Checkout padrão - igual para todos os modelos (A, B e sem trial)
-    // - Cartão sempre obrigatório
-    // - Cliente digita o cupão manualmente (allow_promotion_codes=true)
-    // - MODELO A: cliente usa cupão TRIAL30 (100% off, 1 mês) - cobrança automática no dia 31
-    // - MODELO B: cliente usa cupão TRIAL30B (100% off forever) - você gerencia manualmente depois
     // =====================================================================
+    // MODELO A: Checkout com cartão obrigatório
+    // - Cliente digita o cupom TRIAL30 (100% off, 1 mês) manualmente
+    // - Cobrança automática no dia 31
+    // =====================================================================
+    // MODELO B: Checkout sem cartão
+    // - Cupom foHOUrVn (100% off forever) aplicado automaticamente via discounts
+    // - payment_method_collection=if_required + sem payment_method_types
+    // - Você gerencia manualmente depois (remove o cupom quando quiser cobrar)
+    // =====================================================================
+    const isModelB = trial_model === 'model_b';
+
     const sessionOptions: any = {
       mode: 'subscription',
-      payment_method_types: ['card'],
       line_items: [
         {
           price_data: {
@@ -201,8 +206,6 @@ export async function POST(request: NextRequest) {
       ],
       success_url: `${baseUrl}/pricing/setup?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/pricing/canceled`,
-      allow_promotion_codes: true,
-      payment_method_collection: 'always',
       metadata: {
         plan,
         userCount: userCount.toString(),
@@ -214,7 +217,20 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    console.log('Checkout session options:', { trial_model, payment_method_collection: 'always', allow_promotion_codes: true });
+    if (isModelB) {
+      // Modelo B: sem cartão, cupom aplicado automaticamente
+      sessionOptions.payment_method_collection = 'if_required';
+      sessionOptions.discounts = [{ coupon: 'foHOUrVn' }];
+      console.log('Model B: checkout sem cartão, cupom foHOUrVn (100% off forever) aplicado automaticamente');
+    } else {
+      // Modelo A e fluxo normal: cartão obrigatório, cliente digita cupom manualmente
+      sessionOptions.payment_method_types = ['card'];
+      sessionOptions.payment_method_collection = 'always';
+      sessionOptions.allow_promotion_codes = true;
+      console.log('Model A / normal: checkout com cartão obrigatório, allow_promotion_codes=true');
+    }
+
+    console.log('Checkout session options:', { trial_model, isModelB });
 
     // Create Checkout Session
     console.log('Creating Stripe session with price:', priceCents, 'cents');
