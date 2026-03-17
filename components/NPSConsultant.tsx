@@ -424,6 +424,7 @@ Vou regenerar as perguntas com o novo tom. Um momento...`
       [
         { label: '👤 Nome + E-mail + Telefone', value: 'all' },
         { label: '👤 Nome + E-mail', value: 'name_email' },
+        { label: '👤 Nome + Telefone', value: 'name_phone' },
         { label: '👤 Apenas Nome', value: 'name_only' },
         { label: '⚙️ Configurar manualmente', value: 'custom' }
       ]
@@ -442,6 +443,12 @@ Vou regenerar as perguntas com o novo tom. Um momento...`
         { field: 'name', label: 'Nome', placeholder: 'Digite seu nome', required: true, enabled: true },
         { field: 'email', label: 'E-mail', placeholder: 'Digite seu e-mail', required: true, enabled: true },
         { field: 'phone', label: 'Telefone', placeholder: 'Digite seu telefone', required: false, enabled: false }
+      ]);
+    } else if (value === 'name_phone') {
+      setInitialFields([
+        { field: 'name', label: 'Nome', placeholder: 'Digite seu nome', required: true, enabled: true },
+        { field: 'email', label: 'E-mail', placeholder: 'Digite seu e-mail', required: false, enabled: false },
+        { field: 'phone', label: 'Telefone', placeholder: 'Digite seu telefone', required: true, enabled: true }
       ]);
     } else if (value === 'name_only') {
       setInitialFields([
@@ -562,6 +569,7 @@ Vou regenerar as perguntas com o novo tom. Um momento...`
         [
           { label: '👤 Nome + E-mail + Telefone', value: 'all' },
           { label: '👤 Nome + E-mail', value: 'name_email' },
+          { label: '👤 Nome + Telefone', value: 'name_phone' },
           { label: '👤 Apenas Nome', value: 'name_only' },
           { label: '⚙️ Configurar manualmente', value: 'custom' }
         ]
