@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-01-27.acacia',
-});
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -73,12 +70,12 @@ export async function GET(request: NextRequest) {
 
       const items = subscription.items.data;
       const mainItem = items[0];
-      const product = mainItem?.price?.product as Stripe.Product;
+      const product = mainItem?.price?.product as any;
       const planName = product ? (PLAN_NAMES[product.id] || product.name) : company.plan;
 
       // Addons
       const addons = items.slice(1).map(item => {
-        const addonProduct = item.price?.product as Stripe.Product;
+        const addonProduct = item.price?.product as any;
         return {
           id: addonProduct?.id,
           name: PLAN_NAMES[addonProduct?.id] || addonProduct?.name || 'Add-on',
