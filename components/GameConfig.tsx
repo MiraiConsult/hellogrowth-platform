@@ -96,12 +96,6 @@ const GameConfig: React.FC<GameConfigProps> = ({ tenantId }) => {
       newErrors.push(`Soma das probabilidades deve ser 100% (atual: ${totalProbability.toFixed(1)}%)`);
     }
 
-    const colors = game.prizes.map(p => p.color);
-    const uniqueColors = new Set(colors);
-    if (colors.length !== uniqueColors.size) {
-      newErrors.push('Cores não podem repetir');
-    }
-
     game.prizes.forEach((p, i) => {
       if (!p.name.trim()) {
         newErrors.push(`Prêmio ${i + 1}: nome é obrigatório`);
@@ -411,12 +405,6 @@ const GameConfig: React.FC<GameConfigProps> = ({ tenantId }) => {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">%</span>
-                <input
-                  type="color"
-                  value={prize.color}
-                  onChange={(e) => handlePrizeChange(index, 'color', e.target.value)}
-                  className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
-                />
                 {game.prizes.length > 3 && (
                   <button
                     onClick={() => handleRemovePrize(index)}
