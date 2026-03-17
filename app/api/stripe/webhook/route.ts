@@ -192,6 +192,45 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // ================================================================
+        // Para Modelo B: Checkout concluído sem cartão (payment_method_collection=if_required)
+        // O cliente usou o cupom TRIAL30B (100% off, once) e completou o checkout
+        // Precisamos criar a conta e liberar acesso por 30 dias
+        // O acesso será bloqueado automaticamente quando o Stripe tentar cobrar
+        // no 2º mês e não encontrar cartão (invoice.payment_failed)
+        // ================================================================
+        if (trialModel === 'model_b' && customerEmail && session.subscription) {
+          // Verificar se já existe conta para este e-mail
+          const { data: existingUser } = await supabase
+            .from('users')
+            .select('id, tenant_id')
+            .eq('email', customerEmail.toLowerCase())
+            .maybeSingle();
+
+          if (existingUser?.tenant_id) {
+            // Atualizar empresa existente com dados do Stripe
+            const trialEndAt = new Date();
+            trialEndAt.setDate(trialEndAt.getDate() + 30);
+
+            await supabase
+              .from('companies')
+              .update({
+                stripe_customer_id: session.customer,
+                stripe_subscription_id: session.subscription,
+                subscription_status: 'trialing',
+                trial_model: 'model_b',
+                trial_end_at: trialEndAt.toISOString(),
+              })
+              .eq('id', existingUser.tenant_id);
+
+            console.log(`Updated Model B trial for existing user: ${customerEmail}`);
+          } else {
+            // Criar conta nova via setup-tenants
+            // O redirecionamento para /pricing/setup cuidará da criação
+            console.log(`Model B checkout completed for new user: ${customerEmail}, will be created via setup-tenants`);
+          }
+        }
+
         // Para assinatura normal (sem trial): Ativar imediatamente
         // (o setup-tenants já cuida da criação, mas pode não ter os IDs do Stripe)
         if (trialModel === 'none' && session.subscription && customerEmail) {

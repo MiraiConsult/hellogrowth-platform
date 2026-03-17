@@ -173,81 +173,7 @@ export async function POST(request: NextRequest) {
     const planName = getPlanName(plan, addons || { game: false, mpd: false });
     const description = `${planName} - ${userCount} usuário${userCount > 1 ? 's' : ''} (R$ ${priceBRL.toFixed(2).replace('.', ',')} por usuário/mês)`;
 
-    // =====================================================================
-    // MODELO B CONVERSÃO: Cliente do Modelo B que expirou e quer assinar
-    // Cria sessão Stripe normal com o cupom TRIAL30B (100% off, 1ª cobrança)
-    // aplicado automaticamente — o cliente paga o cartão mas não é cobrado no 1º mês
-    // =====================================================================
-    if (trial_model === 'model_b_convert') {
-      const sessionOptionsB: any = {
-        mode: 'subscription',
-        payment_method_types: ['card'],
-        line_items: [
-          {
-            price_data: {
-              currency: 'brl',
-              product_data: {
-                name: planName,
-                description: description,
-              },
-              unit_amount: priceCents,
-              recurring: {
-                interval: 'month',
-              },
-            },
-            quantity: 1,
-          },
-        ],
-        success_url: `${baseUrl}/pricing/setup?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/pricing/canceled`,
-        payment_method_collection: 'always',
-        // Aplicar o promotion code TRIAL30B automaticamente (100% off na 1ª cobrança)
-        // ID do promotion code: promo_1TC20e0JQvL5ZxK9mmU1oRkL
-        discounts: [
-          { promotion_code: 'promo_1TC20e0JQvL5ZxK9mmU1oRkL' },
-        ],
-        metadata: {
-          plan,
-          userCount: userCount.toString(),
-          addons: JSON.stringify(addons || {}),
-          priceKey,
-          pricePerUserBRL: priceBRL.toString(),
-          totalPriceBRL: totalPriceBRL.toString(),
-          trial_model: 'model_b_convert',
-        },
-      };
-
-      console.log('Model B convert: creating subscription with TRIAL30B promo code (100% off 1st month)');
-      const sessionB = await stripe.checkout.sessions.create(sessionOptionsB);
-      console.log('Stripe session B created successfully:', sessionB.id);
-      return NextResponse.json({ sessionId: sessionB.id, url: sessionB.url });
-    }
-
-    // =====================================================================
-    // MODELO B: Trial sem cartão
-    // Não cria sessão Stripe agora. Retorna dados para criar conta de trial
-    // diretamente no banco. O cliente paga depois de 30 dias via /pricing.
-    // =====================================================================
-    if (trial_model === 'model_b') {
-      const trialEndAt = new Date();
-      trialEndAt.setDate(trialEndAt.getDate() + 30);
-      
-      console.log('Model B trial: creating free trial without payment method');
-      return NextResponse.json({
-        trial_model: 'model_b',
-        trial_end_at: trialEndAt.toISOString(),
-        redirect_to_setup: true,
-        metadata: {
-          plan,
-          userCount: userCount.toString(),
-          addons: JSON.stringify(addons || {}),
-          priceKey,
-          pricePerUserBRL: priceBRL.toString(),
-          totalPriceBRL: totalPriceBRL.toString(),
-          trial_model: 'model_b',
-        },
-      });
-    }
+    // (model_b_convert removido - fluxo unificado no model_b abaixo)
 
     // =====================================================================
     // MODELO A: Trial com cartão (30 dias grátis, cobrança automática no dia 31)
@@ -287,10 +213,13 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Modelo A: Exige cartão e cria trial de 30 dias no Stripe
-    // O cliente cadastra o cartão mas não é cobrado por 30 dias (trial_period_days garante isso)
-    // No dia 31, a cobrança inicia automaticamente
-    // Não aplicamos cupom aqui pois o trial já garante R$0 por 30 dias
+    // =====================================================================
+    // MODELO A: Trial com cartão
+    // - Cartão obrigatório (payment_method_collection=always)
+    // - 30 dias grátis via trial_period_days
+    // - No dia 31, cobrança automática
+    // - Cliente digita o cupom TRIAL30 manualmente no checkout (allow_promotion_codes=true)
+    // =====================================================================
     if (trial_model === 'model_a') {
       sessionOptions.subscription_data = {
         trial_period_days: 30,
@@ -301,6 +230,19 @@ export async function POST(request: NextRequest) {
         },
       };
       console.log('Model A trial: 30-day free trial with card required (payment_method_collection=always)');
+    }
+
+    // =====================================================================
+    // MODELO B: Trial sem cartão
+    // - Sem cartão obrigatório (payment_method_collection=if_required)
+    // - Cliente digita o cupom TRIAL30B manualmente (100% off, once)
+    // - No dia 31, Stripe tenta cobrar, não tem cartão → assinatura vai para past_due
+    // - Webhook detecta e bloqueia o acesso no sistema
+    // - Cliente precisa cadastrar cartão para continuar
+    // =====================================================================
+    if (trial_model === 'model_b') {
+      sessionOptions.payment_method_collection = 'if_required';
+      console.log('Model B trial: checkout without card required (payment_method_collection=if_required)');
     }
 
     // Create Checkout Session

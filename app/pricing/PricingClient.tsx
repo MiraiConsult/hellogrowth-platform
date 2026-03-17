@@ -217,19 +217,9 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
 
       const data = await response.json();
 
-      // Modelo B: trial sem cartão - redirecionar para página de setup de trial
-      if (data.trial_model === 'model_b' && data.redirect_to_setup) {
-        const params = new URLSearchParams({
-          plan,
-          user_count: userCount.toString(),
-          addons: JSON.stringify(selectedPlans[plan]),
-          trial_end_at: data.trial_end_at,
-        });
-        window.location.href = `/pricing/trial-setup?${params.toString()}`;
-        return;
-      }
-
-      // Modelo A ou normal: redirecionar para checkout Stripe
+      // Modelo A, Modelo B ou normal: redirecionar para checkout Stripe
+      // Modelo B agora usa payment_method_collection=if_required (sem cartão obrigatório)
+      // O cliente digita o cupom TRIAL30B (100% off, once) manualmente no checkout
       const { url } = data;
       if (url) window.location.href = url;
       else throw new Error('No checkout URL returned');
@@ -354,7 +344,7 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
             <Clock className="text-amber-600 flex-shrink-0" size={24} />
             <div>
               <p className="text-amber-800 font-semibold">Trial Gratuito — 30 dias sem cartão</p>
-              <p className="text-amber-700 text-sm">Escolha seu plano e ative 30 dias grátis sem precisar de cartão. No dia 31, o acesso é bloqueado e você pode assinar normalmente para continuar.</p>
+              <p className="text-amber-700 text-sm">Escolha seu plano, clique em assinar e use o cupom <strong>TRIAL30B</strong> no checkout para ativar 30 dias grátis sem precisar de cartão. No dia 31, o acesso é bloqueado automaticamente.</p>
             </div>
           </div>
         )}
