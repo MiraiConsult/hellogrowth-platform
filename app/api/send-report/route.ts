@@ -44,21 +44,10 @@ async function sendWhatsAppMessage(
   }
 }
 
-// Busca os KPIs da empresa no Supabase
-async function fetchKPIs(companyId: string, period: 'day' | 'week' | 'month') {
-  const now = new Date();
-  let startDate: Date;
+// ─── Busca de KPIs ──────────────────────────────────────────────────────────
 
-  if (period === 'day') {
-    startDate = new Date(now);
-    startDate.setHours(0, 0, 0, 0);
-  } else if (period === 'week') {
-    startDate = new Date(now);
-    startDate.setDate(now.getDate() - 7);
-  } else {
-    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-  }
-
+async function fetchLeadsKPIs(companyId: string, period: 'day' | 'week' | 'month') {
+  const startDate = getPeriodStart(period);
   const startISO = startDate.toISOString();
 
   const { data: leads } = await supabaseAdmin
@@ -67,61 +56,159 @@ async function fetchKPIs(companyId: string, period: 'day' | 'week' | 'month') {
     .eq('company_id', companyId)
     .gte('created_at', startISO);
 
+  const totalLeads = leads?.length || 0;
+  const totalValue = leads?.reduce((sum, l) => sum + (l.value || 0), 0) || 0;
+  const wonLeads = leads?.filter(l => l.stage === 'won' || l.stage === 'closed_won').length || 0;
+  const conversionRate = totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0;
+
+  return { totalLeads, totalValue, wonLeads, conversionRate };
+}
+
+async function fetchNPSKPIs(companyId: string, period: 'day' | 'week' | 'month') {
+  const startDate = getPeriodStart(period);
+  const startISO = startDate.toISOString();
+
   const { data: npsResponses } = await supabaseAdmin
     .from('nps_responses')
     .select('id, score, created_at')
     .eq('company_id', companyId)
     .gte('created_at', startISO);
 
-  const totalLeads = leads?.length || 0;
-  const totalValue = leads?.reduce((sum, l) => sum + (l.value || 0), 0) || 0;
-  const wonLeads = leads?.filter(l => l.stage === 'won' || l.stage === 'closed_won').length || 0;
-  const conversionRate = totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0;
-
   const npsCount = npsResponses?.length || 0;
   const promoters = npsResponses?.filter(r => r.score >= 9).length || 0;
   const detractors = npsResponses?.filter(r => r.score <= 6).length || 0;
+  const neutrals = npsCount - promoters - detractors;
   const npsScore = npsCount > 0
     ? Math.round(((promoters - detractors) / npsCount) * 100)
     : null;
 
-  return { totalLeads, totalValue, wonLeads, conversionRate, npsCount, npsScore, promoters, detractors };
+  return { npsCount, npsScore, promoters, neutrals, detractors };
+}
+
+function getPeriodStart(period: 'day' | 'week' | 'month'): Date {
+  const now = new Date();
+  if (period === 'day') {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  if (period === 'week') {
+    const d = new Date(now);
+    d.setDate(now.getDate() - 7);
+    return d;
+  }
+  return new Date(now.getFullYear(), now.getMonth(), 1);
 }
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
-function buildReportMessage(
-  companyName: string,
-  period: 'day' | 'week' | 'month',
-  kpis: Awaited<ReturnType<typeof fetchKPIs>>
-): string {
-  const periodLabel = period === 'day' ? 'Diário' : period === 'week' ? 'Semanal' : 'Mensal';
-  const dateStr = new Date().toLocaleDateString('pt-BR');
+// ─── Construtores de mensagem por plano ─────────────────────────────────────
 
-  const npsLine = kpis.npsScore !== null
-    ? `📊 *NPS:* ${kpis.npsScore} pts (${kpis.npsCount} respostas | ${kpis.promoters} promotores | ${kpis.detractors} detratores)`
-    : `📊 *NPS:* Sem respostas no período`;
+function buildClientMessage(
+  companyName: string,
+  periodLabel: string,
+  dateStr: string,
+  leads: Awaited<ReturnType<typeof fetchLeadsKPIs>>
+): string {
+  return `🚀 *HelloGrowth — Relatório ${periodLabel}*
+📅 ${dateStr}
+🏢 ${companyName}
+━━━━━━━━━━━━━━━━━━━━
+💼 *PRÉ-VENDA*
+• Leads: ${leads.totalLeads}
+• Valor no Funil: ${formatCurrency(leads.totalValue)}
+• Ganhos: ${leads.wonLeads}
+• Conversão: ${leads.conversionRate}%
+━━━━━━━━━━━━━━━━━━━━
+_Enviado automaticamente pelo HelloGrowth_`;
+}
+
+function buildRatingMessage(
+  companyName: string,
+  periodLabel: string,
+  dateStr: string,
+  nps: Awaited<ReturnType<typeof fetchNPSKPIs>>
+): string {
+  const npsLine = nps.npsScore !== null
+    ? `• NPS Score: ${nps.npsScore} pts`
+    : `• NPS Score: Sem respostas no período`;
 
   return `🚀 *HelloGrowth — Relatório ${periodLabel}*
 📅 ${dateStr}
 🏢 ${companyName}
-
 ━━━━━━━━━━━━━━━━━━━━
-💼 *VENDAS*
-• Leads: ${kpis.totalLeads}
-• Valor no Funil: ${formatCurrency(kpis.totalValue)}
-• Ganhos: ${kpis.wonLeads}
-• Conversão: ${kpis.conversionRate}%
-
-━━━━━━━━━━━━━━━━━━━━
-⭐ *SATISFAÇÃO*
+⭐ *SATISFAÇÃO DO CLIENTE*
+• Respostas NPS: ${nps.npsCount}
 ${npsLine}
-
+• Promotores: ${nps.promoters}
+• Neutros: ${nps.neutrals}
+• Detratores: ${nps.detractors}
 ━━━━━━━━━━━━━━━━━━━━
 _Enviado automaticamente pelo HelloGrowth_`;
 }
+
+function buildGrowthMessage(
+  companyName: string,
+  periodLabel: string,
+  dateStr: string,
+  leads: Awaited<ReturnType<typeof fetchLeadsKPIs>>,
+  nps: Awaited<ReturnType<typeof fetchNPSKPIs>>
+): string {
+  const npsLine = nps.npsScore !== null
+    ? `• NPS Score: ${nps.npsScore} pts`
+    : `• NPS Score: Sem respostas no período`;
+
+  return `🚀 *HelloGrowth — Relatório ${periodLabel}*
+📅 ${dateStr}
+🏢 ${companyName}
+━━━━━━━━━━━━━━━━━━━━
+💼 *PRÉ-VENDA*
+• Leads: ${leads.totalLeads}
+• Valor no Funil: ${formatCurrency(leads.totalValue)}
+• Ganhos: ${leads.wonLeads}
+• Conversão: ${leads.conversionRate}%
+━━━━━━━━━━━━━━━━━━━━
+⭐ *SATISFAÇÃO DO CLIENTE*
+• Respostas NPS: ${nps.npsCount}
+${npsLine}
+• Promotores: ${nps.promoters}
+• Neutros: ${nps.neutrals}
+• Detratores: ${nps.detractors}
+━━━━━━━━━━━━━━━━━━━━
+_Enviado automaticamente pelo HelloGrowth_`;
+}
+
+async function buildMessageForPlan(
+  plan: string,
+  companyName: string,
+  period: 'day' | 'week' | 'month',
+  companyId: string
+): Promise<string> {
+  const periodLabel = period === 'day' ? 'Diário' : period === 'week' ? 'Semanal' : 'Mensal';
+  const dateStr = new Date().toLocaleDateString('pt-BR');
+  const normalizedPlan = (plan || '').toLowerCase();
+
+  if (normalizedPlan === 'hello_client' || normalizedPlan === 'client') {
+    const leads = await fetchLeadsKPIs(companyId, period);
+    return buildClientMessage(companyName, periodLabel, dateStr, leads);
+  }
+
+  if (normalizedPlan === 'hello_rating' || normalizedPlan === 'rating') {
+    const nps = await fetchNPSKPIs(companyId, period);
+    return buildRatingMessage(companyName, periodLabel, dateStr, nps);
+  }
+
+  // hello_growth, growth ou qualquer outro → mensagem completa
+  const [leads, nps] = await Promise.all([
+    fetchLeadsKPIs(companyId, period),
+    fetchNPSKPIs(companyId, period)
+  ]);
+  return buildGrowthMessage(companyName, periodLabel, dateStr, leads, nps);
+}
+
+// ─── Mensagem de teste de conexão ───────────────────────────────────────────
 
 function buildTestMessage(companyName?: string): string {
   return `✅ *HelloGrowth — Teste de Conexão*
@@ -133,6 +220,8 @@ Os relatórios automáticos de KPIs serão enviados neste número conforme a per
 _HelloGrowth — Plataforma de Gestão Comercial_`;
 }
 
+// ─── Handler principal ───────────────────────────────────────────────────────
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -142,15 +231,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Número de WhatsApp não informado.' }, { status: 400 });
     }
 
-    // Busca o nome da empresa (se companyId fornecido)
+    // Busca nome e plano da empresa
     let companyName = 'Sua Empresa';
+    let plan = 'hello_growth';
+
     if (companyId) {
       const { data: company } = await supabaseAdmin
         .from('companies')
-        .select('name')
+        .select('name, plan')
         .eq('id', companyId)
         .single();
+
       if (company?.name) companyName = company.name;
+      if (company?.plan) plan = company.plan;
     }
 
     // Teste de conexão
@@ -162,11 +255,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'Mensagem de teste enviada!' });
     }
 
-    // Relatório completo
+    // Relatório completo adaptado ao plano
     if (type === 'report' && companyId) {
       const period: 'day' | 'week' | 'month' = body.period || 'day';
-      const kpis = await fetchKPIs(companyId, period);
-      const message = buildReportMessage(companyName, period, kpis);
+      const message = await buildMessageForPlan(plan, companyName, period, companyId);
 
       const result = await sendWhatsAppMessage(whatsappNumber, message);
       if (!result.ok) {
