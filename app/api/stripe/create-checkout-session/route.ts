@@ -236,11 +236,13 @@ export async function POST(request: NextRequest) {
     // MODELO B: Trial sem cartão
     // - Sem cartão obrigatório (payment_method_collection=if_required)
     // - Cupom 100% off forever aplicado AUTOMATICAMENTE via discounts
-    // - Como é 100% off forever, o Stripe não pede cartão
+    // - payment_method_types removido para não forçar cartao
     // - Você gerencia manualmente depois (remove o cupom quando quiser cobrar)
     // =====================================================================
     if (trial_model === 'model_b') {
       sessionOptions.payment_method_collection = 'if_required';
+      // Remover payment_method_types para não forçar cartão
+      delete sessionOptions.payment_method_types;
       // Aplicar cupom forever automaticamente - remove allow_promotion_codes
       // e usa discounts com o coupon ID diretamente
       delete sessionOptions.allow_promotion_codes;
