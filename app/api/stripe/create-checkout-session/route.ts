@@ -174,6 +174,56 @@ export async function POST(request: NextRequest) {
     const description = `${planName} - ${userCount} usuário${userCount > 1 ? 's' : ''} (R$ ${priceBRL.toFixed(2).replace('.', ',')} por usuário/mês)`;
 
     // =====================================================================
+    // MODELO B CONVERSÃO: Cliente do Modelo B que expirou e quer assinar
+    // Cria sessão Stripe normal com o cupom TRIAL30B (100% off, 1ª cobrança)
+    // aplicado automaticamente — o cliente paga o cartão mas não é cobrado no 1º mês
+    // =====================================================================
+    if (trial_model === 'model_b_convert') {
+      const sessionOptionsB: any = {
+        mode: 'subscription',
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'brl',
+              product_data: {
+                name: planName,
+                description: description,
+              },
+              unit_amount: priceCents,
+              recurring: {
+                interval: 'month',
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        success_url: `${baseUrl}/pricing/setup?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/pricing/canceled`,
+        payment_method_collection: 'always',
+        // Aplicar o promotion code TRIAL30B automaticamente (100% off na 1ª cobrança)
+        // ID do promotion code: promo_1TC20e0JQvL5ZxK9mmU1oRkL
+        discounts: [
+          { promotion_code: 'promo_1TC20e0JQvL5ZxK9mmU1oRkL' },
+        ],
+        metadata: {
+          plan,
+          userCount: userCount.toString(),
+          addons: JSON.stringify(addons || {}),
+          priceKey,
+          pricePerUserBRL: priceBRL.toString(),
+          totalPriceBRL: totalPriceBRL.toString(),
+          trial_model: 'model_b_convert',
+        },
+      };
+
+      console.log('Model B convert: creating subscription with TRIAL30B promo code (100% off 1st month)');
+      const sessionB = await stripe.checkout.sessions.create(sessionOptionsB);
+      console.log('Stripe session B created successfully:', sessionB.id);
+      return NextResponse.json({ sessionId: sessionB.id, url: sessionB.url });
+    }
+
+    // =====================================================================
     // MODELO B: Trial sem cartão
     // Não cria sessão Stripe agora. Retorna dados para criar conta de trial
     // diretamente no banco. O cliente paga depois de 30 dias via /pricing.

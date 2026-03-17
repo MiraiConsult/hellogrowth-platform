@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { Lock, Clock, CreditCard, ArrowRight, LogOut } from 'lucide-react';
+import React, { useState } from 'react';
+import { Lock, Clock, CreditCard, ArrowRight, LogOut, Loader2 } from 'lucide-react';
 import { User } from '@/types';
 
 interface TrialExpiredScreenProps {
@@ -10,9 +10,40 @@ interface TrialExpiredScreenProps {
 }
 
 const TrialExpiredScreen: React.FC<TrialExpiredScreenProps> = ({ currentUser, onLogout }) => {
-  const handleActivateSubscription = () => {
-    // Redirecionar para a página de preços para assinar o plano
-    window.location.href = '/pricing';
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleActivateSubscription = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Criar checkout Stripe com o cupom TRIAL30B (100% off, 1ª cobrança)
+      // aplicado automaticamente para clientes do Modelo B
+      const response = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: currentUser.plan || 'hello_growth',
+          userCount: 1,
+          addons: { game: false, mpd: false },
+          trial_model: 'model_b_convert', // flag especial para aplicar TRIAL30B
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        throw new Error(data.error || 'Erro ao criar sessão de pagamento');
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err: any) {
+      setError(err.message || 'Erro ao iniciar pagamento. Tente novamente.');
+      setIsLoading(false);
+    }
   };
 
   const formatDate = (dateStr?: string) => {
@@ -90,19 +121,37 @@ const TrialExpiredScreen: React.FC<TrialExpiredScreenProps> = ({ currentUser, on
               </p>
             </div>
 
+            {/* Error message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+                <p className="text-red-700 text-sm">{error}</p>
+              </div>
+            )}
+
             {/* CTA Button */}
             <button
               onClick={handleActivateSubscription}
-              className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl font-bold text-lg shadow-lg hover:from-emerald-600 hover:to-teal-700 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 mb-3"
+              disabled={isLoading}
+              className="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl font-bold text-lg shadow-lg hover:from-emerald-600 hover:to-teal-700 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 mb-3 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              <CreditCard size={22} />
-              Assinar agora
-              <ArrowRight size={20} />
+              {isLoading ? (
+                <>
+                  <Loader2 size={22} className="animate-spin" />
+                  Aguarde...
+                </>
+              ) : (
+                <>
+                  <CreditCard size={22} />
+                  Assinar agora
+                  <ArrowRight size={20} />
+                </>
+              )}
             </button>
 
             <button
               onClick={onLogout}
-              className="w-full py-3 text-slate-500 hover:text-slate-700 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+              disabled={isLoading}
+              className="w-full py-3 text-slate-500 hover:text-slate-700 text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <LogOut size={16} />
               Sair da conta
