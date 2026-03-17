@@ -101,8 +101,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
       differentials: 10,
       main_pain_points: 10,
       google_place_id: 15,
-      instagram_handle: 5,
-      facebook_page: 5,
+
     };
 
     if (data.company_name?.trim()) score += weights.company_name;
@@ -113,8 +112,6 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
     if (data.differentials?.trim()) score += weights.differentials;
     if (data.main_pain_points?.trim()) score += weights.main_pain_points;
     if (data.google_place_id?.trim()) score += weights.google_place_id;
-    if (data.instagram_handle?.trim()) score += weights.instagram_handle;
-    if (data.facebook_page?.trim()) score += weights.facebook_page;
 
     return Math.min(score, 100);
   };
@@ -495,54 +492,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                <Instagram className="inline mr-2" size={16} />
-                Instagram
-              </label>
-              <div className="flex">
-                <span className="inline-flex items-center px-3 bg-slate-100 border border-r-0 border-slate-200 rounded-l-lg text-slate-500">
-                  @
-                </span>
-                <input
-                  type="text"
-                  value={profile.instagram_handle}
-                  onChange={(e) => setProfile({ ...profile, instagram_handle: e.target.value })}
-                  placeholder="seuinstagram"
-                  className="flex-1 px-4 py-3 border border-slate-200 rounded-r-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-              </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                <Facebook className="inline mr-2" size={16} />
-                Facebook
-              </label>
-              <input
-                type="text"
-                value={profile.facebook_page}
-                onChange={(e) => setProfile({ ...profile, facebook_page: e.target.value })}
-                placeholder="URL da sua página"
-                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              <Globe className="inline mr-2" size={16} />
-              Website
-            </label>
-            <input
-              type="url"
-              value={profile.website_url}
-              onChange={(e) => setProfile({ ...profile, website_url: e.target.value })}
-              placeholder="https://www.seusite.com.br"
-              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-            />
-          </div>
         </div>
       )}
 
