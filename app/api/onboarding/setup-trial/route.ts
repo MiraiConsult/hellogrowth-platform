@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, companies, plan: stripePlan, userCount, addons, trial_model, trial_end_at } = body;
+    const { email, companies, plan: stripePlan, userCount, addons, trial_model, trial_end_at, userName } = body;
 
     if (!email || !companies || !Array.isArray(companies) || !stripePlan) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     const { data: newUser, error: createError } = await supabase
       .from('users')
       .insert([{
-        name: userEmail.split('@')[0],
+        name: userName || userEmail.split('@')[0],
         email: userEmail,
         password: defaultPassword,
         role: 'admin',

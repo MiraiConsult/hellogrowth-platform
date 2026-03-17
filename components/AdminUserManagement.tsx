@@ -110,6 +110,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
     companyName: '',
     plan: 'trial' as PlanType
   });
+  const [trialModel, setTrialModel] = useState<'none' | 'model_a' | 'model_b'>('none');
+  const [trialPlan, setTrialPlan] = useState<string>('hello_growth');
+  const [trialDays, setTrialDays] = useState<number>(30);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const fetchUsers = async () => {
@@ -167,13 +170,47 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
     setMessage(null);
 
     try {
+      // Se for Modelo B, usar a API de setup-trial
+      if (newUser.plan === 'trial' && trialModel === 'model_b') {
+        const trialEndAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
+        const response = await fetch('/api/onboarding/setup-trial', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: newUser.email.toLowerCase().trim(),
+            companies: [newUser.companyName],
+            plan: trialPlan,
+            userCount: 1,
+            addons: { game: false, mpd: false },
+            trial_model: 'model_b',
+            trial_end_at: trialEndAt,
+            // Sobrescrever nome do usuário se fornecido
+            userName: newUser.name || undefined,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          if (data.error === 'EMAIL_EXISTS') throw new Error('Este e-mail já está cadastrado.');
+          throw new Error(data.error || 'Erro ao criar conta Modelo B.');
+        }
+        setMessage({ type: 'success', text: `Conta Modelo B criada! Acesso: ${newUser.email} / 12345. Trial de ${trialDays} dias.` });
+        setNewUser({ name: '', email: '', companyName: '', plan: 'trial' });
+        setTrialModel('none');
+        setTrialDays(30);
+        fetchUsers();
+        // Atualizar lista de trials se estiver na aba
+        if (activeTab === 'trials') fetchTrials();
+        return;
+      }
+
+      // Fluxo padrão (Modelo A ou sem modelo)
       const { data: existing } = await supabase.from('users').select('id').eq('email', newUser.email).single();
       if (existing) {
         throw new Error("Este email já está cadastrado.");
       }
 
       const newTenantId = crypto.randomUUID();
-      const userData = {
+      const userData: any = {
         name: newUser.name,
         email: newUser.email,
         company_name: newUser.companyName,
@@ -186,11 +223,12 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
           adminEmail: newUser.email,
           phone: '',
           website: '',
-          autoRedirect: true
+          autoRedirect: true,
+          ...(newUser.plan === 'trial' && trialModel === 'model_a' ? { trial_model: 'model_a' } : {}),
         }
       };
 
-      let { error } = await supabase.from('users').insert([{
+      let { data: createdUser, error } = await supabase.from('users').insert([{
         ...userData,
         password: '12345',
       }]).select().single();
@@ -198,12 +236,43 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       if (error && (error.message?.includes('Could not find') || error.message?.includes('column'))) {
         const retry = await supabase.from('users').insert([userData]).select().single();
         error = retry.error;
+        createdUser = retry.data;
       }
 
       if (error) throw error;
 
+      // Se for Modelo A, criar company com trial_model
+      if (newUser.plan === 'trial' && trialModel === 'model_a' && createdUser) {
+        const trialEndAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
+        const companyId = crypto.randomUUID();
+        await supabase.from('companies').insert([{
+          id: companyId,
+          name: newUser.companyName,
+          plan: trialPlan.replace('hello_', '') || 'growth',
+          plan_addons: JSON.stringify({ game: false, mpd: false }),
+          subscription_status: 'trialing',
+          trial_start_at: new Date().toISOString(),
+          trial_end_at: trialEndAt,
+          trial_model: 'model_a',
+          created_by: createdUser.id,
+          settings: {
+            companyName: newUser.companyName,
+            adminEmail: newUser.email,
+            autoRedirect: true,
+            trial_model: 'model_a',
+          }
+        }]);
+        await supabase.from('user_companies').insert([{
+          user_id: createdUser.id,
+          company_id: companyId,
+          role: 'owner',
+        }]);
+      }
+
       setMessage({ type: 'success', text: 'Usuário criado com sucesso (Senha padrão: 12345)' });
       setNewUser({ name: '', email: '', companyName: '', plan: 'trial' });
+      setTrialModel('none');
+      setTrialDays(30);
       fetchUsers();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'Erro ao criar usuário.' });
@@ -408,7 +477,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Plano Inicial</label>
-                  <select value={newUser.plan} onChange={e => setNewUser({ ...newUser, plan: e.target.value as PlanType })} className="w-full border border-gray-300 rounded-lg p-2.5">
+                  <select value={newUser.plan} onChange={e => { setNewUser({ ...newUser, plan: e.target.value as PlanType }); if (e.target.value !== 'trial') setTrialModel('none'); }} className="w-full border border-gray-300 rounded-lg p-2.5">
                     <option value="trial">Trial (Teste)</option>
                     <option value="client">HelloClient (Pré)</option>
                     <option value="rating">HelloRating (Pós)</option>
@@ -416,6 +485,66 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                     <option value="growth_lifetime">Lifetime (Vitalício)</option>
                   </select>
                 </div>
+
+                {/* Campos extras para Trial */}
+                {newUser.plan === 'trial' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Modelo de Trial</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['none', 'model_a', 'model_b'] as const).map(m => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setTrialModel(m)}
+                            className={`py-2 px-3 rounded-lg text-xs font-semibold border transition-colors ${
+                              trialModel === m
+                                ? m === 'model_b' ? 'bg-teal-600 text-white border-teal-600' : m === 'model_a' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-600 text-white border-gray-600'
+                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {m === 'none' ? 'Nenhum' : m === 'model_a' ? 'Modelo A' : 'Modelo B'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {trialModel !== 'none' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Plano do Trial</label>
+                          <select value={trialPlan} onChange={e => setTrialPlan(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5">
+                            <option value="hello_client">Hello Client (Pré-venda)</option>
+                            <option value="hello_rating">Hello Rating (Pós-venda)</option>
+                            <option value="hello_growth">Hello Growth (Completo)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Duração do Trial (dias)</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={90}
+                            value={trialDays}
+                            onChange={e => setTrialDays(parseInt(e.target.value) || 30)}
+                            className="w-full border border-gray-300 rounded-lg p-2.5"
+                          />
+                        </div>
+                        {trialModel === 'model_b' && (
+                          <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 text-xs text-teal-700">
+                            <strong>Modelo B:</strong> Conta criada sem cobrança. Você poderá enviar o link de pagamento quando quiser pela aba <strong>Trials</strong>.
+                          </div>
+                        )}
+                        {trialModel === 'model_a' && (
+                          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs text-purple-700">
+                            <strong>Modelo A:</strong> Conta criada em trial. O cliente precisará assinar pelo fluxo normal de pricing.
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+
                 {message && (
                   <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${message.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
                     {message.type === 'success' ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}

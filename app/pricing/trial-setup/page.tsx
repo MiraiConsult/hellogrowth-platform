@@ -31,11 +31,13 @@ function TrialSetupContent() {
   const [step, setStep] = useState<'form' | 'success'>('form');
 
   useEffect(() => {
+    // Se não há parâmetros válidos, redirecionar para pricing em vez de mostrar erro
     if (!plan) {
-      setError('Parâmetros de trial inválidos. Por favor, volte e tente novamente.');
+      router.replace('/pricing');
+      return;
     }
     setCompanyNames(new Array(userCount).fill(''));
-  }, [plan, userCount]);
+  }, [plan, userCount, router]);
 
   const handleSave = async () => {
     if (!email.trim() || !email.includes('@')) {
