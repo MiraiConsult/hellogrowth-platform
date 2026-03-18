@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, status, google_review_url, prizes, messages } = body;
+    const { name, status, google_review_url, prizes, messages, participation_policy, prize_validity_days } = body;
 
     const { data, error } = await supabase
       .from('nps_games')
@@ -70,7 +70,9 @@ export async function POST(request: NextRequest) {
         status: status || 'active',
         google_review_url,
         prizes: prizes || [],
-        messages: messages || {}
+        messages: messages || {},
+        participation_policy: participation_policy || 'unlimited',
+        prize_validity_days: prize_validity_days ?? 7
       })
       .select()
       .single();
@@ -95,7 +97,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, name, status, google_review_url, prizes, messages } = body;
+    const { id, name, status, google_review_url, prizes, messages, participation_policy, prize_validity_days } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Game ID required' }, { status: 400 });
@@ -109,6 +111,8 @@ export async function PUT(request: NextRequest) {
         google_review_url,
         prizes,
         messages,
+        participation_policy: participation_policy || 'unlimited',
+        prize_validity_days: prize_validity_days ?? 7,
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
