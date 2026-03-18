@@ -73,6 +73,9 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
   const [phoneError, setPhoneError] = useState('');
   const [checkingPhone, setCheckingPhone] = useState(false);
 
+  // Estado de verificação automática de participação (evita flash da roleta)
+  const [checkingParticipation, setCheckingParticipation] = useState(!!(initialPhone && participationPolicy !== 'unlimited'));
+
   // Estado de "já participou"
   const [alreadyPlayed, setAlreadyPlayed] = useState(false);
   const [previousParticipation, setPreviousParticipation] = useState<{
@@ -403,11 +406,30 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
               setNextAvailable(data.next_available);
             }
           })
-          .catch(() => { /* fail open - permite jogar em caso de erro */ });
+          .catch(() => { /* fail open - permite jogar em caso de erro */ })
+          .finally(() => setCheckingParticipation(false));
+      } else {
+        setCheckingParticipation(false);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ─── TELA: VERIFICANDO PARTICIPAÇÃO (loading para evitar flash da roleta) ────────────────
+  if (checkingParticipation) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-2xl shadow-lg p-8 text-center border border-gray-100">
+            <div className="w-16 h-16 mx-auto bg-gradient-to-br from-teal-100 to-emerald-100 rounded-full flex items-center justify-center mb-6">
+              <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+            <p className="text-gray-500 text-sm">Verificando sua participação...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ─── TELA: JÁ PARTICIPOU ────────────────────────────────────────────────────
   if (alreadyPlayed && previousParticipation) {
@@ -468,14 +490,13 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
               <p className="text-xs text-gray-400 mt-1">Participou em {playedDate}</p>
             </div>
 
-            {/* Quando pode jogar de novo */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6 flex items-start gap-2 text-left">
-              <Shield size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-xs font-semibold text-amber-700">{POLICY_LABELS[participationPolicy] || 'Participação controlada'}</p>
-                <p className="text-xs text-amber-600 mt-0.5">{nextText}</p>
+            {/* Quando pode jogar de novo - mostrar apenas se houver data futura */}
+            {nextText && participationPolicy !== 'once_forever' && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6 flex items-start gap-2 text-left">
+                <Clock size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-amber-600">{nextText}</p>
               </div>
-            </div>
+            )}
 
             {!isExpired && (
               <p className="text-sm text-gray-600">
