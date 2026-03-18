@@ -231,9 +231,12 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
         clientName={patientData.name}
         clientEmail={patientData.email}
         clientPhone={patientData.phone}
+        participationPolicy={gameData.participation_policy || 'unlimited'}
+        prizeValidityDays={gameData.prize_validity_days || 7}
         customMessage={gameData.messages?.before || 'Parabéns! Gire a roleta e ganhe um prêmio especial!'}
         source="pre-sale"
         onComplete={() => setIsCompleted(true)}
+        onPhoneChange={(p) => setPatientData(prev => ({ ...prev, phone: p }))}
       />
     );
   }
