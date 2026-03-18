@@ -27,6 +27,7 @@ import IntelligenceCenter from '@/components/IntelligenceCenter';
 import GameConfig from '@/components/GameConfig';
 import GameParticipations from '@/components/GameParticipations';
 import ReportSettings from '@/components/ReportSettings';
+import AlertSettings from '@/components/AlertSettings';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
@@ -829,6 +830,28 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     if (!supabase) return;
     await supabase.from('leads').update({ status }).eq('id', leadId);
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status } : l));
+    // Disparar alerta de lead ganho ou perdido
+    if (status === 'Vendido' || status === 'Perdido') {
+      const lead = leads.find(l => l.id === leadId);
+      const tenantId = getActiveTenant();
+      if (lead && tenantId) {
+        fetch('/api/send-alert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: status === 'Vendido' ? 'lead_won' : 'lead_lost',
+            companyId: tenantId,
+            data: {
+              name: lead.name,
+              email: lead.email,
+              phone: lead.phone,
+              value: lead.value || 0,
+              formSource: lead.formSource,
+            },
+          }),
+        }).catch(() => {});
+      }
+    }
   };
 
   const handleUpdateLeadNotes = async (leadId: string, notes: string) => {
@@ -881,6 +904,30 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         status: response.status,
         answers: response.answers
     }]).select().single();
+
+    // Disparar alertas de NPS (fire-and-forget)
+    if (!error && data) {
+      const npsAlertData = {
+        customerName: data.customer_name || 'Cliente',
+        score: data.score,
+        comment: data.comment || '',
+        phone: data.customer_phone || '',
+      };
+      const campaignTenantId = (publicCampaign as any).tenant_id;
+      if (campaignTenantId) {
+        let alertType: string | null = null;
+        if (data.score <= 6) alertType = 'detractor';
+        else if (data.score >= 9) alertType = 'promoter';
+        else if (data.score >= 7 && data.score <= 8 && data.comment) alertType = 'neutral_with_comment';
+        if (alertType) {
+          fetch('/api/send-alert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: alertType, companyId: campaignTenantId, data: npsAlertData }),
+          }).catch(() => {});
+        }
+      }
+    }
 
     if (!error && data && isPreviewMode) {
         const newResponse: NPSResponse = {
@@ -939,6 +986,29 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     if (insertError) {
       console.error('Erro ao salvar lead:', insertError);
       return false;
+    }
+    
+    // Disparar alertas de novo lead e lead de alto valor (fire-and-forget)
+    if (insertedLead && formTenantId) {
+      const alertData = {
+        name: insertedLead.name,
+        email: insertedLead.email,
+        phone: insertedLead.phone,
+        value: insertedLead.value || 0,
+        formSource: insertedLead.form_source,
+      };
+      fetch('/api/send-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'new_lead', companyId: formTenantId, data: alertData }),
+      }).catch(() => {});
+      if ((insertedLead.value || 0) > 0) {
+        fetch('/api/send-alert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'high_value_lead', companyId: formTenantId, data: alertData }),
+        }).catch(() => {});
+      }
     }
     
     // Análise de IA será feita sob demanda pelo admin (botão "Analisar com IA")
@@ -1429,6 +1499,16 @@ Responda APENAS com JSON válido (sem markdown):
                 currentUser={currentUser}
                 userRole={currentUser.role || 'admin'}
             />
+        )}
+
+        {currentView === 'alert-settings' && (
+            <div className="p-6">
+              <AlertSettings
+                companyId={getActiveTenant() || ''}
+                companyName={settings.companyName || 'Minha Empresa'}
+                activePlan={currentUser.plan || 'hello_growth'}
+              />
+            </div>
         )}
 
         {showTour && (
