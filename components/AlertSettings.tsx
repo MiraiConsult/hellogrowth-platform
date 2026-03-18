@@ -47,11 +47,13 @@ const DEFAULT_SETTINGS: Omit<AlertSettingsData, 'company_id'> = {
 
 // Verifica se o plano tem acesso ao módulo de vendas
 const hasSalesModule = (plan: string) =>
-  plan === 'hello_client' || plan === 'hello_growth' || plan === 'lifetime';
+  plan === 'hello_client' || plan === 'hello_growth' || plan === 'lifetime' ||
+  plan === 'client' || plan === 'growth' || plan === 'growth_lifetime' || plan === 'trial';
 
 // Verifica se o plano tem acesso ao módulo de NPS
 const hasNPSModule = (plan: string) =>
-  plan === 'hello_rating' || plan === 'hello_growth' || plan === 'lifetime';
+  plan === 'hello_rating' || plan === 'hello_growth' || plan === 'lifetime' ||
+  plan === 'rating' || plan === 'growth' || plan === 'growth_lifetime' || plan === 'trial';
 
 interface AlertToggleProps {
   enabled: boolean;
@@ -366,7 +368,7 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
       )}
 
       {/* Alertas de Trial (apenas Growth ou admin) */}
-      {(activePlan === 'hello_growth' || activePlan === 'lifetime') && (
+      {(activePlan === 'hello_growth' || activePlan === 'lifetime' || activePlan === 'growth' || activePlan === 'growth_lifetime') && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Clock size={15} className="text-purple-500" />
