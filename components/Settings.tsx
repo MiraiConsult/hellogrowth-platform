@@ -323,7 +323,7 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
                 )}
 
                 {/* Add-ons */}
-                {subscriptionInfo.addons && subscriptionInfo.addons.length > 0 && (
+                {subscriptionInfo.addons && Array.isArray(subscriptionInfo.addons) && subscriptionInfo.addons.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase mb-2 flex items-center gap-1">
                       <Package size={12} /> Add-ons ativos

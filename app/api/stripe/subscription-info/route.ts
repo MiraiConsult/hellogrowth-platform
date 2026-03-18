@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         plan: company.plan || 'trial',
         status: company.subscription_status || 'trial',
-        addons: company.plan_addons || {},
+        addons: Array.isArray(company.plan_addons) ? company.plan_addons : [],
         maxUsers: company.max_users || 1,
         stripeConnected: false,
       });
