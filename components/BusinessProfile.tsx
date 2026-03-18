@@ -93,15 +93,14 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
   const calculateScore = (data: BusinessProfileData): number => {
     let score = 0;
     const weights = {
-      company_name: 10,
+      company_name: 15,
       business_type: 10,
       business_description: 15,
       target_audience: 15,
       brand_tone: 0,
-      differentials: 10,
+      differentials: 15,
       main_pain_points: 10,
-      google_place_id: 15,
-
+      google_place_id: 20,
     };
 
     if (data.company_name?.trim()) score += weights.company_name;
