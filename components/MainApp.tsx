@@ -1469,7 +1469,13 @@ Responda APENAS com JSON válido (sem markdown):
         
         {currentView === 'ai-chat' && <AIChat leads={leads} npsData={npsData} activePlan={currentUser.plan} />}
         
-        {currentView === 'pricing' && <Pricing currentPlan={currentUser.plan} onSelectPlan={onUpdatePlan} />}
+        {currentView === 'pricing' && (() => {
+          // Redirecionar para /pricing (PricingClient com isManageMode ativado)
+          if (typeof window !== 'undefined') {
+            window.location.href = '/pricing';
+          }
+          return null;
+        })()}
         
         {currentView === 'settings' && (
             <Settings 

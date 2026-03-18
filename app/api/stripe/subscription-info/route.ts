@@ -136,3 +136,87 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+// POST handler para o PricingClient (formato diferente do GET)
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const userId = body.userId;
+    if (!userId) {
+      return NextResponse.json({ error: 'userId é obrigatório' }, { status: 400 });
+    }
+    // Buscar tenant_id do usuário
+    const { data: userData } = await supabase
+      .from('users')
+      .select('tenant_id')
+      .eq('id', userId)
+      .single();
+    if (!userData?.tenant_id) {
+      return NextResponse.json({ hasSubscription: false });
+    }
+    // Buscar dados da empresa
+    const { data: company } = await supabase
+      .from('companies')
+      .select('stripe_customer_id, stripe_subscription_id, plan, plan_addons, subscription_status, max_users')
+      .eq('id', userData.tenant_id)
+      .single();
+    if (!company || !company.stripe_subscription_id) {
+      return NextResponse.json({ hasSubscription: false });
+    }
+    // Buscar dados da assinatura no Stripe
+    try {
+      const subscription = await stripe.subscriptions.retrieve(
+        company.stripe_subscription_id,
+        { expand: ['items.data.price.product'] }
+      );
+      const items = subscription.items.data;
+      const mainItem = items[0];
+      const product = mainItem?.price?.product as any;
+      // Detectar addons
+      const GAME_PRODUCT_ID = 'prod_U0XwnB8BK3rUEd';
+      const MPD_PRODUCT_ID = 'prod_U0XwdkknxN91r5';
+      const hasGame = items.some((item: any) => item.price?.product?.id === GAME_PRODUCT_ID);
+      const hasMpd = items.some((item: any) => item.price?.product?.id === MPD_PRODUCT_ID);
+      // Mapear plano
+      const PLAN_MAP: Record<string, string> = {
+        'prod_U0XvnEFkIv72SB': 'client',
+        'prod_U0XwVWr2AKlQQ7': 'rating',
+        'prod_U0XwV8F55iDvd3': 'growth',
+        'prod_TX7pcIXdRyYE8q': 'growth',
+        'prod_TRWrzuONqzRy0M': 'growth',
+      };
+      const PLAN_NAME_MAP: Record<string, string> = {
+        'prod_U0XvnEFkIv72SB': 'Hello Client',
+        'prod_U0XwVWr2AKlQQ7': 'Hello Rating',
+        'prod_U0XwV8F55iDvd3': 'Hello Growth',
+        'prod_TX7pcIXdRyYE8q': 'Hello Growth',
+        'prod_TRWrzuONqzRy0M': 'Hello Growth',
+      };
+      const planKey = product ? (PLAN_MAP[product.id] || company.plan || 'growth') : (company.plan || 'growth');
+      const planName = product ? (PLAN_NAME_MAP[product.id] || product.name || 'Hello Growth') : 'Hello Growth';
+      const nextBillingDate = subscription.current_period_end
+        ? new Date(subscription.current_period_end * 1000).toISOString()
+        : null;
+      const amount = mainItem?.price?.unit_amount || null;
+      return NextResponse.json({
+        hasSubscription: true,
+        subscription: {
+          plan: planKey,
+          planName,
+          hasGame,
+          hasMpd,
+          userCount: company.max_users || 1,
+          status: subscription.status,
+          nextBillingDate,
+          amount,
+        },
+      });
+    } catch (stripeError: any) {
+      console.error('Erro ao buscar assinatura no Stripe (POST):', stripeError);
+      return NextResponse.json({ hasSubscription: false });
+    }
+  } catch (error: any) {
+    console.error('Erro no POST subscription-info:', error);
+    return NextResponse.json({ hasSubscription: false });
+  }
+}

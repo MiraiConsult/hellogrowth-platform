@@ -102,7 +102,7 @@ export default function PricingClient({ showCanceledMessage: initialShowCanceled
     const checkUserAndSubscription = async () => {
       try {
         // Try to get user from localStorage (same pattern as the main app)
-        const savedUser = localStorage.getItem('currentUser');
+        const savedUser = localStorage.getItem('currentUser') || localStorage.getItem('hg_current_user');
         if (!savedUser) return;
 
         const user = JSON.parse(savedUser);
