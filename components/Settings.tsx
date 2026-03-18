@@ -136,8 +136,8 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
   };
 
   const handleOpenPortal = () => {
-    // Redirect to pricing page which handles plan changes
-    window.location.href = '/pricing';
+    // Navegar para a tela de Pricing integrada (via SPA navigation)
+    onSelectPlan('growth');
   };
 
   const isLifetime = activePlan === 'growth_lifetime';

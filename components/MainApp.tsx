@@ -1317,7 +1317,7 @@ Responda APENAS com JSON válido (sem markdown):
                 <span>Você tem <strong>{daysLeft} dia{daysLeft !== 1 ? 's' : ''} restante{daysLeft !== 1 ? 's' : ''}</strong> de trial gratuito.</span>
               )}
             </div>
-            <button onClick={() => window.location.href = '/pricing'} className="bg-white text-emerald-700 px-3 py-1 rounded text-xs font-bold hover:bg-emerald-50 transition-colors">Assinar Agora</button>
+            <button onClick={() => setCurrentView('pricing')} className="bg-white text-emerald-700 px-3 py-1 rounded text-xs font-bold hover:bg-emerald-50 transition-colors">Assinar Agora</button>
           </div>
         )}
         
