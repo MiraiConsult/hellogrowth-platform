@@ -15,6 +15,7 @@ interface Participation {
   played_at: string;
   sent_at?: string;
   redeemed_at?: string;
+  expires_at?: string;
 }
 
 interface Game {
@@ -194,6 +195,18 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
     URL.revokeObjectURL(url);
   };
 
+  // Helpers de expiração
+  const isExpired = (p: Participation) => {
+    if (!p.expires_at) return false;
+    return new Date(p.expires_at) < new Date() && p.status !== 'redeemed';
+  };
+
+  const getDaysUntilExpiry = (p: Participation): number | null => {
+    if (!p.expires_at) return null;
+    const diff = new Date(p.expires_at).getTime() - new Date().getTime();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  };
+
   // Filtros
   const filteredParticipations = participations.filter(p => {
     const matchesSearch = !searchTerm || 
@@ -202,7 +215,11 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
       p.prize_code.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesGame = selectedGameId === 'all' || p.game_id === selectedGameId;
-    const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
+    
+    let matchesStatus = false;
+    if (statusFilter === 'all') matchesStatus = true;
+    else if (statusFilter === 'expired') matchesStatus = isExpired(p);
+    else matchesStatus = p.status === statusFilter && !isExpired(p);
     
     return matchesSearch && matchesGame && matchesStatus;
   });
@@ -210,9 +227,10 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
   // Estatísticas
   const stats = {
     total: participations.length,
-    pending: participations.filter(p => p.status === 'pending').length,
-    sent: participations.filter(p => p.status === 'sent').length,
+    pending: participations.filter(p => p.status === 'pending' && !isExpired(p)).length,
+    sent: participations.filter(p => p.status === 'sent' && !isExpired(p)).length,
     redeemed: participations.filter(p => p.status === 'redeemed').length,
+    expired: participations.filter(p => isExpired(p)).length,
   };
 
   const getStatusBadge = (status: string) => {
@@ -268,7 +286,7 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-5 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -313,6 +331,17 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
             </div>
           </div>
         </div>
+        <div className="bg-white rounded-xl border border-red-100 p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+              <Clock size={20} className="text-red-500" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-red-600">{stats.expired}</p>
+              <p className="text-xs text-gray-500">Expirados</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
@@ -348,6 +377,7 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
           <option value="pending">Pendente</option>
           <option value="sent">Enviado</option>
           <option value="redeemed">Resgatado</option>
+          <option value="expired">Expirado</option>
         </select>
       </div>
 
@@ -390,6 +420,9 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Data
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Validade
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Status
@@ -440,8 +473,27 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
                         {new Date(participation.played_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-xs">
+                      {participation.expires_at ? (
+                        isExpired(participation) ? (
+                          <span className="text-red-500 font-medium">Expirado</span>
+                        ) : (() => {
+                          const days = getDaysUntilExpiry(participation);
+                          return (
+                            <span className={days !== null && days <= 2 ? 'text-orange-500 font-medium' : 'text-gray-500'}>
+                              {days !== null && days > 0 ? `${days}d restante${days > 1 ? 's' : ''}` : 'Expira hoje'}
+                            </span>
+                          );
+                        })()
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
-                      {getStatusBadge(participation.status)}
+                      {isExpired(participation) 
+                        ? <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-red-100 text-red-700 border-red-200">Expirado</span>
+                        : getStatusBadge(participation.status)
+                      }
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
