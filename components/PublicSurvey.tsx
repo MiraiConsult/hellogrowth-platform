@@ -47,11 +47,16 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
   const [loadingGame, setLoadingGame] = useState(false);
 
   // Get initial fields configuration from multiple possible sources
-  const initialFields: InitialField[] = (campaign as any).initial_fields || campaign.initialFields || [
+  const hasGame = !!(campaign as any).game_id;
+  const rawInitialFields: InitialField[] = (campaign as any).initial_fields || campaign.initialFields || [
     { field: 'name', label: 'Nome Completo', placeholder: 'Seu nome', required: true, enabled: true },
     { field: 'email', label: 'Email', placeholder: 'seu@email.com', required: false, enabled: true },
     { field: 'phone', label: 'Telefone / WhatsApp', placeholder: '(00) 00000-0000', required: false, enabled: true }
   ];
+  // Se o game estiver ativo, forçar campo phone como obrigatório e habilitado
+  const initialFields: InitialField[] = hasGame
+    ? rawInitialFields.map((f: InitialField) => f.field === 'phone' ? { ...f, required: true, enabled: true } : f)
+    : rawInitialFields;
 
   const enabledFields = initialFields.filter(f => f.enabled);
   const hasRequiredFields = enabledFields.some(f => f.required);

@@ -63,11 +63,16 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
     }
   }, [form.game_id, form.game_enabled]);
 
-  const initialFields: InitialField[] = form.initialFields || [
+  const hasGame = !!(form.game_id && form.game_enabled);
+  const rawInitialFields: InitialField[] = form.initialFields || [
     { field: 'name', label: 'Nome Completo', placeholder: 'Seu nome', required: true, enabled: true },
     { field: 'email', label: 'Email', placeholder: 'seu@email.com', required: true, enabled: true },
     { field: 'phone', label: 'Telefone / WhatsApp', placeholder: '(00) 00000-0000', required: true, enabled: true }
   ];
+  // Se o game estiver ativo, forçar campo phone como obrigatório e habilitado
+  const initialFields: InitialField[] = hasGame
+    ? rawInitialFields.map((f: InitialField) => f.field === 'phone' ? { ...f, required: true, enabled: true } : f)
+    : rawInitialFields;
 
   const enabledFields = initialFields.filter(f => f.enabled);
 

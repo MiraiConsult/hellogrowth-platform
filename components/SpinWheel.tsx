@@ -68,7 +68,8 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
 
   // Estado do telefone (obrigatório quando policy !== unlimited)
   const [phone, setPhone] = useState(initialPhone || '');
-  const [phoneConfirmed, setPhoneConfirmed] = useState(participationPolicy === 'unlimited' && !!initialPhone);
+  // Se initialPhone foi fornecido pelo formulário/NPS, pular confirmação de telefone
+  const [phoneConfirmed, setPhoneConfirmed] = useState(!!initialPhone || participationPolicy === 'unlimited');
   const [phoneError, setPhoneError] = useState('');
   const [checkingPhone, setCheckingPhone] = useState(false);
 
@@ -385,6 +386,27 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
+  }, []);
+
+  // Quando initialPhone é fornecido (telefone já coletado no formulário/NPS),
+  // verificar automaticamente se o número já participou (aplicar regra do game)
+  useEffect(() => {
+    if (initialPhone && participationPolicy !== 'unlimited') {
+      const cleanPhone = initialPhone.replace(/\D/g, '');
+      if (cleanPhone.length >= 10) {
+        fetch(`/api/game-participations/check?game_id=${gameId}&phone=${cleanPhone}`)
+          .then(res => res.json())
+          .then(data => {
+            if (!data.can_play) {
+              setAlreadyPlayed(true);
+              setPreviousParticipation(data.previous_participation);
+              setNextAvailable(data.next_available);
+            }
+          })
+          .catch(() => { /* fail open - permite jogar em caso de erro */ });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── TELA: JÁ PARTICIPOU ────────────────────────────────────────────────────
