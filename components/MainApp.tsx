@@ -436,8 +436,10 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
                // Check if Onboarding Needed
                const hasSeenTour = localStorage.getItem('hg_onboarding_complete');
                
-               // LOGIC UPDATE: Only show tour if not seen AND PlaceID is missing. 
-               if (!hasSeenTour && !mergedSettings.placeId) {
+               // LOGIC UPDATE: Only show tour if not seen AND PlaceID is missing.
+               // Check both settings.placeId AND business_profile.google_place_id to avoid false positives
+               const hasPlaceId = !!(mergedSettings.placeId || dbBizProfile?.google_place_id);
+               if (!hasSeenTour && !hasPlaceId) {
                    setShowTour(true);
                }
            }

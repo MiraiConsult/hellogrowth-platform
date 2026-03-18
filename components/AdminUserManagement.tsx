@@ -321,24 +321,41 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         };
         const { data: createdUser, error } = await supabase.from('users').insert([userData]).select().single();
         if (error) throw error;
-        if (clientForm.plan === 'trial' && newClientTrialModel === 'model_a' && createdUser) {
-          const trialEndAt = new Date(Date.now() + newClientTrialDays * 24 * 60 * 60 * 1000).toISOString();
+        if (createdUser) {
+          // Sempre criar empresa e vínculo user_companies, independente do plano
           const companyId = crypto.randomUUID();
+          const isTrialModelA = clientForm.plan === 'trial' && newClientTrialModel === 'model_a';
+          const trialEndAt = isTrialModelA
+            ? new Date(Date.now() + newClientTrialDays * 24 * 60 * 60 * 1000).toISOString()
+            : null;
+          // Mapear plano para nome normalizado
+          const planMap: Record<string, string> = {
+            trial: newClientTrialPlan?.replace('hello_', '') || 'growth',
+            client: 'client',
+            rating: 'rating',
+            growth: 'growth',
+            growth_lifetime: 'growth',
+          };
+          const companyPlan = planMap[clientForm.plan] || clientForm.plan;
+          const subscriptionStatus = clientForm.plan === 'trial' ? 'trialing' : 'active';
           await supabase.from('companies').insert([{
             id: companyId,
             name: clientForm.companyName || clientForm.name,
-            plan: newClientTrialPlan.replace('hello_', '') || 'growth',
+            plan: companyPlan,
             plan_addons: JSON.stringify({ game: false, mpd: false }),
-            subscription_status: 'trialing',
-            trial_start_at: new Date().toISOString(),
-            trial_end_at: trialEndAt,
-            trial_model: 'model_a',
+            subscription_status: subscriptionStatus,
+            ...(isTrialModelA ? {
+              trial_start_at: new Date().toISOString(),
+              trial_end_at: trialEndAt,
+              trial_model: 'model_a',
+            } : {}),
             created_by: createdUser.id,
-            settings: { companyName: clientForm.companyName || clientForm.name, adminEmail: clientForm.email, autoRedirect: true, trial_model: 'model_a' }
+            settings: { companyName: clientForm.companyName || clientForm.name, adminEmail: clientForm.email, autoRedirect: true }
           }]);
           await supabase.from('user_companies').insert([{
             user_id: createdUser.id, company_id: companyId, role: 'owner', is_default: true, status: 'active', accepted_at: new Date().toISOString()
           }]);
+          // Nota: a tabela users não tem coluna company_id; o vínculo é feito via user_companies
         }
         showToast('success', `Cliente criado! Login: ${clientForm.email} / 12345`);
       }

@@ -47,7 +47,15 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (!company) {
-      return NextResponse.json({ error: 'Empresa não encontrada' }, { status: 404 });
+      // Retornar dados de fallback em vez de 404 para evitar crash no cliente
+      return NextResponse.json({
+        plan: 'trial',
+        status: 'trial',
+        addons: [],
+        maxUsers: 1,
+        stripeConnected: false,
+        error: 'Empresa não encontrada',
+      });
     }
 
     // Se não tem Stripe, retornar dados básicos do banco
