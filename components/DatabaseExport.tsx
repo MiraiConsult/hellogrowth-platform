@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import {
-  Database, Download, Search, RefreshCw, Users, BarChart3, Trophy, FileText,
+  Database, Download, Search, RefreshCw, Users, BarChart3, Trophy,
   ChevronDown, ChevronUp, Eye, X, Star, MessageSquare, Phone, Mail,
   Loader2, ClipboardList
 } from 'lucide-react';
@@ -88,34 +89,51 @@ const DatabaseExport: React.FC<DatabaseExportProps> = ({
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
   };
 
-  const getFormQuestions = (formId?: string) => {
-    if (!formId) return [];
-    return forms.find(f => f.id === formId)?.questions || [];
+  // Busca o formulário pelo formId ou pelo formSource (fallback)
+  const getFormForLead = (lead: Lead): Form | undefined => {
+    if (lead.formId) {
+      const byId = forms.find(f => f.id === lead.formId);
+      if (byId) return byId;
+    }
+    if (lead.formSource) {
+      return forms.find(f => f.name === lead.formSource);
+    }
+    return undefined;
   };
 
-  const getCampaignQuestions = (campaignId?: string) => {
-    if (!campaignId) return [];
-    return campaigns.find(c => c.id === campaignId)?.questions || [];
+  // Retorna o texto da pergunta dado o ID, com fallback inteligente
+  const getQuestionText = (questionId: string, formQuestions: any[]): string => {
+    if (!questionId || questionId.startsWith('_')) return '';
+    const q = formQuestions.find(q => String(q.id) === String(questionId));
+    if (q) return q.text;
+    // Fallback: se o ID é numérico longo, mostrar "Pergunta N"
+    if (/^\d{10,}/.test(questionId)) return `Pergunta (${questionId.slice(0, 8)}...)`;
+    return questionId;
+  };
+
+  // Extrai o valor legível de uma resposta de formulário
+  const getAnswerValue = (answerData: any): string => {
+    if (answerData === null || answerData === undefined) return '—';
+    // Formato novo: { value: ..., followUps: {}, optionSelected: ... }
+    if (typeof answerData === 'object' && 'value' in answerData) {
+      const val = answerData.value;
+      if (Array.isArray(val)) return val.join(', ');
+      if (val === null || val === undefined || val === '') return '—';
+      return String(val);
+    }
+    // Formato antigo: string direta ou array
+    if (Array.isArray(answerData)) return answerData.join(', ');
+    if (typeof answerData === 'string') return answerData;
+    if (typeof answerData === 'object') {
+      if ('label' in answerData) return answerData.label;
+      return JSON.stringify(answerData);
+    }
+    return String(answerData);
   };
 
   const getCampaignName = (campaignId?: string) => {
     if (!campaignId) return '—';
     return campaigns.find(c => c.id === campaignId)?.name || campaignId;
-  };
-
-  const getAnswerDisplay = (answer: any): string => {
-    if (answer === null || answer === undefined) return '—';
-    if (typeof answer === 'string') return answer;
-    if (Array.isArray(answer)) return answer.join(', ');
-    if (typeof answer === 'object') {
-      if ('value' in answer) {
-        const val = answer.value;
-        if (Array.isArray(val)) return val.join(', ');
-        return String(val || '—');
-      }
-      return JSON.stringify(answer);
-    }
-    return String(answer);
   };
 
   const getStatusColor = (status: string) => {
@@ -210,139 +228,165 @@ const DatabaseExport: React.FC<DatabaseExportProps> = ({
     );
   }, [forms, searchTerm]);
 
-  // Exportação CSV
-  const escapeCSV = (value: any): string => {
-    if (value === null || value === undefined) return '';
-    const str = String(value);
-    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-      return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
-  };
-
-  const downloadCSV = (rows: string[][], filename: string) => {
-    const csv = rows.map(row => row.map(escapeCSV).join(',')).join('\n');
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
+  // ===== EXPORTAÇÃO XLSX =====
   const handleExportCurrentTab = () => {
     setIsExporting(true);
     setTimeout(() => {
       try {
+        const wb = XLSX.utils.book_new();
+
         if (activeTab === 'leads') {
-          const rows: string[][] = [
-            ['Nome', 'Email', 'Telefone', 'Status', 'Valor', 'Formulário', 'Data', 'Notas', 'Respostas']
-          ];
+          // Coletar todas as colunas de perguntas dinamicamente
+          const allQuestionKeys = new Set<string>();
+          const leadFormMap = new Map<string, Form>();
           filteredLeads.forEach(lead => {
-            const questions = getFormQuestions(lead.formId);
-            let answersText = '';
+            const form = getFormForLead(lead);
+            if (form) leadFormMap.set(lead.id, form);
             if (lead.answers && typeof lead.answers === 'object') {
-              answersText = Object.entries(lead.answers)
-                .filter(([k]) => !k.startsWith('_'))
-                .map(([k, v]: [string, any]) => {
-                  const q = questions.find(q => q.id === k);
-                  const label = q?.text || k;
-                  return `${label}: ${getAnswerDisplay(v)}`;
-                })
-                .join(' | ');
+              Object.keys(lead.answers).filter(k => !k.startsWith('_')).forEach(k => allQuestionKeys.add(k));
             }
-            rows.push([
-              lead.name || '',
-              lead.email || '',
-              lead.phone || '',
-              lead.status || '',
-              String(lead.value || 0),
-              lead.formSource || '',
-              formatDate(lead.date),
-              lead.notes || '',
-              answersText
-            ]);
           });
-          downloadCSV(rows, 'leads');
+
+          // Construir mapa de questionId -> texto (usando todos os formulários)
+          const questionTextMap = new Map<string, string>();
+          allQuestionKeys.forEach(qid => {
+            let found = false;
+            for (const form of forms) {
+              const q = (form.questions || []).find(q => String(q.id) === String(qid));
+              if (q) {
+                questionTextMap.set(qid, q.text);
+                found = true;
+                break;
+              }
+            }
+            if (!found) {
+              questionTextMap.set(qid, /^\d{10,}/.test(qid) ? `Pergunta (${qid.slice(0, 8)}...)` : qid);
+            }
+          });
+
+          const questionKeysSorted = Array.from(allQuestionKeys);
+          const headers = ['Nome', 'Email', 'Telefone', 'Status', 'Valor (R$)', 'Formulário', 'Data', 'Notas',
+            ...questionKeysSorted.map(k => questionTextMap.get(k) || k)];
+
+          const rows = filteredLeads.map(lead => {
+            const base: any = {
+              'Nome': lead.name || '',
+              'Email': lead.email || '',
+              'Telefone': lead.phone || '',
+              'Status': lead.status || '',
+              'Valor (R$)': lead.value || 0,
+              'Formulário': lead.formSource || '',
+              'Data': formatDate(lead.date),
+              'Notas': lead.notes || '',
+            };
+            questionKeysSorted.forEach(qid => {
+              const label = questionTextMap.get(qid) || qid;
+              const answerData = lead.answers?.[qid];
+              base[label] = getAnswerValue(answerData);
+            });
+            return base;
+          });
+
+          const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+          XLSX.utils.book_append_sheet(wb, ws, 'Leads');
+          XLSX.writeFile(wb, `leads_${new Date().toISOString().split('T')[0]}.xlsx`);
+
         } else if (activeTab === 'nps') {
-          const rows: string[][] = [
-            ['Nome', 'Email', 'Telefone', 'Score', 'Status', 'Campanha', 'Comentário', 'Data', 'Respostas Adicionais']
-          ];
+          // Coletar todas as perguntas adicionais das campanhas
+          const allNPSQuestionKeys = new Set<string>();
           filteredNPS.forEach(nps => {
-            const questions = getCampaignQuestions(nps.campaignId);
-            let answersText = '';
             if (Array.isArray(nps.answers)) {
-              answersText = nps.answers.map((a: any) => {
-                const q = questions.find(q => q.id === a.question);
-                const label = q?.text || a.question;
-                return `${label}: ${a.answer}`;
-              }).join(' | ');
+              nps.answers.forEach((a: any) => {
+                if (a.question && !a.question.startsWith('_')) allNPSQuestionKeys.add(a.question);
+              });
             }
-            rows.push([
-              nps.customerName || '',
-              nps.customerEmail || '',
-              nps.customerPhone || '',
-              String(nps.score),
-              nps.status || '',
-              nps.campaign || '',
-              nps.comment || '',
-              formatDate(nps.date),
-              answersText
-            ]);
           });
-          downloadCSV(rows, 'respostas_nps');
+
+          const npsQuestionTextMap = new Map<string, string>();
+          allNPSQuestionKeys.forEach(qid => {
+            let found = false;
+            for (const campaign of campaigns) {
+              const q = (campaign.questions || []).find(q => String(q.id) === String(qid));
+              if (q) {
+                npsQuestionTextMap.set(qid, q.text);
+                found = true;
+                break;
+              }
+            }
+            if (!found) npsQuestionTextMap.set(qid, qid);
+          });
+
+          const npsQKeysSorted = Array.from(allNPSQuestionKeys);
+          const headers = ['Nome', 'Email', 'Telefone', 'Score', 'Status', 'Campanha', 'Comentário', 'Data',
+            ...npsQKeysSorted.map(k => npsQuestionTextMap.get(k) || k)];
+
+          const rows = filteredNPS.map(nps => {
+            const base: any = {
+              'Nome': nps.customerName || '',
+              'Email': nps.customerEmail || '',
+              'Telefone': nps.customerPhone || '',
+              'Score': nps.score,
+              'Status': nps.status || '',
+              'Campanha': nps.campaign || '',
+              'Comentário': nps.comment || '',
+              'Data': formatDate(nps.date),
+            };
+            npsQKeysSorted.forEach(qid => {
+              const label = npsQuestionTextMap.get(qid) || qid;
+              const ans = Array.isArray(nps.answers) ? nps.answers.find((a: any) => a.question === qid) : null;
+              base[label] = ans?.answer || '';
+            });
+            return base;
+          });
+
+          const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+          XLSX.utils.book_append_sheet(wb, ws, 'Respostas NPS');
+          XLSX.writeFile(wb, `respostas_nps_${new Date().toISOString().split('T')[0]}.xlsx`);
+
         } else if (activeTab === 'participations') {
-          const rows: string[][] = [
-            ['Nome', 'Email', 'Telefone', 'Prêmio', 'Código', 'Status', 'Origem', 'Campanha', 'Data', 'Enviado em', 'Resgatado em', 'Expira em']
-          ];
-          filteredParticipations.forEach(p => {
-            rows.push([
-              p.client_name || '',
-              p.client_email || '',
-              p.client_phone || '',
-              p.prize_won || '',
-              p.prize_code || '',
-              getStatusLabel(p.status),
-              p.source === 'pre-sale' ? 'Pré-venda' : 'Pós-venda',
-              getCampaignName(p.campaign_id),
-              formatDate(p.played_at),
-              formatDate(p.sent_at),
-              formatDate(p.redeemed_at),
-              formatDate(p.expires_at)
-            ]);
-          });
-          downloadCSV(rows, 'participacoes_roleta');
+          const rows = filteredParticipations.map(p => ({
+            'Nome': p.client_name || '',
+            'Email': p.client_email || '',
+            'Telefone': p.client_phone || '',
+            'Prêmio': p.prize_won || '',
+            'Código': p.prize_code || '',
+            'Status': getStatusLabel(p.status),
+            'Origem': p.source === 'pre-sale' ? 'Pré-venda' : 'Pós-venda',
+            'Campanha': getCampaignName(p.campaign_id),
+            'Data': formatDate(p.played_at),
+            'Enviado em': formatDate(p.sent_at),
+            'Resgatado em': formatDate(p.redeemed_at),
+            'Expira em': formatDate(p.expires_at),
+          }));
+          const ws = XLSX.utils.json_to_sheet(rows);
+          XLSX.utils.book_append_sheet(wb, ws, 'Participações Roleta');
+          XLSX.writeFile(wb, `participacoes_roleta_${new Date().toISOString().split('T')[0]}.xlsx`);
+
         } else if (activeTab === 'campaigns') {
-          const rows: string[][] = [
-            ['Nome', 'Status', 'Tipo', 'NPS Score', 'Respostas', 'Perguntas']
-          ];
-          filteredCampaigns.forEach(c => {
-            rows.push([
-              c.name || '',
-              c.status || '',
-              c.type || '',
-              String(c.npsScore || 0),
-              String(c.responses || 0),
-              (c.questions || []).map(q => q.text).join(' | ')
-            ]);
-          });
-          downloadCSV(rows, 'campanhas');
+          const rows = filteredCampaigns.map(c => ({
+            'Nome': c.name || '',
+            'Status': c.status || '',
+            'Tipo': c.type || '',
+            'NPS Score': c.npsScore || 0,
+            'Respostas': c.responses || 0,
+            'Perguntas': (c.questions || []).map(q => q.text).join(' | '),
+          }));
+          const ws = XLSX.utils.json_to_sheet(rows);
+          XLSX.utils.book_append_sheet(wb, ws, 'Campanhas');
+          XLSX.writeFile(wb, `campanhas_${new Date().toISOString().split('T')[0]}.xlsx`);
+
         } else if (activeTab === 'forms') {
-          const rows: string[][] = [
-            ['Nome', 'Descrição', 'Respostas', 'Ativo', 'Criado em', 'Perguntas']
-          ];
-          filteredForms.forEach(f => {
-            rows.push([
-              f.name || '',
-              f.description || '',
-              String(f.responses || 0),
-              f.active ? 'Sim' : 'Não',
-              formatDate(f.createdAt),
-              (f.questions || []).map(q => q.text).join(' | ')
-            ]);
-          });
-          downloadCSV(rows, 'formularios');
+          const rows = filteredForms.map(f => ({
+            'Nome': f.name || '',
+            'Descrição': f.description || '',
+            'Respostas': f.responses || 0,
+            'Ativo': f.active ? 'Sim' : 'Não',
+            'Criado em': formatDate(f.createdAt),
+            'Perguntas': (f.questions || []).map(q => q.text).join(' | '),
+          }));
+          const ws = XLSX.utils.json_to_sheet(rows);
+          XLSX.utils.book_append_sheet(wb, ws, 'Formulários');
+          XLSX.writeFile(wb, `formularios_${new Date().toISOString().split('T')[0]}.xlsx`);
         }
       } finally {
         setIsExporting(false);
@@ -445,7 +489,7 @@ const DatabaseExport: React.FC<DatabaseExportProps> = ({
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
           >
             {isExporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-            Exportar CSV
+            Exportar XLSX
           </button>
         </div>
 
@@ -479,8 +523,12 @@ const DatabaseExport: React.FC<DatabaseExportProps> = ({
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filteredLeads.map((lead) => {
-                      const questions = getFormQuestions(lead.formId);
-                      const hasAnswers = lead.answers && Object.keys(lead.answers).filter(k => !k.startsWith('_')).length > 0;
+                      const form = getFormForLead(lead);
+                      const formQuestions = form?.questions || [];
+                      const answerEntries = lead.answers
+                        ? Object.entries(lead.answers).filter(([k]) => !k.startsWith('_'))
+                        : [];
+                      const hasAnswers = answerEntries.length > 0;
                       const isExpanded = expandedRow === lead.id;
                       return (
                         <React.Fragment key={lead.id}>
@@ -532,7 +580,7 @@ const DatabaseExport: React.FC<DatabaseExportProps> = ({
                                   }`}
                                 >
                                   <Eye size={12} />
-                                  {isExpanded ? 'Ocultar' : 'Ver'}
+                                  {isExpanded ? 'Ocultar' : `Ver (${answerEntries.length})`}
                                   {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                                 </button>
                               ) : (
@@ -544,22 +592,31 @@ const DatabaseExport: React.FC<DatabaseExportProps> = ({
                             <tr>
                               <td colSpan={7} className="px-4 py-4 bg-blue-50 border-b border-blue-100">
                                 <div className="text-xs font-semibold text-blue-700 mb-3 uppercase tracking-wide">
-                                  Respostas do Formulário — {lead.formSource}
+                                  Respostas do Formulário — {form?.name || lead.formSource || 'Formulário'}
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                  {Object.entries(lead.answers || {})
-                                    .filter(([k]) => !k.startsWith('_'))
-                                    .map(([key, value]: [string, any]) => {
-                                      const question = questions.find(q => q.id === key);
-                                      const label = question?.text || key;
-                                      const displayValue = getAnswerDisplay(value);
-                                      return (
-                                        <div key={key} className="bg-white rounded-lg p-3 border border-blue-100">
-                                          <div className="text-xs text-gray-500 mb-1 font-medium leading-tight">{label}</div>
-                                          <div className="text-sm text-gray-800 font-medium">{displayValue || '—'}</div>
-                                        </div>
-                                      );
-                                    })}
+                                  {answerEntries.map(([key, answerData]: [string, any]) => {
+                                    const label = getQuestionText(key, formQuestions);
+                                    const displayValue = getAnswerValue(answerData);
+                                    return (
+                                      <div key={key} className="bg-white rounded-lg p-3 border border-blue-100">
+                                        <div className="text-xs text-gray-500 mb-1 font-medium leading-tight">{label}</div>
+                                        <div className="text-sm text-gray-800 font-medium">{displayValue}</div>
+                                        {/* Follow-ups */}
+                                        {answerData?.followUps && Object.values(answerData.followUps).some((v: any) => v) && (
+                                          <div className="mt-2 pt-2 border-t border-gray-100">
+                                            {Object.entries(answerData.followUps).map(([fk, fv]: [string, any]) =>
+                                              fv ? (
+                                                <div key={fk} className="text-xs text-gray-500 italic mt-1">
+                                                  ↳ {String(fv)}
+                                                </div>
+                                              ) : null
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </td>
                             </tr>
@@ -599,7 +656,8 @@ const DatabaseExport: React.FC<DatabaseExportProps> = ({
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filteredNPS.map((nps) => {
-                      const questions = getCampaignQuestions(nps.campaignId);
+                      const campaign = campaigns.find(c => c.id === nps.campaignId);
+                      const campaignQuestions = campaign?.questions || [];
                       const hasAnswers = Array.isArray(nps.answers) && nps.answers.length > 0;
                       const isExpanded = expandedRow === nps.id;
                       return (
@@ -673,8 +731,10 @@ const DatabaseExport: React.FC<DatabaseExportProps> = ({
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                   {(nps.answers || []).map((ans: any, idx: number) => {
-                                    const question = questions.find(q => q.id === ans.question);
-                                    const label = question?.text || ans.question || `Pergunta ${idx + 1}`;
+                                    const q = campaignQuestions.find(q => String(q.id) === String(ans.question));
+                                    const label = q?.text || (ans.question && /^\d{10,}/.test(ans.question)
+                                      ? `Pergunta ${idx + 1}`
+                                      : (ans.question || `Pergunta ${idx + 1}`));
                                     return (
                                       <div key={idx} className="bg-white rounded-lg p-3 border border-purple-100">
                                         <div className="text-xs text-gray-500 mb-1 font-medium leading-tight">{label}</div>
@@ -1032,7 +1092,7 @@ const DatabaseExport: React.FC<DatabaseExportProps> = ({
 
         {/* Footer info */}
         <div className="mt-4 text-center text-xs text-gray-400">
-          Clique em "Ver" nas linhas para expandir detalhes. Use "Exportar CSV" para baixar os dados filtrados.
+          Clique em "Ver" nas linhas para expandir detalhes. Use "Exportar XLSX" para baixar os dados filtrados em Excel.
         </div>
       </div>
     </div>
