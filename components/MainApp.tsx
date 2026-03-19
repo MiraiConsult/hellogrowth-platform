@@ -27,6 +27,7 @@ import IntelligenceCenter from '@/components/IntelligenceCenter';
 import GameConfig from '@/components/GameConfig';
 import GameParticipations from '@/components/GameParticipations';
 import ReportSettings from '@/components/ReportSettings';
+import AlertSettings from '@/components/AlertSettings';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
@@ -435,8 +436,10 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
                // Check if Onboarding Needed
                const hasSeenTour = localStorage.getItem('hg_onboarding_complete');
                
-               // LOGIC UPDATE: Only show tour if not seen AND PlaceID is missing. 
-               if (!hasSeenTour && !mergedSettings.placeId) {
+               // LOGIC UPDATE: Only show tour if not seen AND PlaceID is missing.
+               // Check both settings.placeId AND business_profile.google_place_id to avoid false positives
+               const hasPlaceId = !!(mergedSettings.placeId || dbBizProfile?.google_place_id);
+               if (!hasSeenTour && !hasPlaceId) {
                    setShowTour(true);
                }
            }
@@ -472,12 +475,35 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
              };
               setPublicCampaign(safeCampaign);
               
-              const { data: owner } = await supabase.from('users').select('settings, company_name').eq('id', campaign.user_id).single();
-              if (owner) {
-                   const realName = owner.company_name || owner.settings?.companyName || 'Sua Empresa';
-                   setPublicCompanyName(realName);
-                   const ownerSettings = { ...mockSettings, ...owner.settings, companyName: realName, placeId: owner.settings?.placeId };
-                   setPublicSettings(ownerSettings);
+              // Buscar nome da empresa pelo business_profile do tenant da campanha
+              // Isso garante que cada loja/empresa mostre seu próprio nome
+              const campaignTenantId = campaign.tenant_id || campaign.user_id;
+              const { data: bizProfile } = await supabase
+                .from('business_profile')
+                .select('company_name, google_place_id')
+                .eq('tenant_id', campaignTenantId)
+                .maybeSingle();
+              
+              if (bizProfile?.company_name) {
+                setPublicCompanyName(bizProfile.company_name);
+                // Sempre usar o Place ID mais atualizado: business_profile tem prioridade sobre o salvo na campanha
+                // Isso garante que o redirecionamento funcione mesmo que a campanha tenha sido criada antes do Place ID ser cadastrado
+                const currentPlaceId = bizProfile.google_place_id || safeCampaign.google_place_id || '';
+                const ownerSettings = { ...mockSettings, companyName: bizProfile.company_name, placeId: currentPlaceId };
+                setPublicSettings(ownerSettings);
+                // Se o business_profile tem Place ID mas a campanha não, atualizar o safeCampaign
+                if (bizProfile.google_place_id) {
+                  setPublicCampaign({ ...safeCampaign, google_place_id: bizProfile.google_place_id, google_redirect: safeCampaign.google_redirect || !!bizProfile.google_place_id });
+                }
+              } else {
+                // Fallback: buscar pelo user_id se não tiver business_profile
+                const { data: owner } = await supabase.from('users').select('settings, company_name').eq('id', campaign.user_id).single();
+                if (owner) {
+                  const realName = owner.company_name || owner.settings?.companyName || 'Sua Empresa';
+                  setPublicCompanyName(realName);
+                  const ownerSettings = { ...mockSettings, ...owner.settings, companyName: realName, placeId: owner.settings?.placeId };
+                  setPublicSettings(ownerSettings);
+                }
               }
           }
         } else if (formId) {
@@ -494,9 +520,22 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
             };
             setPublicForm(safeForm);
             
-            const { data: owner } = await supabase.from('users').select('company_name, settings').eq('id', form.user_id).single();
-            if (owner) {
-              setPublicCompanyName(owner.company_name || owner.settings?.companyName || 'Sua Empresa');
+            // Buscar nome da empresa pelo business_profile do tenant do formulário
+            const formTenantId = form.tenant_id || form.user_id;
+            const { data: formBizProfile } = await supabase
+              .from('business_profile')
+              .select('company_name')
+              .eq('tenant_id', formTenantId)
+              .maybeSingle();
+            
+            if (formBizProfile?.company_name) {
+              setPublicCompanyName(formBizProfile.company_name);
+            } else {
+              // Fallback: buscar pelo user_id
+              const { data: owner } = await supabase.from('users').select('company_name, settings').eq('id', form.user_id).single();
+              if (owner) {
+                setPublicCompanyName(owner.company_name || owner.settings?.companyName || 'Sua Empresa');
+              }
             }
           }
         }
@@ -628,29 +667,35 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       initial_fields: form.initialFields,
       active: form.active,
       user_id: currentUser.id,
-      tenant_id: getActiveTenant()
+      tenant_id: getActiveTenant(),
+      game_enabled: form.game_enabled || false,
+      game_id: form.game_id || null
+      // product_ids: requer migração 004 no Supabase antes de habilitar
+      // product_ids: (form as any).product_ids || null
     };
     
-    // Check if form exists in database
-    if (form.id) {
-      const { data: existingForm } = await supabase
-        .from('forms')
-        .select('id')
-        .eq('id', form.id)
-        .single();
-      
-      if (existingForm) {
-        // UPDATE existing form
-        await supabase.from('forms').update(formData).eq('id', form.id);
-        setForms(prev => prev.map(f => f.id === form.id ? { ...f, ...form } : f));
-      } else {
-        // INSERT new form (ID doesn't exist in database)
-        const { data } = await supabase.from('forms').insert([formData]).select().single();
-        if (data) setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
+    // Verificar se o ID é um UUID válido (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+    // IDs temporários gerados com Date.now() não são UUIDs válidos
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isValidUUID = form.id && uuidRegex.test(form.id);
+    
+    if (isValidUUID) {
+      // UPDATE: ID é UUID válido, formulário já existe no banco
+      const { error: updateError } = await supabase.from('forms').update(formData).eq('id', form.id);
+      if (updateError) {
+        console.error('Erro ao atualizar formulário:', updateError);
+        alert('Erro ao salvar formulário: ' + updateError.message);
+        return;
       }
+      setForms(prev => prev.map(f => f.id === form.id ? { ...f, ...form } : f));
     } else {
-      // INSERT new form (no ID provided)
-      const { data } = await supabase.from('forms').insert([formData]).select().single();
+      // INSERT: ID ausente ou temporário (Date.now()) - deixar banco gerar UUID
+      const { data, error: insertError } = await supabase.from('forms').insert([formData]).select().single();
+      if (insertError) {
+        console.error('Erro ao inserir formulário:', insertError);
+        alert('Erro ao salvar formulário: ' + insertError.message);
+        return;
+      }
       if (data) setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
     }
   };
@@ -787,6 +832,28 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     if (!supabase) return;
     await supabase.from('leads').update({ status }).eq('id', leadId);
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status } : l));
+    // Disparar alerta de lead ganho ou perdido
+    if (status === 'Vendido' || status === 'Perdido') {
+      const lead = leads.find(l => l.id === leadId);
+      const tenantId = getActiveTenant();
+      if (lead && tenantId) {
+        fetch('/api/send-alert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: status === 'Vendido' ? 'lead_won' : 'lead_lost',
+            companyId: tenantId,
+            data: {
+              name: lead.name,
+              email: lead.email,
+              phone: lead.phone,
+              value: lead.value || 0,
+              formSource: lead.formSource,
+            },
+          }),
+        }).catch(() => {});
+      }
+    }
   };
 
   const handleUpdateLeadNotes = async (leadId: string, notes: string) => {
@@ -839,6 +906,30 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         status: response.status,
         answers: response.answers
     }]).select().single();
+
+    // Disparar alertas de NPS (fire-and-forget)
+    if (!error && data) {
+      const npsAlertData = {
+        customerName: data.customer_name || 'Cliente',
+        score: data.score,
+        comment: data.comment || '',
+        phone: data.customer_phone || '',
+      };
+      const campaignTenantId = (publicCampaign as any).tenant_id;
+      if (campaignTenantId) {
+        let alertType: string | null = null;
+        if (data.score <= 6) alertType = 'detractor';
+        else if (data.score >= 9) alertType = 'promoter';
+        else if (data.score >= 7 && data.score <= 8 && data.comment) alertType = 'neutral_with_comment';
+        if (alertType) {
+          fetch('/api/send-alert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: alertType, companyId: campaignTenantId, data: npsAlertData }),
+          }).catch(() => {});
+        }
+      }
+    }
 
     if (!error && data && isPreviewMode) {
         const newResponse: NPSResponse = {
@@ -897,6 +988,29 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     if (insertError) {
       console.error('Erro ao salvar lead:', insertError);
       return false;
+    }
+    
+    // Disparar alertas de novo lead e lead de alto valor (fire-and-forget)
+    if (insertedLead && formTenantId) {
+      const alertData = {
+        name: insertedLead.name,
+        email: insertedLead.email,
+        phone: insertedLead.phone,
+        value: insertedLead.value || 0,
+        formSource: insertedLead.form_source,
+      };
+      fetch('/api/send-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'new_lead', companyId: formTenantId, data: alertData }),
+      }).catch(() => {});
+      if ((insertedLead.value || 0) > 0) {
+        fetch('/api/send-alert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'high_value_lead', companyId: formTenantId, data: alertData }),
+        }).catch(() => {});
+      }
     }
     
     // Análise de IA será feita sob demanda pelo admin (botão "Analisar com IA")
@@ -1193,13 +1307,17 @@ Responda APENAS com JSON válido (sem markdown):
         npsData={npsData}
       />
       <main className={`flex-1 relative transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
-        {currentUser.plan === 'trial' && daysLeft !== undefined && (
-          <div className="bg-emerald-600 text-white px-4 py-2 text-sm font-medium flex justify-between items-center sticky top-0 z-20">
+        {(currentUser.plan === 'trial' || currentUser.trialModel === 'model_b') && daysLeft !== undefined && (
+          <div className={`text-white px-4 py-2 text-sm font-medium flex justify-between items-center sticky top-0 z-20 ${daysLeft <= 3 ? 'bg-red-600' : daysLeft <= 7 ? 'bg-orange-500' : 'bg-emerald-600'}`}>
             <div className="flex items-center gap-2">
-              <span className="bg-emerald-500 px-2 py-0.5 rounded text-xs uppercase font-bold tracking-wider">Teste Grátis</span>
-              <span>Você tem <strong>{daysLeft} dias restantes</strong>.</span>
+              <span className={`px-2 py-0.5 rounded text-xs uppercase font-bold tracking-wider ${daysLeft <= 3 ? 'bg-red-500' : daysLeft <= 7 ? 'bg-orange-400' : 'bg-emerald-500'}`}>Trial</span>
+              {daysLeft === 0 ? (
+                <span>Seu trial <strong>expira hoje</strong>! Assine para manter o acesso.</span>
+              ) : (
+                <span>Você tem <strong>{daysLeft} dia{daysLeft !== 1 ? 's' : ''} restante{daysLeft !== 1 ? 's' : ''}</strong> de trial gratuito.</span>
+              )}
             </div>
-            <button onClick={() => setCurrentView('pricing')} className="bg-white text-indigo-600 px-3 py-1 rounded text-xs font-bold">Assinar Agora</button>
+            <button onClick={() => setCurrentView('pricing')} className="bg-white text-emerald-700 px-3 py-1 rounded text-xs font-bold hover:bg-emerald-50 transition-colors">Assinar Agora</button>
           </div>
         )}
         
@@ -1327,6 +1445,7 @@ Responda APENAS com JSON válido (sem markdown):
         {currentView === 'digital-diagnostic' && (
           <DigitalDiagnostic 
             userId={currentUser.id}
+            activeTenantId={getActiveTenant()}
             settings={settings}
             npsData={npsData}
             businessProfile={businessProfile}
@@ -1350,7 +1469,13 @@ Responda APENAS com JSON válido (sem markdown):
         
         {currentView === 'ai-chat' && <AIChat leads={leads} npsData={npsData} activePlan={currentUser.plan} />}
         
-        {currentView === 'pricing' && <Pricing currentPlan={currentUser.plan} onSelectPlan={onUpdatePlan} />}
+        {currentView === 'pricing' && (() => {
+          // Redirecionar para /pricing (PricingClient com isManageMode ativado)
+          if (typeof window !== 'undefined') {
+            window.location.href = '/pricing';
+          }
+          return null;
+        })()}
         
         {currentView === 'settings' && (
             <Settings 
@@ -1382,6 +1507,16 @@ Responda APENAS com JSON válido (sem markdown):
                 currentUser={currentUser}
                 userRole={currentUser.role || 'admin'}
             />
+        )}
+
+        {currentView === 'alert-settings' && (
+            <div className="p-6">
+              <AlertSettings
+                companyId={getActiveTenant() || ''}
+                companyName={settings.companyName || 'Minha Empresa'}
+                activePlan={currentUser.plan || 'hello_growth'}
+              />
+            </div>
         )}
 
         {showTour && (

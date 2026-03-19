@@ -70,15 +70,18 @@ interface DiagnosticData {
 
 interface DigitalDiagnosticProps {
   userId: string;
+  activeTenantId?: string; // tenant_id da empresa ativa (para isolamento multi-tenant)
   settings: AccountSettings;
   npsData: any[];
   businessProfile?: any;
 }
 
-const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, settings, npsData, businessProfile }) => {
+const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, activeTenantId, settings, npsData, businessProfile }) => {
   // Usar o Place ID do Perfil do Negócio como fonte principal
   const effectivePlaceId = businessProfile?.google_place_id || settings.placeId || '';
-  const tenantId = useTenantId()
+  const tenantIdFromHook = useTenantId();
+  // Priorizar activeTenantId passado como prop (garante isolamento por empresa)
+  const tenantId = activeTenantId || tenantIdFromHook
 
   const [diagnostics, setDiagnostics] = useState<DiagnosticData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,22 +90,23 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({ userId, 
   const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch existing diagnostics
+  // Fetch existing diagnostics - re-buscar quando a empresa ativa mudar
   useEffect(() => {
     fetchDiagnostics();
-  }, [userId]);
+  }, [userId, activeTenantId]);
 
   const fetchDiagnostics = async () => {
     if (!supabase) return;
     setIsLoading(true);
     try {
-      // Buscar tenant_id do usuário
-      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', userId).single();
-      const tenantId = userData?.tenant_id || userId;
+      // Prioridade: 1) activeTenantId (prop), 2) localStorage, 3) tenantId do hook, 4) userId
+      // NUNCA buscar users.tenant_id pois sempre retorna o tenant principal (empresa mãe)
+      const localStorageTenantId = typeof window !== 'undefined' ? localStorage.getItem('hg_active_company_id') : null;
+      const resolvedTenantId = activeTenantId || localStorageTenantId || tenantId || userId;
       const { data, error } = await supabase
         .from('digital_diagnostics')
         .select('*')
-        .eq('tenant_id', tenantId)
+        .eq('tenant_id', resolvedTenantId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -410,10 +414,11 @@ Forneça de 3 a 5 recomendações priorizadas.
         
         // Save to database
         setAnalysisStep('Salvando diagnóstico...');
+        const mockTenantId = activeTenantId || tenantId || userId;
         const { error: saveError } = await supabase
           .from('digital_diagnostics')
           .insert({
-            user_id: userId, tenant_id: tenantId,
+            user_id: userId, tenant_id: mockTenantId,
             place_data: mockPlaceData,
             ai_analysis: aiAnalysis,
             score_reputation: aiAnalysis.scores.reputation,
@@ -437,9 +442,8 @@ Forneça de 3 a 5 recomendações priorizadas.
 
       // Step 3: Save to database
       setAnalysisStep('Salvando diagnóstico...');
-      // Garantir que tenantId está resolvido antes do insert
-      const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', userId).single();
-      const resolvedTenantId = userData?.tenant_id || tenantId || userId;
+      // Usar activeTenantId (empresa ativa) para garantir isolamento por loja
+      const resolvedTenantId = activeTenantId || tenantId || userId;
       console.log('Saving diagnostic with tenant_id:', resolvedTenantId, 'user_id:', userId);
       const { error: saveError, data: savedData } = await supabase
         .from('digital_diagnostics')

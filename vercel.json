@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/send-reports",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/check-trials",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/check-stale-leads",
+      "schedule": "0 9 * * *"
     }
   ]
 }

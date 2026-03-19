@@ -93,16 +93,14 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
   const calculateScore = (data: BusinessProfileData): number => {
     let score = 0;
     const weights = {
-      company_name: 10,
+      company_name: 15,
       business_type: 10,
       business_description: 15,
       target_audience: 15,
       brand_tone: 0,
-      differentials: 10,
+      differentials: 15,
       main_pain_points: 10,
-      google_place_id: 15,
-      instagram_handle: 5,
-      facebook_page: 5,
+      google_place_id: 20,
     };
 
     if (data.company_name?.trim()) score += weights.company_name;
@@ -113,8 +111,6 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
     if (data.differentials?.trim()) score += weights.differentials;
     if (data.main_pain_points?.trim()) score += weights.main_pain_points;
     if (data.google_place_id?.trim()) score += weights.google_place_id;
-    if (data.instagram_handle?.trim()) score += weights.instagram_handle;
-    if (data.facebook_page?.trim()) score += weights.facebook_page;
 
     return Math.min(score, 100);
   };
@@ -155,6 +151,11 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
   const handleSave = async () => {
     if (!userId || !tenantId) {
       showNotification('error', 'Usuário não identificado');
+      return;
+    }
+
+    if (profile.business_description.length > 1000) {
+      showNotification('error', 'A descrição do negócio ultrapassou o limite de 1000 caracteres. Reduza o texto antes de salvar.');
       return;
     }
 
@@ -382,11 +383,35 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
               onChange={(e) => setProfile({ ...profile, business_description: e.target.value })}
               placeholder="Descreva o que sua empresa faz, quais serviços oferece e o que a torna especial. Quanto mais detalhes, melhor a IA vai te entender..."
               rows={4}
-              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              maxLength={1000}
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                profile.business_description.length > 1000
+                  ? 'border-red-400 focus:ring-red-400 focus:border-red-400'
+                  : 'border-slate-200'
+              }`}
             />
-            <p className="text-xs text-slate-400 mt-1">
-              {profile.business_description.length}/500 caracteres (mínimo recomendado: 50)
-            </p>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-xs text-slate-400">
+                Mínimo recomendado: 50 caracteres
+              </p>
+              <p className={`text-xs font-medium ${
+                profile.business_description.length > 1000
+                  ? 'text-red-500'
+                  : profile.business_description.length > 900
+                  ? 'text-amber-500'
+                  : 'text-slate-400'
+              }`}>
+                {profile.business_description.length}/1000
+                {profile.business_description.length > 1000 && (
+                  <span className="ml-1">⚠ Limite excedido</span>
+                )}
+              </p>
+            </div>
+            {profile.business_description.length > 1000 && (
+              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                ⚠ A descrição ultrapassou o limite de 1000 caracteres. Reduza o texto para salvar.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -495,54 +520,7 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                <Instagram className="inline mr-2" size={16} />
-                Instagram
-              </label>
-              <div className="flex">
-                <span className="inline-flex items-center px-3 bg-slate-100 border border-r-0 border-slate-200 rounded-l-lg text-slate-500">
-                  @
-                </span>
-                <input
-                  type="text"
-                  value={profile.instagram_handle}
-                  onChange={(e) => setProfile({ ...profile, instagram_handle: e.target.value })}
-                  placeholder="seuinstagram"
-                  className="flex-1 px-4 py-3 border border-slate-200 rounded-r-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-              </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                <Facebook className="inline mr-2" size={16} />
-                Facebook
-              </label>
-              <input
-                type="text"
-                value={profile.facebook_page}
-                onChange={(e) => setProfile({ ...profile, facebook_page: e.target.value })}
-                placeholder="URL da sua página"
-                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              <Globe className="inline mr-2" size={16} />
-              Website
-            </label>
-            <input
-              type="url"
-              value={profile.website_url}
-              onChange={(e) => setProfile({ ...profile, website_url: e.target.value })}
-              placeholder="https://www.seusite.com.br"
-              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-            />
-          </div>
         </div>
       )}
 

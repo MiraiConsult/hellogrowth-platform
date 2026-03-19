@@ -17,15 +17,12 @@ const ZAPI_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN!;
 // Retorna o intervalo do dia anterior em horário de Brasília (UTC-3)
 function getYesterdayRange(): { startISO: string; endISO: string; dateLabel: string } {
   const now = new Date();
-  // Ajusta para Brasília (UTC-3)
   const brasiliaOffset = -3 * 60 * 60 * 1000;
   const brasiliaNow = new Date(now.getTime() + brasiliaOffset);
 
-  // Ontem em Brasília
   const yesterday = new Date(brasiliaNow);
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);
 
-  // Início do dia anterior: 00:00:00 Brasília = 03:00:00 UTC
   const start = new Date(Date.UTC(
     yesterday.getUTCFullYear(),
     yesterday.getUTCMonth(),
@@ -33,7 +30,6 @@ function getYesterdayRange(): { startISO: string; endISO: string; dateLabel: str
     3, 0, 0, 0 // 00:00 Brasília = 03:00 UTC
   ));
 
-  // Fim do dia anterior: 23:59:59 Brasília = 02:59:59 UTC do dia atual
   const end = new Date(Date.UTC(
     yesterday.getUTCFullYear(),
     yesterday.getUTCMonth(),
@@ -51,22 +47,13 @@ function getYesterdayRange(): { startISO: string; endISO: string; dateLabel: str
   return { startISO: start.toISOString(), endISO: end.toISOString(), dateLabel };
 }
 
-// Busca KPIs do dia anterior para o tenant
-async function fetchYesterdayKPIs(tenantId: string) {
+// Busca KPIs de vendas (leads) do dia anterior
+async function fetchLeadsKPIs(tenantId: string) {
   const { startISO, endISO } = getYesterdayRange();
 
-  // Busca leads criados ontem
   const { data: leads } = await supabaseAdmin
     .from('leads')
     .select('id, value, stage, created_at')
-    .eq('company_id', tenantId)
-    .gte('created_at', startISO)
-    .lte('created_at', endISO);
-
-  // Busca respostas NPS de ontem
-  const { data: npsResponses } = await supabaseAdmin
-    .from('nps_responses')
-    .select('id, score, created_at')
     .eq('company_id', tenantId)
     .gte('created_at', startISO)
     .lte('created_at', endISO);
@@ -76,44 +63,134 @@ async function fetchYesterdayKPIs(tenantId: string) {
   const wonLeads = leads?.filter(l => l.stage === 'won' || l.stage === 'closed_won').length || 0;
   const conversionRate = totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0;
 
+  return { totalLeads, totalValue, wonLeads, conversionRate };
+}
+
+// Busca KPIs de NPS do dia anterior
+async function fetchNPSKPIs(tenantId: string) {
+  const { startISO, endISO } = getYesterdayRange();
+
+  const { data: npsResponses } = await supabaseAdmin
+    .from('nps_responses')
+    .select('id, score, created_at')
+    .eq('company_id', tenantId)
+    .gte('created_at', startISO)
+    .lte('created_at', endISO);
+
   const npsCount = npsResponses?.length || 0;
   const promoters = npsResponses?.filter(r => r.score >= 9).length || 0;
   const detractors = npsResponses?.filter(r => r.score <= 6).length || 0;
+  const neutrals = npsCount - promoters - detractors;
   const npsScore = npsCount > 0
     ? Math.round(((promoters - detractors) / npsCount) * 100)
     : null;
 
-  return { totalLeads, totalValue, wonLeads, conversionRate, npsCount, npsScore, promoters, detractors };
+  return { npsCount, npsScore, promoters, neutrals, detractors };
 }
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
-// Monta a mensagem do relatório diário
-function buildDailyReportMessage(
+// ─── Mensagem Hello Client (apenas Pré-venda) ───────────────────────────────
+function buildClientMessage(
   companyName: string,
   dateLabel: string,
-  kpis: Awaited<ReturnType<typeof fetchYesterdayKPIs>>
+  leads: Awaited<ReturnType<typeof fetchLeadsKPIs>>
 ): string {
-  const npsLine = kpis.npsScore !== null
-    ? `📊 *NPS:* ${kpis.npsScore} pts (${kpis.npsCount} respostas | ${kpis.promoters} promotores | ${kpis.detractors} detratores)`
-    : `📊 *NPS:* Sem respostas no período`;
+  return `🚀 *HelloGrowth — Relatório Diário*
+📅 Dados de ontem: ${dateLabel}
+🏢 ${companyName}
+━━━━━━━━━━━━━━━━━━━━
+💼 *PRÉ-VENDA*
+• Leads: ${leads.totalLeads}
+• Valor no Funil: ${formatCurrency(leads.totalValue)}
+• Ganhos: ${leads.wonLeads}
+• Conversão: ${leads.conversionRate}%
+━━━━━━━━━━━━━━━━━━━━
+_Enviado automaticamente pelo HelloGrowth_`;
+}
+
+// ─── Mensagem Hello Rating (apenas Satisfação / NPS) ────────────────────────
+function buildRatingMessage(
+  companyName: string,
+  dateLabel: string,
+  nps: Awaited<ReturnType<typeof fetchNPSKPIs>>
+): string {
+  const npsLine = nps.npsScore !== null
+    ? `• NPS Score: ${nps.npsScore} pts`
+    : `• NPS Score: Sem respostas no período`;
 
   return `🚀 *HelloGrowth — Relatório Diário*
 📅 Dados de ontem: ${dateLabel}
 🏢 ${companyName}
 ━━━━━━━━━━━━━━━━━━━━
-💼 *VENDAS*
-• Leads: ${kpis.totalLeads}
-• Valor no Funil: ${formatCurrency(kpis.totalValue)}
-• Ganhos: ${kpis.wonLeads}
-• Conversão: ${kpis.conversionRate}%
-━━━━━━━━━━━━━━━━━━━━
-⭐ *SATISFAÇÃO*
+⭐ *SATISFAÇÃO DO CLIENTE*
+• Respostas NPS: ${nps.npsCount}
 ${npsLine}
+• Promotores: ${nps.promoters}
+• Neutros: ${nps.neutrals}
+• Detratores: ${nps.detractors}
 ━━━━━━━━━━━━━━━━━━━━
 _Enviado automaticamente pelo HelloGrowth_`;
+}
+
+// ─── Mensagem Hello Growth (Pré-venda + Satisfação) ─────────────────────────
+function buildGrowthMessage(
+  companyName: string,
+  dateLabel: string,
+  leads: Awaited<ReturnType<typeof fetchLeadsKPIs>>,
+  nps: Awaited<ReturnType<typeof fetchNPSKPIs>>
+): string {
+  const npsLine = nps.npsScore !== null
+    ? `• NPS Score: ${nps.npsScore} pts`
+    : `• NPS Score: Sem respostas no período`;
+
+  return `🚀 *HelloGrowth — Relatório Diário*
+📅 Dados de ontem: ${dateLabel}
+🏢 ${companyName}
+━━━━━━━━━━━━━━━━━━━━
+💼 *PRÉ-VENDA*
+• Leads: ${leads.totalLeads}
+• Valor no Funil: ${formatCurrency(leads.totalValue)}
+• Ganhos: ${leads.wonLeads}
+• Conversão: ${leads.conversionRate}%
+━━━━━━━━━━━━━━━━━━━━
+⭐ *SATISFAÇÃO DO CLIENTE*
+• Respostas NPS: ${nps.npsCount}
+${npsLine}
+• Promotores: ${nps.promoters}
+• Neutros: ${nps.neutrals}
+• Detratores: ${nps.detractors}
+━━━━━━━━━━━━━━━━━━━━
+_Enviado automaticamente pelo HelloGrowth_`;
+}
+
+// Seleciona e monta a mensagem correta de acordo com o plano
+async function buildMessageForPlan(
+  plan: string,
+  companyName: string,
+  dateLabel: string,
+  tenantId: string
+): Promise<string> {
+  const normalizedPlan = (plan || '').toLowerCase();
+
+  if (normalizedPlan === 'hello_client' || normalizedPlan === 'client') {
+    const leads = await fetchLeadsKPIs(tenantId);
+    return buildClientMessage(companyName, dateLabel, leads);
+  }
+
+  if (normalizedPlan === 'hello_rating' || normalizedPlan === 'rating') {
+    const nps = await fetchNPSKPIs(tenantId);
+    return buildRatingMessage(companyName, dateLabel, nps);
+  }
+
+  // hello_growth, growth ou qualquer outro plano → mensagem completa
+  const [leads, nps] = await Promise.all([
+    fetchLeadsKPIs(tenantId),
+    fetchNPSKPIs(tenantId)
+  ]);
+  return buildGrowthMessage(companyName, dateLabel, leads, nps);
 }
 
 // Envia mensagem via Z-API
@@ -152,7 +229,6 @@ async function sendWhatsAppMessage(phone: string, message: string): Promise<bool
 
 // GET — chamado pelo Vercel Cron todo dia às 12:00 UTC (09:00 Brasília)
 export async function GET(request: NextRequest) {
-  // Verificação de segurança: apenas o Vercel Cron pode chamar esta rota
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
@@ -165,9 +241,16 @@ export async function GET(request: NextRequest) {
 
   try {
     // Busca todos os clientes com relatório diário habilitado e número de WhatsApp
+    // Faz join com companies para obter o plano
     const { data: settings, error } = await supabaseAdmin
       .from('report_settings')
-      .select('*')
+      .select(`
+        *,
+        companies (
+          name,
+          plan
+        )
+      `)
       .eq('daily_enabled', true)
       .not('whatsapp_number', 'is', null);
 
@@ -186,27 +269,21 @@ export async function GET(request: NextRequest) {
 
     for (const setting of settings) {
       const tenantId = setting.company_id;
+      const companyData = (setting as any).companies;
+      const companyName = companyData?.name || 'Sua Empresa';
+      const plan = companyData?.plan || 'hello_growth';
 
-      // Busca o nome da empresa do usuário
-      const { data: userData } = await supabaseAdmin
-        .from('users')
-        .select('company_name, name, email')
-        .eq('id', tenantId)
-        .maybeSingle();
+      console.log(`[Cron] Processando ${companyName} — plano: ${plan}`);
 
-      const companyName = userData?.company_name || userData?.name || 'Sua Empresa';
+      // Monta a mensagem de acordo com o plano
+      const message = await buildMessageForPlan(plan, companyName, dateLabel, tenantId);
 
-      // Busca os KPIs do dia anterior
-      const kpis = await fetchYesterdayKPIs(tenantId);
-
-      // Monta e envia a mensagem
-      const message = buildDailyReportMessage(companyName, dateLabel, kpis);
       const sent = await sendWhatsAppMessage(setting.whatsapp_number, message);
 
       if (sent) {
         totalSent++;
-        results.push({ tenantId, companyName, whatsapp: setting.whatsapp_number });
-        console.log(`[Cron] ✅ Enviado para ${companyName} (${setting.whatsapp_number})`);
+        results.push({ tenantId, companyName, plan, whatsapp: setting.whatsapp_number });
+        console.log(`[Cron] ✅ Enviado para ${companyName} (${setting.whatsapp_number}) — plano: ${plan}`);
       } else {
         console.error(`[Cron] ❌ Falha ao enviar para ${companyName} (${setting.whatsapp_number})`);
       }

@@ -66,7 +66,6 @@ const PRICING_DATA: Record<number, Record<string, number>> = {
 
 // Helper function to get the price key based on plan and addons
 function getPriceKey(plan: string, addons: { game: boolean; mpd: boolean }): string {
-  // Map plan names to their codes
   const planCodeMap: Record<string, string> = {
     'hello_client': 'hc',
     'hello_rating': 'hr',
@@ -77,7 +76,7 @@ function getPriceKey(plan: string, addons: { game: boolean; mpd: boolean }): str
   
   if (!planCode) {
     console.error('Invalid plan:', plan);
-    return plan; // fallback to original plan name
+    return plan;
   }
   
   if (addons.game && addons.mpd) {
@@ -115,9 +114,12 @@ function getPlanName(plan: string, addons: { game: boolean; mpd: boolean }): str
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { plan, userCount, addons } = body;
+    // trial_model: 'none' | 'model_a' | 'model_b'
+    // model_a = trial com cartão (30 dias grátis, cartão obrigatório, cobrança automática no dia 31)
+    // model_b = trial sem cartão (30 dias livres, acesso bloqueado após expiração, cupom de desconto na conversão)
+    const { plan, userCount, addons, trial_model } = body;
     
-    console.log('Received checkout request:', { plan, userCount, addons });
+    console.log('Received checkout request:', { plan, userCount, addons, trial_model });
 
     if (!plan || !userCount) {
       return NextResponse.json(
@@ -138,7 +140,7 @@ export async function POST(request: NextRequest) {
     const priceKey = getPriceKey(plan, addons || { game: false, mpd: false });
     const priceBRL = PRICING_DATA[userCount][priceKey];
     
-    console.log('Price calculation:', { priceKey, priceBRL, userCount });
+    console.log('Price calculation:', { priceKey, pricePerUser: priceBRL, userCount, totalPrice: priceBRL * userCount });
 
     if (!priceBRL) {
       console.error('Invalid price configuration:', { priceKey, userCount, availableKeys: Object.keys(PRICING_DATA[userCount] || {}) });
@@ -148,8 +150,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert BRL to cents
-    const priceCents = Math.round(priceBRL * 100);
+    // Convert BRL to cents - total price = price per user × number of users
+    const totalPriceBRL = priceBRL * userCount;
+    const priceCents = Math.round(totalPriceBRL * 100);
 
     // Initialize Stripe
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -168,13 +171,23 @@ export async function POST(request: NextRequest) {
 
     // Get plan name for display
     const planName = getPlanName(plan, addons || { game: false, mpd: false });
-    const description = `${planName} - ${userCount} usuário${userCount > 1 ? 's' : ''}`;
+    const description = `${planName} - ${userCount} usuário${userCount > 1 ? 's' : ''} (R$ ${priceBRL.toFixed(2).replace('.', ',')} por usuário/mês)`;
 
-    // Create Checkout Session with dynamic pricing
-    console.log('Creating Stripe session with price:', priceCents, 'cents');
-    const session = await stripe.checkout.sessions.create({
+    // =====================================================================
+    // =====================================================================
+    // MODELO A: Checkout com cartão obrigatório
+    // - Cliente digita o cupom TRIAL30 (100% off, 1 mês) manualmente
+    // - Cobrança automática no dia 31
+    // =====================================================================
+    // MODELO B: Checkout sem cartão
+    // - Cupom foHOUrVn (100% off forever) aplicado automaticamente via discounts
+    // - payment_method_collection=if_required + sem payment_method_types
+    // - Você gerencia manualmente depois (remove o cupom quando quiser cobrar)
+    // =====================================================================
+    const isModelB = trial_model === 'model_b';
+
+    const sessionOptions: any = {
       mode: 'subscription',
-      payment_method_types: ['card'],
       line_items: [
         {
           price_data: {
@@ -191,18 +204,37 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-	      success_url: `${baseUrl}/pricing/setup?session_id={CHECKOUT_SESSION_ID}`,
-	      cancel_url: `${baseUrl}/pricing/canceled`,
-	      allow_promotion_codes: true,
-	      payment_method_collection: 'if_required',
-	      metadata: {
+      success_url: `${baseUrl}/pricing/setup?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/pricing/canceled`,
+      metadata: {
         plan,
         userCount: userCount.toString(),
         addons: JSON.stringify(addons || {}),
         priceKey,
-        priceBRL: priceBRL.toString(),
+        pricePerUserBRL: priceBRL.toString(),
+        totalPriceBRL: totalPriceBRL.toString(),
+        trial_model: trial_model || 'none',
       },
-    });
+    };
+
+    if (isModelB) {
+      // Modelo B: sem cartão, cupom aplicado automaticamente
+      sessionOptions.payment_method_collection = 'if_required';
+      sessionOptions.discounts = [{ coupon: 'foHOUrVn' }];
+      console.log('Model B: checkout sem cartão, cupom foHOUrVn (100% off forever) aplicado automaticamente');
+    } else {
+      // Modelo A e fluxo normal: cartão obrigatório, cliente digita cupom manualmente
+      sessionOptions.payment_method_types = ['card'];
+      sessionOptions.payment_method_collection = 'always';
+      sessionOptions.allow_promotion_codes = true;
+      console.log('Model A / normal: checkout com cartão obrigatório, allow_promotion_codes=true');
+    }
+
+    console.log('Checkout session options:', { trial_model, isModelB });
+
+    // Create Checkout Session
+    console.log('Creating Stripe session with price:', priceCents, 'cents');
+    const session = await stripe.checkout.sessions.create(sessionOptions);
 
     console.log('Stripe session created successfully:', session.id);
     return NextResponse.json({ sessionId: session.id, url: session.url });

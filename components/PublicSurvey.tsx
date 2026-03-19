@@ -47,11 +47,16 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
   const [loadingGame, setLoadingGame] = useState(false);
 
   // Get initial fields configuration from multiple possible sources
-  const initialFields: InitialField[] = (campaign as any).initial_fields || campaign.initialFields || [
+  const hasGame = !!(campaign as any).game_id;
+  const rawInitialFields: InitialField[] = (campaign as any).initial_fields || campaign.initialFields || [
     { field: 'name', label: 'Nome Completo', placeholder: 'Seu nome', required: true, enabled: true },
     { field: 'email', label: 'Email', placeholder: 'seu@email.com', required: false, enabled: true },
     { field: 'phone', label: 'Telefone / WhatsApp', placeholder: '(00) 00000-0000', required: false, enabled: true }
   ];
+  // Se o game estiver ativo, forçar campo phone como obrigatório e habilitado
+  const initialFields: InitialField[] = hasGame
+    ? rawInitialFields.map((f: InitialField) => f.field === 'phone' ? { ...f, required: true, enabled: true } : f)
+    : rawInitialFields;
 
   const enabledFields = initialFields.filter(f => f.enabled);
   const hasRequiredFields = enabledFields.some(f => f.required);
@@ -82,10 +87,12 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
   const displayCompanyName = companyName || settings?.companyName || 'Nossa Empresa';
 
   // Get Google Place ID from multiple possible sources
+  // Prioridade: settings.placeId (business_profile atualizado em tempo real) > campaign.google_place_id (pode estar desatualizado)
+  // Isso garante que o redirecionamento funcione mesmo que a campanha tenha sido criada antes do Place ID ser cadastrado
   const getPlaceId = (): string => {
-    return (campaign as any).googlePlaceId || 
+    return settings?.placeId || 
+           (campaign as any).googlePlaceId || 
            (campaign as any).google_place_id || 
-           settings?.placeId || 
            '';
   };
 
@@ -98,11 +105,9 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
            false;
   };
 
-  // Get custom messages
+  // Mensagem fixa antes do Google (sem personalização)
   const getBeforeGoogleMessage = (): string => {
-    return (campaign as any).beforeGoogleMessage || 
-           (campaign as any).before_google_message || 
-           'Muito obrigado pela sua avaliação! Você está sendo redirecionado para nos avaliar no Google...';
+    return 'Obrigado pelo feedback! Pedimos que, se possível, nos avalie no Google também!';
   };
 
   const getAfterGameMessage = (): string => {
@@ -435,6 +440,8 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                 clientName={respondent.name}
                 clientEmail={respondent.email}
                 clientPhone={respondent.phone}
+                participationPolicy={gameData.participation_policy || 'unlimited'}
+                prizeValidityDays={gameData.prize_validity_days || 7}
                 customMessage={gameData.messages?.before || 'Gire a roleta e ganhe prêmios incríveis!'}
                 onComplete={handleGameComplete}
                 source="post-sale"
