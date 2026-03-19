@@ -57,6 +57,8 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
   const [passwordStatus, setPasswordStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [passwordMessage, setPasswordMessage] = useState({ text: '', type: 'idle' as 'idle' | 'success' | 'error' });
   const [businessProfile, setBusinessProfile] = useState<any>(null);
+  const [tenantId, setTenantId] = useState<string>('');
+  const [copiedTenantId, setCopiedTenantId] = useState(false);
 
   // Stripe
   const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null);
@@ -69,8 +71,9 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
       if (!currentUser?.id) return;
       try {
         const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', currentUser.id).single();
-        const tenantId = userData?.tenant_id || currentUser.id;
-        const { data } = await supabase.from('business_profile').select('*').eq('tenant_id', tenantId).single();
+        const resolvedTenantId = userData?.tenant_id || currentUser.id;
+        setTenantId(resolvedTenantId);
+        const { data } = await supabase.from('business_profile').select('*').eq('tenant_id', resolvedTenantId).single();
         if (data) setBusinessProfile(data);
       } catch (e) { console.error('Erro ao carregar perfil:', e); }
     };
@@ -195,6 +198,40 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
                 </button>
               )}
             </div>
+          </div>
+
+          {/* ID da Empresa */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+              <Key size={20} className="text-gray-400" /> ID da Empresa
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">Use este ID para integrar o Hello Growth com outros sistemas da Mirai.</p>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={tenantId || 'Carregando...'}
+                readOnly
+                className="flex-1 rounded-lg border-gray-300 shadow-sm p-2 border bg-gray-50 text-gray-700 font-mono text-sm cursor-text select-all"
+              />
+              <button
+                onClick={() => {
+                  if (tenantId) {
+                    navigator.clipboard.writeText(tenantId);
+                    setCopiedTenantId(true);
+                    setTimeout(() => setCopiedTenantId(false), 2000);
+                  }
+                }}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium ${
+                  copiedTenantId
+                    ? 'bg-green-100 text-green-700 border border-green-200'
+                    : 'bg-gray-800 text-white hover:bg-gray-900'
+                }`}
+              >
+                {copiedTenantId ? <CheckCircle size={16} /> : <ExternalLink size={16} />}
+                {copiedTenantId ? 'Copiado!' : 'Copiar'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">Hello Growth → Configurações → Minha Conta → ID da Empresa</p>
           </div>
 
           {/* Alterar Senha */}
