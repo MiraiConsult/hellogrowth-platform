@@ -467,20 +467,15 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
               Encontramos uma participação anterior com este número de telefone.
             </p>
 
-            {/* Prêmio anterior */}
+            {/* Prêmio anterior - sem mostrar o código */}
             <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-4 text-left">
               <p className="text-xs text-teal-600 font-semibold uppercase tracking-wide mb-2">Seu prêmio anterior</p>
               <p className="text-xl font-bold text-teal-700 mb-1">{previousParticipation.prize_won}</p>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-xs font-mono bg-teal-100 text-teal-800 px-2 py-1 rounded font-bold tracking-wider">
-                  {previousParticipation.prize_code}
-                </span>
-                {isExpired ? (
-                  <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-medium">Expirado</span>
-                ) : (
-                  <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded font-medium">Válido</span>
-                )}
-              </div>
+              {isExpired ? (
+                <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-medium">Expirado</span>
+              ) : (
+                <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded font-medium">Válido</span>
+              )}
               {expiresDate && !isExpired && (
                 <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
                   <Clock size={12} />
@@ -496,12 +491,6 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
                 <Clock size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-amber-600">{nextText}</p>
               </div>
-            )}
-
-            {!isExpired && (
-              <p className="text-sm text-gray-600">
-                Apresente o código <strong className="text-teal-600">{previousParticipation.prize_code}</strong> para resgatar seu prêmio.
-              </p>
             )}
           </div>
 
@@ -693,24 +682,30 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
                 {wonPrize?.name}
               </div>
 
-              {/* Código do prêmio */}
-              <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-4">
-                <p className="text-xs text-teal-600 font-semibold uppercase tracking-wide mb-1">Seu código de resgate</p>
-                <p className="text-2xl font-mono font-bold text-teal-700 tracking-wider">{prizeCode}</p>
-                <p className="text-xs text-gray-500 mt-1 flex items-center justify-center gap-1">
-                  <Clock size={11} />
-                  Válido por {prizeValidityDays} dias
-                </p>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-100">
-                <p className="text-gray-600 text-sm">
-                  {source === 'pre-sale'
-                    ? 'Apresente este código para resgatar seu prêmio.'
-                    : <>Seu código também será enviado por <strong className="text-teal-600">WhatsApp</strong> ou <strong className="text-teal-600">Email</strong> após sua avaliação no Google.</>
-                  }
-                </p>
-              </div>
+              {/* Destaque: avaliar no Google para liberar o prêmio */}
+              {source !== 'pre-sale' ? (
+                <div className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-xl p-5 mb-4 text-white shadow-md">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <p className="text-sm font-bold uppercase tracking-wide">Para liberar seu prêmio</p>
+                  </div>
+                  <p className="text-xl font-bold text-center leading-snug">
+                    Avalie-nos no Google!
+                  </p>
+                  <p className="text-sm text-teal-100 text-center mt-2">
+                    Seu código será enviado por <strong className="text-white">WhatsApp</strong> ou <strong className="text-white">Email</strong> após sua avaliação.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 mb-4">
+                  <p className="text-xs text-teal-600 font-semibold uppercase tracking-wide mb-1">Seu código de resgate</p>
+                  <p className="text-2xl font-mono font-bold text-teal-700 tracking-wider">{prizeCode}</p>
+                  <p className="text-xs text-gray-500 mt-1 flex items-center justify-center gap-1">
+                    <Clock size={11} />
+                    Válido por {prizeValidityDays} dias
+                  </p>
+                </div>
+              )}
             </div>
 
             {source === 'post-sale' && (

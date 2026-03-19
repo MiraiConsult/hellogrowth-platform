@@ -1560,17 +1560,7 @@ Responda:`;
                   </div>
                 )}
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Mensagem após o jogo</label>
-                  <input
-                    type="text"
-                    value={afterGameMessage}
-                    onChange={(e) => setAfterGameMessage(e.target.value)}
-                    placeholder="Ex: Parabéns! Para liberar seu prêmio, nos avalie no Google."
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">Mensagem exibida após o cliente girar a roleta, antes de redirecionar para o Google.</p>
-                </div>
+
               </div>
             )}
           </div>
@@ -1593,33 +1583,7 @@ Responda:`;
             )}
           </div>
 
-          {/* Mensagem de Finalização */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 mt-4">
-            <h3 className="text-lg font-semibold text-slate-800 mb-1">Mensagens Personalizadas</h3>
-            <p className="text-sm text-slate-500 mb-4">Mensagens exibidas ao cliente durante e após a pesquisa</p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Mensagem antes do Google (para promotores)</label>
-                <input
-                  type="text"
-                  value={beforeGoogleMessage}
-                  onChange={(e) => setBeforeGoogleMessage(e.target.value)}
-                  placeholder="Ex: Obrigado! Que tal nos avaliar no Google?"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Mensagem de finalização</label>
-                <input
-                  type="text"
-                  value={afterGameMessage}
-                  onChange={(e) => setAfterGameMessage(e.target.value)}
-                  placeholder="Ex: Obrigado por participar da nossa pesquisa!"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                />
-              </div>
-            </div>
-          </div>
+
 
           <div className="bg-white rounded-xl border border-slate-200 p-5 mt-4">
             <label className="block text-sm font-medium text-slate-600 mb-2">Nome da Campanha</label>

@@ -105,11 +105,9 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
            false;
   };
 
-  // Get custom messages
+  // Mensagem fixa antes do Google (sem personalização)
   const getBeforeGoogleMessage = (): string => {
-    return (campaign as any).beforeGoogleMessage || 
-           (campaign as any).before_google_message || 
-           'Muito obrigado pela sua avaliação! Você está sendo redirecionado para nos avaliar no Google...';
+    return 'Obrigado pelo feedback! Pedimos que, se possível, nos avalie no Google também!';
   };
 
   const getAfterGameMessage = (): string => {
