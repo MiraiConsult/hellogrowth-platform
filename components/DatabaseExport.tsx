@@ -236,110 +236,31 @@ const DatabaseExport: React.FC<DatabaseExportProps> = ({
         const wb = XLSX.utils.book_new();
 
         if (activeTab === 'leads') {
-          // Coletar todas as colunas de perguntas dinamicamente
-          const allQuestionKeys = new Set<string>();
-          const leadFormMap = new Map<string, Form>();
-          filteredLeads.forEach(lead => {
-            const form = getFormForLead(lead);
-            if (form) leadFormMap.set(lead.id, form);
-            if (lead.answers && typeof lead.answers === 'object') {
-              Object.keys(lead.answers).filter(k => !k.startsWith('_')).forEach(k => allQuestionKeys.add(k));
-            }
-          });
-
-          // Construir mapa de questionId -> texto (usando todos os formulários)
-          const questionTextMap = new Map<string, string>();
-          allQuestionKeys.forEach(qid => {
-            let found = false;
-            for (const form of forms) {
-              const q = (form.questions || []).find(q => String(q.id) === String(qid));
-              if (q) {
-                questionTextMap.set(qid, q.text);
-                found = true;
-                break;
-              }
-            }
-            if (!found) {
-              questionTextMap.set(qid, /^\d{10,}/.test(qid) ? `Pergunta (${qid.slice(0, 8)}...)` : qid);
-            }
-          });
-
-          const questionKeysSorted = Array.from(allQuestionKeys);
-          const headers = ['Nome', 'Email', 'Telefone', 'Status', 'Valor (R$)', 'Formulário', 'Data', 'Notas',
-            ...questionKeysSorted.map(k => questionTextMap.get(k) || k)];
-
-          const rows = filteredLeads.map(lead => {
-            const base: any = {
-              'Nome': lead.name || '',
-              'Email': lead.email || '',
-              'Telefone': lead.phone || '',
-              'Status': lead.status || '',
-              'Valor (R$)': lead.value || 0,
-              'Formulário': lead.formSource || '',
-              'Data': formatDate(lead.date),
-              'Notas': lead.notes || '',
-            };
-            questionKeysSorted.forEach(qid => {
-              const label = questionTextMap.get(qid) || qid;
-              const answerData = lead.answers?.[qid];
-              base[label] = getAnswerValue(answerData);
-            });
-            return base;
-          });
-
-          const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+          const rows = filteredLeads.map(lead => ({
+            'Nome': lead.name || '',
+            'Email': lead.email || '',
+            'Telefone': lead.phone || '',
+            'Status': lead.status || '',
+            'Valor (R$)': lead.value || 0,
+            'Formulário': lead.formSource || '',
+            'Data': formatDate(lead.date),
+          }));
+          const ws = XLSX.utils.json_to_sheet(rows);
           XLSX.utils.book_append_sheet(wb, ws, 'Leads');
           XLSX.writeFile(wb, `leads_${new Date().toISOString().split('T')[0]}.xlsx`);
 
         } else if (activeTab === 'nps') {
-          // Coletar todas as perguntas adicionais das campanhas
-          const allNPSQuestionKeys = new Set<string>();
-          filteredNPS.forEach(nps => {
-            if (Array.isArray(nps.answers)) {
-              nps.answers.forEach((a: any) => {
-                if (a.question && !a.question.startsWith('_')) allNPSQuestionKeys.add(a.question);
-              });
-            }
-          });
-
-          const npsQuestionTextMap = new Map<string, string>();
-          allNPSQuestionKeys.forEach(qid => {
-            let found = false;
-            for (const campaign of campaigns) {
-              const q = (campaign.questions || []).find(q => String(q.id) === String(qid));
-              if (q) {
-                npsQuestionTextMap.set(qid, q.text);
-                found = true;
-                break;
-              }
-            }
-            if (!found) npsQuestionTextMap.set(qid, qid);
-          });
-
-          const npsQKeysSorted = Array.from(allNPSQuestionKeys);
-          const headers = ['Nome', 'Email', 'Telefone', 'Score', 'Status', 'Campanha', 'Comentário', 'Data',
-            ...npsQKeysSorted.map(k => npsQuestionTextMap.get(k) || k)];
-
-          const rows = filteredNPS.map(nps => {
-            const base: any = {
-              'Nome': nps.customerName || '',
-              'Email': nps.customerEmail || '',
-              'Telefone': nps.customerPhone || '',
-              'Score': nps.score,
-              'Status': nps.status || '',
-              'Campanha': nps.campaign || '',
-              'Comentário': nps.comment || '',
-              'Data': formatDate(nps.date),
-            };
-            npsQKeysSorted.forEach(qid => {
-              const label = npsQuestionTextMap.get(qid) || qid;
-              const ans = Array.isArray(nps.answers) ? nps.answers.find((a: any) => a.question === qid) : null;
-              base[label] = ans?.answer || '';
-            });
-            return base;
-          });
-
-          const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+          const rows = filteredNPS.map(nps => ({
+            'Nome': nps.customerName || '',
+            'Email': nps.customerEmail || '',
+            'Telefone': nps.customerPhone || '',
+            'Score': nps.score,
+            'Status': nps.status || '',
+            'Campanha': nps.campaign || '',
+            'Comentário': nps.comment || '',
+            'Data': formatDate(nps.date),
+          }));
+          const ws = XLSX.utils.json_to_sheet(rows);
           XLSX.utils.book_append_sheet(wb, ws, 'Respostas NPS');
           XLSX.writeFile(wb, `respostas_nps_${new Date().toISOString().split('T')[0]}.xlsx`);
 
@@ -369,7 +290,6 @@ const DatabaseExport: React.FC<DatabaseExportProps> = ({
             'Tipo': c.type || '',
             'NPS Score': c.npsScore || 0,
             'Respostas': c.responses || 0,
-            'Perguntas': (c.questions || []).map(q => q.text).join(' | '),
           }));
           const ws = XLSX.utils.json_to_sheet(rows);
           XLSX.utils.book_append_sheet(wb, ws, 'Campanhas');
@@ -378,11 +298,9 @@ const DatabaseExport: React.FC<DatabaseExportProps> = ({
         } else if (activeTab === 'forms') {
           const rows = filteredForms.map(f => ({
             'Nome': f.name || '',
-            'Descrição': f.description || '',
             'Respostas': f.responses || 0,
             'Ativo': f.active ? 'Sim' : 'Não',
             'Criado em': formatDate(f.createdAt),
-            'Perguntas': (f.questions || []).map(q => q.text).join(' | '),
           }));
           const ws = XLSX.utils.json_to_sheet(rows);
           XLSX.utils.book_append_sheet(wb, ws, 'Formulários');
