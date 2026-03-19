@@ -1,19 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, KeyboardEvent } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
-  Bell, 
-  Mail, 
-  MessageSquare, 
-  Clock, 
-  CheckCircle, 
-  AlertCircle, 
-  Loader2, 
-  Save,
-  Calendar,
-  Info,
-  Users,
-  PieChart,
-  Send
+  Bell, Mail, MessageSquare, Clock, CheckCircle, AlertCircle,
+  Loader2, Save, Calendar, Info, Users, PieChart, Send, Plus, X
 } from 'lucide-react';
 import { User } from '@/types';
 
@@ -24,41 +13,127 @@ interface ReportSettingsProps {
 
 interface ReportConfig {
   id?: string;
+  // legado (campo único)
   whatsapp_number: string;
   email_recipient: string;
+  // novos campos (múltiplos)
+  whatsapp_numbers: string[];
+  email_recipients: string[];
   daily_enabled: boolean;
   weekly_enabled: boolean;
   monthly_enabled: boolean;
   scheduled_time: string;
 }
 
+// ─── Componente de lista de contatos (tags) ───────────────────────────────────
+interface ContactListProps {
+  label: string;
+  icon: React.ReactNode;
+  placeholder: string;
+  hint: string;
+  type: 'tel' | 'email';
+  values: string[];
+  onChange: (values: string[]) => void;
+  disabled?: boolean;
+}
+
+const ContactList: React.FC<ContactListProps> = ({
+  label, icon, placeholder, hint, type, values, onChange, disabled
+}) => {
+  const [inputValue, setInputValue] = useState('');
+
+  const addContact = () => {
+    const v = inputValue.trim();
+    if (!v || values.includes(v)) { setInputValue(''); return; }
+    onChange([...values, v]);
+    setInputValue('');
+  };
+
+  const removeContact = (idx: number) => {
+    onChange(values.filter((_, i) => i !== idx));
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') { e.preventDefault(); addContact(); }
+  };
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        <span className="flex items-center gap-2">{icon} {label}</span>
+      </label>
+
+      {/* Tags dos contatos cadastrados */}
+      {values.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {values.map((v, i) => (
+            <span
+              key={i}
+              className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm px-3 py-1 rounded-full"
+            >
+              {v}
+              {!disabled && (
+                <button
+                  onClick={() => removeContact(i)}
+                  className="text-emerald-500 hover:text-red-500 transition-colors"
+                  aria-label="Remover"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Input para adicionar novo contato */}
+      {!disabled && (
+        <div className="flex gap-2">
+          <input
+            type={type}
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            className="flex-1 rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 text-sm focus:ring-emerald-500 focus:border-emerald-500"
+          />
+          <button
+            onClick={addContact}
+            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <Plus size={15} /> Adicionar
+          </button>
+        </div>
+      )}
+      <p className="text-xs text-gray-400 mt-1">{hint}</p>
+    </div>
+  );
+};
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole = 'admin' }) => {
   const isReadOnly = userRole === 'viewer';
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [message, setMessage] = useState({ text: '', type: 'idle' as 'idle' | 'success' | 'error' });
-  
-  // No pre-production/main, o company_id é o próprio user.id (que é o tenant_id)
+
   const companyId = currentUser?.id || null;
-  
+
   const [config, setConfig] = useState<ReportConfig>({
     whatsapp_number: '',
     email_recipient: currentUser?.email || '',
+    whatsapp_numbers: [],
+    email_recipients: [],
     daily_enabled: false,
     weekly_enabled: false,
     monthly_enabled: false,
     scheduled_time: '08:00'
   });
 
-  // Carrega as configurações quando o companyId estiver disponível
   useEffect(() => {
     const loadSettings = async () => {
-      if (!companyId) {
-        setLoading(false);
-        return;
-      }
-      
+      if (!companyId) { setLoading(false); return; }
       try {
         setLoading(true);
         const { data } = await supabase
@@ -68,10 +143,22 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
           .maybeSingle();
 
         if (data) {
+          // Migrar campo legado para array se necessário
+          const legacyWhats = data.whatsapp_number || '';
+          const legacyEmail = data.email_recipient || '';
+          let whatsNums: string[] = Array.isArray(data.whatsapp_numbers) ? data.whatsapp_numbers : [];
+          let emailRecs: string[] = Array.isArray(data.email_recipients) ? data.email_recipients : [];
+
+          // Incluir legado se não estiver na lista
+          if (legacyWhats && !whatsNums.includes(legacyWhats)) whatsNums = [legacyWhats, ...whatsNums];
+          if (legacyEmail && !emailRecs.includes(legacyEmail)) emailRecs = [legacyEmail, ...emailRecs];
+
           setConfig({
             id: data.id,
-            whatsapp_number: data.whatsapp_number || '',
-            email_recipient: data.email_recipient || '',
+            whatsapp_number: legacyWhats,
+            email_recipient: legacyEmail,
+            whatsapp_numbers: whatsNums,
+            email_recipients: emailRecs,
             daily_enabled: data.daily_enabled || false,
             weekly_enabled: data.weekly_enabled || false,
             monthly_enabled: data.monthly_enabled || false,
@@ -84,33 +171,29 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
         setLoading(false);
       }
     };
-
     loadSettings();
   }, [companyId]);
 
-  const handleToggle = (field: keyof ReportConfig) => {
+  const handleToggle = (field: 'daily_enabled' | 'weekly_enabled' | 'monthly_enabled') => {
     if (isReadOnly) return;
     setConfig(prev => ({ ...prev, [field]: !prev[field] }));
     setSaveStatus('idle');
   };
 
-  const handleInputChange = (field: keyof ReportConfig, value: string) => {
-    if (isReadOnly) return;
-    setConfig(prev => ({ ...prev, [field]: value }));
-    setSaveStatus('idle');
-  };
-
   const handleSave = async () => {
     if (!companyId || isReadOnly) return;
-    
     setSaveStatus('saving');
     setMessage({ text: '', type: 'idle' });
 
     try {
       const payload = {
         company_id: companyId,
-        whatsapp_number: config.whatsapp_number,
-        email_recipient: config.email_recipient,
+        // Manter campo legado com o primeiro número/email (compatibilidade)
+        whatsapp_number: config.whatsapp_numbers[0] || '',
+        email_recipient: config.email_recipients[0] || '',
+        // Novos campos com todos os contatos
+        whatsapp_numbers: config.whatsapp_numbers,
+        email_recipients: config.email_recipients,
         daily_enabled: config.daily_enabled,
         weekly_enabled: config.weekly_enabled,
         monthly_enabled: config.monthly_enabled,
@@ -120,15 +203,11 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
       let error;
       if (config.id) {
         const { error: updateError } = await supabase
-          .from('report_settings')
-          .update(payload)
-          .eq('id', config.id);
+          .from('report_settings').update(payload).eq('id', config.id);
         error = updateError;
       } else {
         const { data, error: insertError } = await supabase
-          .from('report_settings')
-          .insert([payload])
-          .select();
+          .from('report_settings').insert([payload]).select();
         error = insertError;
         if (data?.[0]) setConfig(prev => ({ ...prev, id: data[0].id }));
       }
@@ -137,26 +216,20 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
 
       setSaveStatus('saved');
       setMessage({ text: 'Configurações salvas com sucesso!', type: 'success' });
-      setTimeout(() => {
-        setSaveStatus('idle');
-        setMessage({ text: '', type: 'idle' });
-      }, 3000);
+      setTimeout(() => { setSaveStatus('idle'); setMessage({ text: '', type: 'idle' }); }, 3000);
     } catch (e: any) {
-      console.error('Erro ao salvar:', e);
       setSaveStatus('error');
       setMessage({ text: `Erro ao salvar: ${e.message || 'Tente novamente.'}`, type: 'error' });
     }
   };
 
   const handleTestWhatsApp = async () => {
-    if (!config.whatsapp_number) {
-      setMessage({ text: 'Preencha o número de WhatsApp antes de testar.', type: 'error' });
+    if (config.whatsapp_numbers.length === 0) {
+      setMessage({ text: 'Adicione ao menos um número de WhatsApp antes de testar.', type: 'error' });
       return;
     }
-
     setTestStatus('sending');
     setMessage({ text: '', type: 'idle' });
-
     try {
       const response = await fetch('/api/send-report', {
         method: 'POST',
@@ -164,23 +237,18 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
         body: JSON.stringify({
           type: 'test',
           companyId,
-          whatsappNumber: config.whatsapp_number
+          whatsappNumber: config.whatsapp_numbers[0]
         })
       });
-
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Erro ao enviar');
-
       setTestStatus('sent');
       setMessage({ text: 'Mensagem de teste enviada com sucesso!', type: 'success' });
     } catch (e: any) {
       setTestStatus('error');
       setMessage({ text: `Erro no teste: ${e.message}`, type: 'error' });
     } finally {
-      setTimeout(() => {
-        setTestStatus('idle');
-        setMessage({ text: '', type: 'idle' });
-      }, 4000);
+      setTimeout(() => { setTestStatus('idle'); setMessage({ text: '', type: 'idle' }); }, 4000);
     }
   };
 
@@ -205,54 +273,52 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
 
         {/* Card: Destinatários */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+          <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
             <Users size={20} className="text-gray-400" /> Destinatários
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                <span className="flex items-center gap-2">
-                  <MessageSquare size={16} className="text-green-500" /> WhatsApp
-                </span>
-              </label>
-              <input 
-                type="tel" 
-                value={config.whatsapp_number}
-                onChange={(e) => handleInputChange('whatsapp_number', e.target.value)}
-                disabled={isReadOnly}
-                placeholder="Ex: 5511999999999"
-                className="w-full rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 focus:ring-emerald-500 focus:border-emerald-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">Inclua o código do país (55) e DDD.</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                <span className="flex items-center gap-2">
-                  <Mail size={16} className="text-blue-500" /> E-mail de Destino
-                </span>
-              </label>
-              <input 
-                type="email" 
-                value={config.email_recipient}
-                onChange={(e) => handleInputChange('email_recipient', e.target.value)}
-                disabled={isReadOnly}
-                placeholder="exemplo@email.com"
-                className="w-full rounded-lg border-gray-300 shadow-sm p-2 border bg-white text-gray-900 focus:ring-emerald-500 focus:border-emerald-500"
-              />
-            </div>
+          <p className="text-sm text-gray-500 mb-5">
+            Adicione quantos números e e-mails quiser. Todos receberão os relatórios.
+          </p>
+
+          <div className="space-y-6">
+            <ContactList
+              label="Números de WhatsApp"
+              icon={<MessageSquare size={16} className="text-green-500" />}
+              placeholder="Ex: 5511999999999"
+              hint="Inclua o código do país (55) e DDD. Pressione Enter ou clique em Adicionar."
+              type="tel"
+              values={config.whatsapp_numbers}
+              onChange={v => { setConfig(prev => ({ ...prev, whatsapp_numbers: v })); setSaveStatus('idle'); }}
+              disabled={isReadOnly}
+            />
+
+            <div className="border-t border-gray-100" />
+
+            <ContactList
+              label="E-mails de Destino"
+              icon={<Mail size={16} className="text-blue-500" />}
+              placeholder="exemplo@email.com"
+              hint="Pressione Enter ou clique em Adicionar para incluir mais e-mails."
+              type="email"
+              values={config.email_recipients}
+              onChange={v => { setConfig(prev => ({ ...prev, email_recipients: v })); setSaveStatus('idle'); }}
+              disabled={isReadOnly}
+            />
           </div>
 
           {/* Botão de Teste */}
           {!isReadOnly && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="mt-5 pt-4 border-t border-gray-100">
               <button
                 onClick={handleTestWhatsApp}
-                disabled={testStatus === 'sending'}
+                disabled={testStatus === 'sending' || config.whatsapp_numbers.length === 0}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  testStatus === 'sending' 
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                  testStatus === 'sending'
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : testStatus === 'sent'
                     ? 'bg-green-100 text-green-700 border border-green-200'
+                    : config.whatsapp_numbers.length === 0
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
                 }`}
               >
@@ -264,6 +330,11 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
                   <><Send size={16} /> Enviar mensagem de teste no WhatsApp</>
                 )}
               </button>
+              {config.whatsapp_numbers.length > 0 && (
+                <p className="text-xs text-gray-400 mt-1.5">
+                  O teste será enviado para: {config.whatsapp_numbers[0]}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -274,6 +345,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
             <Calendar size={20} className="text-gray-400" /> Periodicidade do Relatório
           </h2>
           <div className="space-y-4">
+            {/* Diário */}
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
               <div className="flex items-center gap-3">
                 <div className={`p-2 rounded-lg ${config.daily_enabled ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-200 text-gray-500'}`}>
@@ -297,6 +369,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
               </button>
             </div>
 
+            {/* Semanal */}
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
               <div className="flex items-center gap-3">
                 <div className={`p-2 rounded-lg ${config.weekly_enabled ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-200 text-gray-500'}`}>
@@ -320,6 +393,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
               </button>
             </div>
 
+            {/* Mensal */}
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
               <div className="flex items-center gap-3">
                 <div className={`p-2 rounded-lg ${config.monthly_enabled ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-200 text-gray-500'}`}>
@@ -357,11 +431,10 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
             </div>
           </div>
 
-          {/* Info Box */}
           <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100 flex items-start gap-2">
             <Info size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
             <p className="text-sm text-blue-700">
-              Os relatórios são processados e enviados automaticamente às 9h, 
+              Os relatórios são processados e enviados automaticamente às 9h,
               consolidando os KPIs de Vendas e NPS do dia anterior.
             </p>
           </div>
@@ -370,7 +443,7 @@ const ReportSettings: React.FC<ReportSettingsProps> = ({ currentUser, userRole =
         {/* Mensagem de Status */}
         {message.text && (
           <div className={`flex items-center gap-2 p-3 rounded-lg ${
-            message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 
+            message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' :
             message.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : ''
           }`}>
             {message.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}

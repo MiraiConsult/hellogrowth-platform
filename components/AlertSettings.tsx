@@ -1,16 +1,17 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, KeyboardEvent } from 'react';
 import {
   Bell, BellOff, Phone, Save, TestTube, CheckCircle,
   AlertTriangle, TrendingUp, TrendingDown, Star, MessageSquare,
-  Clock, UserX, Loader2, Info
+  Clock, UserX, Loader2, Info, Plus, X
 } from 'lucide-react';
 
 interface AlertSettingsData {
   id?: string;
   company_id: string;
   whatsapp_number: string | null;
+  whatsapp_numbers: string[];
   alert_new_lead: boolean;
   alert_high_value_lead: boolean;
   high_value_threshold: number;
@@ -32,6 +33,7 @@ interface AlertSettingsProps {
 
 const DEFAULT_SETTINGS: Omit<AlertSettingsData, 'company_id'> = {
   whatsapp_number: '',
+  whatsapp_numbers: [],
   alert_new_lead: true,
   alert_high_value_lead: true,
   high_value_threshold: 1000,
@@ -118,6 +120,7 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [whatsInput, setWhatsInput] = useState('');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,7 +133,11 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
       const res = await fetch(`/api/alert-settings?companyId=${companyId}`);
       const json = await res.json();
       if (json.settings) {
-        setSettings({ ...json.settings, company_id: companyId });
+        const s = json.settings;
+        // Migrar campo legado para array
+        let nums: string[] = Array.isArray(s.whatsapp_numbers) ? s.whatsapp_numbers : [];
+        if (s.whatsapp_number && !nums.includes(s.whatsapp_number)) nums = [s.whatsapp_number, ...nums];
+        setSettings({ ...s, company_id: companyId, whatsapp_numbers: nums });
       }
     } catch (e) {
       console.error('Erro ao carregar alertas:', e);
@@ -146,14 +153,31 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
     setSaved(false);
   };
 
+  const addWhatsNumber = () => {
+    const v = whatsInput.trim();
+    if (!v || settings.whatsapp_numbers.includes(v)) { setWhatsInput(''); return; }
+    update('whatsapp_numbers', [...settings.whatsapp_numbers, v]);
+    setWhatsInput('');
+  };
+
+  const removeWhatsNumber = (idx: number) => {
+    update('whatsapp_numbers', settings.whatsapp_numbers.filter((_, i) => i !== idx));
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
     try {
+      const payload = {
+        ...settings,
+        // Manter campo legado com o primeiro número
+        whatsapp_number: settings.whatsapp_numbers[0] || settings.whatsapp_number || '',
+        whatsapp_numbers: settings.whatsapp_numbers,
+      };
       const res = await fetch('/api/alert-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId, ...settings }),
+        body: JSON.stringify({ companyId, ...payload }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erro ao salvar');
@@ -167,8 +191,9 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
   };
 
   const handleTest = async () => {
-    if (!settings.whatsapp_number) {
-      setError('Informe o número de WhatsApp antes de testar.');
+    const testNumber = settings.whatsapp_numbers[0] || settings.whatsapp_number;
+    if (!testNumber) {
+      setError('Adicione ao menos um número de WhatsApp antes de testar.');
       return;
     }
     setTesting(true);
@@ -180,7 +205,7 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
         body: JSON.stringify({
           type: 'test',
           companyId,
-          whatsappNumber: settings.whatsapp_number,
+          whatsappNumber: testNumber,
         }),
       });
       const json = await res.json();
@@ -214,23 +239,46 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
         </div>
       </div>
 
-      {/* Número de WhatsApp */}
+      {/* Números de WhatsApp */}
       <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           <Phone size={14} className="inline mr-1" />
-          Número de WhatsApp para alertas
+          Números de WhatsApp para alertas
         </label>
+
+        {/* Tags dos números cadastrados */}
+        {settings.whatsapp_numbers.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {settings.whatsapp_numbers.map((num, i) => (
+              <span key={i} className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm px-3 py-1 rounded-full">
+                {num}
+                <button onClick={() => removeWhatsNumber(i)} className="text-emerald-500 hover:text-red-500 transition-colors" aria-label="Remover">
+                  <X size={13} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Input para adicionar */}
         <div className="flex gap-2">
           <input
             type="tel"
-            value={settings.whatsapp_number || ''}
-            onChange={e => update('whatsapp_number', e.target.value)}
+            value={whatsInput}
+            onChange={e => setWhatsInput(e.target.value)}
+            onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') { e.preventDefault(); addWhatsNumber(); } }}
             placeholder="5511999999999 (com DDI e DDD)"
             className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
           <button
+            onClick={addWhatsNumber}
+            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <Plus size={14} /> Adicionar
+          </button>
+          <button
             onClick={handleTest}
-            disabled={testing || !settings.whatsapp_number}
+            disabled={testing || settings.whatsapp_numbers.length === 0}
             className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
           >
             {testing ? <Loader2 size={14} className="animate-spin" /> : <TestTube size={14} />}
@@ -238,7 +286,7 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
           </button>
         </div>
         <p className="text-xs text-gray-400 mt-1.5">
-          Formato: código do país + DDD + número. Ex: 5547999998888
+          Formato: código do país + DDD + número. Ex: 5547999998888. Pressione Enter ou clique em Adicionar.
         </p>
       </div>
 
