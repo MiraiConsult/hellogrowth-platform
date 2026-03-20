@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { Copy, Check, Sparkles, MessageSquare, Mail, Phone, Send, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { 
   getMessageSuggestions, 
@@ -171,7 +172,7 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
       alert('Telefone inválido.');
       return;
     }
-    const message = encodeURIComponent(generatedMessage.whatsappMessage);
+    const message = encodeWhatsAppMessage(generatedMessage.whatsappMessage);
     window.open(`https://wa.me/55${phone}?text=${message}`, '_blank');
   };
 

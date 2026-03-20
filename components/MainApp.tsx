@@ -254,7 +254,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           // Sempre buscar dados base do usuário atual
           const { data: currentUserData } = await supabase
             .from('users')
-            .select('tenant_id, settings, company_name, is_owner')
+            .select('tenant_id, settings, company_name, is_owner, role')
             .eq('id', currentUser.id)
             .single();
 

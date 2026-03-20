@@ -361,7 +361,7 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
         setAiAdvice(response.text || "Sem sugestão gerada.");
       } else {
         await new Promise(r => setTimeout(r, 1500));
-        setAiAdvice(`Olá ${firstName}, tudo bem? 👋\nVi seu interesse em ${selectedLead.formSource}. Podemos conversar rapidinho sobre o que você precisa?`);
+        setAiAdvice(`Olá ${firstName}, tudo bem?\nVi seu interesse em ${selectedLead.formSource}. Podemos conversar rapidinho sobre o que você precisa?`);
       }
     } catch (error) {
       setAiAdvice("Erro ao conectar com IA.");

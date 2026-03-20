@@ -388,7 +388,7 @@ IMPORTANTE: As mensagens devem parecer escritas por um HUMANO REAL, não por um 
 - Seja específico, mencione detalhes das respostas do cliente
 - Não use frases genéricas ou corporativas
 - Escreva como se estivesse conversando com um amigo
-- Use emojis com moderação (1-2 no máximo)
+- NÃO use emojis de nenhum tipo — as mensagens serão enviadas via link wa.me e emojis causam problemas de encoding
 - Seja breve e direto
 
 DADOS DO CLIENTE:
@@ -452,12 +452,12 @@ function generateFallbackMessage(
   
   const templates: Record<string, { whatsapp: string; emailSubject: string; emailBody: string }> = {
     gratitude: {
-      whatsapp: `Oi ${firstName}! Vi sua avaliação e fiquei muito feliz! Obrigado de coração pelo feedback positivo. A gente se esforça muito e é muito bom saber que faz diferença. 💚`,
+      whatsapp: `Oi ${firstName}! Vi sua avaliação e fiquei muito feliz! Obrigado de coração pelo feedback positivo. A gente se esforça muito e é muito bom saber que faz diferença.`,
       emailSubject: `${firstName}, muito obrigado!`,
       emailBody: `Oi ${firstName},\n\nVi sua avaliação e queria te agradecer pessoalmente. Feedback assim faz o nosso dia!\n\nObrigado por confiar na gente.\n\nAbraço!`
     },
     referral: {
-      whatsapp: `Oi ${firstName}! Que bom que você gostou do nosso trabalho! Se você conhecer alguém que também poderia gostar, pode indicar. Vou cuidar bem, prometo! 😊`,
+      whatsapp: `Oi ${firstName}! Que bom que você gostou do nosso trabalho! Se você conhecer alguém que também poderia gostar, pode indicar. Vou cuidar bem, prometo!`,
       emailSubject: `${firstName}, uma perguntinha`,
       emailBody: `Oi ${firstName},\n\nFiquei feliz com seu feedback! Se você conhecer alguém que também poderia se beneficiar, ficaríamos muito gratos pela indicação.\n\nAbraço!`
     },

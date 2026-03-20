@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect, useMemo } from 'react';
+import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, NPSResponse, Form } from '@/types';
 import { 
@@ -447,7 +448,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
     if (category === 'risk') {
       if (isLead) {
         const interest = (data.answers && Object.values(data.answers)[0]) ? (Object.values(data.answers)[0] as any).value : 'seu interesse';
-        whatsapp = `Olá ${firstName}! Notei que ainda não conseguimos avançar com sua solicitação sobre ${interest}. Podemos conversar para entender melhor como posso te ajudar? 😊`;
+        whatsapp = `Olá ${firstName}! Notei que ainda não conseguimos avançar com sua solicitação sobre ${interest}. Podemos conversar para entender melhor como posso te ajudar?`;
         emailSubject = `${firstName}, vamos retomar nossa conversa?`;
         emailBody = `Olá ${name},\n\nEspero que esteja bem!\n\nNotei que ainda não conseguimos avançar com sua solicitação sobre ${interest}. Gostaria muito de entender melhor suas necessidades e ver como posso te ajudar.\n\nPodemos agendar uma conversa rápida?\n\nAtenciosamente,\nEquipe`;
       } else {
@@ -462,8 +463,8 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
         emailSubject = `${firstName}, proposta especial para você!`;
         emailBody = `Olá ${name},\n\nVi que você está interessado em ${interest}.\n\nTenho uma proposta especial que pode se encaixar perfeitamente no que você procura. Vamos conversar sobre como podemos te ajudar?\n\nAtenciosamente,\nEquipe`;
       } else {
-        whatsapp = `Olá ${firstName}! Muito obrigado pela nota ${data.score}! 🎉 Clientes como você são muito importantes para nós. Você conhece alguém que também poderia se beneficiar dos nossos serviços?`;
-        emailSubject = `${firstName}, obrigado pela confiança! 🎉`;
+        whatsapp = `Olá ${firstName}! Muito obrigado pela nota ${data.score}! Clientes como você são muito importantes para nós. Você conhece alguém que também poderia se beneficiar dos nossos serviços?`;
+        emailSubject = `${firstName}, obrigado pela confiança!`;
         emailBody = `Olá ${name},\n\nMuito obrigado pela nota ${data.score}! Ficamos muito felizes em saber que você está satisfeito.\n\nClientes como você são a razão do nosso trabalho. Se conhecer alguém que também possa se beneficiar dos nossos serviços, ficaremos gratos pela indicação!\n\nAtenciosamente,\nEquipe`;
       }
     } else if (category === 'sales') {
@@ -592,7 +593,7 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
       alert("Cliente não possui telefone cadastrado.");
       return;
     }
-    const message = encodeURIComponent(client.whatsappMessage);
+    const message = encodeWhatsAppMessage(client.whatsappMessage);
     window.open(`https://wa.me/55${phone}?text=${message}`, '_blank');
     
     // Add to history

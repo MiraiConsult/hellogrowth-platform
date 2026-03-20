@@ -115,7 +115,7 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
 
   const handleSendWhatsApp = (participation: Participation) => {
     const message = encodeWhatsAppMessage(
-      `Olá ${participation.client_name}! 🎉\n\n` +
+      `Olá ${participation.client_name}!\n\n` +
       `Parabéns! Você ganhou: *${participation.prize_won}*\n\n` +
       `Seu código é: *${participation.prize_code}*\n\n` +
       `Válido até: ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')}\n\n` +

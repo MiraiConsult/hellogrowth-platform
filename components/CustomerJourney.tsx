@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { NPSResponse, CustomerAction } from '@/types';
 
@@ -168,7 +169,7 @@ const CustomerJourney: React.FC<CustomerJourneyProps> = ({ userId, npsData, init
           message = `${context.name} é promotor (média ${context.averageScore})! Aproveite para pedir indicações e fortalecer o relacionamento.`;
         }
         
-        whatsappTemplate = `${context.name}, muito obrigado pelo seu feedback positivo! 😊 Ficamos muito felizes em saber que você está satisfeito. Você conhece alguém que poderia se beneficiar dos nossos serviços?`;
+        whatsappTemplate = `${context.name}, muito obrigado pelo seu feedback positivo! Ficamos muito felizes em saber que você está satisfeito. Você conhece alguém que poderia se beneficiar dos nossos serviços?`;
         
         emailSubject = `${context.name}, obrigado por ser nosso promotor!`;
         emailBody = `Olá ${name},\n\nQueremos agradecer imensamente pelo seu feedback positivo! Clientes como você são a razão do nosso sucesso.\n\n${context.lastComment ? `Adoramos ler: "${context.lastComment}"\n\n` : ''}Se você conhece alguém que poderia se beneficiar dos nossos serviços, ficaríamos muito gratos por uma indicação!\n\nContinue contando conosco!\n\nAtenciosamente,\nEquipe`;
@@ -204,7 +205,7 @@ const CustomerJourney: React.FC<CustomerJourneyProps> = ({ userId, npsData, init
       return;
     }
 
-    const message = encodeURIComponent(aiSuggestion.whatsappTemplate);
+    const message = encodeWhatsAppMessage(aiSuggestion.whatsappTemplate);
     const whatsappUrl = `https://wa.me/55${phone}?text=${message}`;
     
     // Register action
