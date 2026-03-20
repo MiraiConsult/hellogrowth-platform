@@ -50,6 +50,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
   const [currentAnswer, setCurrentAnswer] = useState<any>('');
   const [otherText, setOtherText] = useState<string>(''); // Texto livre para opção "Outro"
   const [otherTextMultiple, setOtherTextMultiple] = useState<Record<string, string>>({}); // Para múltipla escolha
+  const [followUpTexts, setFollowUpTexts] = useState<Record<string, string>>({}); // Textos de seguimento por optId
   const [gameData, setGameData] = useState<any>(null);
   const [loadingGame, setLoadingGame] = useState(false);
 
@@ -175,12 +176,19 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
         return ans;
       });
     }
+
+    // Incluir textos de seguimento (followUpLabel) se houver
+    const followUpEntries = Object.entries(followUpTexts).filter(([, v]) => v.trim());
+    const answerWithFollowUp = followUpEntries.length > 0
+      ? { value: finalAnswer, followUps: followUpTexts }
+      : finalAnswer;
     
-    const newAnswers = [...answers, { question: currentQ.id || currentQ.text, answer: finalAnswer }];
+    const newAnswers = [...answers, { question: currentQ.id || currentQ.text, answer: answerWithFollowUp }];
     setAnswers(newAnswers);
     setCurrentAnswer(''); // Reset for next question
     setOtherText(''); // Reset other text
     setOtherTextMultiple({}); // Reset multiple other texts
+    setFollowUpTexts({}); // Reset follow-up texts
 
     if (currentQuestionIndex < additionalQuestions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
@@ -396,6 +404,20 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                                     />
                                   </div>
                                 )}
+                                {isSelected && opt.followUpLabel !== undefined && !isOtherOption(optText) && (
+                                  <div className="mt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">{opt.followUpLabel || 'Por favor, especifique:'}</label>
+                                    <input
+                                      type="text"
+                                      value={followUpTexts[opt.id] || ''}
+                                      onChange={(e) => setFollowUpTexts(prev => ({ ...prev, [opt.id]: e.target.value }))}
+                                      className="w-full border border-primary-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 text-sm"
+                                      style={{ backgroundColor: '#ffffff', color: '#111827' }}
+                                      placeholder="Descreva aqui..."
+                                      autoFocus
+                                    />
+                                  </div>
+                                )}
                               </div>
                             );
                         })}
@@ -442,6 +464,20 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                                       className="w-full border border-primary-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 text-sm"
                                       style={{ backgroundColor: '#ffffff', color: '#111827' }}
                                       placeholder="Qual seria essa outra opção?"
+                                      autoFocus
+                                    />
+                                  </div>
+                                )}
+                                {isSelected && opt.followUpLabel !== undefined && !isOtherOption(optText) && (
+                                  <div className="mt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">{opt.followUpLabel || 'Por favor, especifique:'}</label>
+                                    <input
+                                      type="text"
+                                      value={followUpTexts[opt.id] || ''}
+                                      onChange={(e) => setFollowUpTexts(prev => ({ ...prev, [opt.id]: e.target.value }))}
+                                      className="w-full border border-primary-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 text-sm"
+                                      style={{ backgroundColor: '#ffffff', color: '#111827' }}
+                                      placeholder="Descreva aqui..."
                                       autoFocus
                                     />
                                   </div>

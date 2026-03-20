@@ -16,13 +16,15 @@ import {
   Bot,
   User,
   Star,
-  Palette
+  Palette,
+  MessageSquare
 } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 
 interface QuestionOption {
   id: string;
   text: string;
+  followUpLabel?: string;
 }
 
 interface GeneratedQuestion {
@@ -1291,7 +1293,7 @@ Responda:`;
                       <label className="block text-xs font-medium text-slate-600 mb-2">Alternativas</label>
                       <div className="space-y-2">
                         {question.options.map((opt, optIndex) => (
-                          <div key={opt.id} className="flex gap-2 items-center">
+                          <div key={opt.id} className="flex gap-2 items-start">
                             <div className="flex flex-col gap-0.5">
                               <button
                                 onClick={() => handleMoveOption(question.id, optIndex, 'up')}
@@ -1310,27 +1312,66 @@ Responda:`;
                                 <ArrowDown className="w-3 h-3" />
                               </button>
                             </div>
-                            <input
-                              type="text"
-                              value={opt.text}
-                              onChange={(e) => {
-                                const newOptions = [...question.options];
-                                newOptions[optIndex] = { ...opt, text: e.target.value };
-                                handleEditQuestion(question.id, { options: newOptions });
-                              }}
-                              className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                              placeholder={`Opção ${optIndex + 1}`}
-                            />
-                            <button
-                              onClick={() => {
-                                const newOptions = question.options.filter((_, i) => i !== optIndex);
-                                handleEditQuestion(question.id, { options: newOptions });
-                              }}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
+                            <div className="flex-1 space-y-1.5">
+                              <div className="flex gap-2 items-center">
+                                <input
+                                  type="text"
+                                  value={opt.text}
+                                  onChange={(e) => {
+                                    const newOptions = [...question.options];
+                                    newOptions[optIndex] = { ...opt, text: e.target.value };
+                                    handleEditQuestion(question.id, { options: newOptions });
+                                  }}
+                                  className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                                  placeholder={`Opção ${optIndex + 1}`}
+                                />
+                                <button
+                                  onClick={() => {
+                                    const newOptions = question.options.filter((_, i) => i !== optIndex);
+                                    handleEditQuestion(question.id, { options: newOptions });
+                                  }}
+                                  className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                              {/* Checkbox de campo de seguimento */}
+                              <div className="pl-1 space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    id={`followup-nps-${opt.id}`}
+                                    checked={opt.followUpLabel !== undefined}
+                                    onChange={(e) => {
+                                      const newOptions = [...question.options];
+                                      newOptions[optIndex] = { 
+                                        ...opt, 
+                                        followUpLabel: e.target.checked ? '' : undefined 
+                                      };
+                                      handleEditQuestion(question.id, { options: newOptions });
+                                    }}
+                                    className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                  />
+                                  <label htmlFor={`followup-nps-${opt.id}`} className="flex items-center gap-1 text-xs text-slate-500 cursor-pointer">
+                                    <MessageSquare size={11} /> Campo de texto de seguimento (Opcional)
+                                  </label>
+                                </div>
+                                {opt.followUpLabel !== undefined && (
+                                  <input
+                                    type="text"
+                                    value={opt.followUpLabel || ''}
+                                    onChange={(e) => {
+                                      const newOptions = [...question.options];
+                                      newOptions[optIndex] = { ...opt, followUpLabel: e.target.value };
+                                      handleEditQuestion(question.id, { options: newOptions });
+                                    }}
+                                    placeholder="Ex: Se sim, qual?"
+                                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                                    autoFocus
+                                  />
+                                )}
+                              </div>
+                            </div>
                         ))}
                         <button
                           onClick={() => {
