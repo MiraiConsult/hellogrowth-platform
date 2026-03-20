@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { Mail, MessageCircle, Check, Download, Search, RefreshCw, Filter, Trophy, Users, Clock } from 'lucide-react';
 
 interface Participation {
@@ -113,7 +114,7 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
   };
 
   const handleSendWhatsApp = (participation: Participation) => {
-    const message = encodeURIComponent(
+    const message = encodeWhatsAppMessage(
       `Olá ${participation.client_name}! 🎉\n\n` +
       `Parabéns! Você ganhou: *${participation.prize_won}*\n\n` +
       `Seu código é: *${participation.prize_code}*\n\n` +

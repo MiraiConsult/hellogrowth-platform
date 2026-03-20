@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { Campaign, NPSResponse } from '@/types';
 import { ArrowLeft, Users, Star, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, X, Mail, Phone, Trash2, ArrowRight, History, Plus, User, Info, FileText, Layout, Search, Filter } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -502,7 +503,7 @@ const CampaignReport: React.FC<CampaignReportProps> = ({ campaignId, campaigns, 
                 <button 
                   onClick={() => {
                     const phone = selectedResponse.customerPhone?.replace(/\D/g, '');
-                    if (phone) window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(`Olá ${selectedResponse.customerName}, obrigado pelo seu feedback!`)}`, '_blank');
+                    if (phone) window.open(`https://wa.me/55${phone}?text=${encodeWhatsAppMessage(`Olá ${selectedResponse.customerName}, obrigado pelo seu feedback!`)}`, '_blank');
                   }}
                   className="px-4 py-2.5 bg-green-50 text-green-700 rounded-xl text-xs font-bold hover:bg-green-100 transition-all flex items-center gap-2 border border-green-200"
                 >

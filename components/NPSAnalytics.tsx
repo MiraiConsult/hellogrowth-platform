@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { NPSResponse, Campaign } from '@/types';
 import { BarChart3, Sparkles, Loader2, X, Mail, Phone, History, Plus, MessageSquare, User, Calendar, Layout } from 'lucide-react';
@@ -516,7 +517,7 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, c
                 <button 
                   onClick={() => {
                     const phone = selectedResponse.customerPhone?.replace(/\D/g, '');
-                    if (phone) window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(`Olá ${selectedResponse.customerName}, obrigado pelo seu feedback!`)}`, '_blank');
+                    if (phone) window.open(`https://wa.me/55${phone}?text=${encodeWhatsAppMessage(`Olá ${selectedResponse.customerName}, obrigado pelo seu feedback!`)}`, '_blank');
                   }}
                   className="px-4 py-2.5 bg-green-50 text-green-700 rounded-xl text-xs font-bold hover:bg-green-100 transition-all flex items-center gap-2 border border-green-200"
                 >

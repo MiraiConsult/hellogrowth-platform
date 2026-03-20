@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
 import { BarChart3, Sparkles, Loader2, X, PieChart, TrendingUp, DollarSign, Calendar, Mail, FileText, Phone, History, Plus, ArrowRight } from 'lucide-react';
@@ -159,7 +160,7 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
             let url = `https://wa.me/55${cleanNumber}`;
             
             if (aiAdvice && !aiAdvice.includes("Erro") && !aiAdvice.includes("Sem sugestão") && !isGeneratingAdvice) {
-                url += `?text=${encodeURIComponent(aiAdvice)}`;
+                url += `?text=${encodeWhatsAppMessage(aiAdvice)}`;
             }
             
             window.open(url, '_blank');

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
 import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare } from 'lucide-react';
@@ -378,7 +379,7 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
             
             // Auto-fill message if generated
             if (aiAdvice && !aiAdvice.includes("Erro") && !aiAdvice.includes("Sem sugestão") && !isGeneratingAdvice) {
-                url += `?text=${encodeURIComponent(aiAdvice)}`;
+                url += `?text=${encodeWhatsAppMessage(aiAdvice)}`;
             }
             
             window.open(url, '_blank');
