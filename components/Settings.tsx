@@ -184,6 +184,11 @@ const Settings: React.FC<SettingsProps> = ({ activePlan, onSelectPlan, settings,
                 <input type="email" value={localSettings.adminEmail} onChange={(e) => handleInputChange('adminEmail', e.target.value)} disabled={isReadOnly} className={`w-full rounded-lg border-gray-300 shadow-sm p-2 border text-gray-900 ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : 'focus:border-primary-500 focus:ring-primary-500 bg-white'}`} style={{ backgroundColor: isReadOnly ? undefined : '#ffffff', color: '#111827' }} placeholder="email@empresa.com" />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp / Telefone</label>
+                <input type="tel" value={localSettings.phone || ''} onChange={(e) => handleInputChange('phone', e.target.value)} disabled={isReadOnly} className={`w-full rounded-lg border-gray-300 shadow-sm p-2 border text-gray-900 ${isReadOnly ? 'bg-gray-100 cursor-not-allowed' : 'focus:border-primary-500 focus:ring-primary-500 bg-white'}`} style={{ backgroundColor: isReadOnly ? undefined : '#ffffff', color: '#111827' }} placeholder="5551999999999" />
+                <p className="text-xs text-gray-500 mt-1">Usado para receber alertas e comunicados</p>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Site</label>
                 <input type="url" value={businessProfile?.website || localSettings.website || ''} disabled className="w-full rounded-lg border-gray-300 shadow-sm p-2 border bg-gray-100 text-gray-600 cursor-not-allowed" placeholder="Definido no Perfil do Negócio" />
                 <p className="text-xs text-gray-500 mt-1">Edite no Perfil do Negócio</p>

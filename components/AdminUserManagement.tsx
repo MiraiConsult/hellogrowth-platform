@@ -5,8 +5,9 @@ import {
   Plus, Trash2, LogOut, Loader2, Users, Edit, X, Save, RefreshCw,
   Key, CheckCircle, AlertTriangle, Clock, Gift, CreditCard,
   ExternalLink, Building2, AlertCircle, Search, ChevronRight, Copy,
-  Zap, Star, UserPlus, DollarSign, Check, Moon, Sun
+  Zap, Star, UserPlus, DollarSign, Check, Moon, Sun, Send
 } from 'lucide-react';
+import AdminBroadcast from '@/components/AdminBroadcast';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ interface Client {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   plan: string;
   companyName?: string;
   createdAt: string;
@@ -208,10 +210,11 @@ function PlanBadge({ plan }: { plan: string }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) => {
-  // ── Theme ──
+   // ── Theme ──
   const [isDark, setIsDark] = useState(true);
   const t = isDark ? DARK : LIGHT;
-
+  // ── Active Tab ──
+  const [activeTab, setActiveTab] = useState<'clients' | 'broadcast'>('clients');
   // ── State ──
   const [clients, setClients] = useState<Client[]>([]);
   const [stats, setStats] = useState<any>({});
@@ -230,7 +233,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [sendingLink, setSendingLink] = useState(false);
 
   // ── Form states ──
-  const [clientForm, setClientForm] = useState({ name: '', email: '', plan: 'trial', companyName: '', password: '' });
+  const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '' });
   const [companyForm, setCompanyForm] = useState({
     name: '', plan: 'hello_growth', subscriptionStatus: 'trialing',
     trialModel: 'model_b', trialEndAt: '', maxUsers: 1,
@@ -306,6 +309,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         const userData: any = {
           name: clientForm.name,
           email: clientForm.email.toLowerCase().trim(),
+          phone: clientForm.phone || null,
           company_name: clientForm.companyName || clientForm.name,
           plan: clientForm.plan,
           tenant_id: crypto.randomUUID(),
@@ -360,7 +364,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         showToast('success', `Cliente criado! Login: ${clientForm.email} / 12345`);
       }
       setEditModal(null);
-      setClientForm({ name: '', email: '', plan: 'trial', companyName: '', password: '' });
+      setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '' });
       setNewClientTrialModel('none');
       fetchClients();
     } catch (err: any) {
@@ -383,6 +387,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
           userData: {
             name: clientForm.name,
             email: clientForm.email,
+            phone: clientForm.phone || null,
             plan: clientForm.plan,
             companyName: clientForm.companyName,
             ...(clientForm.password ? { password: clientForm.password } : {}),
@@ -541,7 +546,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   // ── Open Modals ──
   const openEditClient = (client: Client) => {
     setSelectedClient(client);
-    setClientForm({ name: client.name, email: client.email, plan: client.plan, companyName: client.companyName || '', password: '' });
+    setClientForm({ name: client.name, email: client.email, phone: client.phone || '', plan: client.plan, companyName: client.companyName || '', password: '' });
     setEditModal('client');
   };
 
@@ -617,12 +622,36 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             >
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
-            <button
-              onClick={() => { setClientForm({ name: '', email: '', plan: 'trial', companyName: '', password: '' }); setNewClientTrialModel('none'); setEditModal('new_client'); }}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
-            >
-              <UserPlus size={16} /> Novo Cliente
-            </button>
+            <div className="flex items-center gap-1 border rounded-lg overflow-hidden">
+              <button
+                onClick={() => setActiveTab('clients')}
+                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
+                  activeTab === 'clients'
+                    ? 'bg-emerald-600 text-white'
+                    : `${t.btnSecondary}`
+                }`}
+              >
+                <Users size={14} /> Clientes
+              </button>
+              <button
+                onClick={() => setActiveTab('broadcast')}
+                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
+                  activeTab === 'broadcast'
+                    ? 'bg-emerald-600 text-white'
+                    : `${t.btnSecondary}`
+                }`}
+              >
+                <Send size={14} /> Disparo
+              </button>
+            </div>
+            {activeTab === 'clients' && (
+              <button
+                onClick={() => { setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '' }); setNewClientTrialModel('none'); setEditModal('new_client'); }}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
+              >
+                <UserPlus size={16} /> Novo Cliente
+              </button>
+            )}
             <button onClick={onLogout} className={`flex items-center gap-2 ${t.textSub} hover:${t.text} text-sm px-3 py-2 rounded-lg hover:${isDark ? 'bg-gray-800' : 'bg-slate-100'} transition-colors`}>
               <LogOut size={16} /> Sair
             </button>
@@ -630,6 +659,10 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         </div>
       </header>
 
+      {activeTab === 'broadcast' && (
+        <AdminBroadcast isDark={isDark} />
+      )}
+      {activeTab === 'clients' && (
       <main className="max-w-screen-2xl mx-auto px-6 py-6 space-y-5">
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
@@ -721,6 +754,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                           <div>
                             <p className={`text-sm font-semibold ${t.text}`}>{client.name}</p>
                             <p className={`text-xs ${t.textSub}`}>{client.email}</p>
+                            {client.phone && <p className={`text-xs ${t.textMuted}`}>{client.phone}</p>}
                           </div>
                         </div>
                       </td>
@@ -817,7 +851,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
           )}
         </div>
       </main>
-
+      )}
       {/* ── Modals ── */}
 
       {/* New Client */}
@@ -826,6 +860,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
           <div className="space-y-4">
             <FormField label="Nome Completo" t={t}><input type="text" value={clientForm.name} onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))} className={inputCls} placeholder="João Silva" /></FormField>
             <FormField label="E-mail (Login)" t={t}><input type="email" value={clientForm.email} onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))} className={inputCls} placeholder="joao@empresa.com" /></FormField>
+            <FormField label="WhatsApp / Telefone" t={t}><input type="tel" value={clientForm.phone} onChange={e => setClientForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} placeholder="5551999999999" /></FormField>
             <FormField label="Empresa Principal" t={t}><input type="text" value={clientForm.companyName} onChange={e => setClientForm(f => ({ ...f, companyName: e.target.value }))} className={inputCls} placeholder="Nome da empresa" /></FormField>
             <div className={`${t.securityBox} border rounded-lg p-3 text-xs ${t.securityText} flex items-center gap-2`}>
               <Key size={14} /> Senha padrão: <strong className={t.text}>12345</strong>
@@ -890,6 +925,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
           <div className="space-y-4">
             <FormField label="Nome Completo" t={t}><input type="text" value={clientForm.name} onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))} className={inputCls} /></FormField>
             <FormField label="E-mail (Login)" t={t}><input type="email" value={clientForm.email} onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /></FormField>
+            <FormField label="WhatsApp / Telefone" t={t}><input type="tel" value={clientForm.phone} onChange={e => setClientForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} placeholder="5551999999999" /></FormField>
             <FormField label="Empresa Principal" t={t}><input type="text" value={clientForm.companyName} onChange={e => setClientForm(f => ({ ...f, companyName: e.target.value }))} className={inputCls} /></FormField>
             <FormField label="Plano de Acesso" t={t}>
               <select value={clientForm.plan} onChange={e => setClientForm(f => ({ ...f, plan: e.target.value }))} className={inputCls}>
