@@ -968,6 +968,32 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         if (ans.optionSelected && ans.optionSelected.value) opportunityValue += ans.optionSelected.value;
     });
 
+    // 1b. Enriquecer respostas com o texto livre da opção "Outro"
+    // Quando o usuário selecionou "Outro" e digitou um texto livre, substituir o valor
+    const enrichedAnswers: Record<string, any> = {};
+    Object.entries(data.answers).forEach(([qId, ans]: [string, any]) => {
+      if (!ans || typeof ans !== 'object') { enrichedAnswers[qId] = ans; return; }
+      const otherTexts = ans.otherTexts || {};
+      if (Object.keys(otherTexts).length === 0) { enrichedAnswers[qId] = ans; return; }
+      // Para single choice: substituir "Outro" pelo texto digitado
+      if (typeof ans.value === 'string' && ans.value.trim().toLowerCase() === 'outro') {
+        const otherVal = Object.values(otherTexts)[0] as string;
+        enrichedAnswers[qId] = { ...ans, value: otherVal ? `Outro: ${otherVal.trim()}` : ans.value };
+      // Para multiple choice: substituir cada "Outro" no array
+      } else if (Array.isArray(ans.value)) {
+        const newValues = ans.value.map((v: string) => {
+          if (v.trim().toLowerCase() === 'outro') {
+            const otherVal = otherTexts[v] as string;
+            return otherVal ? `Outro: ${otherVal.trim()}` : v;
+          }
+          return v;
+        });
+        enrichedAnswers[qId] = { ...ans, value: newValues };
+      } else {
+        enrichedAnswers[qId] = ans;
+      }
+    });
+
     // 2. OTIMIZAÇÃO: Salvar IMEDIATAMENTE sem aguardar análise de IA
     const status = 'Novo';
     
@@ -981,9 +1007,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         status: status,
         value: opportunityValue,
         form_source: publicForm.name,
-        answers: {
-          ...data.answers
-        }
+        answers: enrichedAnswers
     }]).select().single();
     
     if (insertError) {

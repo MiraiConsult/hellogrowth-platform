@@ -11,6 +11,11 @@ interface PublicFormProps {
   companyName?: string;
 }
 
+// Helper para detectar se uma opção é "Outro"
+const isOtherOption = (label: string): boolean => {
+  return label.trim().toLowerCase() === 'outro' || label.trim().toLowerCase() === 'other';
+};
+
 // CORREÇÃO: Helper function que extrai o texto da opção independente do formato
 // Suporta: string, {label: string}, {text: string}, {label: {text: string}}
 const getOptionLabel = (opt: any): string => {
@@ -146,6 +151,20 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
         ...prev[questionId],
         followUps: {
           ...prev[questionId].followUps,
+          [optionId]: text,
+        }
+      }
+    }));
+  };
+
+  // Handler para o campo de texto livre da opção "Outro"
+  const handleOtherTextChange = (questionId: string, optionId: string, text: string) => {
+    setAnswers(prev => ({
+      ...prev,
+      [questionId]: {
+        ...prev[questionId],
+        otherTexts: {
+          ...(prev[questionId]?.otherTexts || {}),
           [optionId]: text,
         }
       }
@@ -419,6 +438,20 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
                                   className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-primary-500 bg-white"
                                   style={{ backgroundColor: '#ffffff', color: '#111827' }}
                                   rows={2}
+                                  autoFocus
+                                />
+                              </div>
+                            )}
+                            {isSelected && isOtherOption(optLabel) && opt.followUpLabel === undefined && (
+                              <div className="mt-3 pl-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Qual seria essa outra opção?</label>
+                                <input
+                                  type="text"
+                                  value={answers[currentQuestion.id]?.otherTexts?.[opt.id] || ''}
+                                  onChange={(e) => handleOtherTextChange(currentQuestion.id, opt.id, e.target.value)}
+                                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400"
+                                  style={{ backgroundColor: '#ffffff', color: '#111827' }}
+                                  placeholder="Descreva aqui..."
                                   autoFocus
                                 />
                               </div>

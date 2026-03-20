@@ -13,6 +13,11 @@ interface PublicSurveyProps {
   companyName?: string;
 }
 
+// Helper para detectar se uma opção é "Outro"
+const isOtherOption = (text: string): boolean => {
+  return text.trim().toLowerCase() === 'outro' || text.trim().toLowerCase() === 'other';
+};
+
 // Helper to get option text whether it's a string or {id, text} object
 const getOptionText = (opt: any): string => {
   if (typeof opt === 'string') return opt;
@@ -43,6 +48,8 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
   const [answers, setAnswers] = useState<{ question: string; answer: any }[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [currentAnswer, setCurrentAnswer] = useState<any>('');
+  const [otherText, setOtherText] = useState<string>(''); // Texto livre para opção "Outro"
+  const [otherTextMultiple, setOtherTextMultiple] = useState<Record<string, string>>({}); // Para múltipla escolha
   const [gameData, setGameData] = useState<any>(null);
   const [loadingGame, setLoadingGame] = useState(false);
 
@@ -154,9 +161,26 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
     if (!additionalQuestions || additionalQuestions.length === 0) return;
 
     const currentQ = additionalQuestions[currentQuestionIndex];
-    const newAnswers = [...answers, { question: currentQ.id || currentQ.text, answer: currentAnswer }];
+    const qType = normalizeType(currentQ.type);
+    
+    // Enriquecer a resposta com o texto do "Outro" quando aplicável
+    let finalAnswer = currentAnswer;
+    if (qType === 'single_choice' && isOtherOption(currentAnswer) && otherText.trim()) {
+      finalAnswer = `Outro: ${otherText.trim()}`;
+    } else if (qType === 'multiple_choice' && Array.isArray(currentAnswer)) {
+      finalAnswer = currentAnswer.map((ans: string) => {
+        if (isOtherOption(ans) && otherTextMultiple[ans]?.trim()) {
+          return `Outro: ${otherTextMultiple[ans].trim()}`;
+        }
+        return ans;
+      });
+    }
+    
+    const newAnswers = [...answers, { question: currentQ.id || currentQ.text, answer: finalAnswer }];
     setAnswers(newAnswers);
     setCurrentAnswer(''); // Reset for next question
+    setOtherText(''); // Reset other text
+    setOtherTextMultiple({}); // Reset multiple other texts
 
     if (currentQuestionIndex < additionalQuestions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
@@ -345,19 +369,34 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                     <div className="space-y-2">
                         {currentQOptions.map((opt: any, idx: number) => {
                             const optText = getOptionText(opt);
+                            const isSelected = currentAnswer === optText;
                             return (
-                              <button
-                                  key={idx}
-                                  onClick={() => setCurrentAnswer(optText)}
-                                  className={`w-full p-3 rounded-lg border text-left transition-all flex justify-between items-center bg-white ${
-                                      currentAnswer === optText 
-                                      ? 'border-primary-500 bg-primary-50 text-primary-700' 
-                                      : 'border-gray-200 hover:bg-gray-50 text-gray-700'
-                                  }`}
-                              >
-                                  {optText}
-                                  {currentAnswer === optText && <Check size={16} />}
-                              </button>
+                              <div key={idx}>
+                                <button
+                                    onClick={() => { setCurrentAnswer(optText); if (!isOtherOption(optText)) setOtherText(''); }}
+                                    className={`w-full p-3 rounded-lg border text-left transition-all flex justify-between items-center bg-white ${
+                                        isSelected 
+                                        ? 'border-primary-500 bg-primary-50 text-primary-700' 
+                                        : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                                    }`}
+                                >
+                                    {optText}
+                                    {isSelected && <Check size={16} />}
+                                </button>
+                                {isSelected && isOtherOption(optText) && (
+                                  <div className="mt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <input
+                                      type="text"
+                                      value={otherText}
+                                      onChange={(e) => setOtherText(e.target.value)}
+                                      className="w-full border border-primary-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 text-sm"
+                                      style={{ backgroundColor: '#ffffff', color: '#111827' }}
+                                      placeholder="Qual seria essa outra opção?"
+                                      autoFocus
+                                    />
+                                  </div>
+                                )}
+                              </div>
                             );
                         })}
                     </div>
@@ -371,23 +410,43 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                             const selected = Array.isArray(currentAnswer) ? currentAnswer : [];
                             const isSelected = selected.includes(optText);
                             return (
-                              <button
-                                  key={idx}
-                                  onClick={() => {
-                                      let newSelected;
-                                      if (isSelected) newSelected = selected.filter((s: any) => s !== optText);
-                                      else newSelected = [...selected, optText];
-                                      setCurrentAnswer(newSelected);
-                                  }}
-                                  className={`w-full p-3 rounded-lg border text-left transition-all flex justify-between items-center bg-white ${
-                                      isSelected
-                                      ? 'border-primary-500 bg-primary-50 text-primary-700' 
-                                      : 'border-gray-200 hover:bg-gray-50 text-gray-700'
-                                  }`}
-                              >
-                                  {optText}
-                                  {isSelected && <Check size={16} />}
-                              </button>
+                              <div key={idx}>
+                                <button
+                                    onClick={() => {
+                                        let newSelected;
+                                        if (isSelected) {
+                                          newSelected = selected.filter((s: any) => s !== optText);
+                                          if (isOtherOption(optText)) {
+                                            setOtherTextMultiple(prev => { const n = {...prev}; delete n[optText]; return n; });
+                                          }
+                                        } else {
+                                          newSelected = [...selected, optText];
+                                        }
+                                        setCurrentAnswer(newSelected);
+                                    }}
+                                    className={`w-full p-3 rounded-lg border text-left transition-all flex justify-between items-center bg-white ${
+                                        isSelected
+                                        ? 'border-primary-500 bg-primary-50 text-primary-700' 
+                                        : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                                    }`}
+                                >
+                                    {optText}
+                                    {isSelected && <Check size={16} />}
+                                </button>
+                                {isSelected && isOtherOption(optText) && (
+                                  <div className="mt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    <input
+                                      type="text"
+                                      value={otherTextMultiple[optText] || ''}
+                                      onChange={(e) => setOtherTextMultiple(prev => ({ ...prev, [optText]: e.target.value }))}
+                                      className="w-full border border-primary-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 text-sm"
+                                      style={{ backgroundColor: '#ffffff', color: '#111827' }}
+                                      placeholder="Qual seria essa outra opção?"
+                                      autoFocus
+                                    />
+                                  </div>
+                                )}
+                              </div>
                             );
                         })}
                     </div>
