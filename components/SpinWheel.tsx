@@ -238,23 +238,33 @@ const SpinWheel: React.FC<SpinWheelProps> = ({
     ctx.closePath();
   };
 
-  useEffect(() => {
+  // Inicializar e redesenhar o canvas sempre que o canvas ficar disponível
+  const initCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
     const displaySize = 320;
-    canvas.width = displaySize * dpr;
-    canvas.height = displaySize * dpr;
+    canvas.width = displaySize;
+    canvas.height = displaySize;
     canvas.style.width = `${displaySize}px`;
     canvas.style.height = `${displaySize}px`;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.scale(dpr, dpr);
-      canvas.width = displaySize;
-      canvas.height = displaySize;
-    }
-    drawWheel(0);
+    drawWheel(rotationRef.current);
   }, [drawWheel]);
+
+  useEffect(() => {
+    initCanvas();
+  }, [initCanvas]);
+
+  // Redesenhar quando a tela principal da roleta se torna visível
+  // (após confirmar telefone ou após verificação automática)
+  useEffect(() => {
+    if (phoneConfirmed && !hasSpun && !alreadyPlayed && !checkingParticipation) {
+      // Aguardar o próximo frame para garantir que o canvas está no DOM
+      const raf = requestAnimationFrame(() => {
+        initCanvas();
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [phoneConfirmed, hasSpun, alreadyPlayed, checkingParticipation, initCanvas]);
 
   // Verificar participação por telefone
   const handleConfirmPhone = async () => {
