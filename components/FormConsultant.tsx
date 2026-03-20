@@ -1795,9 +1795,7 @@ Responda agora:`;
                       className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                     >
                       <option value="single_choice">Escolha Única</option>
-                      <option value="single">Escolha Única</option>
                       <option value="multiple_choice">Múltipla Escolha</option>
-                      <option value="multiple">Múltipla Escolha</option>
                       <option value="text">Texto Livre</option>
                       <option value="scale">Escala 1-10</option>
                     </select>

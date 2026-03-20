@@ -442,7 +442,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
                                 />
                               </div>
                             )}
-                            {isSelected && isOtherOption(optLabel) && opt.followUpLabel === undefined && (
+                            {isSelected && isOtherOption(optLabel) && !opt.followUpLabel && (
                               <div className="mt-3 pl-4 animate-in fade-in slide-in-from-top-2 duration-300">
                                 <label className="block text-sm font-medium text-gray-600 mb-1">Qual seria essa outra opção?</label>
                                 <input
