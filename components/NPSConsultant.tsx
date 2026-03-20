@@ -1372,6 +1372,7 @@ Responda:`;
                                 )}
                               </div>
                             </div>
+                          </div>
                         ))}
                         <button
                           onClick={() => {

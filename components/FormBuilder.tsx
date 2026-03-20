@@ -825,7 +825,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
           )}
 
           <div className="flex justify-between items-center">
-             <h2 className="text-lg font-bold text-gray-800">Perguntas</h2>>
+             <h2 className="text-lg font-bold text-gray-800">Perguntas</h2>
              <button 
                 onClick={handleAiSuggest}
                 disabled={!currentFormName || isGenerating}
