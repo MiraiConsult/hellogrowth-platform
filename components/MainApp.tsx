@@ -614,13 +614,14 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     fetchData();
   }, [currentUser.id]);
 
-  // Supabase Realtime: Listen for new leads being inserted
+  // Supabase Realtime: Listen for new leads and NPS responses being inserted
   useEffect(() => {
     const activeTenant = getActiveTenant();
     if (!supabase || !activeTenant) return;
 
     const channel = supabase
-      .channel('leads-insert-realtime')
+      .channel('realtime-new-submissions')
+      // --- Novos leads (respostas de formulários) ---
       .on(
         'postgres_changes',
         {
@@ -630,23 +631,77 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           filter: `tenant_id=eq.${activeTenant}`
         },
         (payload) => {
-          console.log('Novo lead inserido via Realtime:', payload);
           const newLead = payload.new as any;
-          
-          // Adicionar novo lead ao estado local
+          const internalNotes = (newLead.answers && typeof newLead.answers === 'object' && newLead.answers._internal_notes)
+            ? newLead.answers._internal_notes : '';
           setLeads((prev) => {
-            // Verificar se o lead já existe (evitar duplicatas)
-            if (prev.some(l => l.id === newLead.id)) {
-              return prev;
-            }
-            
+            if (prev.some(l => l.id === newLead.id)) return prev;
             return [{
               ...newLead,
               date: newLead.created_at,
               formSource: newLead.form_source,
               formId: newLead.form_id,
-              notes: newLead.notes || ''
+              notes: newLead.notes || internalNotes || ''
             }, ...prev];
+          });
+        }
+      )
+      // --- Novas respostas NPS ---
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'nps_responses',
+          filter: `tenant_id=eq.${activeTenant}`
+        },
+        (payload) => {
+          const n = payload.new as any;
+          const derivedStatus = n.status || (n.score >= 9 ? 'Promotor' : n.score >= 7 ? 'Neutro' : 'Detrator');
+          let normalizedAnswers = n.answers;
+          if (normalizedAnswers && !Array.isArray(normalizedAnswers) && typeof normalizedAnswers === 'object') {
+            normalizedAnswers = Object.entries(normalizedAnswers).map(([k, v]: [string, any]) => {
+              if (v && typeof v === 'object' && 'question' in v && 'answer' in v) return v;
+              return { question: k, answer: v };
+            });
+          }
+          const internalNotes = (n.answers && typeof n.answers === 'object' && n.answers._internal_notes)
+            ? n.answers._internal_notes : '';
+
+          setNpsData((prev) => {
+            if (prev.some(r => r.id === n.id)) return prev;
+            // Buscar nome da campanha no estado atual de campaigns
+            setCampaigns(prevCampaigns => {
+              const campaignName = prevCampaigns.find(c => c.id === n.campaign_id)?.name || 'Desconhecida';
+              const newResponse = {
+                id: n.id,
+                customerName: n.customer_name,
+                customerEmail: n.customer_email,
+                customerPhone: n.customer_phone,
+                score: n.score,
+                comment: n.comment,
+                date: n.created_at,
+                campaign: campaignName,
+                campaignId: n.campaign_id,
+                status: derivedStatus as 'Promotor' | 'Neutro' | 'Detrator',
+                answers: normalizedAnswers,
+                notes: n.notes || internalNotes || ''
+              };
+              // Atualizar o score da campanha correspondente
+              return prevCampaigns.map(c => {
+                if (c.id !== n.campaign_id) return c;
+                const allResponses = [...prev, newResponse].filter(r => r.campaignId === c.id);
+                const count = allResponses.length;
+                const p = allResponses.filter(r => r.score >= 9).length;
+                const d = allResponses.filter(r => r.score <= 6).length;
+                const score = count > 0 ? Math.round(((p - d) / count) * 100) : 0;
+                return { ...c, npsScore: Math.max(0, score), responses: count };
+              });
+            });
+            return [{ ...n, id: n.id, customerName: n.customer_name, customerEmail: n.customer_email,
+              customerPhone: n.customer_phone, score: n.score, comment: n.comment, date: n.created_at,
+              campaign: '', campaignId: n.campaign_id, status: derivedStatus as 'Promotor' | 'Neutro' | 'Detrator',
+              answers: normalizedAnswers, notes: n.notes || internalNotes || '' }, ...prev];
           });
         }
       )
