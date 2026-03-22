@@ -47,11 +47,34 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       return <AdminUserManagement onLogout={onLogout} />;
   }
 
+  // Views que NÃO devem ser persistidas na URL (públicas ou transitórias)
+  const NON_PERSISTENT_VIEWS = ['public-survey', 'public-form', 'pricing'];
+
+  // Inicializar a view a partir do hash da URL (ex: #kanban → 'kanban')
+  const getInitialView = () => {
+    if (typeof window === 'undefined') return 'dashboard';
+    const hash = window.location.hash.replace('#', '');
+    if (hash && !NON_PERSISTENT_VIEWS.includes(hash)) return hash;
+    return 'dashboard';
+  };
+
   // Sempre inicia no dashboard, independente do plano
-  const [currentView, setCurrentViewRaw] = useState('dashboard');
+  const [currentView, setCurrentViewRaw] = useState(getInitialView);
 
   // Proteção de acesso por role - redireciona views não permitidas
   const userRole = currentUser.role || 'admin';
+
+  // Atualiza o hash da URL ao mudar de view (exceto views transitórias)
+  const persistView = (view: string) => {
+    if (typeof window !== 'undefined') {
+      if (!NON_PERSISTENT_VIEWS.includes(view)) {
+        window.history.replaceState(null, '', `#${view}`);
+      } else {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    }
+  };
+
   const setCurrentView = (view: string) => {
     const allAccess = ['dashboard', 'analytics', 'intelligence-center', 'tutorial'];
     const viewerAccess = [...allAccess, 'digital-diagnostic', 'settings'];
@@ -59,20 +82,19 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     
     if (userRole === 'admin' || userRole === 'super_admin') {
       setCurrentViewRaw(view);
+      persistView(view);
     } else if (userRole === 'manager') {
-      if (view !== 'team-management' && view !== 'pricing') setCurrentViewRaw(view);
-      else setCurrentViewRaw('dashboard');
+      if (view !== 'team-management' && view !== 'pricing') { setCurrentViewRaw(view); persistView(view); }
+      else { setCurrentViewRaw('dashboard'); persistView('dashboard'); }
     } else if (userRole === 'member') {
-      if (view !== 'team-management' && view !== 'pricing') setCurrentViewRaw(view);
-      else setCurrentViewRaw('dashboard');
-    } else if (userRole === 'member') {
-      if (memberAccess.includes(view)) setCurrentViewRaw(view);
-      else setCurrentViewRaw('dashboard');
+      if (view !== 'team-management' && view !== 'pricing') { setCurrentViewRaw(view); persistView(view); }
+      else { setCurrentViewRaw('dashboard'); persistView('dashboard'); }
     } else if (userRole === 'viewer') {
-      if (viewerAccess.includes(view)) setCurrentViewRaw(view);
-      else setCurrentViewRaw('dashboard');
+      if (viewerAccess.includes(view)) { setCurrentViewRaw(view); persistView(view); }
+      else { setCurrentViewRaw('dashboard'); persistView('dashboard'); }
     } else {
       setCurrentViewRaw(view);
+      persistView(view);
     }
   };
 
