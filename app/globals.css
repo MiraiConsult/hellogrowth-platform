@@ -26,6 +26,12 @@ body {
     rgb(var(--background-start-rgb));
 }
 
+/* Forçar modo claro em elementos de formulário para evitar
+   problemas com o modo noturno/escuro do navegador */
+input, textarea, select, button {
+  color-scheme: light;
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

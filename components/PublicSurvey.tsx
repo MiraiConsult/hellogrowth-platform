@@ -259,7 +259,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
   const currentQOptions = currentQ?.options || [];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 relative">
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 relative" style={{ colorScheme: 'light', backgroundColor: '#f9fafb', color: '#111827' }}>
       {/* Header */}
       {isPreview && (
         <div className="absolute top-4 left-4 z-50">
@@ -269,9 +269,9 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
         </div>
       )}
 
-      <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden min-h-[400px] flex flex-col">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden min-h-[400px] flex flex-col" style={{ backgroundColor: '#ffffff', color: '#111827' }}>
         {/* Brand Header */}
-        <div className="bg-white p-6 border-b border-gray-100 flex justify-center">
+        <div className="bg-white p-6 border-b border-gray-100 flex justify-center" style={{ backgroundColor: '#ffffff' }}>
            <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold">
                   {displayCompanyName.charAt(0)}
@@ -338,6 +338,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                         ? 'bg-primary-600 text-white ring-2 ring-offset-2 ring-primary-500' 
                         : 'bg-gray-100 text-gray-700 hover:bg-primary-50 hover:text-primary-600'
                     }`}
+                    style={score !== i ? { backgroundColor: '#f3f4f6', color: '#374151' } : {}}
                   >
                     {i}
                   </button>
@@ -387,6 +388,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                                         ? 'border-primary-500 bg-primary-50 text-primary-700' 
                                         : 'border-gray-200 hover:bg-gray-50 text-gray-700'
                                     }`}
+                                    style={!isSelected ? { backgroundColor: '#ffffff', color: '#374151' } : { backgroundColor: '#eff6ff', color: '#1d4ed8' }}
                                 >
                                     {optText}
                                     {isSelected && <Check size={16} />}
@@ -451,6 +453,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                                         ? 'border-primary-500 bg-primary-50 text-primary-700' 
                                         : 'border-gray-200 hover:bg-gray-50 text-gray-700'
                                     }`}
+                                    style={!isSelected ? { backgroundColor: '#ffffff', color: '#374151' } : { backgroundColor: '#eff6ff', color: '#1d4ed8' }}
                                 >
                                     {optText}
                                     {isSelected && <Check size={16} />}
@@ -580,7 +583,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
 
         </div>
         
-        <div className="bg-gray-50 p-4 border-t border-gray-100 flex justify-center items-center gap-2 text-gray-400 text-xs">
+        <div className="bg-gray-50 p-4 border-t border-gray-100 flex justify-center items-center gap-2 text-gray-400 text-xs" style={{ backgroundColor: '#f9fafb', color: '#9ca3af' }}>
             <ShieldCheck size={12} /> Ambiente Seguro • Powered by HelloGrowth
         </div>
       </div>
