@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     // Buscar todos os usuários (exceto admin)
     let usersQuery = supabase
       .from('users')
-      .select('id, name, email, phone, plan, company_name, created_at, settings, tenant_id, role')
+      .select('id, name, email, phone, plan, company_name, created_at, settings, tenant_id, role, last_login')
       .neq('email', 'admin@hellogrowth.com')
       .order('created_at', { ascending: false });
 
@@ -105,6 +105,7 @@ export async function GET(request: NextRequest) {
           plan: user.plan,
           companyName: user.company_name,
           createdAt: user.created_at,
+          lastLogin: (user as any).last_login || null,
           settings: user.settings,
           companies: enrichedCompanies,
           primaryCompany: enrichedCompanies.find((c: any) => c.isDefault) || enrichedCompanies[0] || null,

@@ -40,6 +40,7 @@ interface Client {
   plan: string;
   companyName?: string;
   createdAt: string;
+  lastLogin?: string | null;
   settings?: Record<string, any>;
   companies: Company[];
   primaryCompany: Company | null;
@@ -731,8 +732,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             <table className="w-full">
               <thead>
                 <tr className={`border-b ${t.border}`}>
-                  {['', 'Cliente', 'Plano', 'Status', 'Modelo', 'Empresas', 'Cadastro', ''].map((h, i) => (
-                    <th key={i} className={`text-left text-xs font-semibold ${t.thead} uppercase tracking-wider px-${i === 0 || i === 7 ? '6' : '4'} py-3 ${i === 7 ? 'text-right' : ''}`}>{h}</th>
+                  {['', 'Cliente', 'Plano', 'Status', 'Modelo', 'Empresas', 'Cadastro', 'Último Acesso', ''].map((h, i) => (
+                    <th key={i} className={`text-left text-xs font-semibold ${t.thead} uppercase tracking-wider px-${i === 0 || i === 8 ? '6' : '4'} py-3 ${i === 8 ? 'text-right' : ''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -763,6 +764,16 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                       <td className="px-4 py-4"><ModelBadge model={client.consolidatedTrialModel} /></td>
                       <td className="px-4 py-4"><span className={`text-sm ${t.textSub}`}>{client.companies.length} empresa{client.companies.length !== 1 ? 's' : ''}</span></td>
                       <td className="px-4 py-4"><span className={`text-xs ${t.textMuted}`}>{new Date(client.createdAt).toLocaleDateString('pt-BR')}</span></td>
+                      <td className="px-4 py-4">
+                        {client.lastLogin ? (
+                          <div>
+                            <span className={`text-xs ${t.textMuted}`}>{new Date(client.lastLogin).toLocaleDateString('pt-BR')}</span>
+                            <p className={`text-xs ${t.textMuted} opacity-70`}>{new Date(client.lastLogin).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                        ) : (
+                          <span className={`text-xs ${t.textMuted} opacity-50`}>Nunca</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
                           <button onClick={() => openEditClient(client)} className={`p-1.5 ${t.textMuted} hover:${t.text} hover:${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg transition-colors`} title="Editar">

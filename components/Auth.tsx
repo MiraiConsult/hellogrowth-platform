@@ -188,6 +188,14 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           subscriptionStatus: (activeSubscriptionStatus as any) || 'active',
         };
 
+        // Registrar last_login no banco (fire-and-forget, não bloqueia o login)
+        supabase
+          .from('users')
+          .update({ last_login: new Date().toISOString() })
+          .eq('id', data.id)
+          .then(() => {})
+          .catch(() => {});
+
         onLogin(user);
 
     } catch (err: any) {
