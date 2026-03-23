@@ -14,7 +14,9 @@ export async function GET(request: NextRequest) {
     const stateRaw = searchParams.get('state');
     const error = searchParams.get('error');
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+    // Derivar a URL base da própria requisição para funcionar em qualquer ambiente
+    const requestUrl = new URL(request.url);
+    const appUrl = `${requestUrl.protocol}//${requestUrl.host}`;
 
     if (error) {
       console.error('GBP OAuth error:', error);
@@ -32,7 +34,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${appUrl}/#mpd?gbp_error=${encodeURIComponent('State inválido')}`);
     }
 
-    const redirectUri = `${appUrl}/api/gbp/callback`;
+    const redirectUri = `${appUrl}/api/gbp/callback`; // appUrl derivado da requisição
 
     const client = new OAuth2Client(
       process.env.GOOGLE_CLIENT_ID,
@@ -147,7 +149,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${appUrl}/#mpd?gbp_connected=true`);
   } catch (err: any) {
     console.error('GBP callback error:', err);
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+    // Derivar a URL base da própria requisição para funcionar em qualquer ambiente
+    const requestUrl = new URL(request.url);
+    const appUrl = `${requestUrl.protocol}//${requestUrl.host}`;
     return NextResponse.redirect(`${appUrl}/#mpd?gbp_error=${encodeURIComponent('Erro ao conectar com Google Business Profile')}`);
   }
 }
