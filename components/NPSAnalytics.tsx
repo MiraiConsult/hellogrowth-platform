@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { NPSResponse, Campaign } from '@/types';
-import { BarChart3, Sparkles, Loader2, X, Mail, Phone, History, Plus, MessageSquare, User, Calendar, Layout, Trash2 } from 'lucide-react';
+import { BarChart3, Sparkles, Loader2, X, Mail, Phone, History, Plus, MessageSquare, User, Calendar, Layout, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, Filter } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from 'react-markdown';
@@ -30,6 +30,12 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, o
   // Delete State
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+
+  // Filter & Sort State
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [sortColumn, setSortColumn] = useState<'customerName' | 'score' | 'status' | 'date' | null>('date');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // CÁLCULO CORRETO DE NPS (Range -100 a +100)
   const calculateNPS = () => {
@@ -162,6 +168,53 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, o
     }
   };
 
+  // Filtro e ordenação aplicados sobre npsData
+  const filteredAndSorted = React.useMemo(() => {
+    let data = [...npsData];
+
+    // Filtro de data
+    if (dateFrom) {
+      const from = new Date(dateFrom + 'T00:00:00');
+      data = data.filter(n => new Date(n.date) >= from);
+    }
+    if (dateTo) {
+      const to = new Date(dateTo + 'T23:59:59');
+      data = data.filter(n => new Date(n.date) <= to);
+    }
+
+    // Ordenação
+    if (sortColumn) {
+      data.sort((a, b) => {
+        let valA: string | number = '';
+        let valB: string | number = '';
+        if (sortColumn === 'customerName') { valA = a.customerName?.toLowerCase() || ''; valB = b.customerName?.toLowerCase() || ''; }
+        if (sortColumn === 'score') { valA = a.score; valB = b.score; }
+        if (sortColumn === 'status') { valA = a.status || ''; valB = b.status || ''; }
+        if (sortColumn === 'date') { valA = new Date(a.date).getTime(); valB = new Date(b.date).getTime(); }
+        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return data;
+  }, [npsData, dateFrom, dateTo, sortColumn, sortDirection]);
+
+  const handleSort = (col: 'customerName' | 'score' | 'status' | 'date') => {
+    if (sortColumn === col) {
+      setSortDirection(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(col);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIcon = ({ col }: { col: 'customerName' | 'score' | 'status' | 'date' }) => {
+    if (sortColumn !== col) return <ChevronsUpDown size={12} className="ml-1 text-gray-300" />;
+    return sortDirection === 'asc'
+      ? <ChevronUp size={12} className="ml-1 text-primary-500" />
+      : <ChevronDown size={12} className="ml-1 text-primary-500" />;
+  };
+
   return (
     <div className="p-8 min-h-screen bg-gray-50 relative">
       <div className="mb-8">
@@ -252,21 +305,74 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, o
         </div>
       </div>
 
-      <h2 className="text-lg font-bold text-gray-900 mb-4">Feedbacks Detalhados</h2>
+      {/* Filtros e Cabeçalho da Tabela */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <h2 className="text-lg font-bold text-gray-900">Feedbacks Detalhados
+          <span className="ml-2 text-sm font-normal text-gray-400">{filteredAndSorted.length} de {npsData.length}</span>
+        </h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+            <Filter size={14} className="text-gray-400" />
+            <span className="text-xs text-gray-500 font-medium">De</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="text-xs text-gray-700 border-none outline-none bg-transparent cursor-pointer"
+            />
+          </div>
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+            <span className="text-xs text-gray-500 font-medium">Até</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="text-xs text-gray-700 border-none outline-none bg-transparent cursor-pointer"
+            />
+          </div>
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDateFrom(''); setDateTo(''); }}
+              className="text-xs text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg transition-colors font-medium"
+            >
+              Limpar filtro
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
             <tr>
-              <th className="px-6 py-3 font-medium">Cliente</th>
-              <th className="px-6 py-3 font-medium">Nota</th>
+              <th className="px-6 py-3 font-medium">
+                <button onClick={() => handleSort('customerName')} className="flex items-center hover:text-gray-700 transition-colors">
+                  Cliente <SortIcon col="customerName" />
+                </button>
+              </th>
+              <th className="px-6 py-3 font-medium">
+                <button onClick={() => handleSort('score')} className="flex items-center hover:text-gray-700 transition-colors">
+                  Nota <SortIcon col="score" />
+                </button>
+              </th>
               <th className="px-6 py-3 font-medium">Comentário</th>
-              <th className="px-6 py-3 font-medium">Status</th>
-              <th className="px-6 py-3 font-medium">Data</th>
+              <th className="px-6 py-3 font-medium">
+                <button onClick={() => handleSort('status')} className="flex items-center hover:text-gray-700 transition-colors">
+                  Status <SortIcon col="status" />
+                </button>
+              </th>
+              <th className="px-6 py-3 font-medium">
+                <button onClick={() => handleSort('date')} className="flex items-center hover:text-gray-700 transition-colors">
+                  Data <SortIcon col="date" />
+                </button>
+              </th>
               {onDeleteNPSResponse && <th className="px-4 py-3 font-medium text-center">Ações</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {npsData.map((nps) => (
+            {filteredAndSorted.length === 0 ? (
+              <tr><td colSpan={onDeleteNPSResponse ? 6 : 5} className="px-6 py-10 text-center text-gray-400 text-sm">Nenhum feedback encontrado para o período selecionado.</td></tr>
+            ) : filteredAndSorted.map((nps) => (
               <tr key={nps.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-6 py-4 cursor-pointer" onClick={() => setSelectedResponse(nps)}>
                   <p className="font-medium text-gray-900">{nps.customerName}</p>
