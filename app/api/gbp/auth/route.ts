@@ -18,11 +18,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'tenantId e userId são obrigatórios' }, { status: 400 });
     }
 
-    // Derivar a URL base da própria requisição para funcionar em qualquer ambiente
-    // (production, staging, pre-production) sem depender de variável de ambiente
-    const requestUrl = new URL(request.url);
-    const baseUrl = `${requestUrl.protocol}//${requestUrl.host}`;
-    const redirectUri = `${baseUrl}/api/gbp/callback`;
+    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/gbp/callback`;
 
     const client = new OAuth2Client(
       process.env.GOOGLE_CLIENT_ID,

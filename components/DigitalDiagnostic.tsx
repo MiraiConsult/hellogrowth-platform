@@ -285,27 +285,8 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   const [gbpMetrics, setGbpMetrics] = useState<GBPMetrics | null>(null);
   const [gbpLoading, setGbpLoading] = useState(false);
   const [gbpConnected, setGbpConnected] = useState(false);
-  const [locationIdInput, setLocationIdInput] = useState('');
-  const [savingLocationId, setSavingLocationId] = useState(false);
-  const [locationIdSaved, setLocationIdSaved] = useState(false);
   const [todoItems, setTodoItems] = useState<TodoItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
-  const [expandedCard, setExpandedCard] = useState<string | null>(null);
-  const [clickedDimension, setClickedDimension] = useState<string | null>(null);
-
-  // Limpar erro de Place ID quando o businessProfile carrega com o Place ID preenchido
-  useEffect(() => {
-    if (effectivePlaceId && error === 'Configure o Google Place ID no Perfil do Negócio para analisar sua presença digital.') {
-      setError(null);
-    }
-  }, [effectivePlaceId]);
-
-  // Limpar erro de Place ID quando o businessProfile carrega com o Place ID preenchido
-  useEffect(() => {
-    if (effectivePlaceId && error === 'Configure o Google Place ID no Perfil do Negócio para analisar sua presença digital.') {
-      setError(null);
-    }
-  }, [effectivePlaceId]);
 
   useEffect(() => {
     fetchDiagnostics();
@@ -316,11 +297,11 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
       if (hash.includes('gbp_connected=true')) {
         setGbpConnected(true);
         fetchGbpMetrics();
-        window.history.replaceState(null, '', window.location.pathname + '#digital-diagnostic');
+        window.history.replaceState(null, '', window.location.pathname + '#mpd');
       } else if (hash.includes('gbp_error=')) {
         const match = hash.match(/gbp_error=([^&]+)/);
         if (match) setError(decodeURIComponent(match[1]));
-        window.history.replaceState(null, '', window.location.pathname + '#digital-diagnostic');
+        window.history.replaceState(null, '', window.location.pathname + '#mpd');
       }
     }
   }, [userId, activeTenantId]);
@@ -330,7 +311,7 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
     setIsLoading(true);
     try {
       const localStorageTenantId = typeof window !== 'undefined' ? localStorage.getItem('hg_active_company_id') : null;
-      const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || localStorageTenantId || tenantId || userId;
+      const resolvedTenantId = activeTenantId || localStorageTenantId || tenantId || userId;
       const { data, error } = await supabase
         .from('digital_diagnostics')
         .select('*')
@@ -348,26 +329,8 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
         }));
         setDiagnostics(mapped);
         // Carregar to-do items do diagnóstico mais recente
-        const latestAnalysis = mapped[0]?.ai_analysis;
-        if (latestAnalysis) {
-          const existingTodos: TodoItem[] = latestAnalysis.todoItems || [];
-          const existingIds = new Set(existingTodos.map((t: TodoItem) => t.id));
-          // Converter recomendações da IA em TodoItems
-          const recTodos: TodoItem[] = (latestAnalysis.recommendations || []).map((rec: { priority: string; title: string; description: string; impact: string }, i: number) => {
-            const id = `rec_${i}_${rec.title.replace(/\s+/g, '_').toLowerCase().slice(0, 20)}`;
-            if (existingIds.has(id)) return null;
-            return {
-              id,
-              title: rec.title,
-              description: rec.description,
-              impact: rec.impact,
-              impactScore: rec.priority === 'high' ? 20 : rec.priority === 'medium' ? 10 : 5,
-              priority: rec.priority as 'high' | 'medium' | 'low',
-              completed: false,
-              category: 'reputation' as const,
-            };
-          }).filter(Boolean) as TodoItem[];
-          setTodoItems([...existingTodos, ...recTodos]);
+        if (mapped[0]?.ai_analysis?.todoItems) {
+          setTodoItems(mapped[0].ai_analysis.todoItems);
         }
       }
     } catch (e) {
@@ -378,7 +341,7 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   };
 
   const checkGbpConnection = async () => {
-    const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
+    const resolvedTenantId = activeTenantId || tenantId || userId;
     if (!resolvedTenantId) return;
     try {
       const res = await fetch(`/api/gbp/metrics?tenantId=${resolvedTenantId}&months=1`);
@@ -391,7 +354,7 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   };
 
   const fetchGbpMetrics = async () => {
-    const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
+    const resolvedTenantId = activeTenantId || tenantId || userId;
     if (!resolvedTenantId) return;
     setGbpLoading(true);
     try {
@@ -407,12 +370,12 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   };
 
   const handleConnectGBP = () => {
-    const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
+    const resolvedTenantId = activeTenantId || tenantId || userId;
     window.location.href = `/api/gbp/auth?tenantId=${resolvedTenantId}&userId=${userId}`;
   };
 
   const handleDisconnectGBP = async () => {
-    const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
+    const resolvedTenantId = activeTenantId || tenantId || userId;
     await fetch('/api/gbp/disconnect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -809,7 +772,7 @@ Responda APENAS em JSON puro (sem markdown):
       const aiAnalysis = await generateAIAnalysis(dataToAnalyze, previousAnalysis, generatedTodos);
 
       setAnalysisStep('Salvando diagnóstico...');
-      const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
+      const resolvedTenantId = activeTenantId || tenantId || userId;
       const { error: saveError } = await supabase
         .from('digital_diagnostics')
         .insert({
@@ -870,9 +833,9 @@ Responda APENAS em JSON puro (sem markdown):
   }, [latestDiagnostic, previousDiagnostic]);
 
   const radarData = latestDiagnostic?.ai_analysis ? [
-    { subject: 'Reputação', value: latestDiagnostic.ai_analysis.scores.reputation, previous: previousDiagnostic?.ai_analysis?.scores.reputation ?? null, fullMark: 100 },
-    { subject: 'Visibilidade', value: latestDiagnostic.ai_analysis.scores.visibility, previous: previousDiagnostic?.ai_analysis?.scores.visibility ?? null, fullMark: 100 },
-    { subject: 'Engajamento', value: latestDiagnostic.ai_analysis.scores.engagement, previous: previousDiagnostic?.ai_analysis?.scores.engagement ?? null, fullMark: 100 },
+    { subject: 'Reputação', value: latestDiagnostic.ai_analysis.scores.reputation, fullMark: 100 },
+    { subject: 'Visibilidade', value: latestDiagnostic.ai_analysis.scores.visibility, fullMark: 100 },
+    { subject: 'Engajamento', value: latestDiagnostic.ai_analysis.scores.engagement, fullMark: 100 },
   ] : [];
 
   // Projeções de cenário
@@ -1067,107 +1030,35 @@ Responda APENAS em JSON puro (sem markdown):
             { label: 'Reputação', score: aiAnalysis.scores.reputation, prev: prevScores?.reputation, icon: <Star size={16} />, key: 'reputation' as const },
             { label: 'Visibilidade', score: aiAnalysis.scores.visibility, prev: prevScores?.visibility, icon: <Eye size={16} />, key: 'visibility' as const },
             { label: 'Engajamento', score: aiAnalysis.scores.engagement, prev: prevScores?.engagement, icon: <MessageSquare size={16} />, key: 'engagement' as const },
-          ] as const).map((item) => {
-            const isExpanded = expandedCard === item.key;
-            const info = METRIC_EXPLANATIONS[item.key];
-            const pd = latestDiagnostic?.place_data;
-            const criteria: { label: string; pts: number; maxPts: number; ok: boolean }[] = [];
-            if (item.key === 'reputation' && pd) {
-              const ratingPts = Math.round((pd.rating || 0) / 5 * 60);
-              const reviewPts = Math.min(40, Math.round(Math.log10((pd.user_ratings_total || 0) + 1) * 20));
-              criteria.push({ label: `Nota média (${pd.rating || 0}★)`, pts: ratingPts, maxPts: 60, ok: ratingPts >= 48 });
-              criteria.push({ label: `Volume de avaliações (${pd.user_ratings_total || 0})`, pts: reviewPts, maxPts: 40, ok: reviewPts >= 30 });
-            } else if (item.key === 'visibility' && pd) {
-              const photoCount = pd.photos?.length || 0;
-              const photoPts = photoCount >= 10 ? 30 : photoCount >= 3 ? 20 : photoCount >= 1 ? 10 : 0;
-              criteria.push({ label: `Fotos (${photoCount} fotos)`, pts: photoPts, maxPts: 30, ok: photoPts >= 30 });
-              criteria.push({ label: 'Horários configurados', pts: pd.opening_hours?.weekday_text?.length ? 25 : 0, maxPts: 25, ok: !!pd.opening_hours?.weekday_text?.length });
-              criteria.push({ label: 'Website vinculado', pts: pd.website ? 25 : 0, maxPts: 25, ok: !!pd.website });
-              criteria.push({ label: 'Telefone cadastrado', pts: pd.formatted_phone_number ? 20 : 0, maxPts: 20, ok: !!pd.formatted_phone_number });
-            } else if (item.key === 'engagement' && pd) {
-              const eng = calculateEngagementMetrics(pd);
-              const recentPts = Math.min(50, eng.recentReviewCount * 5);
-              const volumePts = Math.min(50, Math.round(Math.log10((pd.user_ratings_total || 0) + 1) * 15));
-              criteria.push({ label: `Avaliações recentes (${eng.recentReviewCount} nos últimos 6 meses)`, pts: recentPts, maxPts: 50, ok: recentPts >= 30 });
-              criteria.push({ label: `Volume total (${pd.user_ratings_total || 0} avaliações)`, pts: volumePts, maxPts: 50, ok: volumePts >= 30 });
-            } else if (item.key === 'overall') {
-              criteria.push({ label: `Reputação (peso 40%)`, pts: Math.round(aiAnalysis.scores.reputation * 0.4), maxPts: 40, ok: aiAnalysis.scores.reputation >= 70 });
-              criteria.push({ label: `Visibilidade (peso 35%)`, pts: Math.round(aiAnalysis.scores.visibility * 0.35), maxPts: 35, ok: aiAnalysis.scores.visibility >= 70 });
-              criteria.push({ label: `Engajamento (peso 25%)`, pts: Math.round(aiAnalysis.scores.engagement * 0.25), maxPts: 25, ok: aiAnalysis.scores.engagement >= 70 });
-            }
-            return (
-              <div key={item.key} className={`rounded-xl border transition-all ${getScoreBg(item.score)} ${isExpanded ? 'col-span-2 md:col-span-4' : ''}`}>
-                <div
-                  className="p-4 cursor-pointer select-none"
-                  onClick={() => setExpandedCard(isExpanded ? null : item.key)}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-gray-600 text-xs font-medium">{item.label}</span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-400">{item.icon}</span>
-                      <ChevronRight size={14} className={`text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-                    </div>
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <div className={`text-3xl font-bold ${getScoreColor(item.score)}`}>{item.score}</div>
-                    {getDeltaIcon(item.score, item.prev)}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">{getScoreLabel(item.score)}</div>
-                  <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${item.score >= 80 ? 'bg-green-500' : item.score >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                      style={{ width: `${item.score}%` }}
-                    />
-                  </div>
-                  <p className="text-gray-400 text-xs mt-2">Clique para ver o cálculo</p>
+          ] as const).map((item) => (
+            <div key={item.key} className={`rounded-xl border p-4 ${getScoreBg(item.score)} relative`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-600 text-xs font-medium">{item.label}</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-400">{item.icon}</span>
+                  <button
+                    onClick={() => setOpenMetricInfo(item.key)}
+                    className="text-gray-300 hover:text-gray-500 transition-colors"
+                    title={`O que é ${item.label}?`}
+                  >
+                    <HelpCircle size={13} />
+                  </button>
                 </div>
-                {isExpanded && (
-                  <div className="border-t border-gray-200 p-4 bg-white rounded-b-xl">
-                    <p className="text-gray-600 text-xs mb-4">{info.description}</p>
-                    <div className="space-y-3 mb-4">
-                      {criteria.map((c, i) => (
-                        <div key={i}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-700 flex items-center gap-1">
-                              {c.ok
-                                ? <CheckCircle size={12} className="text-green-500" />
-                                : <AlertTriangle size={12} className="text-yellow-500" />
-                              }
-                              {c.label}
-                            </span>
-                            <span className={`text-xs font-semibold ${c.ok ? 'text-green-600' : 'text-yellow-600'}`}>
-                              {c.pts}/{c.maxPts} pts
-                            </span>
-                          </div>
-                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${c.ok ? 'bg-green-400' : 'bg-yellow-400'}`}
-                              style={{ width: `${Math.round((c.pts / c.maxPts) * 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {info.benchmark && (
-                      <div className="bg-blue-50 rounded-lg p-3 mb-3">
-                        <p className="text-blue-700 text-xs flex items-start gap-1">
-                          <Info size={12} className="flex-shrink-0 mt-0.5" />{info.benchmark}
-                        </p>
-                      </div>
-                    )}
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-700 mb-1">Como melhorar:</p>
-                      {info.howToImprove.slice(0, 2).map((tip, i) => (
-                        <p key={i} className="text-xs text-gray-600 flex items-start gap-1">
-                          <span className="text-primary-500 font-bold">→</span> {tip}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
-            );
-          })}
+              <div className="flex items-end gap-2">
+                <div className={`text-3xl font-bold ${getScoreColor(item.score)}`}>{item.score}</div>
+                {getDeltaIcon(item.score, item.prev)}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">{getScoreLabel(item.score)}</div>
+              {/* Barra de progresso */}
+              <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${item.score >= 80 ? 'bg-green-500' : item.score >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                  style={{ width: `${item.score}%` }}
+                />
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -1363,105 +1254,54 @@ Responda APENAS em JSON puro (sem markdown):
             </div>
           </div>
 
-          {/* Link para To-Do */}
+          {/* Recomendações */}
           {aiAnalysis.recommendations.length > 0 && (
-            <div
-              className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-100 rounded-xl p-4 flex items-center justify-between cursor-pointer hover:border-orange-300 transition-colors"
-              onClick={() => setActiveTab('todo')}
-            >
-              <div className="flex items-center gap-3">
-                <Zap className="text-orange-500" size={20} />
-                <div>
-                  <h4 className="font-semibold text-orange-800 text-sm">Plano de Ação Gerado</h4>
-                  <p className="text-orange-700 text-xs mt-0.5">{aiAnalysis.recommendations.length} recomendações disponíveis no To-Do</p>
-                </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Lightbulb className="text-yellow-600" size={20} />
+                <h3 className="font-semibold text-gray-800">Recomendações Prioritárias</h3>
               </div>
-              <span className="text-orange-600 text-sm font-medium flex items-center gap-1">
-                Ver To-Do <ChevronRight size={16} />
-              </span>
+              <div className="space-y-3">
+                {aiAnalysis.recommendations.map((rec, index) => (
+                  <div key={index} className="border border-gray-100 rounded-lg p-4 hover:border-gray-200 transition-colors">
+                    <div className="flex items-start gap-3">
+                      <div className={`px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 mt-0.5 ${
+                        rec.priority === 'high' ? 'bg-red-100 text-red-700' :
+                        rec.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {rec.priority === 'high' ? 'Alta' : rec.priority === 'medium' ? 'Média' : 'Baixa'}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-800 text-sm">{rec.title}</h4>
+                        <p className="text-gray-600 text-sm mt-1">{rec.description}</p>
+                        <p className="text-green-600 text-xs mt-2 flex items-center gap-1">
+                          <Target size={12} />{rec.impact}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Radar */}
-          {radarData.length > 0 && (() => {
-            const hasPrevious = radarData.some(d => d.previous !== null);
-            const bm = benchmark;
-            const bmReputationScore = bm ? Math.min(100, Math.round((bm.avgRating / 5) * 60 + Math.min(40, Math.log10(bm.avgReviews + 1) * 20))) : null;
-            const dimensionDetails: Record<string, { icon: React.ReactNode; tips: string[]; color: string }> = {
-              'Reputação': { icon: <Star size={16} className="text-yellow-500" />, tips: METRIC_EXPLANATIONS.reputation.howToImprove, color: 'yellow' },
-              'Visibilidade': { icon: <Eye size={16} className="text-blue-500" />, tips: METRIC_EXPLANATIONS.visibility.howToImprove, color: 'blue' },
-              'Engajamento': { icon: <MessageSquare size={16} className="text-green-500" />, tips: METRIC_EXPLANATIONS.engagement.howToImprove, color: 'green' },
-            };
-            return (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <BarChart2 className="text-primary-600" size={20} />
-                    <h3 className="font-semibold text-gray-800">Visão Geral por Dimensão</h3>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs">
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-500 inline-block opacity-80"></span> Atual</span>
-                    {hasPrevious && <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-400 inline-block opacity-60"></span> Anterior</span>}
-                    {bmReputationScore && <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-400 inline-block opacity-60"></span> Setor ({bm?.label})</span>}
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mb-3">Clique em uma dimensão para ver dicas de melhoria</p>
-                <ResponsiveContainer width="100%" height={280}>
-                  <RadarChart data={radarData} onClick={(data: any) => {
-                    if (data?.activeLabel) setClickedDimension(clickedDimension === data.activeLabel ? null : data.activeLabel);
-                  }}>
-                    <PolarGrid />
-                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 13, cursor: 'pointer' }} />
-                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 11 }} />
-                    {hasPrevious && (
-                      <Radar name="Anterior" dataKey="previous" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.15} strokeDasharray="4 2" />
-                    )}
-                    {bmReputationScore && (
-                      <Radar name="Setor" dataKey="benchmark" stroke="#60a5fa" fill="#60a5fa" fillOpacity={0.1} strokeDasharray="2 2" />
-                    )}
-                    <Radar name="Atual" dataKey="value" stroke="#7c3aed" fill="#7c3aed" fillOpacity={0.3} />
-                  </RadarChart>
-                </ResponsiveContainer>
-                {/* Painel de detalhes ao clicar */}
-                {clickedDimension && dimensionDetails[clickedDimension] && (
-                  <div className={`mt-4 border rounded-xl p-4 bg-${dimensionDetails[clickedDimension].color}-50 border-${dimensionDetails[clickedDimension].color}-200`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-semibold text-gray-800 flex items-center gap-2">
-                        {dimensionDetails[clickedDimension].icon}
-                        Como melhorar: {clickedDimension}
-                      </h4>
-                      <button onClick={() => setClickedDimension(null)} className="text-gray-400 hover:text-gray-600">×</button>
-                    </div>
-                    <ul className="space-y-2">
-                      {dimensionDetails[clickedDimension].tips.map((tip, i) => (
-                        <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
-                          <span className="text-primary-500 font-bold mt-0.5">→</span>{tip}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {/* Tabela de comparação */}
-                <div className="mt-4 grid grid-cols-3 gap-3">
-                  {radarData.map((d) => (
-                    <div
-                      key={d.subject}
-                      className={`rounded-lg p-3 border cursor-pointer transition-all ${clickedDimension === d.subject ? 'border-primary-400 bg-primary-50' : 'border-gray-100 bg-gray-50 hover:border-gray-300'}`}
-                      onClick={() => setClickedDimension(clickedDimension === d.subject ? null : d.subject)}
-                    >
-                      <p className="text-xs text-gray-500 mb-1">{d.subject}</p>
-                      <p className={`text-xl font-bold ${getScoreColor(d.value)}`}>{d.value}</p>
-                      {d.previous !== null && (
-                        <p className="text-xs text-gray-400">
-                          Anterior: {d.previous} {d.value > d.previous ? <span className="text-green-500">(+{d.value - d.previous})</span> : d.value < d.previous ? <span className="text-red-500">({d.value - d.previous})</span> : <span className="text-gray-400">(=)</span>}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
+          {radarData.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <BarChart2 className="text-primary-600" size={20} />
+                <h3 className="font-semibold text-gray-800">Visão Geral por Dimensão</h3>
               </div>
-            );
-          })()}
+              <ResponsiveContainer width="100%" height={280}>
+                <RadarChart data={radarData}>
+                  <PolarGrid />
+                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 13 }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 11 }} />
+                  <Radar name="Score" dataKey="value" stroke="#7c3aed" fill="#7c3aed" fillOpacity={0.3} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       )}
 
@@ -1504,34 +1344,34 @@ Responda APENAS em JSON puro (sem markdown):
                       {items.map(item => (
                         <div
                           key={item.id}
-                          className={`flex items-start gap-3 p-4 rounded-lg border transition-all ${
+                          className={`flex items-start gap-3 p-4 rounded-lg border transition-all cursor-pointer ${
                             item.completed ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-200 hover:border-primary-200'
                           }`}
+                          onClick={() => toggleTodoItem(item.id)}
                         >
-                          <div className="mt-0.5 flex-shrink-0 cursor-pointer" onClick={() => toggleTodoItem(item.id)}>
+                          <div className="mt-0.5 flex-shrink-0">
                             {item.completed
                               ? <CheckSquare size={20} className="text-green-500" />
                               : <Square size={20} className="text-gray-400" />
                             }
                           </div>
                           <div className="flex-1">
-                            <div className="flex items-start gap-2">
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 mt-0.5 ${
-                                item.priority === 'high' ? 'bg-red-100 text-red-700' :
-                                item.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
-                              }`}>
-                                {item.priority === 'high' ? 'Alta' : item.priority === 'medium' ? 'Média' : 'Baixa'}
+                            <h4 className={`font-medium text-sm ${item.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                              {item.title}
+                            </h4>
+                            <p className="text-gray-500 text-sm mt-0.5">{item.description}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="flex items-center gap-1 text-green-600 text-xs font-medium">
+                                <TrendingUp size={11} />{item.impact}
                               </span>
-                              <h4 className={`font-medium text-sm ${item.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-                                {item.title}
-                              </h4>
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                item.category === 'reputation' ? 'bg-yellow-100 text-yellow-700' :
+                                item.category === 'visibility' ? 'bg-blue-100 text-blue-700' :
+                                'bg-green-100 text-green-700'
+                              }`}>
+                                {item.category === 'reputation' ? 'Reputação' : item.category === 'visibility' ? 'Visibilidade' : 'Engajamento'}
+                              </span>
                             </div>
-                            <p className="text-gray-500 text-sm mt-1">{item.description}</p>
-                            {item.impact && (
-                              <p className="text-green-600 text-xs mt-2 flex items-center gap-1">
-                                <Target size={12} />{item.impact}
-                              </p>
-                            )}
                           </div>
                         </div>
                       ))}
@@ -1728,9 +1568,9 @@ Responda APENAS em JSON puro (sem markdown):
       )}
 
       {/* ── Tab: Dados Google (GBP) ── */}
-      {activeTab === 'google-data' && gbpConnected && false && (
+      {activeTab === 'google-data' && gbpConnected && (
         <div className="space-y-6">
-          {false ? (
+          {gbpLoading ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 flex items-center justify-center">
               <Loader2 className="animate-spin text-primary-600 mr-3" size={24} />
               <span className="text-gray-500">Buscando dados do Google Business Profile...</span>
@@ -1834,105 +1674,17 @@ Responda APENAS em JSON puro (sem markdown):
               )}
             </>
           ) : (
-            <div className="space-y-6">
-              {/* Mensagem de erro */}
-              {gbpMetrics?.error && gbpMetrics.error !== 'Location ID não configurado' && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-                  {gbpMetrics.error}
-                </div>
-              )}
-
-              {/* Formulário para inserir o Location ID */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                    <MapPin className="text-blue-600" size={20} />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-800">Configurar Location ID do Google</h3>
-                    <p className="text-sm text-gray-500">Necessário para visualizar métricas de desempenho</p>
-                  </div>
-                </div>
-
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5 text-sm text-blue-800">
-                  <p className="font-medium mb-2">Como encontrar seu Location ID:</p>
-                  <ol className="list-decimal list-inside space-y-1 text-blue-700">
-                    <li>Acesse <a href="https://business.google.com" target="_blank" rel="noopener noreferrer" className="underline font-medium">business.google.com</a></li>
-                    <li>Clique no seu negócio</li>
-                    <li>Olhe a URL do navegador — ela terá o formato:<br />
-                      <code className="bg-blue-100 px-1 rounded text-xs">business.google.com/u/0/edit/l/<strong>XXXXXXXXXX</strong>/...</code>
-                    </li>
-                    <li>O número após <code className="bg-blue-100 px-1 rounded text-xs">/l/</code> é o seu Location ID</li>
-                  </ol>
-                </div>
-
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    value={locationIdInput}
-                    onChange={e => setLocationIdInput(e.target.value)}
-                    placeholder="Ex: 12345678901234567"
-                    className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                  <button
-                    onClick={async () => {
-                      if (!locationIdInput.trim()) return;
-                      const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
-                      setSavingLocationId(true);
-                      try {
-                        const res = await fetch('/api/gbp/set-location', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ tenantId: resolvedTenantId, locationId: locationIdInput.trim() }),
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                          setLocationIdSaved(true);
-                          setTimeout(() => {
-                            setLocationIdSaved(false);
-                            fetchGbpMetrics();
-                          }, 1500);
-                        }
-                      } catch (e) {
-                        console.error('Error saving location ID:', e);
-                      } finally {
-                        setSavingLocationId(false);
-                      }
-                    }}
-                    disabled={savingLocationId || !locationIdInput.trim()}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {savingLocationId ? (
-                      <><Loader2 size={15} className="animate-spin" />Salvando...</>
-                    ) : locationIdSaved ? (
-                      <><CheckCircle size={15} />Salvo!</>
-                    ) : (
-                      'Salvar'
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="text-center">
-                <button onClick={fetchGbpMetrics} className="inline-flex items-center gap-2 px-4 py-2 text-gray-500 hover:text-gray-700 text-sm">
-                  <RefreshCw size={14} />Tentar novamente
-                </button>
-              </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+              <BarChart className="mx-auto text-gray-300 mb-4" size={48} />
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">Dados ainda não disponíveis</h3>
+              <p className="text-gray-500 mb-4">
+                {gbpMetrics?.error || 'Os dados do Google Business Profile serão carregados em breve.'}
+              </p>
+              <button onClick={fetchGbpMetrics} className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm">
+                <RefreshCw size={15} />Tentar novamente
+              </button>
             </div>
           )}
-        </div>
-      )}
-
-      {/* ── Tab: Dados Google - Em Breve ── */}
-      {activeTab === 'google-data' && gbpConnected && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
-          <div className="w-16 h-16 rounded-full bg-primary-50 flex items-center justify-center mx-auto mb-5">
-            <BarChart className="text-primary-400" size={32} />
-          </div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">Em Breve</h3>
-          <p className="text-gray-500 max-w-sm mx-auto">
-            Os dados de desempenho do Google Business Profile (visualizações, ligações, rotas e palavras-chave) estarão disponíveis em breve.
-          </p>
         </div>
       )}
 

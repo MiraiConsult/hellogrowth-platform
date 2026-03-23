@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { error: dbError } = await supabaseAdmin
-      .from('business_profile')
+      .from('business_profiles')
       .update(updateData)
       .eq('tenant_id', tenantId);
 
