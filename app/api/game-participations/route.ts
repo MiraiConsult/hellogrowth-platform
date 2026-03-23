@@ -106,6 +106,31 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// DELETE /api/game-participations?id=xxx - Remover participação do game (sem apagar dados do lead/formulário)
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID required' }, { status: 400 });
+    }
+
+    const { error } = await supabase
+      .from('nps_game_participations')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 // PATCH /api/game-participations - Atualizar status de participação
 export async function PATCH(request: NextRequest) {
   try {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
-import { Mail, MessageCircle, Check, Download, Search, RefreshCw, Filter, Trophy, Users, Clock } from 'lucide-react';
+import { Mail, MessageCircle, Check, Download, Search, RefreshCw, Filter, Trophy, Users, Clock, Trash2 } from 'lucide-react';
 
 interface Participation {
   id: string;
@@ -38,6 +38,8 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGameId, setSelectedGameId] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     loadGames();
@@ -170,6 +172,26 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
       }
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    try {
+      const response = await fetch(`/api/game-participations?id=${id}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        setParticipations(prev => prev.filter(p => p.id !== id));
+      } else {
+        console.error('Erro ao excluir participação');
+      }
+    } catch (error) {
+      console.error('Erro ao excluir participação:', error);
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
     }
   };
 
@@ -523,6 +545,32 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
                             title={participation.status === 'pending' ? 'Marcar como Enviado' : 'Marcar como Resgatado'}
                           >
                             <Check size={16} />
+                          </button>
+                        )}
+                        {confirmDeleteId === participation.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleDelete(participation.id)}
+                              disabled={deletingId === participation.id}
+                              className="px-2 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors font-medium"
+                              title="Confirmar exclusão"
+                            >
+                              {deletingId === participation.id ? '...' : 'Sim'}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                            >
+                              Não
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteId(participation.id)}
+                            className="p-2 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+                            title="Remover do game (dados do formulário permanecem)"
+                          >
+                            <Trash2 size={16} />
                           </button>
                         )}
                       </div>
