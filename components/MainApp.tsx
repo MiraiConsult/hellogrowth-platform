@@ -992,6 +992,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         score: data.score,
         comment: data.comment || '',
         phone: data.customer_phone || '',
+        companyName: publicCompanyName || undefined,
       };
       const campaignTenantId = (publicCampaign as any).tenant_id;
       if (campaignTenantId) {
@@ -1100,6 +1101,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         phone: insertedLead.phone,
         value: insertedLead.value || 0,
         formSource: insertedLead.form_source,
+        companyName: publicCompanyName || undefined,
       };
       fetch('/api/send-alert', {
         method: 'POST',

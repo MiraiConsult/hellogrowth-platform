@@ -141,8 +141,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Buscar nome da empresa se não foi passado pelo frontend
+    let companyName = data.companyName;
+    if (!companyName) {
+      // Tentar buscar em business_profiles primeiro
+      const { data: bizProfile } = await supabaseAdmin
+        .from('business_profiles')
+        .select('company_name')
+        .eq('tenant_id', companyId)
+        .maybeSingle();
+      if (bizProfile?.company_name) {
+        companyName = bizProfile.company_name;
+      } else {
+        // Fallback: buscar em users
+        const { data: userProfile } = await supabaseAdmin
+          .from('users')
+          .select('company_name, settings')
+          .eq('id', companyId)
+          .maybeSingle();
+        companyName = userProfile?.company_name || userProfile?.settings?.companyName || 'Sua Empresa';
+      }
+    }
+
     // Monta e envia a mensagem
-    const message = buildMessage(type, { ...data, companyName: data.companyName });
+    const message = buildMessage(type, { ...data, companyName });
     const sent = await sendWhatsApp(settings.whatsapp_number, message);
 
     return NextResponse.json({ sent, type, phone: settings.whatsapp_number });
