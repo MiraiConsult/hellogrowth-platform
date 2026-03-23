@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { NPSResponse, Campaign } from '@/types';
-import { BarChart3, Sparkles, Loader2, X, Mail, Phone, History, Plus, MessageSquare, User, Calendar, Layout } from 'lucide-react';
+import { BarChart3, Sparkles, Loader2, X, Mail, Phone, History, Plus, MessageSquare, User, Calendar, Layout, Trash2 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from 'react-markdown';
@@ -10,10 +10,11 @@ import ReactMarkdown from 'react-markdown';
 interface NPSAnalyticsProps {
   npsData: NPSResponse[];
   onUpdateNPSNote?: (id: string, note: string) => Promise<void>;
+  onDeleteNPSResponse?: (id: string) => Promise<void>;
   campaigns?: Campaign[];
 }
 
-const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, campaigns }) => {
+const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, onDeleteNPSResponse, campaigns }) => {
   const tenantId = useTenantId()
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -25,6 +26,10 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, c
   const [newNoteText, setNewNoteText] = useState('');
   const [isSavingNote, setIsSavingNote] = useState(false);
   const notesEndRef = useRef<HTMLDivElement>(null);
+
+  // Delete State
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
 
   // CÁLCULO CORRETO DE NPS (Range -100 a +100)
   const calculateNPS = () => {
@@ -84,6 +89,21 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, c
         console.error("Error saving note", e);
     } finally {
         setIsSavingNote(false);
+    }
+  };
+
+  const handleDeleteResponse = async (id: string) => {
+    if (!onDeleteNPSResponse) return;
+    setIsDeletingId(id);
+    try {
+      await onDeleteNPSResponse(id);
+      // Fechar painel de detalhes se o item excluído estava aberto
+      if (selectedResponse?.id === id) setSelectedResponse(null);
+      setConfirmDeleteId(null);
+    } catch (e) {
+      console.error('Erro ao excluir resposta NPS', e);
+    } finally {
+      setIsDeletingId(null);
     }
   };
 
@@ -242,26 +262,27 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, c
               <th className="px-6 py-3 font-medium">Comentário</th>
               <th className="px-6 py-3 font-medium">Status</th>
               <th className="px-6 py-3 font-medium">Data</th>
+              {onDeleteNPSResponse && <th className="px-4 py-3 font-medium text-center">Ações</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {npsData.map((nps) => (
-              <tr key={nps.id} onClick={() => setSelectedResponse(nps)} className="hover:bg-gray-50 transition-colors cursor-pointer">
-                <td className="px-6 py-4">
+              <tr key={nps.id} className="hover:bg-gray-50 transition-colors">
+                <td className="px-6 py-4 cursor-pointer" onClick={() => setSelectedResponse(nps)}>
                   <p className="font-medium text-gray-900">{nps.customerName}</p>
                   <p className="text-xs text-gray-500">{nps.campaign}</p>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-6 py-4 cursor-pointer" onClick={() => setSelectedResponse(nps)}>
                   <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold text-white ${
                     nps.score >= 9 ? 'bg-green-500' : nps.score >= 7 ? 'bg-yellow-400' : 'bg-red-500'
                   }`}>
                     {nps.score}
                   </span>
                 </td>
-                <td className="px-6 py-4 max-w-xs truncate text-gray-600">
+                <td className="px-6 py-4 max-w-xs truncate text-gray-600 cursor-pointer" onClick={() => setSelectedResponse(nps)}>
                   {nps.comment || (nps.notes ? <span className="text-gray-400 italic flex items-center gap-1"><History size={12}/> Ver notas internas</span> : '')}
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-6 py-4 cursor-pointer" onClick={() => setSelectedResponse(nps)}>
                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                      nps.status === 'Promotor' ? 'bg-green-100 text-green-700' :
                      nps.status === 'Neutro' ? 'bg-yellow-100 text-yellow-700' :
@@ -270,9 +291,38 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, c
                     {nps.status}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
+                <td className="px-6 py-4 text-sm text-gray-500 cursor-pointer" onClick={() => setSelectedResponse(nps)}>
                   {new Date(nps.date).toLocaleDateString('pt-BR')}
                 </td>
+                {onDeleteNPSResponse && (
+                  <td className="px-4 py-4 text-center">
+                    {confirmDeleteId === nps.id ? (
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => handleDeleteResponse(nps.id)}
+                          disabled={isDeletingId === nps.id}
+                          className="px-2 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors font-medium"
+                        >
+                          {isDeletingId === nps.id ? '...' : 'Sim'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                        >
+                          Não
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(nps.id); }}
+                        className="p-1.5 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Excluir resposta"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -355,9 +405,39 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, c
                   </div>
                 </div>
               </div>
-              <button onClick={() => setSelectedResponse(null)} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition-colors">
-                <X size={24} />
-              </button>
+              <div className="flex items-center gap-2">
+                {onDeleteNPSResponse && (
+                  confirmDeleteId === `panel-${selectedResponse.id}` ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-gray-500 mr-1">Excluir?</span>
+                      <button
+                        onClick={() => handleDeleteResponse(selectedResponse.id)}
+                        disabled={isDeletingId === selectedResponse.id}
+                        className="px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors font-medium"
+                      >
+                        {isDeletingId === selectedResponse.id ? '...' : 'Sim'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="px-3 py-1.5 text-xs bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                      >
+                        Não
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteId(`panel-${selectedResponse.id}`)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+                      title="Excluir esta resposta"
+                    >
+                      <Trash2 size={13} /> Excluir
+                    </button>
+                  )
+                )}
+                <button onClick={() => setSelectedResponse(null)} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
             </div>
             
             <div className="flex-1 flex overflow-hidden">

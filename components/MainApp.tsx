@@ -1485,6 +1485,7 @@ Responda APENAS com JSON válido (sem markdown):
         {currentView === 'analytics' && <NPSAnalytics 
             npsData={npsData} 
             onUpdateNPSNote={handleUpdateNPSNote}
+            onDeleteNPSResponse={handleDeleteNpsResponse}
             campaigns={campaigns}
         />}
         
