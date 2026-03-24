@@ -41,6 +41,8 @@ interface BusinessProfileData {
 
 interface BusinessProfileProps {
   userId: string;
+  onProfileUpdate?: () => void;
+  supabase?: any; // aceito mas não usado (usa o import direto)
 }
 
 const BRAND_TONES = [
@@ -66,7 +68,7 @@ const BUSINESS_TYPES = [
   'Outro'
 ];
 
-export default function BusinessProfile({ userId }: BusinessProfileProps) {
+export default function BusinessProfile({ userId, onProfileUpdate }: BusinessProfileProps) {
   const tenantId = useTenantId();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -190,6 +192,8 @@ export default function BusinessProfile({ userId }: BusinessProfileProps) {
       if (result.error) throw result.error;
 
       showNotification('success', 'Perfil salvo com sucesso!');
+      // Notificar o MainApp para recarregar os dados (ex: businessProfile com google_place_id)
+      if (onProfileUpdate) onProfileUpdate();
     } catch (error) {
       console.error('Erro ao salvar perfil:', error);
       showNotification('error', 'Erro ao salvar perfil');
