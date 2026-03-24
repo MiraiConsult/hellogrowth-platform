@@ -23,6 +23,7 @@ interface AlertSettingsData {
   alert_trial_expiring: boolean;
   alert_stale_lead: boolean;
   stale_lead_days: number;
+  alert_new_google_review: boolean;
 }
 
 interface AlertSettingsProps {
@@ -45,6 +46,7 @@ const DEFAULT_SETTINGS: Omit<AlertSettingsData, 'company_id'> = {
   alert_trial_expiring: true,
   alert_stale_lead: false,
   stale_lead_days: 7,
+  alert_new_google_review: true,
 };
 
 // Verifica se o plano tem acesso ao módulo de vendas
@@ -414,6 +416,24 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
           />
         </div>
       )}
+
+      {/* Alertas de Presença Digital (Google) */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Star size={15} className="text-blue-500" />
+          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Presença Digital (Google)</h3>
+        </div>
+
+        <AlertToggle
+          enabled={settings.alert_new_google_review}
+          onChange={v => update('alert_new_google_review', v)}
+          icon={<Star size={16} />}
+          title="Nova Avaliação no Google"
+          description="Alerta diário quando novas avaliações forem detectadas no Google Meu Negócio. Inclui o Diário do Dia com o resumo das mudanças."
+          badge="Diário · 8h"
+          badgeColor="bg-blue-100 text-blue-700"
+        />
+      </div>
 
       {/* Alertas de Trial (apenas Growth ou admin) */}
       {(activePlan === 'hello_growth' || activePlan === 'lifetime' || activePlan === 'growth' || activePlan === 'growth_lifetime') && (
