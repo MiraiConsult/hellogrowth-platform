@@ -3,7 +3,6 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function GET(request: NextRequest) {
   const results: Record<string, any> = {};
-  const tenantId = request.nextUrl.searchParams.get('tenantId') || '45406cf8-8cf8-4d78-8546-2b952648be47';
 
   // 1. Verificar variáveis de ambiente
   results.env = {
@@ -11,7 +10,7 @@ export async function GET(request: NextRequest) {
     googleClientIdPrefix: process.env.GOOGLE_CLIENT_ID?.substring(0, 12) || 'NOT SET',
     hasGoogleClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
     hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-    supabaseUrlPrefix: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 40) || 'NOT SET',
+    supabaseUrlPrefix: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) || 'NOT SET',
     hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
     hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     usingKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SERVICE_ROLE' : 'ANON',
@@ -27,25 +26,20 @@ export async function GET(request: NextRequest) {
     // Tentar ler
     const { data: readData, error: readError } = await supabase
       .from('business_profile')
-      .select('tenant_id, gbp_connected_at, gbp_access_token')
-      .eq('tenant_id', tenantId)
+      .select('tenant_id, gbp_connected_at')
+      .eq('tenant_id', '2cfdc04c-6759-419c-9270-5defcb305e58')
       .maybeSingle();
 
-    results.read = {
-      data: readData ? { tenant_id: readData.tenant_id, gbp_connected_at: readData.gbp_connected_at, has_token: !!readData.gbp_access_token } : null,
-      error: readError,
-    };
+    results.read = { data: readData, error: readError };
 
-    // Tentar upsert (mesma lógica do callback)
-    const { data: upsertData, error: upsertError } = await supabase
+    // Tentar escrever
+    const { data: writeData, error: writeError } = await supabase
       .from('business_profile')
-      .upsert(
-        { tenant_id: tenantId, user_id: tenantId, gbp_connected_at: new Date().toISOString() },
-        { onConflict: 'tenant_id' }
-      )
+      .update({ gbp_connected_at: new Date().toISOString() })
+      .eq('tenant_id', '2cfdc04c-6759-419c-9270-5defcb305e58')
       .select('tenant_id, gbp_connected_at');
 
-    results.upsert = { data: upsertData, error: upsertError };
+    results.write = { data: writeData, error: writeError };
   } catch (err: any) {
     results.supabaseError = err.message;
   }
