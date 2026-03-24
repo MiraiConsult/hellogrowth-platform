@@ -1578,9 +1578,9 @@ Responda APENAS em JSON puro (sem markdown):
       )}
 
       {/* ── Tab: Dados Google (GBP) ── */}
-      {activeTab === 'google-data' && gbpConnected && (
+      {activeTab === 'google-data' && gbpConnected && false && (
         <div className="space-y-6">
-          {gbpLoading ? (
+          {false ? (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 flex items-center justify-center">
               <Loader2 className="animate-spin text-primary-600 mr-3" size={24} />
               <span className="text-gray-500">Buscando dados do Google Business Profile...</span>
@@ -1770,6 +1770,19 @@ Responda APENAS em JSON puro (sem markdown):
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Tab: Dados Google - Em Breve ── */}
+      {activeTab === 'google-data' && gbpConnected && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+          <div className="w-16 h-16 rounded-full bg-primary-50 flex items-center justify-center mx-auto mb-5">
+            <BarChart className="text-primary-400" size={32} />
+          </div>
+          <h3 className="text-xl font-semibold text-gray-800 mb-2">Em Breve</h3>
+          <p className="text-gray-500 max-w-sm mx-auto">
+            Os dados de desempenho do Google Business Profile (visualizações, ligações, rotas e palavras-chave) estarão disponíveis em breve.
+          </p>
         </div>
       )}
 
