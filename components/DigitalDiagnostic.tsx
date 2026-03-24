@@ -1382,15 +1382,6 @@ Responda APENAS em JSON puro (sem markdown):
               Histórico ({diagnostics.length})
             </button>
           )}
-          {latestDiagnostic?.ai_analysis?.dailyDigest && (
-            <button
-              onClick={() => setShowDailyDigest(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium"
-            >
-              <Newspaper size={16} />
-              Diário do Dia
-            </button>
-          )}
           <button
             onClick={handleRunDiagnostic}
             disabled={isAnalyzing}
@@ -1466,6 +1457,15 @@ Responda APENAS em JSON puro (sem markdown):
               </div>
             </div>
             <div className="flex flex-col items-end gap-2">
+              {latestDiagnostic?.ai_analysis?.dailyDigest && (
+                <button
+                  onClick={() => setShowDailyDigest(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium"
+                >
+                  <Newspaper size={14} />
+                  Diário do Dia
+                </button>
+              )}
               {placeData.url && (
                 <a href={placeData.url} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm">
