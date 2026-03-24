@@ -285,6 +285,9 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   const [gbpMetrics, setGbpMetrics] = useState<GBPMetrics | null>(null);
   const [gbpLoading, setGbpLoading] = useState(false);
   const [gbpConnected, setGbpConnected] = useState(false);
+  const [locationIdInput, setLocationIdInput] = useState('');
+  const [savingLocationId, setSavingLocationId] = useState(false);
+  const [locationIdSaved, setLocationIdSaved] = useState(false);
   const [todoItems, setTodoItems] = useState<TodoItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -1681,15 +1684,90 @@ Responda APENAS em JSON puro (sem markdown):
               )}
             </>
           ) : (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
-              <BarChart className="mx-auto text-gray-300 mb-4" size={48} />
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">Dados ainda não disponíveis</h3>
-              <p className="text-gray-500 mb-4">
-                {gbpMetrics?.error || 'Os dados do Google Business Profile serão carregados em breve.'}
-              </p>
-              <button onClick={fetchGbpMetrics} className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm">
-                <RefreshCw size={15} />Tentar novamente
-              </button>
+            <div className="space-y-6">
+              {/* Mensagem de erro */}
+              {gbpMetrics?.error && gbpMetrics.error !== 'Location ID não configurado' && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+                  {gbpMetrics.error}
+                </div>
+              )}
+
+              {/* Formulário para inserir o Location ID */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                    <MapPin className="text-blue-600" size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-800">Configurar Location ID do Google</h3>
+                    <p className="text-sm text-gray-500">Necessário para visualizar métricas de desempenho</p>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5 text-sm text-blue-800">
+                  <p className="font-medium mb-2">Como encontrar seu Location ID:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-blue-700">
+                    <li>Acesse <a href="https://business.google.com" target="_blank" rel="noopener noreferrer" className="underline font-medium">business.google.com</a></li>
+                    <li>Clique no seu negócio</li>
+                    <li>Olhe a URL do navegador — ela terá o formato:<br />
+                      <code className="bg-blue-100 px-1 rounded text-xs">business.google.com/u/0/edit/l/<strong>XXXXXXXXXX</strong>/...</code>
+                    </li>
+                    <li>O número após <code className="bg-blue-100 px-1 rounded text-xs">/l/</code> é o seu Location ID</li>
+                  </ol>
+                </div>
+
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={locationIdInput}
+                    onChange={e => setLocationIdInput(e.target.value)}
+                    placeholder="Ex: 12345678901234567"
+                    className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!locationIdInput.trim()) return;
+                      const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
+                      setSavingLocationId(true);
+                      try {
+                        const res = await fetch('/api/gbp/set-location', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ tenantId: resolvedTenantId, locationId: locationIdInput.trim() }),
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          setLocationIdSaved(true);
+                          setTimeout(() => {
+                            setLocationIdSaved(false);
+                            fetchGbpMetrics();
+                          }, 1500);
+                        }
+                      } catch (e) {
+                        console.error('Error saving location ID:', e);
+                      } finally {
+                        setSavingLocationId(false);
+                      }
+                    }}
+                    disabled={savingLocationId || !locationIdInput.trim()}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {savingLocationId ? (
+                      <><Loader2 size={15} className="animate-spin" />Salvando...</>
+                    ) : locationIdSaved ? (
+                      <><CheckCircle size={15} />Salvo!</>
+                    ) : (
+                      'Salvar'
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="text-center">
+                <button onClick={fetchGbpMetrics} className="inline-flex items-center gap-2 px-4 py-2 text-gray-500 hover:text-gray-700 text-sm">
+                  <RefreshCw size={14} />Tentar novamente
+                </button>
+              </div>
             </div>
           )}
         </div>
