@@ -9,7 +9,7 @@ import {
   Calendar, Users, ThumbsUp, ThumbsDown, Eye, Lightbulb, Target, Award,
   ArrowUp, ArrowDown, BarChart2, X, Info, Link2, Unlink, CheckSquare,
   Square, TrendingDown as TrendingDownIcon, Zap, MousePointer, Navigation,
-  Search, BarChart, PieChart, HelpCircle, Copy, BookOpen, Newspaper
+  Search, BarChart, PieChart, HelpCircle
 } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -357,206 +357,6 @@ const MetricInfoModal = ({ metric, onClose }: { metric: keyof typeof METRIC_EXPL
   return <ScoreDetailModal metricKey={metric} score={0} criteria={[]} onClose={onClose} />;
 };
 
-// ─── ReviewsTab: aba de avaliações com sugestão de resposta por IA ─────────────────
-
-const ReviewsTab: React.FC<{
-  placeData: GooglePlaceData | undefined;
-  businessName: string;
-  benchmark: { label: string; avgRating: number; avgReviews: number };
-}> = ({ placeData, businessName, benchmark }) => {
-  const [suggestedReplies, setSuggestedReplies] = useState<Record<number, string>>({});
-  const [loadingReply, setLoadingReply] = useState<Record<number, boolean>>({});
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-
-  const generateReply = async (review: GooglePlaceData['reviews'][0], index: number) => {
-    setLoadingReply(prev => ({ ...prev, [index]: true }));
-    try {
-      const res = await fetch('/api/suggest-review-reply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          businessName,
-          reviewerName: review.author_name,
-          rating: review.rating,
-          reviewText: review.text || '',
-        }),
-      });
-      const data = await res.json();
-      if (data.reply) {
-        setSuggestedReplies(prev => ({ ...prev, [index]: data.reply }));
-      }
-    } catch (e) {
-      console.error('Erro ao gerar resposta:', e);
-    } finally {
-      setLoadingReply(prev => ({ ...prev, [index]: false }));
-    }
-  };
-
-  const copyReply = (text: string, index: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedIndex(index);
-    setTimeout(() => setCopiedIndex(null), 2000);
-  };
-
-  const openGoogleReply = () => {
-    window.open('https://business.google.com/reviews', '_blank');
-  };
-
-  if (!placeData?.reviews || placeData.reviews.length === 0) {
-    return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
-        <Star className="mx-auto text-gray-300 mb-4" size={48} />
-        <h3 className="text-lg font-semibold text-gray-800 mb-2">Sem avaliações disponíveis</h3>
-        <p className="text-gray-500">As avaliações aparecerão aqui após o próximo diagnóstico.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Distribuição */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Star className="text-yellow-500" size={20} />
-          <h3 className="font-semibold text-gray-800">Distribuição das Avaliações</h3>
-        </div>
-        <div className="flex items-center gap-6">
-          <div className="text-center">
-            <div className="text-5xl font-bold text-gray-800">{placeData.rating?.toFixed(1)}</div>
-            <div className="flex justify-center mt-1">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} size={16} className={i < Math.round(placeData.rating || 0) ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'} />
-              ))}
-            </div>
-            <div className="text-sm text-gray-500 mt-1">{placeData.user_ratings_total?.toLocaleString('pt-BR')} avaliações</div>
-            <div className={`text-xs mt-1 font-medium ${placeData.rating && placeData.rating >= benchmark.avgRating ? 'text-green-600' : 'text-orange-500'}`}>
-              {placeData.rating && placeData.rating >= benchmark.avgRating ? '▲ Acima' : '▼ Abaixo'} da média do setor ({benchmark.avgRating}★)
-            </div>
-          </div>
-          <div className="flex-1">
-            {[5, 4, 3, 2, 1].map(star => {
-              const count = placeData.reviews?.filter(r => r.rating === star).length || 0;
-              const pct = placeData.reviews?.length ? Math.round((count / placeData.reviews.length) * 100) : 0;
-              return (
-                <div key={star} className="flex items-center gap-2 mb-1.5">
-                  <span className="text-xs text-gray-500 w-4 text-right">{star}</span>
-                  <Star size={12} className="text-yellow-400 fill-yellow-400 flex-shrink-0" />
-                  <div className="flex-1 bg-gray-100 rounded-full h-2">
-                    <div className="bg-yellow-400 h-2 rounded-full" style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="text-xs text-gray-500 w-8">{pct}%</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Avaliações com sugestão de resposta */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="text-blue-600" size={20} />
-            <h3 className="font-semibold text-gray-800">Avaliações Recentes</h3>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 bg-purple-50 border border-purple-100 px-2 py-1 rounded-lg flex items-center gap-1">
-              <Sparkles size={11} className="text-purple-500" /> IA sugere respostas
-            </span>
-            <button
-              onClick={openGoogleReply}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
-            >
-              <ExternalLink size={12} /> Responder no Google
-            </button>
-          </div>
-        </div>
-
-        <div className="space-y-5">
-          {placeData.reviews.slice(0, 10).map((review, index) => {
-            const isPositive = review.rating >= 4;
-            const isNegative = review.rating <= 2;
-            const hasSuggestion = !!suggestedReplies[index];
-            const isLoading = !!loadingReply[index];
-
-            return (
-              <div
-                key={index}
-                className={`rounded-xl border p-4 transition-all ${
-                  isNegative ? 'border-red-100 bg-red-50/30' :
-                  isPositive ? 'border-green-100 bg-green-50/30' :
-                  'border-gray-100 bg-gray-50/30'
-                }`}
-              >
-                {/* Cabeçalho da avaliação */}
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-gray-800 text-sm">{review.author_name}</span>
-                    <div className="flex items-center gap-0.5">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} size={12} className={i < review.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'} />
-                      ))}
-                    </div>
-                    <span className="text-gray-400 text-xs">{review.relative_time_description}</span>
-                    {isNegative && (
-                      <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">Resposta urgente</span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => generateReply(review, index)}
-                    disabled={isLoading}
-                    className="flex-shrink-0 flex items-center gap-1.5 text-xs px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors disabled:opacity-50"
-                  >
-                    {isLoading
-                      ? <><Loader2 size={12} className="animate-spin" /> Gerando...</>
-                      : <><Sparkles size={12} /> {hasSuggestion ? 'Regerar' : 'Sugerir resposta'}</>
-                    }
-                  </button>
-                </div>
-
-                {/* Texto da avaliação */}
-                {review.text
-                  ? <p className="text-gray-600 text-sm leading-relaxed mb-3">{review.text}</p>
-                  : <p className="text-gray-400 text-sm italic mb-3">Avaliação sem comentário</p>
-                }
-
-                {/* Resposta sugerida */}
-                {hasSuggestion && (
-                  <div className="mt-3 bg-white rounded-lg border border-purple-200 p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold text-purple-700 flex items-center gap-1">
-                        <Sparkles size={11} /> Resposta sugerida pela IA
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => copyReply(suggestedReplies[index], index)}
-                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded border border-gray-200 hover:border-gray-300 transition-colors"
-                        >
-                          {copiedIndex === index
-                            ? <><CheckCircle size={11} className="text-green-500" /> Copiado!</>
-                            : <><Copy size={11} /> Copiar</>
-                          }
-                        </button>
-                        <button
-                          onClick={openGoogleReply}
-                          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 px-2 py-1 rounded border border-blue-200 hover:border-blue-300 transition-colors"
-                        >
-                          <ExternalLink size={11} /> Publicar no Google
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-gray-700 text-sm leading-relaxed">{suggestedReplies[index]}</p>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
@@ -585,7 +385,6 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   const [todoItems, setTodoItems] = useState<TodoItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [clickedDimension, setClickedDimension] = useState<string | null>(null);
-  const [showDailyDigest, setShowDailyDigest] = useState(false);
 
   // Limpar erro de Place ID quando o businessProfile carrega com o Place ID preenchido
   useEffect(() => {
@@ -1216,125 +1015,6 @@ Responda APENAS em JSON puro (sem markdown):
         />
       )}
 
-      {/* Diário do Dia Modal */}
-      {showDailyDigest && latestDiagnostic?.ai_analysis?.dailyDigest && (() => {
-        const digest = latestDiagnostic.ai_analysis.dailyDigest;
-        const scores = latestDiagnostic.ai_analysis.scores;
-        const prevScoresModal = previousDiagnostic?.ai_analysis?.scores;
-        const delta = prevScoresModal ? scores.overall - prevScoresModal.overall : 0;
-        const generatedDate = digest.generatedAt
-          ? new Date(digest.generatedAt).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
-          : new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-        return (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowDailyDigest(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              {/* Header */}
-              <div className="bg-gradient-to-r from-amber-400 to-orange-400 rounded-t-2xl p-6 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Newspaper size={22} />
-                    <span className="font-bold text-lg">Diário do Dia</span>
-                  </div>
-                  <button onClick={() => setShowDailyDigest(false)} className="text-white/80 hover:text-white">
-                    <X size={20} />
-                  </button>
-                </div>
-                <p className="text-white/80 text-sm capitalize">{generatedDate}</p>
-              </div>
-
-              <div className="p-6 space-y-5">
-                {/* Score geral com delta */}
-                <div className="flex items-center justify-between bg-gray-50 rounded-xl p-4">
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Score Geral</p>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-4xl font-bold ${getScoreColor(scores.overall)}`}>{scores.overall}</span>
-                      <span className="text-gray-400 text-lg">/100</span>
-                    </div>
-                  </div>
-                  {delta !== 0 && (
-                    <div className={`flex flex-col items-center px-4 py-2 rounded-xl ${delta > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                      {delta > 0 ? <ArrowUp size={20} /> : <ArrowDown size={20} />}
-                      <span className="font-bold text-lg">{delta > 0 ? '+' : ''}{delta}</span>
-                      <span className="text-xs">vs ontem</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Scores por dimensão */}
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: 'Reputação', value: scores.reputation, prev: prevScoresModal?.reputation },
-                    { label: 'Visibilidade', value: scores.visibility, prev: prevScoresModal?.visibility },
-                    { label: 'Engajamento', value: scores.engagement, prev: prevScoresModal?.engagement },
-                  ].map(s => {
-                    const d = s.prev ? s.value - s.prev : 0;
-                    return (
-                      <div key={s.label} className="bg-gray-50 rounded-xl p-3 text-center">
-                        <p className="text-xs text-gray-500 mb-1">{s.label}</p>
-                        <p className={`text-2xl font-bold ${getScoreColor(s.value)}`}>{s.value}</p>
-                        {d !== 0 && (
-                          <p className={`text-xs mt-0.5 ${d > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {d > 0 ? '+' : ''}{d}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Novas avaliações */}
-                {digest.newReviewsCount > 0 && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Star className="text-yellow-500 fill-yellow-500" size={16} />
-                      <span className="font-semibold text-blue-800 text-sm">{digest.newReviewsCount} nova{digest.newReviewsCount > 1 ? 's' : ''} avaliação{digest.newReviewsCount > 1 ? 'ões' : ''} detectada{digest.newReviewsCount > 1 ? 's' : ''}</span>
-                    </div>
-                    {digest.newReviews?.slice(0, 3).map((r: any, i: number) => (
-                      <div key={i} className="mb-2 last:mb-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-700">{r.author_name}</span>
-                          <div className="flex">
-                            {[...Array(5)].map((_, j) => (
-                              <Star key={j} size={11} className={j < r.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'} />
-                            ))}
-                          </div>
-                        </div>
-                        {r.text && <p className="text-xs text-gray-500 mt-0.5">"{r.text.substring(0, 80)}{r.text.length > 80 ? '...' : ''}"</p>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Resumo da IA */}
-                {digest.summary && (
-                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Sparkles size={15} className="text-amber-600" />
-                      <span className="text-xs font-semibold text-amber-700">Análise do dia</span>
-                    </div>
-                    <p className="text-gray-700 text-sm leading-relaxed">{digest.summary}</p>
-                  </div>
-                )}
-
-                {/* Nota média e total */}
-                <div className="flex items-center justify-between text-sm text-gray-500 pt-2 border-t border-gray-100">
-                  <span>Nota média: <strong className="text-gray-800">{latestDiagnostic.place_data?.rating?.toFixed(1) || '-'}★</strong></span>
-                  <span>Total de avaliações: <strong className="text-gray-800">{latestDiagnostic.place_data?.user_ratings_total?.toLocaleString('pt-BR') || '-'}</strong></span>
-                </div>
-
-                <button
-                  onClick={() => setShowDailyDigest(false)}
-                  className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-medium transition-colors"
-                >
-                  Fechar
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
@@ -1380,15 +1060,6 @@ Responda APENAS em JSON puro (sem markdown):
             >
               <History size={16} />
               Histórico ({diagnostics.length})
-            </button>
-          )}
-          {latestDiagnostic?.ai_analysis?.dailyDigest && (
-            <button
-              onClick={() => setShowDailyDigest(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium"
-            >
-              <Newspaper size={16} />
-              Diário do Dia
             </button>
           )}
           <button
@@ -1466,15 +1137,6 @@ Responda APENAS em JSON puro (sem markdown):
               </div>
             </div>
             <div className="flex flex-col items-end gap-2">
-              {latestDiagnostic?.ai_analysis?.dailyDigest && (
-                <button
-                  onClick={() => setShowDailyDigest(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium"
-                >
-                  <Newspaper size={14} />
-                  Diário do Dia
-                </button>
-              )}
               {placeData.url && (
                 <a href={placeData.url} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm">
@@ -1803,9 +1465,8 @@ Responda APENAS em JSON puro (sem markdown):
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 mb-3">Clique em uma dimensão para ver dicas de melhoria</p>
-                <div style={{ outline: 'none' }} tabIndex={-1}>
                 <ResponsiveContainer width="100%" height={280}>
-                  <RadarChart data={radarData} style={{ outline: 'none' }} onClick={(data: any) => {
+                  <RadarChart data={radarData} onClick={(data: any) => {
                     if (data?.activeLabel) setClickedDimension(clickedDimension === data.activeLabel ? null : data.activeLabel);
                   }}>
                     <PolarGrid />
@@ -1820,7 +1481,6 @@ Responda APENAS em JSON puro (sem markdown):
                     <Radar name="Atual" dataKey="value" stroke="#7c3aed" fill="#7c3aed" fillOpacity={0.3} />
                   </RadarChart>
                 </ResponsiveContainer>
-                </div>
                 {/* Painel de detalhes ao clicar */}
                 {clickedDimension && dimensionDetails[clickedDimension] && (
                   <div className={`mt-4 border rounded-xl p-4 bg-${dimensionDetails[clickedDimension].color}-50 border-${dimensionDetails[clickedDimension].color}-200`}>
@@ -2053,11 +1713,77 @@ Responda APENAS em JSON puro (sem markdown):
 
       {/* ── Tab: Avaliações ── */}
       {activeTab === 'reviews' && (
-        <ReviewsTab
-          placeData={placeData}
-          businessName={placeData?.name || settings.companyName || ''}
-          benchmark={benchmark}
-        />
+        <div className="space-y-6">
+          {placeData?.reviews && placeData.reviews.length > 0 ? (
+            <>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Star className="text-yellow-500" size={20} />
+                  <h3 className="font-semibold text-gray-800">Distribuição das Avaliações</h3>
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="text-center">
+                    <div className="text-5xl font-bold text-gray-800">{placeData.rating?.toFixed(1)}</div>
+                    <div className="flex justify-center mt-1">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} size={16} className={i < Math.round(placeData.rating || 0) ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'} />
+                      ))}
+                    </div>
+                    <div className="text-sm text-gray-500 mt-1">{placeData.user_ratings_total?.toLocaleString('pt-BR')} avaliações</div>
+                    <div className={`text-xs mt-1 font-medium ${placeData.rating && placeData.rating >= benchmark.avgRating ? 'text-green-600' : 'text-orange-500'}`}>
+                      {placeData.rating && placeData.rating >= benchmark.avgRating ? '▲ Acima' : '▼ Abaixo'} da média do setor ({benchmark.avgRating}★)
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    {[5, 4, 3, 2, 1].map(star => {
+                      const count = placeData.reviews?.filter(r => r.rating === star).length || 0;
+                      const pct = placeData.reviews?.length ? Math.round((count / placeData.reviews.length) * 100) : 0;
+                      return (
+                        <div key={star} className="flex items-center gap-2 mb-1.5">
+                          <span className="text-xs text-gray-500 w-4 text-right">{star}</span>
+                          <Star size={12} className="text-yellow-400 fill-yellow-400 flex-shrink-0" />
+                          <div className="flex-1 bg-gray-100 rounded-full h-2">
+                            <div className="bg-yellow-400 h-2 rounded-full" style={{ width: `${pct}%` }}></div>
+                          </div>
+                          <span className="text-xs text-gray-500 w-8">{pct}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <MessageSquare className="text-blue-600" size={20} />
+                  <h3 className="font-semibold text-gray-800">Avaliações Recentes</h3>
+                </div>
+                <div className="space-y-4">
+                  {placeData.reviews.slice(0, 10).map((review, index) => (
+                    <div key={index} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="font-medium text-gray-800 text-sm">{review.author_name}</span>
+                        <div className="flex items-center gap-0.5">
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} size={12} className={i < review.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'} />
+                          ))}
+                        </div>
+                        <span className="text-gray-400 text-xs">{review.relative_time_description}</span>
+                      </div>
+                      {review.text && <p className="text-gray-600 text-sm leading-relaxed">{review.text}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+              <Star className="mx-auto text-gray-300 mb-4" size={48} />
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">Sem avaliações disponíveis</h3>
+              <p className="text-gray-500">As avaliações aparecerão aqui após o próximo diagnóstico.</p>
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── Tab: Dados Google (GBP) ── */}
