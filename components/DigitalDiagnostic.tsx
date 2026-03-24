@@ -311,7 +311,7 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
     setIsLoading(true);
     try {
       const localStorageTenantId = typeof window !== 'undefined' ? localStorage.getItem('hg_active_company_id') : null;
-      const resolvedTenantId = activeTenantId || localStorageTenantId || tenantId || userId;
+      const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || localStorageTenantId || tenantId || userId;
       const { data, error } = await supabase
         .from('digital_diagnostics')
         .select('*')
@@ -341,7 +341,7 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   };
 
   const checkGbpConnection = async () => {
-    const resolvedTenantId = activeTenantId || tenantId || userId;
+    const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
     if (!resolvedTenantId) return;
     try {
       const res = await fetch(`/api/gbp/metrics?tenantId=${resolvedTenantId}&months=1`);
@@ -354,7 +354,7 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   };
 
   const fetchGbpMetrics = async () => {
-    const resolvedTenantId = activeTenantId || tenantId || userId;
+    const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
     if (!resolvedTenantId) return;
     setGbpLoading(true);
     try {
@@ -370,12 +370,12 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   };
 
   const handleConnectGBP = () => {
-    const resolvedTenantId = activeTenantId || tenantId || userId;
+    const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
     window.location.href = `/api/gbp/auth?tenantId=${resolvedTenantId}&userId=${userId}`;
   };
 
   const handleDisconnectGBP = async () => {
-    const resolvedTenantId = activeTenantId || tenantId || userId;
+    const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
     await fetch('/api/gbp/disconnect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -772,7 +772,7 @@ Responda APENAS em JSON puro (sem markdown):
       const aiAnalysis = await generateAIAnalysis(dataToAnalyze, previousAnalysis, generatedTodos);
 
       setAnalysisStep('Salvando diagnóstico...');
-      const resolvedTenantId = activeTenantId || tenantId || userId;
+      const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
       const { error: saveError } = await supabase
         .from('digital_diagnostics')
         .insert({
