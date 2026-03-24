@@ -339,8 +339,26 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
         }));
         setDiagnostics(mapped);
         // Carregar to-do items do diagnóstico mais recente
-        if (mapped[0]?.ai_analysis?.todoItems) {
-          setTodoItems(mapped[0].ai_analysis.todoItems);
+        const latestAnalysis = mapped[0]?.ai_analysis;
+        if (latestAnalysis) {
+          const existingTodos: TodoItem[] = latestAnalysis.todoItems || [];
+          const existingIds = new Set(existingTodos.map((t: TodoItem) => t.id));
+          // Converter recomendações da IA em TodoItems
+          const recTodos: TodoItem[] = (latestAnalysis.recommendations || []).map((rec: { priority: string; title: string; description: string; impact: string }, i: number) => {
+            const id = `rec_${i}_${rec.title.replace(/\s+/g, '_').toLowerCase().slice(0, 20)}`;
+            if (existingIds.has(id)) return null;
+            return {
+              id,
+              title: rec.title,
+              description: rec.description,
+              impact: rec.impact,
+              impactScore: rec.priority === 'high' ? 20 : rec.priority === 'medium' ? 10 : 5,
+              priority: rec.priority as 'high' | 'medium' | 'low',
+              completed: false,
+              category: 'reputation' as const,
+            };
+          }).filter(Boolean) as TodoItem[];
+          setTodoItems([...existingTodos, ...recTodos]);
         }
       }
     } catch (e) {
@@ -1354,34 +1372,34 @@ Responda APENAS em JSON puro (sem markdown):
                       {items.map(item => (
                         <div
                           key={item.id}
-                          className={`flex items-start gap-3 p-4 rounded-lg border transition-all cursor-pointer ${
+                          className={`flex items-start gap-3 p-4 rounded-lg border transition-all ${
                             item.completed ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-200 hover:border-primary-200'
                           }`}
-                          onClick={() => toggleTodoItem(item.id)}
                         >
-                          <div className="mt-0.5 flex-shrink-0">
+                          <div className="mt-0.5 flex-shrink-0 cursor-pointer" onClick={() => toggleTodoItem(item.id)}>
                             {item.completed
                               ? <CheckSquare size={20} className="text-green-500" />
                               : <Square size={20} className="text-gray-400" />
                             }
                           </div>
                           <div className="flex-1">
-                            <h4 className={`font-medium text-sm ${item.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-                              {item.title}
-                            </h4>
-                            <p className="text-gray-500 text-sm mt-0.5">{item.description}</p>
-                            <div className="flex items-center gap-2 mt-2">
-                              <span className="flex items-center gap-1 text-green-600 text-xs font-medium">
-                                <TrendingUp size={11} />{item.impact}
-                              </span>
-                              <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                item.category === 'reputation' ? 'bg-yellow-100 text-yellow-700' :
-                                item.category === 'visibility' ? 'bg-blue-100 text-blue-700' :
-                                'bg-green-100 text-green-700'
+                            <div className="flex items-start gap-2">
+                              <span className={`px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 mt-0.5 ${
+                                item.priority === 'high' ? 'bg-red-100 text-red-700' :
+                                item.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
                               }`}>
-                                {item.category === 'reputation' ? 'Reputação' : item.category === 'visibility' ? 'Visibilidade' : 'Engajamento'}
+                                {item.priority === 'high' ? 'Alta' : item.priority === 'medium' ? 'Média' : 'Baixa'}
                               </span>
+                              <h4 className={`font-medium text-sm ${item.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                                {item.title}
+                              </h4>
                             </div>
+                            <p className="text-gray-500 text-sm mt-1">{item.description}</p>
+                            {item.impact && (
+                              <p className="text-green-600 text-xs mt-2 flex items-center gap-1">
+                                <Target size={12} />{item.impact}
+                              </p>
+                            )}
                           </div>
                         </div>
                       ))}
