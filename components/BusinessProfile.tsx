@@ -131,7 +131,22 @@ export default function BusinessProfile({ userId, onProfileUpdate }: BusinessPro
           .single();
 
         if (data) {
-          setProfile(data);
+          // Garantir que campos string nunca sejam null (evita crash em .length/.trim())
+          setProfile({
+            ...data,
+            company_name: data.company_name || '',
+            business_type: data.business_type || '',
+            business_description: data.business_description || '',
+            target_audience: data.target_audience || '',
+            brand_tone: data.brand_tone || 'profissional',
+            differentials: data.differentials || '',
+            main_pain_points: data.main_pain_points || '',
+            google_place_id: data.google_place_id || '',
+            instagram_handle: data.instagram_handle || '',
+            facebook_page: data.facebook_page || '',
+            website_url: data.website_url || '',
+            onboarding_score: data.onboarding_score || 0,
+          });
         }
       } catch (error) {
         console.log('Perfil não encontrado, criando novo...');
@@ -156,7 +171,7 @@ export default function BusinessProfile({ userId, onProfileUpdate }: BusinessPro
       return;
     }
 
-    if (profile.business_description.length > 1000) {
+    if ((profile.business_description || '').length > 1000) {
       showNotification('error', 'A descrição do negócio ultrapassou o limite de 1000 caracteres. Reduza o texto antes de salvar.');
       return;
     }
@@ -389,7 +404,7 @@ export default function BusinessProfile({ userId, onProfileUpdate }: BusinessPro
               rows={4}
               maxLength={1000}
               className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
-                profile.business_description.length > 1000
+                (profile.business_description || '').length > 1000
                   ? 'border-red-400 focus:ring-red-400 focus:border-red-400'
                   : 'border-slate-200'
               }`}
@@ -399,19 +414,19 @@ export default function BusinessProfile({ userId, onProfileUpdate }: BusinessPro
                 Mínimo recomendado: 50 caracteres
               </p>
               <p className={`text-xs font-medium ${
-                profile.business_description.length > 1000
+                (profile.business_description || '').length > 1000
                   ? 'text-red-500'
-                  : profile.business_description.length > 900
+                  : (profile.business_description || '').length > 900
                   ? 'text-amber-500'
                   : 'text-slate-400'
               }`}>
-                {profile.business_description.length}/1000
-                {profile.business_description.length > 1000 && (
+                {(profile.business_description || '').length}/1000
+                {(profile.business_description || '').length > 1000 && (
                   <span className="ml-1">⚠ Limite excedido</span>
                 )}
               </p>
             </div>
-            {profile.business_description.length > 1000 && (
+            {(profile.business_description || '').length > 1000 && (
               <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
                 ⚠ A descrição ultrapassou o limite de 1000 caracteres. Reduza o texto para salvar.
               </p>
