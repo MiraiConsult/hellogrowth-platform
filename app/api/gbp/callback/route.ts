@@ -8,6 +8,7 @@ const supabaseAdmin = createClient(
 );
 
 export async function GET(request: NextRequest) {
+  // Derivar a URL base da própria requisição para funcionar em qualquer ambiente
   const requestUrl = new URL(request.url);
   const appUrl = `${requestUrl.protocol}//${requestUrl.host}`;
 
@@ -17,22 +18,29 @@ export async function GET(request: NextRequest) {
     const stateRaw = searchParams.get('state');
     const error = searchParams.get('error');
 
+    console.log('[GBP Callback] Starting. code:', !!code, 'state:', !!stateRaw, 'error:', error);
+
     if (error) {
-      return redirectWithPage(appUrl, 'gbp_error', 'Conexão com Google cancelada');
+      console.error('[GBP Callback] OAuth error from Google:', error);
+      return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_error=${encodeURIComponent('Conexão com Google cancelada')}`);
     }
 
     if (!code || !stateRaw) {
-      return redirectWithPage(appUrl, 'gbp_error', 'Parâmetros inválidos');
+      console.error('[GBP Callback] Missing code or state');
+      return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_error=${encodeURIComponent('Parâmetros inválidos')}`);
     }
 
     let state: { tenantId: string; userId: string };
     try {
       state = JSON.parse(stateRaw);
+      console.log('[GBP Callback] Parsed state - tenantId:', state.tenantId, 'userId:', state.userId);
     } catch {
-      return redirectWithPage(appUrl, 'gbp_error', 'State inválido');
+      console.error('[GBP Callback] Failed to parse state:', stateRaw);
+      return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_error=${encodeURIComponent('State inválido')}`);
     }
 
     const redirectUri = `${appUrl}/api/gbp/callback`;
+    console.log('[GBP Callback] Using redirectUri:', redirectUri);
 
     const client = new OAuth2Client(
       process.env.GOOGLE_CLIENT_ID,
@@ -45,16 +53,19 @@ export async function GET(request: NextRequest) {
     try {
       const tokenResponse = await client.getToken(code);
       tokens = tokenResponse.tokens;
+      console.log('[GBP Callback] Got tokens. access_token:', !!tokens.access_token, 'refresh_token:', !!tokens.refresh_token);
     } catch (tokenErr: any) {
       console.error('[GBP Callback] Error getting tokens:', tokenErr.message);
-      return redirectWithPage(appUrl, 'gbp_error', 'Não foi possível obter token de acesso');
+      return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_error=${encodeURIComponent('Não foi possível obter token de acesso')}`);
     }
 
     if (!tokens.access_token) {
-      return redirectWithPage(appUrl, 'gbp_error', 'Não foi possível obter token de acesso');
+      console.error('[GBP Callback] No access_token in response');
+      return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_error=${encodeURIComponent('Não foi possível obter token de acesso')}`);
     }
 
-    // ── SALVAR TOKENS NO BANCO ──
+    // ── SALVAR TOKENS IMEDIATAMENTE (antes de qualquer chamada à API do GBP) ──
+    // Isso garante que os tokens são salvos mesmo se a busca de locations falhar
     const updateData: Record<string, any> = {
       gbp_access_token: tokens.access_token,
       gbp_refresh_token: tokens.refresh_token || null,
@@ -62,94 +73,132 @@ export async function GET(request: NextRequest) {
       gbp_connected_at: new Date().toISOString(),
     };
 
-    // Tentar update primeiro
-    const { data: updateResult, error: dbError1 } = await supabaseAdmin
+    console.log('[GBP Callback] Saving initial tokens for tenant:', state.tenantId);
+    const { error: dbError1 } = await supabaseAdmin
       .from('business_profile')
       .update(updateData)
-      .eq('tenant_id', state.tenantId)
-      .select('tenant_id');
+      .eq('tenant_id', state.tenantId);
 
     if (dbError1) {
-      console.error('[GBP Callback] Update error:', JSON.stringify(dbError1));
-    }
-
-    // Se update não afetou nenhuma linha (registro não existe), tentar insert
-    if (!updateResult || updateResult.length === 0) {
-      console.log('[GBP Callback] Update matched 0 rows, trying insert...');
-      const { error: insertErr } = await supabaseAdmin
+      console.error('[GBP Callback] Error saving initial tokens:', JSON.stringify(dbError1));
+      // Tentar upsert como fallback
+      const { error: dbError2 } = await supabaseAdmin
         .from('business_profile')
-        .insert({
+        .upsert({
           tenant_id: state.tenantId,
           user_id: state.userId,
           ...updateData,
-        });
+        }, { onConflict: 'tenant_id' });
 
-      if (insertErr) {
-        console.error('[GBP Callback] Insert also failed:', JSON.stringify(insertErr));
+      if (dbError2) {
+        console.error('[GBP Callback] Upsert also failed:', JSON.stringify(dbError2));
+      } else {
+        console.log('[GBP Callback] Upsert succeeded');
       }
+    } else {
+      console.log('[GBP Callback] Initial tokens saved successfully');
     }
 
-    // ── BUSCAR LOCATIONS (opcional) ──
+    // ── BUSCAR LOCATIONS (opcional, pode falhar sem impedir a conexão) ──
     let locations: any[] = [];
     let accountName = '';
 
     try {
-      const accountsResp = await fetch(
+      client.setCredentials(tokens);
+      const locationsResponse = await fetch(
         'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
-        { headers: { Authorization: `Bearer ${tokens.access_token}` } }
+        {
+          headers: {
+            Authorization: `Bearer ${tokens.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
       );
 
-      if (accountsResp.ok) {
-        const accountsData = await accountsResp.json();
+      console.log('[GBP Callback] Accounts API status:', locationsResponse.status);
+
+      if (locationsResponse.ok) {
+        const accountsData = await locationsResponse.json();
         const accounts = accountsData.accounts || [];
+        console.log('[GBP Callback] Found', accounts.length, 'accounts');
 
         if (accounts.length > 0) {
           accountName = accounts[0].name;
+          console.log('[GBP Callback] Using account:', accountName);
 
+          // Buscar locations do primeiro account
           const locResp = await fetch(
-            `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations?readMask=name,title,storefrontAddress,metadata`,
-            { headers: { Authorization: `Bearer ${tokens.access_token}` } }
+            `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations?readMask=name,title,storefrontAddress,websiteUri,phoneNumbers,regularHours,metadata`,
+            {
+              headers: {
+                Authorization: `Bearer ${tokens.access_token}`,
+                'Content-Type': 'application/json',
+              },
+            }
           );
+
+          console.log('[GBP Callback] Locations API status:', locResp.status);
 
           if (locResp.ok) {
             const locData = await locResp.json();
             locations = locData.locations || [];
+            console.log('[GBP Callback] Found', locations.length, 'locations');
+          } else {
+            const errText = await locResp.text();
+            console.error('[GBP Callback] Locations API error:', errText);
+          }
+        }
+      } else {
+        const errText = await locationsResponse.text();
+        console.error('[GBP Callback] Accounts API error:', errText);
+      }
+    } catch (apiErr: any) {
+      console.error('[GBP Callback] Error fetching GBP data:', apiErr.message);
+      // Não retornar erro — os tokens já foram salvos
+    }
+
+    // ── ATUALIZAR COM DADOS DE LOCATION (se disponível) ──
+    if (accountName || locations.length > 0) {
+      const locationUpdate: Record<string, any> = {};
+      if (accountName) locationUpdate.gbp_account_name = accountName;
+
+      // Se houver exatamente 1 location, preencher automaticamente
+      if (locations.length === 1) {
+        const loc = locations[0];
+        const locationId = loc.name?.split('/').pop();
+
+        locationUpdate.gbp_location_name = loc.name;
+        locationUpdate.gbp_location_title = loc.title;
+        locationUpdate.gbp_location_id = locationId;
+
+        if (loc.metadata?.mapsUri) {
+          locationUpdate.gbp_maps_uri = loc.metadata.mapsUri;
+        }
+        if (loc.metadata?.newReviewUri) {
+          const reviewUrl = loc.metadata.newReviewUri;
+          const placeIdMatch = reviewUrl.match(/placeid=([^&]+)/);
+          if (placeIdMatch) {
+            locationUpdate.google_place_id = placeIdMatch[1];
           }
         }
       }
-    } catch (apiErr: any) {
-      console.error('[GBP Callback] API error (non-blocking):', apiErr.message);
-    }
 
-    // Atualizar com dados de location
-    if (accountName || locations.length > 0) {
-      const locUpdate: Record<string, any> = {};
-      if (accountName) locUpdate.gbp_account_name = accountName;
+      if (Object.keys(locationUpdate).length > 0) {
+        console.log('[GBP Callback] Updating location data:', Object.keys(locationUpdate));
+        const { error: locDbErr } = await supabaseAdmin
+          .from('business_profile')
+          .update(locationUpdate)
+          .eq('tenant_id', state.tenantId);
 
-      if (locations.length === 1) {
-        const loc = locations[0];
-        locUpdate.gbp_location_name = loc.name;
-        locUpdate.gbp_location_title = loc.title;
-        locUpdate.gbp_location_id = loc.name?.split('/').pop();
-
-        if (loc.metadata?.mapsUri) locUpdate.gbp_maps_uri = loc.metadata.mapsUri;
-        if (loc.metadata?.newReviewUri) {
-          const match = loc.metadata.newReviewUri.match(/placeid=([^&]+)/);
-          if (match) locUpdate.google_place_id = match[1];
+        if (locDbErr) {
+          console.error('[GBP Callback] Error saving location data:', JSON.stringify(locDbErr));
         }
       }
-
-      if (Object.keys(locUpdate).length > 0) {
-        await supabaseAdmin
-          .from('business_profile')
-          .update(locUpdate)
-          .eq('tenant_id', state.tenantId);
-      }
     }
 
-    // Redirecionar com página HTML intermediária
+    // Se há múltiplas locations, redirecionar para seleção
     if (locations.length > 1) {
-      const locParam = encodeURIComponent(JSON.stringify(
+      const locationsParam = encodeURIComponent(JSON.stringify(
         locations.map(l => ({
           name: l.name,
           title: l.title,
@@ -158,72 +207,13 @@ export async function GET(request: NextRequest) {
           newReviewUri: l.metadata?.newReviewUri,
         }))
       ));
-      return redirectWithPage(appUrl, 'gbp_connected', 'true', `&gbp_select_location=true&locations=${locParam}&tenantId=${state.tenantId}`);
+      return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_connected=true&gbp_select_location=true&locations=${locationsParam}&tenantId=${state.tenantId}`);
     }
 
-    return redirectWithPage(appUrl, 'gbp_connected', 'true');
+    console.log('[GBP Callback] Success! Redirecting to digital-diagnostic');
+    return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_connected=true`);
   } catch (err: any) {
     console.error('[GBP Callback] Unhandled error:', err.message, err.stack);
-    return redirectWithPage(appUrl, 'gbp_error', 'Erro ao conectar com Google Business Profile');
+    return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_error=${encodeURIComponent('Erro ao conectar com Google Business Profile')}`);
   }
-}
-
-/**
- * Retorna uma página HTML intermediária que faz o redirect via JavaScript.
- * Isso resolve o problema do Next.js não conseguir redirecionar para URLs com hash (#).
- * O browser executa o JS e navega para a URL correta com o hash fragment.
- */
-function redirectWithPage(appUrl: string, paramKey: string, paramValue: string, extraParams: string = ''): NextResponse {
-  const targetUrl = `${appUrl}/#digital-diagnostic?${paramKey}=${encodeURIComponent(paramValue)}${extraParams}`;
-
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Conectando...</title>
-  <style>
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #f8fafc;
-      color: #64748b;
-    }
-    .loader {
-      text-align: center;
-    }
-    .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid #e2e8f0;
-      border-top: 3px solid #22c55e;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 16px;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-  </style>
-</head>
-<body>
-  <div class="loader">
-    <div class="spinner"></div>
-    <p>Conectando ao Google Business Profile...</p>
-  </div>
-  <script>
-    // Redirect via JavaScript para preservar o hash fragment
-    window.location.replace("${targetUrl}");
-  </script>
-</body>
-</html>`;
-
-  return new NextResponse(html, {
-    status: 200,
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
-  });
 }
