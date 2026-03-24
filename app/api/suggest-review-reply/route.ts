@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 
 export const maxDuration = 30;
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,13 +15,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Dados insuficientes' }, { status: 400 });
     }
 
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
-    if (!apiKey) {
-      return NextResponse.json({ error: 'API key não configurada' }, { status: 500 });
-    }
-
     const isNegative = rating <= 2;
     const isNeutral = rating === 3;
+    const isPositive = rating >= 4;
 
     const tone = isNegative
       ? 'empático, profissional e focado em resolver o problema'
@@ -53,14 +53,14 @@ Regras:
 
 Responda apenas com o texto da resposta, sem explicações adicionais.`;
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
-      generationConfig: { temperature: 0.7, maxOutputTokens: 400 },
-    } as any);
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4.1-mini',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 300,
+      temperature: 0.7,
+    });
 
-    const result = await model.generateContent(prompt);
-    const reply = result.response.text().trim();
+    const reply = completion.choices[0]?.message?.content?.trim() || '';
 
     return NextResponse.json({ reply });
   } catch (e: any) {

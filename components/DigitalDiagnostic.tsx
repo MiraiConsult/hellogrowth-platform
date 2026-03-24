@@ -1382,6 +1382,15 @@ Responda APENAS em JSON puro (sem markdown):
               Histórico ({diagnostics.length})
             </button>
           )}
+          {latestDiagnostic?.ai_analysis?.dailyDigest && (
+            <button
+              onClick={() => setShowDailyDigest(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium"
+            >
+              <Newspaper size={16} />
+              Diário do Dia
+            </button>
+          )}
           <button
             onClick={handleRunDiagnostic}
             disabled={isAnalyzing}
