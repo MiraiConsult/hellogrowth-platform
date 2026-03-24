@@ -18,10 +18,12 @@ export async function GET(request: NextRequest) {
     const error = searchParams.get('error');
 
     if (error) {
+      console.error('[GBP Callback] OAuth error from Google:', error);
       return redirectWithPage(appUrl, 'gbp_error', 'Conexão com Google cancelada');
     }
 
     if (!code || !stateRaw) {
+      console.error('[GBP Callback] Missing code or state');
       return redirectWithPage(appUrl, 'gbp_error', 'Parâmetros inválidos');
     }
 
@@ -29,8 +31,11 @@ export async function GET(request: NextRequest) {
     try {
       state = JSON.parse(stateRaw);
     } catch {
+      console.error('[GBP Callback] Invalid state JSON:', stateRaw);
       return redirectWithPage(appUrl, 'gbp_error', 'State inválido');
     }
+
+    console.log('[GBP Callback] Starting. tenantId:', state.tenantId, 'userId:', state.userId);
 
     const redirectUri = `${appUrl}/api/gbp/callback`;
 
@@ -45,48 +50,40 @@ export async function GET(request: NextRequest) {
     try {
       const tokenResponse = await client.getToken(code);
       tokens = tokenResponse.tokens;
+      console.log('[GBP Callback] Token exchange successful. Has access_token:', !!tokens.access_token, 'Has refresh_token:', !!tokens.refresh_token);
     } catch (tokenErr: any) {
       console.error('[GBP Callback] Error getting tokens:', tokenErr.message);
       return redirectWithPage(appUrl, 'gbp_error', 'Não foi possível obter token de acesso');
     }
 
     if (!tokens.access_token) {
+      console.error('[GBP Callback] No access_token in response');
       return redirectWithPage(appUrl, 'gbp_error', 'Não foi possível obter token de acesso');
     }
 
-    // ── SALVAR TOKENS NO BANCO ──
-    const updateData: Record<string, any> = {
+    // ── SALVAR TOKENS NO BANCO (UPSERT) ──
+    // Agora temos UNIQUE constraint em tenant_id, então upsert funciona
+    const upsertData: Record<string, any> = {
+      tenant_id: state.tenantId,
+      user_id: state.userId,
       gbp_access_token: tokens.access_token,
       gbp_refresh_token: tokens.refresh_token || null,
       gbp_token_expiry: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
       gbp_connected_at: new Date().toISOString(),
     };
 
-    // Tentar update primeiro
-    const { data: updateResult, error: dbError1 } = await supabaseAdmin
+    console.log('[GBP Callback] Attempting upsert for tenant_id:', state.tenantId);
+
+    const { data: upsertResult, error: upsertError } = await supabaseAdmin
       .from('business_profile')
-      .update(updateData)
-      .eq('tenant_id', state.tenantId)
-      .select('tenant_id');
+      .upsert(upsertData, { onConflict: 'tenant_id' })
+      .select('id, tenant_id');
 
-    if (dbError1) {
-      console.error('[GBP Callback] Update error:', JSON.stringify(dbError1));
-    }
-
-    // Se update não afetou nenhuma linha (registro não existe), tentar insert
-    if (!updateResult || updateResult.length === 0) {
-      console.log('[GBP Callback] Update matched 0 rows, trying insert...');
-      const { error: insertErr } = await supabaseAdmin
-        .from('business_profile')
-        .insert({
-          tenant_id: state.tenantId,
-          user_id: state.userId,
-          ...updateData,
-        });
-
-      if (insertErr) {
-        console.error('[GBP Callback] Insert also failed:', JSON.stringify(insertErr));
-      }
+    if (upsertError) {
+      console.error('[GBP Callback] Upsert error:', JSON.stringify(upsertError));
+      // Não falhar - tentar continuar mesmo com erro no save
+    } else {
+      console.log('[GBP Callback] Upsert success:', JSON.stringify(upsertResult));
     }
 
     // ── BUSCAR LOCATIONS (opcional) ──
@@ -102,6 +99,7 @@ export async function GET(request: NextRequest) {
       if (accountsResp.ok) {
         const accountsData = await accountsResp.json();
         const accounts = accountsData.accounts || [];
+        console.log('[GBP Callback] Found', accounts.length, 'accounts');
 
         if (accounts.length > 0) {
           accountName = accounts[0].name;
@@ -114,8 +112,15 @@ export async function GET(request: NextRequest) {
           if (locResp.ok) {
             const locData = await locResp.json();
             locations = locData.locations || [];
+            console.log('[GBP Callback] Found', locations.length, 'locations');
+          } else {
+            const locErr = await locResp.text();
+            console.error('[GBP Callback] Locations API error:', locResp.status, locErr);
           }
         }
+      } else {
+        const accErr = await accountsResp.text();
+        console.error('[GBP Callback] Accounts API error:', accountsResp.status, accErr);
       }
     } catch (apiErr: any) {
       console.error('[GBP Callback] API error (non-blocking):', apiErr.message);
@@ -140,10 +145,15 @@ export async function GET(request: NextRequest) {
       }
 
       if (Object.keys(locUpdate).length > 0) {
-        await supabaseAdmin
+        console.log('[GBP Callback] Updating location data:', JSON.stringify(locUpdate));
+        const { error: locError } = await supabaseAdmin
           .from('business_profile')
           .update(locUpdate)
           .eq('tenant_id', state.tenantId);
+
+        if (locError) {
+          console.error('[GBP Callback] Location update error:', JSON.stringify(locError));
+        }
       }
     }
 
@@ -161,6 +171,7 @@ export async function GET(request: NextRequest) {
       return redirectWithPage(appUrl, 'gbp_connected', 'true', `&gbp_select_location=true&locations=${locParam}&tenantId=${state.tenantId}`);
     }
 
+    console.log('[GBP Callback] Flow complete. Redirecting to app.');
     return redirectWithPage(appUrl, 'gbp_connected', 'true');
   } catch (err: any) {
     console.error('[GBP Callback] Unhandled error:', err.message, err.stack);
