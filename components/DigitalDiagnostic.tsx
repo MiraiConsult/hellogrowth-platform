@@ -1465,8 +1465,9 @@ Responda APENAS em JSON puro (sem markdown):
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 mb-3">Clique em uma dimensão para ver dicas de melhoria</p>
+                <div style={{ outline: 'none' }} tabIndex={-1}>
                 <ResponsiveContainer width="100%" height={280}>
-                  <RadarChart data={radarData} onClick={(data: any) => {
+                  <RadarChart data={radarData} style={{ outline: 'none' }} onClick={(data: any) => {
                     if (data?.activeLabel) setClickedDimension(clickedDimension === data.activeLabel ? null : data.activeLabel);
                   }}>
                     <PolarGrid />
@@ -1481,6 +1482,7 @@ Responda APENAS em JSON puro (sem markdown):
                     <Radar name="Atual" dataKey="value" stroke="#7c3aed" fill="#7c3aed" fillOpacity={0.3} />
                   </RadarChart>
                 </ResponsiveContainer>
+                </div>
                 {/* Painel de detalhes ao clicar */}
                 {clickedDimension && dimensionDetails[clickedDimension] && (
                   <div className={`mt-4 border rounded-xl p-4 bg-${dimensionDetails[clickedDimension].color}-50 border-${dimensionDetails[clickedDimension].color}-200`}>

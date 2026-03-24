@@ -38,6 +38,14 @@ input, textarea, select, button {
   }
 }
 
+/* Remove outline/focus ring from Recharts SVG charts */
+.recharts-wrapper,
+.recharts-wrapper svg,
+.recharts-wrapper *:focus,
+.recharts-surface {
+  outline: none !important;
+}
+
 /* Confetti animation for SpinWheel */
 @keyframes confetti-fall {
   0% {
