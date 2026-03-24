@@ -156,8 +156,8 @@ const METRIC_EXPLANATIONS = {
   reputation: {
     title: 'Reputação',
     icon: <Star size={18} className="text-yellow-500" />,
-    description: 'A Reputação mede como os clientes enxergam o seu negócio no Google. Ela é baseada em dois fatores: a nota média que você recebe nas avaliações (de 0 a 5 estrelas) e a quantidade total de avaliações que o seu perfil acumulou. Um negócio com nota alta mas poucas avaliações ainda tem reputação limitada — o Google valoriza tanto a qualidade quanto o volume.',
-    howCalculated: 'O cálculo divide 100 pontos em duas partes: até 60 pontos pela nota média (quanto mais próximo de 5 estrelas, mais pontos) e até 40 pontos pelo volume de avaliações (crescimento logarítmico — as primeiras avaliações valem mais do que as últimas). Por exemplo: nota 4.8★ com 199 avaliações gera aproximadamente 58 + 46 = 98 pontos.',
+    description: 'Mede a qualidade percebida do seu negócio com base na nota média e no volume de avaliações no Google.',
+    howCalculated: 'Combina a nota média (0-5 estrelas) com o volume total de avaliações. Uma nota alta com muitas avaliações resulta em score máximo.',
     howToImprove: [
       'Solicite avaliações de clientes satisfeitos após cada atendimento',
       'Responda a todas as avaliações, especialmente as negativas',
@@ -169,8 +169,8 @@ const METRIC_EXPLANATIONS = {
   visibility: {
     title: 'Visibilidade',
     icon: <Eye size={18} className="text-blue-500" />,
-    description: 'A Visibilidade mede o quão completo e bem configurado está o seu perfil no Google. Perfis incompletos aparecem menos nas buscas — o Google prioriza negócios que fornecem informações completas para os usuários. Cada informação que você adiciona aumenta as chances do seu negócio aparecer quando alguém busca por um serviço como o seu.',
-    howCalculated: 'O cálculo avalia 4 elementos do perfil: Fotos (até 30 pts — 0 fotos = 0, 1-2 fotos = 10, 3-9 fotos = 20, 10+ fotos = 30), Horários de funcionamento configurados (25 pts), Website vinculado (25 pts) e Telefone cadastrado (20 pts). Total máximo: 100 pontos.',
+    description: 'Mede o quão completo e otimizado está o seu perfil no Google, o que influencia diretamente o posicionamento nas buscas.',
+    howCalculated: 'Avalia a presença de: fotos (30pts), horários de funcionamento (25pts), website (25pts) e telefone (20pts).',
     howToImprove: [
       'Adicione pelo menos 10 fotos de qualidade do estabelecimento',
       'Configure os horários de funcionamento corretamente',
@@ -182,8 +182,8 @@ const METRIC_EXPLANATIONS = {
   engagement: {
     title: 'Engajamento',
     icon: <MessageSquare size={18} className="text-green-500" />,
-    description: 'O Engajamento mede se o seu negócio está ativo e gerando interações recentes no Google. Um perfil que não recebe novas avaliações há meses é visto pelo Google como menos relevante — mesmo que tenha uma nota alta. O algoritmo do Google valoriza negócios que mantmé atividade constante, pois indica que o negócio está funcionando e atendendo clientes.',
-    howCalculated: 'O cálculo combina dois fatores: avaliações recentes nos últimos 6 meses (até 50 pts, onde cada avaliação recente vale 5 pts) e volume total de avaliações (até 50 pts, crescimento logarítmico). O foco nas avaliações recentes significa que manter um fluxo constante é mais importante do que ter muitas avaliações antigas.',
+    description: 'Mede a atividade recente do seu perfil — se clientes estão interagindo com você nos últimos 6 meses.',
+    howCalculated: 'Combina o número de avaliações recentes (últimos 6 meses) com o volume total. Foca na atividade atual, não apenas histórica.',
     howToImprove: [
       'Mantenha um fluxo constante de novas avaliações',
       'Responda às avaliações para incentivar mais interações',
@@ -195,8 +195,8 @@ const METRIC_EXPLANATIONS = {
   overall: {
     title: 'Score Geral',
     icon: <Activity size={18} className="text-purple-500" />,
-    description: 'O Score Geral é um número único de 0 a 100 que resume toda a sua presença digital no Google. Ele combina as três dimensões — Reputação, Visibilidade e Engajamento — com pesos diferentes, pois cada uma tem um impacto diferente no posicionamento do seu negócio nas buscas. Quanto maior o score, mais chances o seu negócio tem de aparecer na frente dos concorrentes.',
-    howCalculated: 'O Score Geral é uma média ponderada das três dimensões: Reputação representa 40% do score (o fator mais importante — clientes confiam em avaliações), Visibilidade representa 35% (perfil completo aparece mais nas buscas) e Engajamento representa 25% (atividade recente indica negócio ativo). Fórmula: (Reputação × 0,4) + (Visibilidade × 0,35) + (Engajamento × 0,25).',
+    description: 'Score consolidado da sua presença digital no Google, combinando Reputação, Visibilidade e Engajamento.',
+    howCalculated: 'Média ponderada: Reputação (40%) + Visibilidade (35%) + Engajamento (25%).',
     howToImprove: [
       'Foque primeiro na dimensão com menor score',
       'Mantenha consistência nas ações ao longo do tempo',
@@ -225,136 +225,45 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-const ScoreDetailModal = ({
-  metricKey, score, prevScore, criteria, onClose
-}: {
-  metricKey: keyof typeof METRIC_EXPLANATIONS;
-  score: number;
-  prevScore?: number | null;
-  criteria: { label: string; pts: number; maxPts: number; ok: boolean }[];
-  onClose: () => void;
-}) => {
-  const info = METRIC_EXPLANATIONS[metricKey];
-  const scoreColor = score >= 80 ? 'text-green-600' : score >= 60 ? 'text-yellow-600' : 'text-red-600';
-  const scoreBg = score >= 80 ? 'bg-green-50 border-green-200' : score >= 60 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200';
-  const scoreLabel = score >= 80 ? 'Excelente' : score >= 60 ? 'Bom' : score >= 40 ? 'Regular' : 'Precisa melhorar';
-  const delta = prevScore != null ? score - prevScore : null;
-
+const MetricInfoModal = ({ metric, onClose }: { metric: keyof typeof METRIC_EXPLANATIONS; onClose: () => void }) => {
+  const info = METRIC_EXPLANATIONS[metric];
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="p-6 border-b border-gray-100">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-xl ${scoreBg} border`}>{info.icon}</div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">{info.title}</h3>
-                <p className="text-sm text-gray-500">Entenda como esse score é calculado</p>
-              </div>
-            </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1"><X size={20} /></button>
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full" onClick={e => e.stopPropagation()}>
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {info.icon}
+            <h3 className="text-lg font-semibold text-gray-800">{info.title}</h3>
           </div>
-          {/* Score display */}
-          <div className={`mt-4 rounded-xl p-4 border ${scoreBg} flex items-center justify-between`}>
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Score atual</p>
-              <div className="flex items-end gap-2">
-                <span className={`text-5xl font-bold ${scoreColor}`}>{score}</span>
-                <span className="text-gray-400 text-lg mb-1">/100</span>
-              </div>
-              <span className={`text-sm font-medium ${scoreColor}`}>{scoreLabel}</span>
-            </div>
-            {delta != null && (
-              <div className="text-right">
-                <p className="text-xs text-gray-500 mb-1">vs. diagnóstico anterior</p>
-                <span className={`text-2xl font-bold ${delta > 0 ? 'text-green-600' : delta < 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                  {delta > 0 ? '+' : ''}{delta}
-                </span>
-                <p className="text-xs text-gray-400">pontos</p>
-              </div>
-            )}
-          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
-
-        <div className="p-6 space-y-5">
-          {/* O que é */}
+        <div className="p-5 space-y-4">
           <div>
-            <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
-              <Info size={15} className="text-blue-500" /> O que é {info.title}?
-            </h4>
-            <p className="text-gray-600 text-sm leading-relaxed">{info.description}</p>
+            <p className="text-gray-700 text-sm leading-relaxed">{info.description}</p>
           </div>
-
-          {/* Como é calculado */}
-          <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-            <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
-              <BarChart size={15} /> Como esse número é calculado
-            </h4>
-            <p className="text-blue-700 text-sm leading-relaxed mb-4">{info.howCalculated}</p>
-            {/* Breakdown visual dos critérios */}
-            {criteria.length > 0 && (
-              <div className="space-y-3">
-                {criteria.map((c, i) => (
-                  <div key={i} className="bg-white rounded-lg p-3 border border-blue-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-gray-700 flex items-center gap-2">
-                        {c.ok
-                          ? <CheckCircle size={14} className="text-green-500 flex-shrink-0" />
-                          : <AlertTriangle size={14} className="text-yellow-500 flex-shrink-0" />
-                        }
-                        {c.label}
-                      </span>
-                      <span className={`text-sm font-bold ${c.ok ? 'text-green-600' : 'text-yellow-600'}`}>
-                        {c.pts} <span className="text-gray-400 font-normal">/ {c.maxPts} pts</span>
-                      </span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${c.ok ? 'bg-green-400' : 'bg-yellow-400'}`}
-                        style={{ width: `${Math.round((c.pts / c.maxPts) * 100)}%` }}
-                      />
-                    </div>
-                    {!c.ok && (
-                      <p className="text-xs text-yellow-700 mt-1">⚠️ Pode melhorar — veja as dicas abaixo</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+          <div className="bg-blue-50 rounded-lg p-4">
+            <h4 className="font-medium text-blue-800 text-sm mb-2 flex items-center gap-2"><BarChart size={14} /> Como é calculado</h4>
+            <p className="text-blue-700 text-sm">{info.howCalculated}</p>
           </div>
-
-          {/* Benchmark */}
-          <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
-            <h4 className="font-semibold text-amber-800 mb-2 flex items-center gap-2">
-              <Award size={15} /> Benchmark do setor
-            </h4>
-            <p className="text-amber-700 text-sm leading-relaxed">{info.benchmark}</p>
-          </div>
-
-          {/* Como melhorar */}
-          <div className="bg-green-50 rounded-xl p-4 border border-green-100">
-            <h4 className="font-semibold text-green-800 mb-3 flex items-center gap-2">
-              <TrendingUp size={15} /> Como melhorar sua {info.title}
-            </h4>
-            <ul className="space-y-2">
+          <div className="bg-green-50 rounded-lg p-4">
+            <h4 className="font-medium text-green-800 text-sm mb-2 flex items-center gap-2"><TrendingUp size={14} /> Como melhorar</h4>
+            <ul className="space-y-1">
               {info.howToImprove.map((tip, i) => (
                 <li key={i} className="text-green-700 text-sm flex items-start gap-2">
-                  <CheckCircle size={14} className="mt-0.5 flex-shrink-0 text-green-500" />
+                  <CheckCircle size={13} className="mt-0.5 flex-shrink-0" />
                   {tip}
                 </li>
               ))}
             </ul>
           </div>
+          <div className="bg-yellow-50 rounded-lg p-4">
+            <h4 className="font-medium text-yellow-800 text-sm mb-2 flex items-center gap-2"><Award size={14} /> Benchmark do setor</h4>
+            <p className="text-yellow-700 text-sm">{info.benchmark}</p>
+          </div>
         </div>
       </div>
     </div>
   );
-};
-
-// Mantido para compatibilidade mas não usado
-const MetricInfoModal = ({ metric, onClose }: { metric: keyof typeof METRIC_EXPLANATIONS; onClose: () => void }) => {
-  return <ScoreDetailModal metricKey={metric} score={0} criteria={[]} onClose={onClose} />;
 };
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -373,9 +282,6 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'evolution' | 'reviews' | 'google-data' | 'todo'>('overview');
   const [error, setError] = useState<string | null>(null);
   const [openMetricInfo, setOpenMetricInfo] = useState<keyof typeof METRIC_EXPLANATIONS | null>(null);
-  const [modalCriteria, setModalCriteria] = useState<{ label: string; pts: number; maxPts: number; ok: boolean }[]>([]);
-  const [modalPrevScore, setModalPrevScore] = useState<number | null>(null);
-  const [modalScore, setModalScore] = useState<number>(0);
   const [gbpMetrics, setGbpMetrics] = useState<GBPMetrics | null>(null);
   const [gbpLoading, setGbpLoading] = useState(false);
   const [gbpConnected, setGbpConnected] = useState(false);
@@ -384,6 +290,7 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   const [locationIdSaved, setLocationIdSaved] = useState(false);
   const [todoItems, setTodoItems] = useState<TodoItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [clickedDimension, setClickedDimension] = useState<string | null>(null);
 
   // Limpar erro de Place ID quando o businessProfile carrega com o Place ID preenchido
@@ -1006,13 +913,7 @@ Responda APENAS em JSON puro (sem markdown):
   return (
     <div className="p-6 min-h-screen bg-gray-50">
       {openMetricInfo && (
-        <ScoreDetailModal
-          metricKey={openMetricInfo}
-          score={modalScore}
-          prevScore={modalPrevScore}
-          criteria={modalCriteria}
-          onClose={() => setOpenMetricInfo(null)}
-        />
+        <MetricInfoModal metric={openMetricInfo} onClose={() => setOpenMetricInfo(null)} />
       )}
 
       {/* Header */}
@@ -1160,55 +1061,44 @@ Responda APENAS em JSON puro (sem markdown):
             { label: 'Visibilidade', score: aiAnalysis.scores.visibility, prev: prevScores?.visibility, icon: <Eye size={16} />, key: 'visibility' as const },
             { label: 'Engajamento', score: aiAnalysis.scores.engagement, prev: prevScores?.engagement, icon: <MessageSquare size={16} />, key: 'engagement' as const },
           ] as const).map((item) => {
+            const isExpanded = expandedCard === item.key;
+            const info = METRIC_EXPLANATIONS[item.key];
             const pd = latestDiagnostic?.place_data;
-
-            const buildCriteria = () => {
-              const c: { label: string; pts: number; maxPts: number; ok: boolean }[] = [];
-              if (item.key === 'reputation' && pd) {
-                const ratingPts = Math.round((pd.rating || 0) / 5 * 60);
-                const reviewPts = Math.min(40, Math.round(Math.log10((pd.user_ratings_total || 0) + 1) * 20));
-                c.push({ label: `Nota média (${pd.rating || 0}★)`, pts: ratingPts, maxPts: 60, ok: ratingPts >= 48 });
-                c.push({ label: `Volume de avaliações (${pd.user_ratings_total || 0})`, pts: reviewPts, maxPts: 40, ok: reviewPts >= 30 });
-              } else if (item.key === 'visibility' && pd) {
-                const photoCount = pd.photos?.length || 0;
-                const photoPts = photoCount >= 10 ? 30 : photoCount >= 3 ? 20 : photoCount >= 1 ? 10 : 0;
-                c.push({ label: `Fotos (${photoCount} fotos)`, pts: photoPts, maxPts: 30, ok: photoPts >= 30 });
-                c.push({ label: 'Horários configurados', pts: pd.opening_hours?.weekday_text?.length ? 25 : 0, maxPts: 25, ok: !!pd.opening_hours?.weekday_text?.length });
-                c.push({ label: 'Website vinculado', pts: pd.website ? 25 : 0, maxPts: 25, ok: !!pd.website });
-                c.push({ label: 'Telefone cadastrado', pts: pd.formatted_phone_number ? 20 : 0, maxPts: 20, ok: !!pd.formatted_phone_number });
-              } else if (item.key === 'engagement' && pd) {
-                const eng = calculateEngagementMetrics(pd);
-                const recentPts = Math.min(50, eng.recentReviewCount * 5);
-                const volumePts = Math.min(50, Math.round(Math.log10((pd.user_ratings_total || 0) + 1) * 15));
-                c.push({ label: `Avaliações recentes (${eng.recentReviewCount} nos últimos 6 meses)`, pts: recentPts, maxPts: 50, ok: recentPts >= 30 });
-                c.push({ label: `Volume total (${pd.user_ratings_total || 0} avaliações)`, pts: volumePts, maxPts: 50, ok: volumePts >= 30 });
-              } else if (item.key === 'overall') {
-                c.push({ label: `Reputação (peso 40%)`, pts: Math.round(aiAnalysis.scores.reputation * 0.4), maxPts: 40, ok: aiAnalysis.scores.reputation >= 70 });
-                c.push({ label: `Visibilidade (peso 35%)`, pts: Math.round(aiAnalysis.scores.visibility * 0.35), maxPts: 35, ok: aiAnalysis.scores.visibility >= 70 });
-                c.push({ label: `Engajamento (peso 25%)`, pts: Math.round(aiAnalysis.scores.engagement * 0.25), maxPts: 25, ok: aiAnalysis.scores.engagement >= 70 });
-              }
-              return c;
-            };
-
-            const handleCardClick = () => {
-              setModalScore(item.score);
-              setModalPrevScore(item.prev ?? null);
-              setModalCriteria(buildCriteria());
-              setOpenMetricInfo(item.key);
-            };
-
+            const criteria: { label: string; pts: number; maxPts: number; ok: boolean }[] = [];
+            if (item.key === 'reputation' && pd) {
+              const ratingPts = Math.round((pd.rating || 0) / 5 * 60);
+              const reviewPts = Math.min(40, Math.round(Math.log10((pd.user_ratings_total || 0) + 1) * 20));
+              criteria.push({ label: `Nota média (${pd.rating || 0}★)`, pts: ratingPts, maxPts: 60, ok: ratingPts >= 48 });
+              criteria.push({ label: `Volume de avaliações (${pd.user_ratings_total || 0})`, pts: reviewPts, maxPts: 40, ok: reviewPts >= 30 });
+            } else if (item.key === 'visibility' && pd) {
+              const photoCount = pd.photos?.length || 0;
+              const photoPts = photoCount >= 10 ? 30 : photoCount >= 3 ? 20 : photoCount >= 1 ? 10 : 0;
+              criteria.push({ label: `Fotos (${photoCount} fotos)`, pts: photoPts, maxPts: 30, ok: photoPts >= 30 });
+              criteria.push({ label: 'Horários configurados', pts: pd.opening_hours?.weekday_text?.length ? 25 : 0, maxPts: 25, ok: !!pd.opening_hours?.weekday_text?.length });
+              criteria.push({ label: 'Website vinculado', pts: pd.website ? 25 : 0, maxPts: 25, ok: !!pd.website });
+              criteria.push({ label: 'Telefone cadastrado', pts: pd.formatted_phone_number ? 20 : 0, maxPts: 20, ok: !!pd.formatted_phone_number });
+            } else if (item.key === 'engagement' && pd) {
+              const eng = calculateEngagementMetrics(pd);
+              const recentPts = Math.min(50, eng.recentReviewCount * 5);
+              const volumePts = Math.min(50, Math.round(Math.log10((pd.user_ratings_total || 0) + 1) * 15));
+              criteria.push({ label: `Avaliações recentes (${eng.recentReviewCount} nos últimos 6 meses)`, pts: recentPts, maxPts: 50, ok: recentPts >= 30 });
+              criteria.push({ label: `Volume total (${pd.user_ratings_total || 0} avaliações)`, pts: volumePts, maxPts: 50, ok: volumePts >= 30 });
+            } else if (item.key === 'overall') {
+              criteria.push({ label: `Reputação (peso 40%)`, pts: Math.round(aiAnalysis.scores.reputation * 0.4), maxPts: 40, ok: aiAnalysis.scores.reputation >= 70 });
+              criteria.push({ label: `Visibilidade (peso 35%)`, pts: Math.round(aiAnalysis.scores.visibility * 0.35), maxPts: 35, ok: aiAnalysis.scores.visibility >= 70 });
+              criteria.push({ label: `Engajamento (peso 25%)`, pts: Math.round(aiAnalysis.scores.engagement * 0.25), maxPts: 25, ok: aiAnalysis.scores.engagement >= 70 });
+            }
             return (
-              <div
-                key={item.key}
-                className={`rounded-xl border transition-all cursor-pointer hover:shadow-md hover:-translate-y-0.5 ${getScoreBg(item.score)}`}
-                onClick={handleCardClick}
-              >
-                <div className="p-4 select-none">
+              <div key={item.key} className={`rounded-xl border transition-all ${getScoreBg(item.score)} ${isExpanded ? 'col-span-2 md:col-span-4' : ''}`}>
+                <div
+                  className="p-4 cursor-pointer select-none"
+                  onClick={() => setExpandedCard(isExpanded ? null : item.key)}
+                >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-gray-600 text-xs font-medium">{item.label}</span>
                     <div className="flex items-center gap-1">
                       <span className="text-gray-400">{item.icon}</span>
-                      <Info size={13} className="text-gray-300" />
+                      <ChevronRight size={14} className={`text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
                     </div>
                   </div>
                   <div className="flex items-end gap-2">
@@ -1222,8 +1112,52 @@ Responda APENAS em JSON puro (sem markdown):
                       style={{ width: `${item.score}%` }}
                     />
                   </div>
-                  <p className="text-gray-400 text-xs mt-2">Clique para entender o cálculo</p>
+                  <p className="text-gray-400 text-xs mt-2">Clique para ver o cálculo</p>
                 </div>
+                {isExpanded && (
+                  <div className="border-t border-gray-200 p-4 bg-white rounded-b-xl">
+                    <p className="text-gray-600 text-xs mb-4">{info.description}</p>
+                    <div className="space-y-3 mb-4">
+                      {criteria.map((c, i) => (
+                        <div key={i}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-gray-700 flex items-center gap-1">
+                              {c.ok
+                                ? <CheckCircle size={12} className="text-green-500" />
+                                : <AlertTriangle size={12} className="text-yellow-500" />
+                              }
+                              {c.label}
+                            </span>
+                            <span className={`text-xs font-semibold ${c.ok ? 'text-green-600' : 'text-yellow-600'}`}>
+                              {c.pts}/{c.maxPts} pts
+                            </span>
+                          </div>
+                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${c.ok ? 'bg-green-400' : 'bg-yellow-400'}`}
+                              style={{ width: `${Math.round((c.pts / c.maxPts) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {info.benchmark && (
+                      <div className="bg-blue-50 rounded-lg p-3 mb-3">
+                        <p className="text-blue-700 text-xs flex items-start gap-1">
+                          <Info size={12} className="flex-shrink-0 mt-0.5" />{info.benchmark}
+                        </p>
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-700 mb-1">Como melhorar:</p>
+                      {info.howToImprove.slice(0, 2).map((tip, i) => (
+                        <p key={i} className="text-xs text-gray-600 flex items-start gap-1">
+                          <span className="text-primary-500 font-bold">→</span> {tip}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
