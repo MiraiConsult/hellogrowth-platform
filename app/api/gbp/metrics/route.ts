@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     // Buscar tokens do business_profile
     const { data: profile, error: profileError } = await supabaseAdmin
-      .from('business_profiles')
+      .from('business_profile')
       .select('gbp_access_token, gbp_refresh_token, gbp_token_expiry, gbp_location_id, gbp_account_name')
       .eq('tenant_id', tenantId)
       .maybeSingle();
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
         if (accessToken) {
           // Atualizar token no banco
           await supabaseAdmin
-            .from('business_profiles')
+            .from('business_profile')
             .update({ gbp_access_token: accessToken })
             .eq('tenant_id', tenantId);
         }

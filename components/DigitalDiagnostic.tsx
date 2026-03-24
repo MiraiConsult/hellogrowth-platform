@@ -297,11 +297,11 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
       if (hash.includes('gbp_connected=true')) {
         setGbpConnected(true);
         fetchGbpMetrics();
-        window.history.replaceState(null, '', window.location.pathname + '#mpd');
+        window.history.replaceState(null, '', window.location.pathname + '#digital-diagnostic');
       } else if (hash.includes('gbp_error=')) {
         const match = hash.match(/gbp_error=([^&]+)/);
         if (match) setError(decodeURIComponent(match[1]));
-        window.history.replaceState(null, '', window.location.pathname + '#mpd');
+        window.history.replaceState(null, '', window.location.pathname + '#digital-diagnostic');
       }
     }
   }, [userId, activeTenantId]);

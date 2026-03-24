@@ -20,18 +20,18 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('GBP OAuth error:', error);
-      return NextResponse.redirect(`${appUrl}/#mpd?gbp_error=${encodeURIComponent('Conexão com Google cancelada')}`);
+      return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_error=${encodeURIComponent('Conexão com Google cancelada')}`);
     }
 
     if (!code || !stateRaw) {
-      return NextResponse.redirect(`${appUrl}/#mpd?gbp_error=${encodeURIComponent('Parâmetros inválidos')}`);
+      return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_error=${encodeURIComponent('Parâmetros inválidos')}`);
     }
 
     let state: { tenantId: string; userId: string };
     try {
       state = JSON.parse(stateRaw);
     } catch {
-      return NextResponse.redirect(`${appUrl}/#mpd?gbp_error=${encodeURIComponent('State inválido')}`);
+      return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_error=${encodeURIComponent('State inválido')}`);
     }
 
     const redirectUri = `${appUrl}/api/gbp/callback`; // appUrl derivado da requisição
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     const { tokens } = await client.getToken(code);
 
     if (!tokens.access_token) {
-      return NextResponse.redirect(`${appUrl}/#mpd?gbp_error=${encodeURIComponent('Não foi possível obter token de acesso')}`);
+      return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_error=${encodeURIComponent('Não foi possível obter token de acesso')}`);
     }
 
     // Buscar as locations do Google Business Profile
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
 
     // Salvar no business_profiles
     const { error: dbError } = await supabaseAdmin
-      .from('business_profiles')
+      .from('business_profile')
       .update(updateData)
       .eq('tenant_id', state.tenantId);
 
@@ -143,15 +143,15 @@ export async function GET(request: NextRequest) {
           newReviewUri: l.metadata?.newReviewUri,
         }))
       ));
-      return NextResponse.redirect(`${appUrl}/#mpd?gbp_connected=true&gbp_select_location=true&locations=${locationsParam}&tenantId=${state.tenantId}`);
+      return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_connected=true&gbp_select_location=true&locations=${locationsParam}&tenantId=${state.tenantId}`);
     }
 
-    return NextResponse.redirect(`${appUrl}/#mpd?gbp_connected=true`);
+    return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_connected=true`);
   } catch (err: any) {
     console.error('GBP callback error:', err);
     // Derivar a URL base da própria requisição para funcionar em qualquer ambiente
     const requestUrl = new URL(request.url);
     const appUrl = `${requestUrl.protocol}//${requestUrl.host}`;
-    return NextResponse.redirect(`${appUrl}/#mpd?gbp_error=${encodeURIComponent('Erro ao conectar com Google Business Profile')}`);
+    return NextResponse.redirect(`${appUrl}/#digital-diagnostic?gbp_error=${encodeURIComponent('Erro ao conectar com Google Business Profile')}`);
   }
 }
