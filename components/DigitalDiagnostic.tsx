@@ -288,6 +288,13 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   const [todoItems, setTodoItems] = useState<TodoItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
 
+  // Limpar erro de Place ID quando o businessProfile carrega com o Place ID preenchido
+  useEffect(() => {
+    if (effectivePlaceId && error === 'Configure o Google Place ID no Perfil do Negócio para analisar sua presença digital.') {
+      setError(null);
+    }
+  }, [effectivePlaceId]);
+
   useEffect(() => {
     fetchDiagnostics();
     checkGbpConnection();
