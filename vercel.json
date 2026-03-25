@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/mpd-daily-update",
-      "schedule": "0 10 * * *"
+      "schedule": "0 10 * * 1"
     }
   ]
 }

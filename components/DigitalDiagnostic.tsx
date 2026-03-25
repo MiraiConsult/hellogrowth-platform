@@ -2259,8 +2259,8 @@ Responda APENAS em JSON puro (sem markdown):
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
           <Globe className="mx-auto text-gray-300 mb-4" size={48} />
           <h3 className="text-lg font-semibold text-gray-800 mb-2">Nenhum diagnóstico realizado</h3>
-          <p className="text-gray-500 mb-2">O diagnóstico é gerado automaticamente todos os dias às 7h.</p>
-          <p className="text-gray-400 text-sm">O primeiro diagnóstico será gerado amanhã de manhã.</p>
+          <p className="text-gray-500 mb-2">O diagnóstico é gerado automaticamente toda segunda-feira às 7h.</p>
+          <p className="text-gray-400 text-sm">O primeiro diagnóstico será gerado na próxima segunda-feira de manhã.</p>
         </div>
       )}
 
