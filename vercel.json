@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/check-stale-leads",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/mpd-daily-update",
+      "schedule": "0 10 * * 1"
     }
   ]
 }

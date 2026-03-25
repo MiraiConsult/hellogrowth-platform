@@ -807,6 +807,20 @@ Forneça de 3 a 5 recomendações priorizadas.
               </div>
             ))}
           </div>
+          <h3 className="text-xl font-semibold text-gray-800 mb-2">Em Breve</h3>
+          <p className="text-gray-500 max-w-sm mx-auto">
+            Os dados de desempenho do Google Business Profile (visualizações, ligações, rotas e palavras-chave) estarão disponíveis em breve.
+          </p>
+        </div>
+      )}
+
+      {/* No diagnostics yet */}
+      {!latestDiagnostic && !isAnalyzing && (effectivePlaceId || gbpConnected) && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+          <Globe className="mx-auto text-gray-300 mb-4" size={48} />
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">Nenhum diagnóstico realizado</h3>
+          <p className="text-gray-500 mb-2">O diagnóstico é gerado automaticamente toda segunda-feira às 7h.</p>
+          <p className="text-gray-400 text-sm">O primeiro diagnóstico será gerado na próxima segunda-feira de manhã.</p>
         </div>
       )}
 
