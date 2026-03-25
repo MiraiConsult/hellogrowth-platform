@@ -32,6 +32,53 @@ body {
   }
 }
 
+/* Fix input text color in dark mode - prevent white text on white background */
+input,
+textarea,
+select,
+input::placeholder,
+textarea::placeholder {
+  color-scheme: light;
+}
+
+input,
+textarea,
+select {
+  color: #1a1a1a !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Exception: inputs that are explicitly styled for dark backgrounds */
+.bg-gray-800 input,
+.bg-gray-800 textarea,
+.bg-gray-800 select,
+.bg-gray-900 input,
+.bg-gray-900 textarea,
+.bg-gray-900 select,
+input.bg-gray-800,
+textarea.bg-gray-800,
+select.bg-gray-800,
+input.bg-gray-900,
+textarea.bg-gray-900,
+select.bg-gray-900 {
+  color: #f3f4f6 !important;
+}
+
+.bg-gray-800 input::placeholder,
+.bg-gray-800 textarea::placeholder,
+.bg-gray-900 input::placeholder,
+.bg-gray-900 textarea::placeholder,
+input.bg-gray-800::placeholder,
+textarea.bg-gray-800::placeholder,
+input.bg-gray-900::placeholder,
+textarea.bg-gray-900::placeholder {
+  color: #6b7280 !important;
+}
+
 /* Remove outline/focus ring from Recharts SVG charts */
 .recharts-wrapper,
 .recharts-wrapper svg,
