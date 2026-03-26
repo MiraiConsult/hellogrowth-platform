@@ -32,7 +32,7 @@ html {
   color-scheme: light;
 }
 
-input, textarea, select, button {
+input, textarea, select {
   color-scheme: light;
   color: #111827 !important;
   background-color: inherit;
