@@ -27,6 +27,8 @@ function TrialSetupContent() {
   const [email, setEmail] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [checkingEmail, setCheckingEmail] = useState(false);
   const [companyNames, setCompanyNames] = useState<string[]>(new Array(userCount).fill(''));
   const [step, setStep] = useState<'form' | 'success'>('form');
 
@@ -39,9 +41,38 @@ function TrialSetupContent() {
     setCompanyNames(new Array(userCount).fill(''));
   }, [plan, userCount, router]);
 
+  const checkEmailExists = async (emailToCheck: string) => {
+    if (!emailToCheck.trim() || !emailToCheck.includes('@')) {
+      setEmailError(null);
+      return;
+    }
+    setCheckingEmail(true);
+    try {
+      const res = await fetch('/api/onboarding/check-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailToCheck.toLowerCase().trim() })
+      });
+      const data = await res.json();
+      if (data.exists) {
+        setEmailError('Este e-mail já possui uma conta ativa. Por favor, faça login.');
+      } else {
+        setEmailError(null);
+      }
+    } catch {
+      setEmailError(null);
+    } finally {
+      setCheckingEmail(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!email.trim() || !email.includes('@')) {
       alert('Por favor, informe um e-mail válido.');
+      return;
+    }
+    if (emailError) {
+      alert(emailError);
       return;
     }
     if (companyNames.some(name => !name.trim())) {
@@ -213,13 +244,28 @@ function TrialSetupContent() {
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="block w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setEmailError(null);
+                }}
+                onBlur={() => checkEmailExists(email)}
+                className={`block w-full px-4 py-4 bg-slate-50 border rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:border-transparent transition-all ${
+                  emailError ? 'border-red-400 focus:ring-red-400' : 'border-slate-200 focus:ring-emerald-500'
+                }`}
                 placeholder="seu@email.com"
               />
-              <p className="text-xs text-slate-500 mt-1">
-                Este será o e-mail de login da sua conta.
-              </p>
+              {emailError ? (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <AlertCircle size={14} className="text-red-500 flex-shrink-0" />
+                  <p className="text-xs text-red-500 font-medium">{emailError}</p>
+                </div>
+              ) : checkingEmail ? (
+                <p className="text-xs text-slate-400 mt-1">Verificando e-mail...</p>
+              ) : (
+                <p className="text-xs text-slate-500 mt-1">
+                  Este será o e-mail de login da sua conta.
+                </p>
+              )}
             </div>
 
             {/* Company names */}
