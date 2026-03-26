@@ -10,9 +10,9 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+    --foreground-rgb: 0, 0, 0;
+    --background-start-rgb: 255, 255, 255;
+    --background-end-rgb: 255, 255, 255;
   }
 }
 
@@ -26,10 +26,20 @@ body {
     rgb(var(--background-start-rgb));
 }
 
-/* Forçar modo claro em elementos de formulário para evitar
+/* Forçar modo claro em toda a aplicação para evitar
    problemas com o modo noturno/escuro do navegador */
+html {
+  color-scheme: light;
+}
+
 input, textarea, select, button {
   color-scheme: light;
+  color: #111827 !important;
+  background-color: inherit;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #9ca3af !important;
 }
 
 @layer utilities {
