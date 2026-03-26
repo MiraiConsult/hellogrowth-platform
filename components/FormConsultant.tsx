@@ -2280,8 +2280,8 @@ Responda agora:`;
 
           {/* Product Selection */}
           {currentStep === 'products' && businessContext.productSelection === 'manual' && products.length > 0 && (
-            <div className="p-6 bg-white border-t border-slate-200">
-              <div className="flex gap-2 mb-4">
+            <div className="flex flex-col bg-white border-t border-slate-200" style={{ maxHeight: '60vh' }}>
+              <div className="flex gap-2 p-4 pb-2 flex-shrink-0">
                 <button
                   onClick={() => {
                     const allProductIds = products.map(p => p.id);
@@ -2300,35 +2300,41 @@ Responda agora:`;
                   Desmarcar Todos
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-3 mb-4 max-h-96 overflow-y-auto">
-                {products.map(product => (
-                  <button
-                    key={product.id}
-                    onClick={() => {
-                      const newSelected = businessContext.selectedProducts.includes(product.id)
-                        ? businessContext.selectedProducts.filter(id => id !== product.id)
-                        : [...businessContext.selectedProducts, product.id];
-                      setBusinessContext(prev => ({ ...prev, selectedProducts: newSelected }));
-                    }}
-                    className={`p-4 rounded-xl border-2 text-left transition-all ${
-                      businessContext.selectedProducts.includes(product.id)
-                        ? 'border-emerald-500 bg-emerald-50'
-                        : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <p className="font-medium text-slate-800">{product.name}</p>
-                    <p className="text-sm text-emerald-600">R$ {product.value.toLocaleString('pt-BR')}</p>
-                  </button>
-                ))}
+              <div className="flex-1 overflow-y-auto px-4 pb-2 min-h-0">
+                <div className="grid grid-cols-2 gap-3">
+                  {products.map(product => (
+                    <button
+                      key={product.id}
+                      onClick={() => {
+                        const newSelected = businessContext.selectedProducts.includes(product.id)
+                          ? businessContext.selectedProducts.filter(id => id !== product.id)
+                          : [...businessContext.selectedProducts, product.id];
+                        setBusinessContext(prev => ({ ...prev, selectedProducts: newSelected }));
+                      }}
+                      className={`p-4 rounded-xl border-2 text-left transition-all ${
+                        businessContext.selectedProducts.includes(product.id)
+                          ? 'border-emerald-500 bg-emerald-50'
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <p className="font-medium text-slate-800">{product.name}</p>
+                      <p className="text-sm text-emerald-600">R$ {product.value.toLocaleString('pt-BR')}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
-              {businessContext.selectedProducts.length > 0 && (
-                <button
-                  onClick={() => handleOptionClick('confirm_products', `${businessContext.selectedProducts.length} produtos selecionados`)}
-                  className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
-                >
-                  Confirmar Seleção ({businessContext.selectedProducts.length} produtos)
-                </button>
-              )}
+              <div className="p-4 pt-2 flex-shrink-0 border-t border-slate-100">
+                {businessContext.selectedProducts.length > 0 ? (
+                  <button
+                    onClick={() => handleOptionClick('confirm_products', `${businessContext.selectedProducts.length} produtos selecionados`)}
+                    className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
+                  >
+                    Confirmar Seleção ({businessContext.selectedProducts.length} produtos)
+                  </button>
+                ) : (
+                  <p className="text-center text-sm text-slate-400">Selecione pelo menos um produto para continuar</p>
+                )}
+              </div>
             </div>
           )}
         </div>
