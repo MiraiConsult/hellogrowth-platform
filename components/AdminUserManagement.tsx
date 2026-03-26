@@ -447,7 +447,10 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
     if (!selectedClient) return;
     setIsSaving(true);
     try {
-      const trialEndAt = companyForm.trialEndAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const isTrialing = companyForm.subscriptionStatus === 'trialing';
+      const trialEndAt = isTrialing
+        ? (companyForm.trialEndAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString())
+        : null;
       const res = await fetch('/api/admin/clients', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -458,7 +461,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             plan: companyForm.plan.replace('hello_', ''),
             planAddons: companyForm.addons,
             subscriptionStatus: companyForm.subscriptionStatus,
-            trialModel: companyForm.trialModel || null,
+            trialModel: isTrialing ? (companyForm.trialModel || null) : null,
             trialEndAt,
             maxUsers: companyForm.maxUsers,
           },
