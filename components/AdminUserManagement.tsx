@@ -307,13 +307,14 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       } else {
         const { data: existing } = await supabase.from('users').select('id').eq('email', clientForm.email.toLowerCase()).single();
         if (existing) throw new Error('E-mail já cadastrado.');
+        const companyId = crypto.randomUUID();
         const userData: any = {
           name: clientForm.name,
           email: clientForm.email.toLowerCase().trim(),
           phone: clientForm.phone || null,
           company_name: clientForm.companyName || clientForm.name,
           plan: clientForm.plan,
-          tenant_id: crypto.randomUUID(),
+          tenant_id: companyId,
           role: 'admin',
           is_owner: true,
           password: '12345',
@@ -328,7 +329,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         if (error) throw error;
         if (createdUser) {
           // Sempre criar empresa e vínculo user_companies, independente do plano
-          const companyId = crypto.randomUUID();
+          // companyId já foi gerado acima e usado como tenant_id do usuário
           const isTrialModelA = clientForm.plan === 'trial' && newClientTrialModel === 'model_a';
           const trialEndAt = isTrialModelA
             ? new Date(Date.now() + newClientTrialDays * 24 * 60 * 60 * 1000).toISOString()
