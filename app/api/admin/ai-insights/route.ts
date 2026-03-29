@@ -22,6 +22,10 @@ export async function POST(request: NextRequest) {
       return await analyzeCommentThemes(data);
     }
 
+    if (type === 'template_description') {
+      return await generateTemplateDescription(body);
+    }
+
     return NextResponse.json({ error: 'type inválido' }, { status: 400 });
   } catch (error: any) {
     console.error('[admin/ai-insights] Error:', error);
@@ -103,6 +107,23 @@ Responda APENAS com o JSON, sem markdown.`;
   return NextResponse.json({ analysis, generatedAt: new Date().toISOString() });
 }
 
+// ─── Gerar descrição de template ─────────────────────────────────────────────
+async function generateTemplateDescription(body: any) {
+  const { templateName, tipoVenda, ramoNegocio, questions, objective } = body;
+  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+  const tipoLabel = tipoVenda === 'pre_venda' ? 'pré-venda (antes da compra/contratação)' : 'pós-venda (após a compra/atendimento)';
+
+  const prompt = `Você é especialista em pesquisas de satisfação e NPS para pequenas e médias empresas brasileiras.\n\nCrie uma descrição concisa e persuasiva (máximo 2 frases) para um template de pesquisa:\n- Nome: ${templateName}\n- Tipo: ${tipoLabel}\n- Ramo: ${ramoNegocio || 'não especificado'}\n- Perguntas: ${questions || 'não especificadas'}\n\nExplique QUANDO usar e QUAL benefício traz. Português brasileiro, tom profissional. Responda APENAS com a descrição.`;
+
+  const result = await model.generateContent(prompt);
+  const description = result.response.text().trim();
+
+  return NextResponse.json({ description });
+}
+
 // ─── Análise de um tenant específico ─────────────────────────────────────────
 async function generateTenantAnalysis(tenantId: string, data: any) {
   const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
@@ -148,58 +169,6 @@ Gere uma análise em JSON:
     }
   ],
   "script_abordagem": "Script curto de como abordar esse cliente em uma reunião de CS (2-3 frases)"
-}
-
-Responda APENAS com o JSON, sem markdown.`;
-
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
-
-  let analysis;
-  try {
-    const clean = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
-    analysis = JSON.parse(clean);
-  } catch {
-    analysis = { raw: text, error: 'parse_failed' };
-  }
-
-  return NextResponse.json({ analysis, generatedAt: new Date().toISOString() });
-}
-
-// ─── Análise de temas em comentários ─────────────────────────────────────────
-async function analyzeCommentThemes(data: any) {
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-  const { texts, context } = data;
-
-  if (!texts || texts.length === 0) {
-    return NextResponse.json({ themes: [], summary: 'Sem comentários para analisar.' });
-  }
-
-  const prompt = `Analise os seguintes comentários de clientes finais de pequenos negócios brasileiros e identifique os principais temas e sentimentos.
-
-Contexto: ${context || 'Respostas de pesquisas NPS de múltiplos negócios'}
-
-Comentários (${texts.length} no total):
-${texts.slice(0, 60).map((t: string, i: number) => `${i + 1}. "${t}"`).join('\n')}
-
-Retorne um JSON com:
-{
-  "temas_identificados": [
-    {
-      "tema": "Nome do tema (ex: Atendimento, Qualidade do produto, Preço, etc.)",
-      "frequencia_estimada": "alta | média | baixa",
-      "sentimento_dominante": "positivo | negativo | neutro",
-      "exemplos": ["exemplo 1", "exemplo 2"],
-      "insight": "O que esse tema revela sobre os negócios"
-    }
-  ],
-  "palavras_chave_positivas": ["palavra1", "palavra2", "palavra3"],
-  "palavras_chave_negativas": ["palavra1", "palavra2"],
-  "resumo_sentimento": "Parágrafo resumindo o sentimento geral dos clientes finais",
-  "oportunidades_identificadas": ["oportunidade 1", "oportunidade 2", "oportunidade 3"]
 }
 
 Responda APENAS com o JSON, sem markdown.`;

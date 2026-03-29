@@ -86,7 +86,7 @@ function QuestionTypeBadge({ type }: { type: string }) {
 export default function AdminIntelligence({ isDark, tenants, globalStats }: AdminIntelligenceProps) {
   const t = isDark ? DARK : LIGHT;
 
-  const [activeSection, setActiveSection] = useState<'overview' | 'trends' | 'surveys' | 'products' | 'clients'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'trends' | 'products' | 'clients'>('overview');
 
   // Tendências
   const [trendsData, setTrendsData] = useState<any>(null);
@@ -218,7 +218,7 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
           {[
             { id: 'overview', label: 'Visão Geral', icon: <BarChart2 size={14} /> },
             { id: 'trends', label: 'Tendências NPS', icon: <TrendingUp size={14} /> },
-            { id: 'surveys', label: 'Pesquisas & Formulários', icon: <FileText size={14} /> },
+
             { id: 'products', label: 'Produtos & Preços', icon: <Package size={14} /> },
             { id: 'clients', label: 'Análise por Cliente', icon: <Users size={14} /> },
           ].map(sec => (
