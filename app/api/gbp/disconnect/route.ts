@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { error: dbError } = await supabaseAdmin
-      .from('business_profiles')
+      .from('business_profile')
       .update({
         gbp_access_token: null,
         gbp_refresh_token: null,
