@@ -56,6 +56,25 @@ async function getOverview() {
     .from('nps_games')
     .select('tenant_id, type, status, created_at');
 
+  // Buscar nomes das empresas (tenant_id = companies.id = users.id)
+  const { data: companies } = await supabase
+    .from('companies')
+    .select('id, name, plan, subscription_status, created_at');
+
+  // Mapa de tenant_id -> nome da empresa
+  const companyNameMap: Record<string, string> = {};
+  const companyPlanMap: Record<string, string> = {};
+  const companyStatusMap: Record<string, string> = {};
+  const companyCreatedMap: Record<string, string> = {};
+  for (const c of companies || []) {
+    if (c.id) {
+      companyNameMap[c.id] = c.name || c.id.substring(0, 8);
+      companyPlanMap[c.id] = c.plan || '';
+      companyStatusMap[c.id] = c.subscription_status || '';
+      companyCreatedMap[c.id] = c.created_at || '';
+    }
+  }
+
   // Agrupar por tenant
   const tenantMap: Record<string, any> = {};
 
@@ -185,8 +204,18 @@ async function getOverview() {
       : 0;
     const healthScore = Math.round(npsHealth * 0.4 + leadsHealth * 0.3 + activityHealth * 0.3);
 
+    // Calcular tempo de uso em dias
+    const createdAt = companyCreatedMap[t.tenantId];
+    const daysAsClient = createdAt
+      ? Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
     return {
       tenantId: t.tenantId,
+      companyName: companyNameMap[t.tenantId] || t.tenantId.substring(0, 8),
+      plan: companyPlanMap[t.tenantId] || '',
+      subscriptionStatus: companyStatusMap[t.tenantId] || '',
+      daysAsClient,
       nps: {
         score: npsScore,
         avgScore,
