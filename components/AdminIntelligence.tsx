@@ -3,9 +3,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   TrendingUp, Brain, BarChart2, MessageSquare,
   Loader2, RefreshCw, ChevronDown, ChevronUp, Zap, AlertTriangle,
-  CheckCircle, Star, Target, Lightbulb, Globe, ArrowUp, ArrowDown,
+  CheckCircle, Star, Target, Lightbulb, ArrowUp, ArrowDown,
   ThumbsUp, ThumbsDown, Activity, Users, DollarSign, Award, Minus,
-  Calendar, Package
+  Calendar, FileText, Package, Search, Eye, Tag, ShoppingBag
 } from 'lucide-react';
 
 interface AdminIntelligenceProps {
@@ -15,35 +15,18 @@ interface AdminIntelligenceProps {
 }
 
 const DARK = {
-  bg: 'bg-gray-950',
-  surface: 'bg-gray-900',
-  border: 'border-gray-800',
-  text: 'text-white',
-  textSub: 'text-gray-400',
-  textMuted: 'text-gray-500',
-  label: 'text-gray-400',
-  kpi: 'bg-gray-900 border-gray-800',
-  card: 'bg-gray-900 border-gray-800',
-  cardInner: 'bg-gray-800/50 border-gray-700',
-  badge: 'bg-gray-800 text-gray-300',
-  tableRow: 'hover:bg-gray-800/30',
-  divider: 'divide-gray-800',
+  bg: 'bg-gray-950', surface: 'bg-gray-900', border: 'border-gray-800',
+  text: 'text-white', textSub: 'text-gray-400', textMuted: 'text-gray-500',
+  label: 'text-gray-400', kpi: 'bg-gray-900 border-gray-800', card: 'bg-gray-900 border-gray-800',
+  cardInner: 'bg-gray-800/50 border-gray-700', badge: 'bg-gray-800 text-gray-300',
+  tableRow: 'hover:bg-gray-800/30', input: 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500',
 };
-
 const LIGHT = {
-  bg: 'bg-slate-50',
-  surface: 'bg-white',
-  border: 'border-slate-200',
-  text: 'text-slate-900',
-  textSub: 'text-slate-500',
-  textMuted: 'text-slate-400',
-  label: 'text-slate-500',
-  kpi: 'bg-white border-slate-200',
-  card: 'bg-white border-slate-200',
-  cardInner: 'bg-slate-50 border-slate-200',
-  badge: 'bg-slate-100 text-slate-600',
-  tableRow: 'hover:bg-slate-50',
-  divider: 'divide-slate-100',
+  bg: 'bg-slate-50', surface: 'bg-white', border: 'border-slate-200',
+  text: 'text-slate-900', textSub: 'text-slate-500', textMuted: 'text-slate-400',
+  label: 'text-slate-500', kpi: 'bg-white border-slate-200', card: 'bg-white border-slate-200',
+  cardInner: 'bg-slate-50 border-slate-200', badge: 'bg-slate-100 text-slate-600',
+  tableRow: 'hover:bg-slate-50', input: 'bg-white border-slate-300 text-slate-900 placeholder-slate-400',
 };
 
 function NpsGauge({ score, size = 'md' }: { score: number | null; size?: 'sm' | 'md' | 'lg' }) {
@@ -53,7 +36,7 @@ function NpsGauge({ score, size = 'md' }: { score: number | null; size?: 'sm' | 
   return <span className={`${color} ${sizes[size]}`}>{score}</span>;
 }
 
-function TrendIcon({ trend }: { trend: 'up' | 'down' | 'stable' | null }) {
+function TrendIcon({ trend }: { trend: string | null }) {
   if (!trend || trend === 'stable') return <Minus size={14} className="text-gray-400" />;
   if (trend === 'up') return <ArrowUp size={14} className="text-emerald-500" />;
   return <ArrowDown size={14} className="text-red-400" />;
@@ -65,7 +48,7 @@ function HealthBar({ score }: { score: number }) {
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 bg-gray-200/30 rounded-full h-1.5">
-        <div className={`${color} h-1.5 rounded-full transition-all`} style={{ width: `${Math.min(100, score)}%` }} />
+        <div className={`${color} h-1.5 rounded-full`} style={{ width: `${Math.min(100, score)}%` }} />
       </div>
       <span className={`text-xs font-bold ${textColor} w-6 text-right`}>{score}</span>
     </div>
@@ -87,16 +70,44 @@ function PlanBadge({ plan }: { plan: string }) {
   return <span className={`text-xs font-semibold px-2 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
 }
 
+function QuestionTypeBadge({ type }: { type: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    nps: { label: 'NPS', cls: 'bg-emerald-100 text-emerald-700' },
+    text: { label: 'Texto', cls: 'bg-blue-100 text-blue-700' },
+    single: { label: 'Única', cls: 'bg-violet-100 text-violet-700' },
+    multiple_choice: { label: 'Múltipla', cls: 'bg-orange-100 text-orange-700' },
+    rating: { label: 'Avaliação', cls: 'bg-yellow-100 text-yellow-700' },
+    csat: { label: 'CSAT', cls: 'bg-teal-100 text-teal-700' },
+  };
+  const cfg = map[type] || { label: type, cls: 'bg-slate-100 text-slate-500' };
+  return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>;
+}
+
 export default function AdminIntelligence({ isDark, tenants, globalStats }: AdminIntelligenceProps) {
   const t = isDark ? DARK : LIGHT;
 
-  const [activeSection, setActiveSection] = useState<'overview' | 'trends' | 'market' | 'clients'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'trends' | 'surveys' | 'products' | 'clients'>('overview');
+
+  // Tendências
   const [trendsData, setTrendsData] = useState<any>(null);
-  const [insightsData, setInsightsData] = useState<any>(null);
-  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [isLoadingTrends, setIsLoadingTrends] = useState(false);
-  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
-  const [isLoadingAI, setIsLoadingAI] = useState(false);
+
+  // Pesquisas
+  const [surveysData, setSurveysData] = useState<any>(null);
+  const [isLoadingSurveys, setIsLoadingSurveys] = useState(false);
+  const [surveySearch, setSurveySearch] = useState('');
+  const [expandedSurvey, setExpandedSurvey] = useState<string | null>(null);
+  const [surveyTenantFilter, setSurveyTenantFilter] = useState('');
+
+  // Produtos
+  const [productsData, setProductsData] = useState<any>(null);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [productsAI, setProductsAI] = useState<any>(null);
+  const [isLoadingProductsAI, setIsLoadingProductsAI] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
+  const [productTenantFilter, setProductTenantFilter] = useState('');
+
+  // Clientes
   const [tenantAI, setTenantAI] = useState<Record<string, any>>({});
   const [isLoadingTenantAI, setIsLoadingTenantAI] = useState<string | null>(null);
   const [expandedTenant, setExpandedTenant] = useState<string | null>(null);
@@ -107,43 +118,38 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
     try {
       const res = await fetch('/api/admin/analytics?type=trends');
       setTrendsData(await res.json());
-    } catch (e) { console.error(e); }
-    finally { setIsLoadingTrends(false); }
+    } finally { setIsLoadingTrends(false); }
   }, []);
 
-  const loadInsights = useCallback(async () => {
-    setIsLoadingInsights(true);
+  const loadSurveys = useCallback(async () => {
+    setIsLoadingSurveys(true);
     try {
-      const res = await fetch('/api/admin/analytics?type=insights');
-      setInsightsData(await res.json());
-    } catch (e) { console.error(e); }
-    finally { setIsLoadingInsights(false); }
+      const res = await fetch('/api/admin/surveys');
+      setSurveysData(await res.json());
+    } finally { setIsLoadingSurveys(false); }
   }, []);
 
-  const generateMarketAI = useCallback(async () => {
-    if (!trendsData) return;
-    setIsLoadingAI(true);
+  const loadProducts = useCallback(async () => {
+    setIsLoadingProducts(true);
     try {
-      const res = await fetch('/api/admin/ai-insights', {
+      const res = await fetch('/api/admin/products');
+      setProductsData(await res.json());
+    } finally { setIsLoadingProducts(false); }
+  }, []);
+
+  const generateProductsAI = useCallback(async () => {
+    if (!productsData) return;
+    setIsLoadingProductsAI(true);
+    try {
+      const res = await fetch('/api/admin/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'market-overview',
-          data: {
-            globalNps: globalStats?.npsScore,
-            totalResponses: globalStats?.totalNpsResponses,
-            topThemes: insightsData?.themes?.slice(0, 15),
-            promoterTexts: insightsData?.promoterTexts?.slice(0, 15),
-            detractorTexts: insightsData?.detractorTexts?.slice(0, 10),
-            trendData: trendsData?.trend?.slice(-6),
-          }
-        })
+        body: JSON.stringify({ products: productsData.allProducts }),
       });
       const data = await res.json();
-      setAiAnalysis(data.analysis);
-    } catch (e) { console.error(e); }
-    finally { setIsLoadingAI(false); }
-  }, [trendsData, insightsData, globalStats]);
+      setProductsAI(data.analysis);
+    } finally { setIsLoadingProductsAI(false); }
+  }, [productsData]);
 
   const generateTenantAI = useCallback(async (tenant: any) => {
     const tid = tenant.tenantId;
@@ -170,19 +176,32 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
       });
       const data = await res.json();
       setTenantAI(prev => ({ ...prev, [tid]: data.analysis }));
-    } catch (e) { console.error(e); }
-    finally { setIsLoadingTenantAI(null); }
+    } finally { setIsLoadingTenantAI(null); }
   }, []);
 
   useEffect(() => {
     if (activeSection === 'trends' && !trendsData) loadTrends();
-    if (activeSection === 'market' && !insightsData) loadInsights();
-  }, [activeSection, trendsData, insightsData, loadTrends, loadInsights]);
+    if (activeSection === 'surveys' && !surveysData) loadSurveys();
+    if (activeSection === 'products' && !productsData) loadProducts();
+  }, [activeSection]);
 
-  // Filtrar e ordenar tenants por health score
   const filteredTenants = tenants
     .filter(ten => !clientSearch || ten.companyName?.toLowerCase().includes(clientSearch.toLowerCase()))
     .sort((a, b) => (b.healthScore || 0) - (a.healthScore || 0));
+
+  const filteredSurveys = (surveysData?.campaigns || []).filter((c: any) => {
+    const matchSearch = !surveySearch || c.name?.toLowerCase().includes(surveySearch.toLowerCase());
+    const matchTenant = !surveyTenantFilter || c.tenantId === surveyTenantFilter;
+    return matchSearch && matchTenant;
+  });
+
+  const filteredProducts = (() => {
+    if (!productsData) return [];
+    let all = productsData.allProducts || [];
+    if (productSearch) all = all.filter((p: any) => p.name?.toLowerCase().includes(productSearch.toLowerCase()));
+    if (productTenantFilter) all = all.filter((p: any) => p.tenant === productTenantFilter);
+    return all;
+  })();
 
   const cardCls = `${t.card} border rounded-xl p-5`;
   const sectionBtnCls = (active: boolean) =>
@@ -198,8 +217,9 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
         <div className="flex items-center gap-2 flex-wrap">
           {[
             { id: 'overview', label: 'Visão Geral', icon: <BarChart2 size={14} /> },
-            { id: 'trends', label: 'Tendências', icon: <TrendingUp size={14} /> },
-            { id: 'market', label: 'Inteligência de Mercado', icon: <Globe size={14} /> },
+            { id: 'trends', label: 'Tendências NPS', icon: <TrendingUp size={14} /> },
+            { id: 'surveys', label: 'Pesquisas & Formulários', icon: <FileText size={14} /> },
+            { id: 'products', label: 'Produtos & Preços', icon: <Package size={14} /> },
             { id: 'clients', label: 'Análise por Cliente', icon: <Users size={14} /> },
           ].map(sec => (
             <button key={sec.id} onClick={() => setActiveSection(sec.id as any)} className={sectionBtnCls(activeSection === sec.id)}>
@@ -211,7 +231,6 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
         {/* ── VISÃO GERAL ── */}
         {activeSection === 'overview' && (
           <div className="space-y-5">
-            {/* KPIs globais */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
                 { label: 'NPS Global', value: <NpsGauge score={globalStats?.npsScore} />, sub: `${globalStats?.totalNpsResponses || 0} respostas`, icon: <Star size={16} className="text-yellow-500" /> },
@@ -232,7 +251,7 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
               ))}
             </div>
 
-            {/* Tabela de clientes com health score */}
+            {/* Ranking de clientes */}
             <div className={cardCls}>
               <h3 className={`text-sm font-semibold ${t.text} mb-4 flex items-center gap-2`}>
                 <Award size={16} className="text-emerald-500" /> Ranking de Clientes por Health Score
@@ -252,19 +271,17 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
                     </tr>
                   </thead>
                   <tbody className={`divide-y ${t.border}`}>
-                    {filteredTenants.map((tenant) => (
+                    {[...tenants].sort((a, b) => (b.healthScore || 0) - (a.healthScore || 0)).map((tenant) => (
                       <tr key={tenant.tenantId} className={`${t.tableRow} transition-colors`}>
                         <td className={`py-3 pr-4 font-semibold ${t.text}`}>{tenant.companyName}</td>
                         <td className="py-3 px-3 text-center"><PlanBadge plan={tenant.plan} /></td>
                         <td className="py-3 px-3 text-center"><NpsGauge score={tenant.nps?.score} size="sm" /></td>
                         <td className={`py-3 px-3 text-center ${t.textSub}`}>{tenant.nps?.totalResponses || 0}</td>
                         <td className={`py-3 px-3 text-center ${t.textSub}`}>{tenant.leads?.total || 0}</td>
-                        <td className={`py-3 px-3 text-center text-purple-500 font-medium`}>
+                        <td className="py-3 px-3 text-center text-purple-500 font-medium">
                           {tenant.leads?.pipelineValue > 0 ? `R$ ${(tenant.leads.pipelineValue / 1000).toFixed(1)}k` : '—'}
                         </td>
-                        <td className="py-3 px-3 text-center">
-                          <div className="flex justify-center"><TrendIcon trend={tenant.nps?.trend} /></div>
-                        </td>
+                        <td className="py-3 px-3 text-center"><div className="flex justify-center"><TrendIcon trend={tenant.nps?.trend} /></div></td>
                         <td className="py-3 pl-3 w-40"><HealthBar score={tenant.healthScore || 0} /></td>
                       </tr>
                     ))}
@@ -273,16 +290,16 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
               </div>
             </div>
 
-            {/* Distribuição NPS global */}
+            {/* Distribuição NPS */}
             <div className={cardCls}>
               <h3 className={`text-sm font-semibold ${t.text} mb-4 flex items-center gap-2`}>
                 <MessageSquare size={16} className="text-blue-500" /> Distribuição NPS Global
               </h3>
               {(() => {
-                const total = tenants.reduce((sum, ten) => sum + (ten.nps?.totalResponses || 0), 0);
-                const promo = tenants.reduce((sum, ten) => sum + (ten.nps?.promotores || 0), 0);
-                const detr = tenants.reduce((sum, ten) => sum + (ten.nps?.detratores || 0), 0);
-                const pass = tenants.reduce((sum, ten) => sum + (ten.nps?.passivos || 0), 0);
+                const total = tenants.reduce((s, ten) => s + (ten.nps?.totalResponses || 0), 0);
+                const promo = tenants.reduce((s, ten) => s + (ten.nps?.promotores || 0), 0);
+                const detr = tenants.reduce((s, ten) => s + (ten.nps?.detratores || 0), 0);
+                const pass = tenants.reduce((s, ten) => s + (ten.nps?.passivos || 0), 0);
                 const pPromo = total > 0 ? Math.round((promo / total) * 100) : 0;
                 const pDetr = total > 0 ? Math.round((detr / total) * 100) : 0;
                 const pPass = total > 0 ? Math.round((pass / total) * 100) : 0;
@@ -314,7 +331,7 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
           </div>
         )}
 
-        {/* ── TENDÊNCIAS ── */}
+        {/* ── TENDÊNCIAS NPS ── */}
         {activeSection === 'trends' && (
           <div className="space-y-5">
             <div className="flex items-center justify-between">
@@ -325,28 +342,43 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
             </div>
 
             {isLoadingTrends ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 size={24} className="animate-spin text-emerald-500" />
-              </div>
+              <div className="flex items-center justify-center py-20"><Loader2 size={24} className="animate-spin text-emerald-500" /></div>
             ) : trendsData ? (
               <div className="space-y-5">
-                {/* Gráfico de barras */}
+                {/* Gráfico de barras corrigido */}
                 <div className={cardCls}>
-                  <h3 className={`text-sm font-semibold ${t.text} mb-5`}>NPS Mensal da Base</h3>
-                  <div className="flex items-end gap-2 h-40">
+                  <h3 className={`text-sm font-semibold ${t.text} mb-6`}>NPS Mensal da Base</h3>
+                  <div className="space-y-3">
                     {trendsData.trend?.slice(-8).map((m: any, i: number) => {
-                      const height = Math.max(4, ((m.nps + 100) / 200) * 100);
-                      const color = m.nps >= 70 ? 'bg-emerald-500' : m.nps >= 30 ? 'bg-yellow-500' : 'bg-red-500';
-                      const textColor = m.nps >= 70 ? 'text-emerald-500' : m.nps >= 30 ? 'text-yellow-500' : 'text-red-400';
+                      const nps = m.nps ?? 0;
+                      const color = nps >= 70 ? 'bg-emerald-500' : nps >= 30 ? 'bg-yellow-500' : 'bg-red-500';
+                      const textColor = nps >= 70 ? 'text-emerald-500' : nps >= 30 ? 'text-yellow-500' : 'text-red-400';
+                      // Normalizar: NPS vai de -100 a 100, exibir como % da barra
+                      const barWidth = Math.max(2, ((nps + 100) / 200) * 100);
+                      const monthLabel = m.month ? `${m.month.substring(5)}/${m.month.substring(2, 4)}` : '';
                       return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                          <span className={`text-xs font-bold ${textColor}`}>{m.nps}</span>
-                          <div className={`w-full ${color} rounded-t-sm opacity-80 hover:opacity-100 transition-opacity`} style={{ height: `${height}%` }} />
-                          <span className={`text-xs ${t.textMuted} text-center`}>{m.month?.substring(5)}</span>
-                          <span className={`text-xs ${t.textMuted}`}>{m.count}</span>
+                        <div key={i} className="flex items-center gap-3">
+                          <span className={`text-xs ${t.textMuted} w-12 text-right shrink-0`}>{monthLabel}</span>
+                          <div className="flex-1 bg-gray-200/20 rounded-full h-6 relative overflow-hidden">
+                            <div className={`${color} h-6 rounded-full flex items-center justify-end pr-2 transition-all`} style={{ width: `${barWidth}%` }}>
+                              {barWidth > 15 && <span className="text-white text-xs font-bold">{nps}</span>}
+                            </div>
+                            {barWidth <= 15 && <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold ${textColor}`}>{nps}</span>}
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 text-xs">
+                            <span className={`${t.textMuted} w-16`}>{m.count} resp.</span>
+                            <span className="text-emerald-500 w-8">{m.promotores}P</span>
+                            <span className="text-red-400 w-8">{m.detratores}D</span>
+                          </div>
                         </div>
                       );
                     })}
+                  </div>
+                  <div className={`flex items-center gap-4 mt-4 text-xs ${t.textMuted}`}>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" /> NPS ≥ 70</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-500 inline-block" /> NPS 30–69</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" /> NPS &lt; 30</span>
+                    <span className="ml-2">P = Promotores | D = Detratores</span>
                   </div>
                 </div>
 
@@ -389,178 +421,433 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
           </div>
         )}
 
-        {/* ── INTELIGÊNCIA DE MERCADO ── */}
-        {activeSection === 'market' && (
+        {/* ── PESQUISAS & FORMULÁRIOS ── */}
+        {activeSection === 'surveys' && (
           <div className="space-y-5">
             <div className="flex items-center justify-between flex-wrap gap-3">
-              <h2 className={`text-base font-semibold ${t.text}`}>O que os clientes finais estão dizendo</h2>
-              <button
-                onClick={() => { if (!insightsData) loadInsights(); generateMarketAI(); }}
-                disabled={isLoadingAI}
-                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-              >
-                {isLoadingAI ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />}
-                {isLoadingAI ? 'Analisando com IA...' : 'Gerar Análise com IA'}
+              <h2 className={`text-base font-semibold ${t.text}`}>Pesquisas & Formulários NPS dos Clientes</h2>
+              <button onClick={loadSurveys} disabled={isLoadingSurveys} className={`flex items-center gap-1.5 text-xs ${t.textSub} hover:${t.text} transition-colors`}>
+                {isLoadingSurveys ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Atualizar
               </button>
             </div>
 
-            {/* Análise de IA */}
-            {aiAnalysis && (
-              <div className={`${cardCls} border-purple-500/30 bg-purple-500/5`}>
-                <div className="flex items-center gap-2 mb-4">
-                  <Brain size={18} className="text-purple-400" />
-                  <h3 className={`text-sm font-semibold ${t.text}`}>Análise de Inteligência Artificial</h3>
+            {isLoadingSurveys ? (
+              <div className="flex items-center justify-center py-20"><Loader2 size={24} className="animate-spin text-emerald-500" /></div>
+            ) : surveysData ? (
+              <div className="space-y-5">
+                {/* KPIs */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Total de Pesquisas', value: surveysData.stats?.totalCampaigns || 0, color: 'text-emerald-500', icon: <FileText size={16} className="text-emerald-500" /> },
+                    { label: 'Pesquisas Ativas', value: surveysData.stats?.activeCampaigns || 0, color: 'text-blue-500', icon: <Activity size={16} className="text-blue-500" /> },
+                    { label: 'Total de Respostas', value: surveysData.stats?.totalResponses || 0, color: 'text-purple-500', icon: <MessageSquare size={16} className="text-purple-500" /> },
+                    { label: 'Média de Perguntas', value: surveysData.stats?.avgQuestionsPerCampaign || 0, color: 'text-orange-500', icon: <Tag size={16} className="text-orange-500" /> },
+                  ].map((kpi, i) => (
+                    <div key={i} className={`${t.kpi} border rounded-xl p-4`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-xs ${t.textMuted} font-medium`}>{kpi.label}</span>
+                        {kpi.icon}
+                      </div>
+                      <div className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</div>
+                    </div>
+                  ))}
                 </div>
 
-                {aiAnalysis.error ? (
-                  <p className={`text-sm ${t.textSub}`}>{aiAnalysis.raw || 'Erro ao gerar análise.'}</p>
-                ) : (
-                  <div className="space-y-5">
-                    {aiAnalysis.resumo_executivo && (
-                      <div className={`${t.cardInner} border rounded-lg p-4`}>
-                        <p className={`text-sm ${t.text} leading-relaxed`}>{aiAnalysis.resumo_executivo}</p>
-                      </div>
-                    )}
+                {/* Tipos de perguntas mais usados */}
+                {surveysData.stats?.globalQuestionTypes?.length > 0 && (
+                  <div className={cardCls}>
+                    <h3 className={`text-sm font-semibold ${t.text} mb-4`}>Tipos de Perguntas Mais Usados</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {surveysData.stats.globalQuestionTypes.map((qt: any, i: number) => (
+                        <div key={i} className={`${t.cardInner} border rounded-lg px-3 py-2 flex items-center gap-2`}>
+                          <QuestionTypeBadge type={qt.type} />
+                          <span className={`text-sm font-bold ${t.text}`}>{qt.count}</span>
+                          <span className={`text-xs ${t.textMuted}`}>perguntas</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                      {aiAnalysis.principais_forcas?.length > 0 && (
-                        <div>
-                          <h4 className={`text-xs font-semibold ${t.label} uppercase tracking-wider mb-2 flex items-center gap-1.5`}>
-                            <ThumbsUp size={12} className="text-emerald-500" /> Principais Forças
-                          </h4>
-                          <ul className="space-y-1.5">
-                            {aiAnalysis.principais_forcas.map((f: string, i: number) => (
-                              <li key={i} className={`flex items-start gap-2 text-sm ${t.textSub}`}>
-                                <CheckCircle size={14} className="text-emerald-500 mt-0.5 shrink-0" /> {f}
-                              </li>
-                            ))}
-                          </ul>
+                {/* Filtros */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="relative">
+                    <Search size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
+                    <input
+                      type="text"
+                      placeholder="Buscar pesquisa..."
+                      value={surveySearch}
+                      onChange={e => setSurveySearch(e.target.value)}
+                      className={`text-sm pl-8 pr-3 py-2 rounded-lg border ${t.input} w-52`}
+                    />
+                  </div>
+                  <select
+                    value={surveyTenantFilter}
+                    onChange={e => setSurveyTenantFilter(e.target.value)}
+                    className={`text-sm px-3 py-2 rounded-lg border ${t.input} w-52`}
+                  >
+                    <option value="">Todos os clientes</option>
+                    {surveysData.stats?.topTenants?.map((ten: any) => (
+                      <option key={ten.tenantId} value={ten.tenantId}>{ten.name} ({ten.count})</option>
+                    ))}
+                  </select>
+                  <span className={`text-xs ${t.textMuted}`}>{filteredSurveys.length} pesquisas</span>
+                </div>
+
+                {/* Lista de pesquisas */}
+                <div className="space-y-2">
+                  {filteredSurveys.map((campaign: any) => {
+                    const isExpanded = expandedSurvey === campaign.id;
+                    return (
+                      <div key={campaign.id} className={`${t.card} border rounded-xl overflow-hidden`}>
+                        <div
+                          className={`flex items-center gap-4 p-4 cursor-pointer ${t.tableRow} transition-colors`}
+                          onClick={() => setExpandedSurvey(isExpanded ? null : campaign.id)}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className={`text-sm font-bold ${t.text}`}>{campaign.name}</div>
+                            <div className={`text-xs ${t.textMuted} mt-0.5 flex items-center gap-3 flex-wrap`}>
+                              <span className="font-medium text-blue-500">{campaign.companyName}</span>
+                              <span>{campaign.questionCount} perguntas</span>
+                              <span>{campaign.responseCount} respostas</span>
+                              {campaign.objective && <span className="italic">"{campaign.objective.substring(0, 50)}"</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${campaign.status === 'Ativa' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                              {campaign.status}
+                            </span>
+                            <div className="flex gap-1 flex-wrap max-w-40">
+                              {Object.entries(campaign.questionTypes || {}).map(([type, count]) => (
+                                <QuestionTypeBadge key={type} type={type} />
+                              ))}
+                            </div>
+                            {isExpanded ? <ChevronUp size={16} className={t.textMuted} /> : <ChevronDown size={16} className={t.textMuted} />}
+                          </div>
                         </div>
-                      )}
-                      {aiAnalysis.principais_riscos?.length > 0 && (
-                        <div>
-                          <h4 className={`text-xs font-semibold ${t.label} uppercase tracking-wider mb-2 flex items-center gap-1.5`}>
-                            <AlertTriangle size={12} className="text-red-400" /> Riscos Identificados
-                          </h4>
-                          <ul className="space-y-1.5">
-                            {aiAnalysis.principais_riscos.map((r: string, i: number) => (
-                              <li key={i} className={`flex items-start gap-2 text-sm ${t.textSub}`}>
-                                <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" /> {r}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+
+                        {isExpanded && (
+                          <div className={`border-t ${t.border} p-5 space-y-4`}>
+                            {campaign.description && (
+                              <p className={`text-sm ${t.textSub} italic`}>"{campaign.description}"</p>
+                            )}
+                            <div>
+                              <div className={`text-xs font-semibold ${t.label} uppercase tracking-wider mb-3`}>Perguntas do Formulário</div>
+                              <div className="space-y-2">
+                                {campaign.questions.map((q: any, qi: number) => (
+                                  <div key={qi} className={`${t.cardInner} border rounded-lg p-3`}>
+                                    <div className="flex items-start gap-3">
+                                      <span className={`text-xs font-bold ${t.textMuted} w-5 shrink-0 mt-0.5`}>{qi + 1}.</span>
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <QuestionTypeBadge type={q.type} />
+                                          {q.required && <span className="text-xs text-red-400">obrigatória</span>}
+                                        </div>
+                                        <p className={`text-sm ${t.text}`}>{q.text}</p>
+                                        {q.options?.length > 0 && (
+                                          <div className="mt-2 flex flex-wrap gap-1">
+                                            {q.options.slice(0, 6).map((opt: any, oi: number) => (
+                                              <span key={oi} className={`text-xs ${t.badge} px-2 py-0.5 rounded`}>
+                                                {typeof opt === 'string' ? opt : opt.text || opt.label || JSON.stringify(opt)}
+                                              </span>
+                                            ))}
+                                            {q.options.length > 6 && <span className={`text-xs ${t.textMuted}`}>+{q.options.length - 6} mais</span>}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <div className={`text-xs ${t.textMuted} flex items-center gap-4`}>
+                              <span>Criado em {new Date(campaign.createdAt).toLocaleDateString('pt-BR')}</span>
+                              {campaign.tone && <span>Tom: {campaign.tone}</span>}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {filteredSurveys.length === 0 && (
+                    <div className={`text-center py-16 ${t.textMuted}`}>Nenhuma pesquisa encontrada.</div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className={`text-center py-20 ${t.textMuted}`}>Carregando pesquisas...</div>
+            )}
+          </div>
+        )}
+
+        {/* ── PRODUTOS & PREÇOS ── */}
+        {activeSection === 'products' && (
+          <div className="space-y-5">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <h2 className={`text-base font-semibold ${t.text}`}>Produtos & Serviços dos Clientes</h2>
+              <div className="flex items-center gap-2">
+                <button onClick={loadProducts} disabled={isLoadingProducts} className={`flex items-center gap-1.5 text-xs ${t.textSub} hover:${t.text} transition-colors`}>
+                  {isLoadingProducts ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Atualizar
+                </button>
+                <button
+                  onClick={() => { if (!productsData) loadProducts(); else generateProductsAI(); }}
+                  disabled={isLoadingProductsAI || isLoadingProducts}
+                  className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                >
+                  {isLoadingProductsAI ? <Loader2 size={14} className="animate-spin" /> : <Brain size={14} />}
+                  {isLoadingProductsAI ? 'Analisando...' : 'Análise de Preços com IA'}
+                </button>
+              </div>
+            </div>
+
+            {isLoadingProducts ? (
+              <div className="flex items-center justify-center py-20"><Loader2 size={24} className="animate-spin text-emerald-500" /></div>
+            ) : productsData ? (
+              <div className="space-y-5">
+                {/* KPIs */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Total de Produtos', value: productsData.stats?.totalProducts || 0, color: 'text-emerald-500', sub: 'cadastrados' },
+                    { label: 'Clientes com Produtos', value: productsData.stats?.tenantsWithProducts || 0, color: 'text-blue-500', sub: 'empresas' },
+                    { label: 'Preço Médio Global', value: `R$ ${(productsData.stats?.globalAvgValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, color: 'text-purple-500', sub: 'média geral' },
+                    { label: 'Preço Mediano', value: `R$ ${(productsData.stats?.globalMedianValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, color: 'text-orange-500', sub: 'mediana' },
+                  ].map((kpi, i) => (
+                    <div key={i} className={`${t.kpi} border rounded-xl p-4`}>
+                      <div className={`text-xs ${t.textMuted} font-medium mb-2`}>{kpi.label}</div>
+                      <div className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</div>
+                      <div className={`text-xs ${t.textMuted} mt-0.5`}>{kpi.sub}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Faixas de preço */}
+                <div className={cardCls}>
+                  <h3 className={`text-sm font-semibold ${t.text} mb-4`}>Distribuição por Faixa de Preço</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Até R$ 100', count: productsData.stats?.priceRanges?.ate100 || 0, color: 'text-slate-500', bg: 'bg-slate-500/10' },
+                      { label: 'R$ 100 – 500', count: productsData.stats?.priceRanges?.de100a500 || 0, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                      { label: 'R$ 500 – 2.000', count: productsData.stats?.priceRanges?.de500a2000 || 0, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+                      { label: 'Acima de R$ 2.000', count: productsData.stats?.priceRanges?.acima2000 || 0, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+                    ].map((range, i) => (
+                      <div key={i} className={`${range.bg} rounded-lg p-3 text-center`}>
+                        <div className={`text-2xl font-bold ${range.color}`}>{range.count}</div>
+                        <div className={`text-xs ${t.textMuted} mt-1`}>{range.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Análise de IA */}
+                {productsAI && (
+                  <div className={`${cardCls} border-purple-500/30 bg-purple-500/5`}>
+                    <div className="flex items-center gap-2 mb-5">
+                      <Brain size={18} className="text-purple-400" />
+                      <h3 className={`text-sm font-semibold ${t.text}`}>Análise de Preços por Inteligência Artificial</h3>
                     </div>
 
-                    {aiAnalysis.oportunidades_mercado?.length > 0 && (
-                      <div>
-                        <h4 className={`text-xs font-semibold ${t.label} uppercase tracking-wider mb-3 flex items-center gap-1.5`}>
-                          <Lightbulb size={12} className="text-yellow-500" /> Oportunidades de Mercado
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {aiAnalysis.oportunidades_mercado.map((op: any, i: number) => (
-                            <div key={i} className={`${t.cardInner} border rounded-lg p-4`}>
-                              <div className="flex items-start justify-between gap-2 mb-2">
-                                <span className={`text-sm font-semibold ${t.text}`}>{op.titulo}</span>
-                                <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${op.potencial === 'alto' ? 'bg-emerald-500/20 text-emerald-400' : op.potencial === 'médio' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-500/20 text-gray-400'}`}>
-                                  {op.potencial}
-                                </span>
-                              </div>
-                              <p className={`text-xs ${t.textSub} leading-relaxed`}>{op.descricao}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    {productsAI.error ? (
+                      <p className={`text-sm ${t.textSub}`}>{productsAI.raw || 'Erro ao gerar análise.'}</p>
+                    ) : (
+                      <div className="space-y-6">
+                        {productsAI.resumo_executivo && (
+                          <div className={`${t.cardInner} border rounded-lg p-4`}>
+                            <p className={`text-sm ${t.text} leading-relaxed`}>{productsAI.resumo_executivo}</p>
+                          </div>
+                        )}
 
-                    {aiAnalysis.temas_emergentes?.length > 0 && (
-                      <div>
-                        <h4 className={`text-xs font-semibold ${t.label} uppercase tracking-wider mb-3 flex items-center gap-1.5`}>
-                          <TrendingUp size={12} className="text-blue-400" /> Temas Emergentes
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {aiAnalysis.temas_emergentes.map((tema: any, i: number) => (
-                            <div key={i} className={`${t.cardInner} border rounded-lg p-3`}>
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <span className={`text-sm font-semibold ${t.text}`}>{tema.tema}</span>
-                                <span className={`text-xs ${tema.sentimento === 'positivo' ? 'text-emerald-400' : tema.sentimento === 'negativo' ? 'text-red-400' : 'text-yellow-400'}`}>
-                                  {tema.sentimento === 'positivo' ? '↑' : tema.sentimento === 'negativo' ? '↓' : '→'}
-                                </span>
-                              </div>
-                              <p className={`text-xs ${t.textMuted} leading-relaxed`}>{tema.insight}</p>
+                        {/* Segmentos identificados */}
+                        {productsAI.segmentos_identificados?.length > 0 && (
+                          <div>
+                            <h4 className={`text-xs font-semibold ${t.label} uppercase tracking-wider mb-3 flex items-center gap-1.5`}>
+                              <ShoppingBag size={12} className="text-blue-400" /> Segmentos Identificados
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {productsAI.segmentos_identificados.map((seg: any, i: number) => (
+                                <div key={i} className={`${t.cardInner} border rounded-lg p-4`}>
+                                  <div className={`text-sm font-bold ${t.text} mb-2`}>{seg.segmento}</div>
+                                  <div className="grid grid-cols-3 gap-1 text-center mb-3">
+                                    <div>
+                                      <div className="text-xs text-purple-400 font-bold">R$ {(seg.preco_medio || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</div>
+                                      <div className={`text-xs ${t.textMuted}`}>média</div>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs text-emerald-400 font-bold">R$ {(seg.preco_minimo || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</div>
+                                      <div className={`text-xs ${t.textMuted}`}>mín</div>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs text-orange-400 font-bold">R$ {(seg.preco_maximo || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</div>
+                                      <div className={`text-xs ${t.textMuted}`}>máx</div>
+                                    </div>
+                                  </div>
+                                  <p className={`text-xs ${t.textMuted} leading-relaxed`}>{seg.insight}</p>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                          </div>
+                        )}
 
-                    {aiAnalysis.recomendacoes_para_clientes?.length > 0 && (
-                      <div>
-                        <h4 className={`text-xs font-semibold ${t.label} uppercase tracking-wider mb-3 flex items-center gap-1.5`}>
-                          <Target size={12} className="text-teal-400" /> Recomendações para seus Clientes
-                        </h4>
-                        <div className="space-y-2">
-                          {aiAnalysis.recomendacoes_para_clientes.map((rec: any, i: number) => (
-                            <div key={i} className={`${t.cardInner} border rounded-lg p-4 flex gap-3`}>
-                              <div className="w-6 h-6 rounded-full bg-teal-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                                <span className="text-xs font-bold text-teal-400">{i + 1}</span>
-                              </div>
-                              <div>
-                                <p className={`text-sm font-medium ${t.text}`}>{rec.recomendacao}</p>
-                                <p className={`text-xs ${t.textMuted} mt-0.5`}>{rec.justificativa}</p>
-                                {rec.impacto_esperado && <p className="text-xs text-emerald-400 mt-1">→ {rec.impacto_esperado}</p>}
-                              </div>
+                        {/* Produtos similares */}
+                        {productsAI.produtos_similares?.length > 0 && (
+                          <div>
+                            <h4 className={`text-xs font-semibold ${t.label} uppercase tracking-wider mb-3 flex items-center gap-1.5`}>
+                              <Tag size={12} className="text-teal-400" /> Produtos Similares — Comparação de Preços
+                            </h4>
+                            <div className="space-y-3">
+                              {productsAI.produtos_similares.map((grupo: any, i: number) => (
+                                <div key={i} className={`${t.cardInner} border rounded-lg p-4`}>
+                                  <div className="flex items-start justify-between gap-3 mb-3">
+                                    <div>
+                                      <span className={`text-sm font-bold ${t.text}`}>{grupo.grupo}</span>
+                                      <span className={`ml-2 text-xs ${t.textMuted}`}>Média: R$ {(grupo.preco_medio_grupo || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                                    </div>
+                                    {grupo.variacao_percentual > 0 && (
+                                      <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full shrink-0">
+                                        ±{grupo.variacao_percentual}% variação
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap gap-2 mb-3">
+                                    {grupo.produtos?.map((p: any, pi: number) => (
+                                      <div key={pi} className={`${t.badge} rounded-lg px-2 py-1 text-xs`}>
+                                        <span className="font-medium">{p.nome}</span>
+                                        <span className={`ml-1 ${t.textMuted}`}>({p.empresa})</span>
+                                        <span className="ml-1 text-purple-400 font-bold">R$ {(p.valor || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <p className={`text-xs ${t.textMuted} leading-relaxed`}>{grupo.insight}</p>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        )}
+
+                        {/* Oportunidades */}
+                        {productsAI.oportunidades_precificacao?.length > 0 && (
+                          <div>
+                            <h4 className={`text-xs font-semibold ${t.label} uppercase tracking-wider mb-3 flex items-center gap-1.5`}>
+                              <Lightbulb size={12} className="text-yellow-400" /> Oportunidades de Precificação
+                            </h4>
+                            <div className="space-y-2">
+                              {productsAI.oportunidades_precificacao.map((op: any, i: number) => (
+                                <div key={i} className={`${t.cardInner} border rounded-lg p-3 flex items-start gap-3`}>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 mt-0.5 ${op.impacto === 'alto' ? 'bg-emerald-500/20 text-emerald-400' : op.impacto === 'médio' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-slate-500/20 text-slate-400'}`}>
+                                    {op.impacto}
+                                  </span>
+                                  <p className={`text-sm ${t.textSub}`}>{op.observacao}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {productsAI.benchmark_mercado && (
+                          <div className={`${t.cardInner} border rounded-lg p-4`}>
+                            <div className={`text-xs font-semibold ${t.label} uppercase tracking-wider mb-2`}>Benchmark de Mercado</div>
+                            <p className={`text-sm ${t.textSub} leading-relaxed`}>{productsAI.benchmark_mercado}</p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 )}
-              </div>
-            )}
 
-            {/* Enquanto carrega insights */}
-            {isLoadingInsights && (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 size={24} className="animate-spin text-emerald-500" />
-              </div>
-            )}
-
-            {/* Temas por sentimento (apenas comentários reais, sem múltipla escolha) */}
-            {insightsData && !isLoadingInsights && (
-              <div className={cardCls}>
-                <h3 className={`text-sm font-semibold ${t.text} mb-4`}>Temas por Frequência e Sentimento</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className={`text-xs ${t.textMuted} border-b ${t.border}`}>
-                        <th className="text-left py-2 pr-4">Tema</th>
-                        <th className="text-center py-2 px-3">Menções</th>
-                        <th className="text-center py-2 px-3">% Promotores</th>
-                        <th className="text-center py-2 px-3">% Detratores</th>
-                        <th className="text-center py-2 px-3">Sentimento</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${t.border}`}>
-                      {insightsData.themes?.slice(0, 15).map((theme: any, i: number) => (
-                        <tr key={i} className={`${t.tableRow} transition-colors`}>
-                          <td className={`py-2.5 pr-4 font-medium ${t.text}`}>{theme.theme}</td>
-                          <td className={`py-2.5 px-3 text-center ${t.textSub}`}>{theme.count}</td>
-                          <td className="py-2.5 px-3 text-center text-emerald-500">{theme.promoterRate}%</td>
-                          <td className="py-2.5 px-3 text-center text-red-400">{theme.detractorRate}%</td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${theme.sentiment === 'positive' ? 'bg-emerald-500/20 text-emerald-400' : theme.sentiment === 'negative' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                              {theme.sentiment === 'positive' ? 'Positivo' : theme.sentiment === 'negative' ? 'Negativo' : 'Neutro'}
-                            </span>
-                          </td>
+                {/* Filtros e tabela de produtos */}
+                <div className={cardCls}>
+                  <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                    <h3 className={`text-sm font-semibold ${t.text}`}>Todos os Produtos ({productsData.allProducts?.length || 0})</h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="relative">
+                        <Search size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
+                        <input
+                          type="text"
+                          placeholder="Buscar produto..."
+                          value={productSearch}
+                          onChange={e => setProductSearch(e.target.value)}
+                          className={`text-sm pl-8 pr-3 py-2 rounded-lg border ${t.input} w-48`}
+                        />
+                      </div>
+                      <select
+                        value={productTenantFilter}
+                        onChange={e => setProductTenantFilter(e.target.value)}
+                        className={`text-sm px-3 py-2 rounded-lg border ${t.input} w-48`}
+                      >
+                        <option value="">Todas as empresas</option>
+                        {productsData.tenants?.map((ten: any) => (
+                          <option key={ten.tenantId} value={ten.companyName}>{ten.companyName} ({ten.stats.count})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className={`text-xs ${t.textMuted} border-b ${t.border}`}>
+                          <th className="text-left py-2 pr-4">Produto / Serviço</th>
+                          <th className="text-left py-2 px-3">Empresa</th>
+                          <th className="text-right py-2 px-3">Valor</th>
+                          <th className="text-left py-2 pl-3">Descrição</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className={`divide-y ${t.border}`}>
+                        {filteredProducts.slice(0, 50).map((p: any, i: number) => (
+                          <tr key={i} className={`${t.tableRow} transition-colors`}>
+                            <td className={`py-2.5 pr-4 font-medium ${t.text}`}>{p.name}</td>
+                            <td className={`py-2.5 px-3 text-blue-500 text-xs font-medium`}>{p.tenant}</td>
+                            <td className="py-2.5 px-3 text-right font-bold text-purple-500">
+                              R$ {(p.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                            </td>
+                            <td className={`py-2.5 pl-3 text-xs ${t.textMuted} max-w-xs truncate`}>
+                              {p.description ? p.description.substring(0, 80) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {filteredProducts.length > 50 && (
+                      <div className={`text-center text-xs ${t.textMuted} mt-3`}>Exibindo 50 de {filteredProducts.length} produtos</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Por cliente */}
+                <div className={cardCls}>
+                  <h3 className={`text-sm font-semibold ${t.text} mb-4`}>Resumo por Cliente</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className={`text-xs ${t.textMuted} border-b ${t.border}`}>
+                          <th className="text-left py-2 pr-4">Empresa</th>
+                          <th className="text-center py-2 px-3">Produtos</th>
+                          <th className="text-right py-2 px-3">Preço Médio</th>
+                          <th className="text-right py-2 px-3">Mínimo</th>
+                          <th className="text-right py-2 px-3">Máximo</th>
+                        </tr>
+                      </thead>
+                      <tbody className={`divide-y ${t.border}`}>
+                        {productsData.tenants?.map((ten: any, i: number) => (
+                          <tr key={i} className={`${t.tableRow} transition-colors`}>
+                            <td className={`py-2.5 pr-4 font-semibold ${t.text}`}>{ten.companyName}</td>
+                            <td className={`py-2.5 px-3 text-center ${t.textSub}`}>{ten.stats.count}</td>
+                            <td className="py-2.5 px-3 text-right font-bold text-purple-500">
+                              R$ {(ten.stats.avgValue || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                            </td>
+                            <td className="py-2.5 px-3 text-right text-emerald-500">
+                              R$ {(ten.stats.minValue || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                            </td>
+                            <td className="py-2.5 px-3 text-right text-orange-500">
+                              R$ {(ten.stats.maxValue || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
+            ) : (
+              <div className={`text-center py-20 ${t.textMuted}`}>Carregando produtos...</div>
             )}
           </div>
         )}
@@ -575,7 +862,7 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
                 placeholder="Buscar empresa..."
                 value={clientSearch}
                 onChange={e => setClientSearch(e.target.value)}
-                className={`text-sm px-3 py-2 rounded-lg border ${isDark ? 'bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'} w-56`}
+                className={`text-sm px-3 py-2 rounded-lg border ${t.input} w-56`}
               />
             </div>
 
@@ -588,17 +875,14 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
 
                 return (
                   <div key={tid} className={`${t.card} border rounded-xl overflow-hidden`}>
-                    {/* Header */}
                     <div
                       className={`flex items-center gap-4 p-4 cursor-pointer ${t.tableRow} transition-colors`}
                       onClick={() => setExpandedTenant(isExpanded ? null : tid)}
                     >
-                      {/* Health score circle */}
                       <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-sm font-bold text-white"
                         style={{ background: tenant.healthScore >= 70 ? '#10b981' : tenant.healthScore >= 40 ? '#f59e0b' : '#ef4444' }}>
                         {tenant.healthScore || 0}
                       </div>
-
                       <div className="flex-1 min-w-0">
                         <div className={`text-sm font-bold ${t.text}`}>{tenant.companyName}</div>
                         <div className={`text-xs ${t.textMuted} flex items-center gap-3 mt-0.5 flex-wrap`}>
@@ -608,15 +892,12 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
                           {tenant.campaignCount > 0 && <span className="flex items-center gap-1"><Activity size={10} /> {tenant.campaignCount} campanhas</span>}
                         </div>
                       </div>
-
                       <div className="flex items-center gap-4 shrink-0">
                         <div className="text-center">
                           <NpsGauge score={tenant.nps?.score} size="sm" />
                           <div className={`text-xs ${t.textMuted}`}>NPS</div>
                         </div>
-                        <div className="text-center">
-                          <PlanBadge plan={tenant.plan} />
-                        </div>
+                        <PlanBadge plan={tenant.plan} />
                         <div className="text-center">
                           <span className="text-sm font-semibold text-purple-400">
                             {tenant.leads?.pipelineValue > 0 ? `R$ ${(tenant.leads.pipelineValue / 1000).toFixed(1)}k` : '—'}
@@ -628,10 +909,8 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
                       </div>
                     </div>
 
-                    {/* Detalhes expandidos */}
                     {isExpanded && (
                       <div className={`border-t ${t.border} p-5 space-y-5`}>
-                        {/* Métricas detalhadas */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                           {[
                             { label: 'Promotores', value: tenant.nps?.promotores || 0, color: 'text-emerald-500', sub: `${tenant.nps?.totalResponses > 0 ? Math.round((tenant.nps.promotores / tenant.nps.totalResponses) * 100) : 0}%` },
@@ -649,7 +928,6 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
                           ))}
                         </div>
 
-                        {/* Pipeline por status */}
                         {tenant.leads?.total > 0 && (
                           <div>
                             <div className={`text-xs font-semibold ${t.label} uppercase tracking-wider mb-2`}>Pipeline de Leads</div>
@@ -661,9 +939,7 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
                                 { label: 'Vendido', value: tenant.leads.vendido, color: 'bg-emerald-500/20 text-emerald-400' },
                                 { label: 'Perdido', value: tenant.leads.perdido, color: 'bg-red-500/20 text-red-400' },
                               ].filter(s => s.value > 0).map((s, i) => (
-                                <span key={i} className={`text-xs px-2.5 py-1 rounded-full font-medium ${s.color}`}>
-                                  {s.label}: {s.value}
-                                </span>
+                                <span key={i} className={`text-xs px-2.5 py-1 rounded-full font-medium ${s.color}`}>{s.label}: {s.value}</span>
                               ))}
                               {tenant.leads.pipelineValue > 0 && (
                                 <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-purple-500/20 text-purple-400">
@@ -674,7 +950,6 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
                           </div>
                         )}
 
-                        {/* Último diagnóstico MPD */}
                         {tenant.lastDiagnostic && (
                           <div className={`${t.cardInner} border rounded-lg p-4`}>
                             <div className={`text-xs font-semibold ${t.label} uppercase tracking-wider mb-2 flex items-center gap-1.5`}>
@@ -685,12 +960,10 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
                                 {tenant.lastDiagnostic.score}<span className="text-sm font-normal text-gray-500">/100</span>
                               </span>
                               <span className={`text-xs ${t.textMuted}`}>{new Date(tenant.lastDiagnostic.date).toLocaleDateString('pt-BR')}</span>
-                              {tenant.diagnosticCount > 1 && <span className={`text-xs ${t.textMuted}`}>({tenant.diagnosticCount} diagnósticos no total)</span>}
                             </div>
                           </div>
                         )}
 
-                        {/* Análise de IA */}
                         <div>
                           {!ai ? (
                             <button
@@ -707,16 +980,14 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
                                 <div className={`text-xs font-semibold ${t.label} uppercase tracking-wider flex items-center gap-1.5`}>
                                   <Brain size={12} className="text-purple-400" /> Análise de IA
                                 </div>
-                                <button onClick={() => generateTenantAI(tenant)} disabled={isLoadingThis} className={`text-xs ${t.textMuted} hover:${t.text} flex items-center gap-1`}>
+                                <button onClick={() => generateTenantAI(tenant)} disabled={isLoadingThis} className={`text-xs ${t.textMuted} flex items-center gap-1`}>
                                   <RefreshCw size={10} /> Regenerar
                                 </button>
                               </div>
-
                               {ai.error ? (
                                 <p className={`text-sm ${t.textSub}`}>{ai.raw}</p>
                               ) : (
                                 <div className="space-y-4">
-                                  {/* Saúde + Resumo */}
                                   <div className={`${t.cardInner} border rounded-lg p-4`}>
                                     {ai.saude_geral && (
                                       <div className="flex items-center gap-2 mb-2">
@@ -728,48 +999,36 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
                                     )}
                                     {ai.resumo && <p className={`text-sm ${t.textSub} leading-relaxed`}>{ai.resumo}</p>}
                                   </div>
-
-                                  {/* Elogios e críticas */}
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {ai.o_que_clientes_elogiam?.length > 0 && (
                                       <div>
-                                        <div className={`text-xs font-semibold ${t.label} mb-2 flex items-center gap-1`}><ThumbsUp size={10} className="text-emerald-500" /> O que os clientes elogiam</div>
-                                        <ul className="space-y-1.5">
-                                          {ai.o_que_clientes_elogiam.slice(0, 4).map((e: string, i: number) => (
-                                            <li key={i} className={`text-xs ${t.textSub} flex items-start gap-1.5`}><span className="text-emerald-500 mt-0.5 shrink-0">•</span>{e}</li>
-                                          ))}
-                                        </ul>
+                                        <div className={`text-xs font-semibold ${t.label} mb-2 flex items-center gap-1`}><ThumbsUp size={10} className="text-emerald-500" /> O que elogiam</div>
+                                        <ul className="space-y-1.5">{ai.o_que_clientes_elogiam.slice(0, 4).map((e: string, i: number) => (
+                                          <li key={i} className={`text-xs ${t.textSub} flex items-start gap-1.5`}><span className="text-emerald-500 mt-0.5 shrink-0">•</span>{e}</li>
+                                        ))}</ul>
                                       </div>
                                     )}
                                     {ai.o_que_clientes_reclamam?.length > 0 && (
                                       <div>
-                                        <div className={`text-xs font-semibold ${t.label} mb-2 flex items-center gap-1`}><ThumbsDown size={10} className="text-red-400" /> O que os clientes reclamam</div>
-                                        <ul className="space-y-1.5">
-                                          {ai.o_que_clientes_reclamam.slice(0, 4).map((r: string, i: number) => (
-                                            <li key={i} className={`text-xs ${t.textSub} flex items-start gap-1.5`}><span className="text-red-400 mt-0.5 shrink-0">•</span>{r}</li>
-                                          ))}
-                                        </ul>
+                                        <div className={`text-xs font-semibold ${t.label} mb-2 flex items-center gap-1`}><ThumbsDown size={10} className="text-red-400" /> O que reclamam</div>
+                                        <ul className="space-y-1.5">{ai.o_que_clientes_reclamam.slice(0, 4).map((r: string, i: number) => (
+                                          <li key={i} className={`text-xs ${t.textSub} flex items-start gap-1.5`}><span className="text-red-400 mt-0.5 shrink-0">•</span>{r}</li>
+                                        ))}</ul>
                                       </div>
                                     )}
                                   </div>
-
-                                  {/* Oportunidades */}
                                   {ai.oportunidades_para_cliente?.length > 0 && (
                                     <div>
-                                      <div className={`text-xs font-semibold ${t.label} mb-2 flex items-center gap-1`}><Target size={10} className="text-teal-400" /> Oportunidades para este cliente</div>
-                                      <div className="space-y-2">
-                                        {ai.oportunidades_para_cliente.slice(0, 3).map((op: any, i: number) => (
-                                          <div key={i} className={`${t.cardInner} border rounded-lg p-3`}>
-                                            <p className={`text-xs font-medium ${t.text}`}>{op.acao}</p>
-                                            <p className={`text-xs ${t.textMuted} mt-0.5`}>{op.motivo}</p>
-                                            {op.resultado_esperado && <p className="text-xs text-teal-400 mt-0.5">→ {op.resultado_esperado}</p>}
-                                          </div>
-                                        ))}
-                                      </div>
+                                      <div className={`text-xs font-semibold ${t.label} mb-2 flex items-center gap-1`}><Target size={10} className="text-teal-400" /> Oportunidades</div>
+                                      <div className="space-y-2">{ai.oportunidades_para_cliente.slice(0, 3).map((op: any, i: number) => (
+                                        <div key={i} className={`${t.cardInner} border rounded-lg p-3`}>
+                                          <p className={`text-xs font-medium ${t.text}`}>{op.acao}</p>
+                                          <p className={`text-xs ${t.textMuted} mt-0.5`}>{op.motivo}</p>
+                                          {op.resultado_esperado && <p className="text-xs text-teal-400 mt-0.5">→ {op.resultado_esperado}</p>}
+                                        </div>
+                                      ))}</div>
                                     </div>
                                   )}
-
-                                  {/* Script CS */}
                                   {ai.script_abordagem && (
                                     <div className={`${isDark ? 'bg-purple-900/20 border-purple-700/30' : 'bg-purple-50 border-purple-200'} border rounded-lg p-4`}>
                                       <div className={`text-xs font-semibold mb-1.5 ${isDark ? 'text-purple-300' : 'text-purple-700'} flex items-center gap-1.5`}>
@@ -788,7 +1047,6 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
                   </div>
                 );
               })}
-
               {filteredTenants.length === 0 && (
                 <div className={`text-center py-16 ${t.textMuted}`}>
                   {clientSearch ? `Nenhuma empresa encontrada para "${clientSearch}"` : 'Nenhum cliente com dados disponíveis.'}
