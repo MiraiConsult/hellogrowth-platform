@@ -6,14 +6,16 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
+    const tipoVenda = searchParams.get('tipoVenda');
 
     let query = supabase
       .from('campaign_templates')
-      .select('id, name, description, category, objective, tone, questions, tags, use_count, created_at')
+      .select('id, name, description, category, objective, tone, questions, tags, use_count, created_at, tipo_venda, ramo_negocio')
       .eq('is_active', true)
       .order('use_count', { ascending: false });
 
     if (category && category !== 'Todos') query = query.eq('category', category);
+    if (tipoVenda) query = query.eq('tipo_venda', tipoVenda);
 
     const { data, error } = await query;
     if (error) throw error;
