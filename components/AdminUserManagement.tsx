@@ -8,6 +8,7 @@ import {
   Zap, Star, UserPlus, DollarSign, Check, Moon, Sun, Send
 } from 'lucide-react';
 import AdminBroadcast from '@/components/AdminBroadcast';
+import AdminIntelligence from '@/components/AdminIntelligence';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -215,7 +216,25 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [isDark, setIsDark] = useState(true);
   const t = isDark ? DARK : LIGHT;
   // ── Active Tab ──
-  const [activeTab, setActiveTab] = useState<'clients' | 'broadcast'>('clients');
+  const [activeTab, setActiveTab] = useState<'clients' | 'broadcast' | 'intelligence'>('clients');
+
+  // ── Analytics / Intelligence ──
+  const [analyticsData, setAnalyticsData] = useState<{ global: any; tenants: any[] } | null>(null);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+
+  const fetchAnalytics = useCallback(async () => {
+    if (analyticsData) return; // já carregado
+    setIsLoadingAnalytics(true);
+    try {
+      const res = await fetch('/api/admin/analytics?type=overview');
+      const data = await res.json();
+      setAnalyticsData(data);
+    } catch (e) {
+      console.error('Error fetching analytics:', e);
+    } finally {
+      setIsLoadingAnalytics(false);
+    }
+  }, [analyticsData]);
   // ── State ──
   const [clients, setClients] = useState<Client[]>([]);
   const [stats, setStats] = useState<any>({});
@@ -639,6 +658,16 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                 <Users size={14} /> Clientes
               </button>
               <button
+                onClick={() => { setActiveTab('intelligence'); fetchAnalytics(); }}
+                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
+                  activeTab === 'intelligence'
+                    ? 'bg-purple-600 text-white'
+                    : `${t.btnSecondary}`
+                }`}
+              >
+                <Zap size={14} /> Inteligência
+              </button>
+              <button
                 onClick={() => setActiveTab('broadcast')}
                 className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
                   activeTab === 'broadcast'
@@ -666,6 +695,26 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
 
       {activeTab === 'broadcast' && (
         <AdminBroadcast isDark={isDark} />
+      )}
+      {activeTab === 'intelligence' && (
+        isLoadingAnalytics ? (
+          <div className="flex items-center justify-center py-32">
+            <div className="text-center">
+              <div className="w-10 h-10 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className={`text-sm ${t.textMuted}`}>Carregando dados de inteligência...</p>
+            </div>
+          </div>
+        ) : analyticsData ? (
+          <AdminIntelligence
+            isDark={isDark}
+            tenants={analyticsData.tenants || []}
+            globalStats={analyticsData.global}
+          />
+        ) : (
+          <div className="flex items-center justify-center py-32">
+            <p className={`text-sm ${t.textMuted}`}>Nenhum dado disponível.</p>
+          </div>
+        )
       )}
       {activeTab === 'clients' && (
       <main className="max-w-screen-2xl mx-auto px-6 py-6 space-y-5">
