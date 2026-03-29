@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const maxDuration = 60;
 
@@ -23,7 +23,7 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '');
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY || '';
 const ZAPI_INSTANCE_ID = process.env.ZAPI_INSTANCE_ID!;
@@ -130,14 +130,9 @@ ${newReviews.length > 0 ? `- Últimas avaliações: ${newReviews.slice(0, 2).map
 Escreva um resumo em 2-3 frases curtas. Seja específico, use os dados reais. Se houve melhora, comemore. Se piorou, motive a ação. Se há novas avaliações, destaque.
 Responda apenas com o texto do resumo, sem títulos ou formatação.`;
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4.1-mini',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 150,
-      temperature: 0.7,
-    });
-
-    return completion.choices[0]?.message?.content?.trim() || '';
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
   } catch {
     return `Score geral: ${newScores.overallScore}/100 (${deltaStr} vs ontem). ${newReviewsCount > 0 ? `${newReviewsCount} nova(s) avaliação(ões) detectada(s).` : 'Sem novas avaliações hoje.'}`;
   }
