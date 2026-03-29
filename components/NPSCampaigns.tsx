@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Campaign, CampaignQuestion, User, InitialField } from '@/types';
 import { getSurveyLink } from '@/lib/utils/getBaseUrl';
-import { Plus, X, Share2, MoreVertical, Star, Link as LinkIcon, ExternalLink, Sparkles, Trash2, Check, Pause, Play, Edit, Eye, Loader2, MapPin, Send, Upload, FileSpreadsheet, QrCode, Download, FileText, AlertCircle, GripVertical, ArrowUp, ArrowDown, ArrowLeft, Gift } from 'lucide-react';
+import { Plus, X, Share2, MoreVertical, Star, Link as LinkIcon, ExternalLink, Sparkles, Trash2, Check, Pause, Play, Edit, Eye, Loader2, MapPin, Send, Upload, FileSpreadsheet, QrCode, Download, FileText, AlertCircle, GripVertical, ArrowUp, ArrowDown, ArrowLeft, Gift, BookOpen, Search } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from '@/lib/supabase';
 import InitialFieldsConfig from '@/components/InitialFieldsConfig';
@@ -47,6 +47,52 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const [currentQrName, setCurrentQrName] = useState('');
 
   // States antigos removidos - agora usa apenas NPSConsultant
+
+  // Template Library State
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [templateCategories, setTemplateCategories] = useState<string[]>(['Todos']);
+  const [templateCategoryFilter, setTemplateCategoryFilter] = useState('Todos');
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [isUsingTemplate, setIsUsingTemplate] = useState<string | null>(null);
+  const [templateSuccess, setTemplateSuccess] = useState<string | null>(null);
+
+  const loadTemplates = async () => {
+    setIsLoadingTemplates(true);
+    try {
+      const res = await fetch('/api/templates');
+      const data = await res.json();
+      setTemplates(data.templates || []);
+      setTemplateCategories(data.categories || ['Todos']);
+    } finally { setIsLoadingTemplates(false); }
+  };
+
+  const openTemplateModal = () => {
+    setShowTemplateModal(true);
+    loadTemplates();
+  };
+
+  const useTemplate = async (templateId: string, templateName: string) => {
+    if (!tenantId) return;
+    setIsUsingTemplate(templateId);
+    try {
+      const res = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId, tenantId, campaignName: `${templateName} (cópia)` }),
+      });
+      const data = await res.json();
+      if (data.campaign) {
+        setTemplateSuccess(templateId);
+        setTimeout(() => {
+          setTemplateSuccess(null);
+          setShowTemplateModal(false);
+          onSaveCampaign(data.campaign);
+        }, 1500);
+      }
+    } finally { setIsUsingTemplate(null); }
+  };
 
   // UI State
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -133,6 +179,9 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
             </button>
             <button onClick={() => { setManualMode(true); setEditingCampaign(null); setShowNPSConsultant(true); }} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center gap-2 hover:bg-gray-50 font-medium">
                 <Edit size={18} /> Criar manualmente
+            </button>
+            <button onClick={openTemplateModal} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center gap-2 hover:bg-gray-50 font-medium">
+                <BookOpen size={18} /> Usar Template
             </button>
             <button onClick={() => { setManualMode(false); setShowNPSConsultant(true); }} className="px-4 py-2 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-lg flex items-center gap-2 hover:shadow-lg transition-all font-medium">
                 <Sparkles size={18} /> Nova Campanha com IA
@@ -222,6 +271,12 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
               >
                 <Edit size={15} /> Manualmente
               </button>
+              <button 
+                onClick={openTemplateModal}
+                className="w-full px-3 py-2 bg-white border border-emerald-300 text-emerald-700 rounded-lg flex items-center justify-center gap-2 hover:bg-emerald-50 transition-all text-sm font-medium"
+              >
+                <BookOpen size={15} /> Usar Template
+              </button>
             </div>
         </div>
       </div>
@@ -270,6 +325,107 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
                 </div>
             </div>
        )}
+
+      {/* Template Library Modal */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-2xl my-4 shadow-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-slate-200">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Biblioteca de Templates</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Escolha um template pronto e crie sua campanha em segundos</p>
+              </div>
+              <button onClick={() => setShowTemplateModal(false)} className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200"><X size={16} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* Filtros */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="relative flex-1 min-w-40">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar template..."
+                    value={templateSearch}
+                    onChange={e => setTemplateSearch(e.target.value)}
+                    className="w-full text-sm pl-8 pr-3 py-2 rounded-lg border border-gray-300 bg-white"
+                  />
+                </div>
+                <select
+                  value={templateCategoryFilter}
+                  onChange={e => setTemplateCategoryFilter(e.target.value)}
+                  className="text-sm px-3 py-2 rounded-lg border border-gray-300 bg-white"
+                >
+                  {templateCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              </div>
+              {/* Lista */}
+              {isLoadingTemplates ? (
+                <div className="flex items-center justify-center py-16"><Loader2 size={24} className="animate-spin text-emerald-500" /></div>
+              ) : templates.filter(t => {
+                const matchSearch = !templateSearch || t.name?.toLowerCase().includes(templateSearch.toLowerCase());
+                const matchCat = templateCategoryFilter === 'Todos' || t.category === templateCategoryFilter;
+                return matchSearch && matchCat;
+              }).length === 0 ? (
+                <div className="text-center py-16 text-gray-400">
+                  <BookOpen size={40} className="mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">Nenhum template disponível no momento.</p>
+                  <p className="text-xs mt-1">O administrador ainda não criou templates.</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                  {templates.filter(t => {
+                    const matchSearch = !templateSearch || t.name?.toLowerCase().includes(templateSearch.toLowerCase());
+                    const matchCat = templateCategoryFilter === 'Todos' || t.category === templateCategoryFilter;
+                    return matchSearch && matchCat;
+                  }).map(template => (
+                    <div key={template.id} className="border border-slate-200 rounded-xl p-4 hover:border-emerald-400 transition-colors">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="text-sm font-bold text-gray-900">{template.name}</span>
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{template.category}</span>
+                          </div>
+                          {template.description && <p className="text-xs text-gray-500 mb-2">{template.description}</p>}
+                          <div className="flex items-center gap-3 text-xs text-gray-400">
+                            <span>{template.questions?.length || 0} perguntas</span>
+                            <span className="flex items-center gap-1"><Star size={10} className="text-yellow-500" /> {template.use_count || 0} usos</span>
+                            {template.objective && <span className="truncate max-w-xs italic">{template.objective}</span>}
+                          </div>
+                          {(template.tags || []).length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {template.tags.map((tag: string) => (
+                                <span key={tag} className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{tag}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => useTemplate(template.id, template.name)}
+                          disabled={!!isUsingTemplate}
+                          className={`shrink-0 flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-lg transition-colors ${
+                            templateSuccess === template.id
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50'
+                          }`}
+                        >
+                          {isUsingTemplate === template.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : templateSuccess === template.id ? (
+                            <Check size={14} />
+                          ) : (
+                            <Plus size={14} />
+                          )}
+                          {templateSuccess === template.id ? 'Criado!' : 'Usar'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* NPS Consultant Modal */}
       {showNPSConsultant && (

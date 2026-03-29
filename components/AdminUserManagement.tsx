@@ -5,10 +5,11 @@ import {
   Plus, Trash2, LogOut, Loader2, Users, Edit, X, Save, RefreshCw,
   Key, CheckCircle, AlertTriangle, Clock, Gift, CreditCard,
   ExternalLink, Building2, AlertCircle, Search, ChevronRight, Copy,
-  Zap, Star, UserPlus, DollarSign, Check, Moon, Sun, Send
+  Zap, Star, UserPlus, DollarSign, Check, Moon, Sun, Send, BookOpen
 } from 'lucide-react';
 import AdminBroadcast from '@/components/AdminBroadcast';
 import AdminIntelligence from '@/components/AdminIntelligence';
+import AdminTemplates from '@/components/AdminTemplates';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -216,7 +217,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [isDark, setIsDark] = useState(true);
   const t = isDark ? DARK : LIGHT;
   // ── Active Tab ──
-  const [activeTab, setActiveTab] = useState<'clients' | 'broadcast' | 'intelligence'>('clients');
+  const [activeTab, setActiveTab] = useState<'clients' | 'broadcast' | 'intelligence' | 'templates'>('clients');
 
   // ── Analytics / Intelligence ──
   const [analyticsData, setAnalyticsData] = useState<{ global: any; tenants: any[] } | null>(null);
@@ -668,6 +669,16 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                 <Zap size={14} /> Inteligência
               </button>
               <button
+                onClick={() => setActiveTab('templates')}
+                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
+                  activeTab === 'templates'
+                    ? 'bg-emerald-600 text-white'
+                    : `${t.btnSecondary}`
+                }`}
+              >
+                <BookOpen size={14} /> Templates
+              </button>
+              <button
                 onClick={() => setActiveTab('broadcast')}
                 className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
                   activeTab === 'broadcast'
@@ -695,6 +706,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
 
       {activeTab === 'broadcast' && (
         <AdminBroadcast isDark={isDark} />
+      )}
+      {activeTab === 'templates' && (
+        <AdminTemplates isDark={isDark} surveysData={analyticsData} />
       )}
       {activeTab === 'intelligence' && (
         isLoadingAnalytics ? (
