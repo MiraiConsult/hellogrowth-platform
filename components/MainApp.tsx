@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Sparkles, ArrowLeft } from 'lucide-react';
 import GiuliaWhatsApp from '@/components/GiuliaWhatsApp';
 import Navigation from '@/components/Navigation';
 import DashboardUnificado from '@/components/DashboardUnificado';
@@ -111,6 +112,20 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
+  // Onboarding: sinais de criação para marcar etapas como concluídas
+  const [npsCreatedSignal, setNpsCreatedSignal] = useState(0);
+  const [formCreatedSignal, setFormCreatedSignal] = useState(0);
+  const [productsCreatedSignal, setProductsCreatedSignal] = useState(0);
+  // Onboarding: estados para abrir modais nativos diretamente do wizard
+  const [onboardingOpenNpsTemplates, setOnboardingOpenNpsTemplates] = useState(false);
+  const [onboardingOpenNpsAI, setOnboardingOpenNpsAI] = useState(false);
+  const [onboardingOpenNpsManual, setOnboardingOpenNpsManual] = useState(false);
+  const [onboardingOpenFormTemplates, setOnboardingOpenFormTemplates] = useState(false);
+  const [onboardingOpenFormAI, setOnboardingOpenFormAI] = useState(false);
+  const [onboardingOpenFormManual, setOnboardingOpenFormManual] = useState(false);
+  const [onboardingOpenProductCatalog, setOnboardingOpenProductCatalog] = useState(false);
+  const [onboardingOpenProductAI, setOnboardingOpenProductAI] = useState(false);
+  const [onboardingOpenProductManual, setOnboardingOpenProductManual] = useState(false);
 
   // --- REAL DATA STATES (Fetched from Supabase) ---
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -792,7 +807,11 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         alert('Erro ao salvar formulário: ' + insertError.message);
         return;
       }
-      if (data) setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
+      if (data) {
+        setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
+        // Sinalizar para o onboarding que um formulário foi criado
+        if (showOnboardingWizard) setFormCreatedSignal(prev => prev + 1);
+      }
     }
   };
 
@@ -876,7 +895,11 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         alert('Erro ao salvar campanha: ' + insertError.message);
         return;
       }
-      if (data) setCampaigns(prev => [...prev, { ...data, npsScore: 0, responses: 0, questions: data.questions || [], initialFields: data.initial_fields || [], enableRedirection: data.enable_redirection, google_redirect: data.google_redirect, google_place_id: data.google_place_id, offer_prize: data.offer_prize, game_id: data.game_id, before_google_message: data.before_google_message, after_game_message: data.after_game_message, objective: data.objective, tone: data.tone, evaluation_points: data.evaluation_points }]);
+      if (data) {
+        setCampaigns(prev => [...prev, { ...data, npsScore: 0, responses: 0, questions: data.questions || [], initialFields: data.initial_fields || [], enableRedirection: data.enable_redirection, google_redirect: data.google_redirect, google_place_id: data.google_place_id, offer_prize: data.offer_prize, game_id: data.game_id, before_google_message: data.before_google_message, after_game_message: data.after_game_message, objective: data.objective, tone: data.tone, evaluation_points: data.evaluation_points }]);
+        // Sinalizar para o onboarding que um NPS foi criado
+        if (showOnboardingWizard) setNpsCreatedSignal(prev => prev + 1);
+      }
     }
   };
 
@@ -1484,6 +1507,9 @@ Responda APENAS com JSON válido (sem markdown):
                 analysisProgress={analysisProgress}
                 pendingAnalysisCount={pendingAnalysisCount}
                 onAnalyzeAllLeads={handleAnalyzeAllLeads}
+                onboardingOpenTemplates={onboardingOpenFormTemplates}
+                onboardingOpenAI={onboardingOpenFormAI}
+                onboardingOpenManual={onboardingOpenFormManual}
             />
         )}
         
@@ -1497,6 +1523,9 @@ Responda APENAS com JSON válido (sem markdown):
                 onViewReport={(id) => { setReportCampaignId(id); setCurrentView('campaign-report'); }} 
                 currentUser={currentUser}
                 businessProfile={businessProfile}
+                onboardingOpenTemplates={onboardingOpenNpsTemplates}
+                onboardingOpenAI={onboardingOpenNpsAI}
+                onboardingOpenManual={onboardingOpenNpsManual}
             />
         )}
         
@@ -1588,6 +1617,10 @@ Responda APENAS com JSON válido (sem markdown):
           <ProductsManagement 
             supabase={supabase}
             userId={currentUser.id}
+            onboardingOpenCatalog={onboardingOpenProductCatalog}
+            onboardingOpenAI={onboardingOpenProductAI}
+            onboardingOpenManual={onboardingOpenProductManual}
+            onProductsCreated={() => setProductsCreatedSignal(prev => prev + 1)}
           />
         )}
         
@@ -1646,6 +1679,32 @@ Responda APENAS com JSON válido (sem markdown):
             </div>
         )}
 
+        {/* Banner flutuante de onboarding em andamento — aparece quando o usuário navega para módulos durante o onboarding */}
+        {!showOnboardingWizard && (() => {
+          const wizardComplete = typeof window !== 'undefined' && localStorage.getItem('hg_wizard_complete') === 'true';
+          const onboardingViews = ['nps','forms','products'];
+          if (wizardComplete || !onboardingViews.includes(currentView)) return null;
+          // Verificar se o onboarding está em andamento (não completo)
+          const onboardingInProgress = typeof window !== 'undefined' && !localStorage.getItem('hg_wizard_complete');
+          if (!onboardingInProgress) return null;
+          return (
+            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl border border-emerald-500 animate-in slide-in-from-top-2 duration-300">
+              <div className="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Sparkles size={14} className="text-white"/>
+              </div>
+              <div>
+                <p className="text-xs font-bold leading-tight">Onboarding em andamento</p>
+                <p className="text-xs text-emerald-200 leading-tight">Crie aqui e volte ao wizard para continuar</p>
+              </div>
+              <button
+                onClick={() => setShowOnboardingWizard(true)}
+                className="ml-2 flex items-center gap-1.5 bg-white text-emerald-700 text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition-colors flex-shrink-0">
+                <ArrowLeft size={12}/> Voltar ao Wizard
+              </button>
+            </div>
+          );
+        })()}
+
         {showTour && (
             <OnboardingTour 
                 onClose={() => setShowTour(false)} 
@@ -1667,6 +1726,18 @@ Responda APENAS com JSON válido (sem markdown):
                     setShowOnboardingWizard(false);
                     setCurrentView(view);
                 }}
+                npsCreatedSignal={npsCreatedSignal}
+                formCreatedSignal={formCreatedSignal}
+                productsCreatedSignal={productsCreatedSignal}
+                onOpenNpsTemplates={() => { setCurrentView('nps'); setOnboardingOpenNpsTemplates(prev => !prev); }}
+                onOpenNpsAI={() => { setCurrentView('nps'); setOnboardingOpenNpsAI(prev => !prev); }}
+                onOpenNpsManual={() => { setCurrentView('nps'); setOnboardingOpenNpsManual(prev => !prev); }}
+                onOpenFormTemplates={() => { setCurrentView('forms'); setOnboardingOpenFormTemplates(prev => !prev); }}
+                onOpenFormAI={() => { setCurrentView('forms'); setOnboardingOpenFormAI(prev => !prev); }}
+                onOpenFormManual={() => { setCurrentView('forms'); setOnboardingOpenFormManual(prev => !prev); }}
+                onOpenProductCatalog={() => { setCurrentView('products'); setOnboardingOpenProductCatalog(prev => !prev); }}
+                onOpenProductAI={() => { setCurrentView('products'); setOnboardingOpenProductAI(prev => !prev); }}
+                onOpenProductManual={() => { setCurrentView('products'); setOnboardingOpenProductManual(prev => !prev); }}
             />
         )}
       </main>

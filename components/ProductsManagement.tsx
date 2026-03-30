@@ -38,11 +38,14 @@ interface Product {
 interface ProductsManagementProps {
   supabase: SupabaseClient | null;
   userId: string;
+  // Onboarding: abrir modais nativos diretamente
+  onboardingOpenCatalog?: boolean;
+  onboardingOpenAI?: boolean;
+  onboardingOpenManual?: boolean;
+  onProductsCreated?: () => void;
 }
 
-
-
-const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userId }) => {
+const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userId, onboardingOpenCatalog, onboardingOpenAI, onboardingOpenManual, onProductsCreated }) => {
   const tenantId = useTenantId()
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -98,6 +101,15 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
       fetchProducts();
     }
   }, [supabase, userId, tenantId]);
+
+  // Onboarding: abrir modais nativos quando sinalizado pelo wizard
+  useEffect(() => {
+    if (onboardingOpenCatalog) { fetchCatalogForBusiness(); }
+  }, [onboardingOpenCatalog]);
+
+  useEffect(() => {
+    if (onboardingOpenManual) { setShowAddModal(true); }
+  }, [onboardingOpenManual]);
 
   const fetchProducts = async () => {
     if (!supabase || !userId || !tenantId) return;
@@ -273,6 +285,8 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
       setShowCatalogOnboarding(false);
       setMultiSegmentSelections({});
       showNotification('success', `${allSelected.length} produtos importados com sucesso!`);
+      // Sinalizar onboarding que produtos foram criados
+      if (onProductsCreated) onProductsCreated();
     } finally {
       setImportingCatalog(false);
     }
@@ -393,6 +407,8 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
       setNewProduct({ name: "", value: "" });
       setShowAddModal(false);
       showNotification("success", "Produto adicionado com sucesso!");
+      // Sinalizar onboarding que produto foi criado
+      if (onProductsCreated) onProductsCreated();
 
       if (data) {
         generateAIInsights(data.id, data.name, data.value);
@@ -495,6 +511,8 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
       setImportData([]);
       setShowImportModal(false);
       showNotification("success", `${data?.length || 0} produtos importados!`);
+      // Sinalizar onboarding que produtos foram criados
+      if (onProductsCreated && data && data.length > 0) onProductsCreated();
       if (data) {
         for (const product of data) {
           await generateAIInsights(product.id, product.name, product.value);

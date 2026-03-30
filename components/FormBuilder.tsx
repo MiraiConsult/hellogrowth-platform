@@ -23,6 +23,10 @@ interface FormBuilderProps {
   analysisProgress?: { current: number; total: number };
   pendingAnalysisCount?: number;
   onAnalyzeAllLeads?: () => void;
+  // Onboarding: abrir modais nativos diretamente
+  onboardingOpenTemplates?: boolean;
+  onboardingOpenAI?: boolean;
+  onboardingOpenManual?: boolean;
 }
 
 
@@ -39,7 +43,7 @@ const normalizeQuestionType = (type: string): 'text' | 'single' | 'multiple' => 
   return typeMap[type] || 'text';
 };
 
-const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId, activeCompany, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads }) => {
+const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId, activeCompany, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads, onboardingOpenTemplates, onboardingOpenAI, onboardingOpenManual }) => {
   const tenantId = useTenantId();
   const [view, setView] = useState<'list' | 'editor' | 'consultant'>('list');
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
@@ -47,6 +51,17 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
 
   // Template modal (pre-venda) — novo design estilo catálogo
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+
+  // Onboarding: abrir modais nativos quando sinalizado pelo wizard
+  useEffect(() => {
+    if (onboardingOpenTemplates) { setShowTemplateModal(true); }
+  }, [onboardingOpenTemplates]);
+  useEffect(() => {
+    if (onboardingOpenAI) { setShowConsultant(true); }
+  }, [onboardingOpenAI]);
+  useEffect(() => {
+    if (onboardingOpenManual) { setView('editor'); setEditingFormId(null); }
+  }, [onboardingOpenManual]);
   const [allFormTemplates, setAllFormTemplates] = useState<any[]>([]);
   const [formTemplateSegments, setFormTemplateSegments] = useState<string[]>([]);
   const [activeFormTemplateSegment, setActiveFormTemplateSegment] = useState<string>('Todos');

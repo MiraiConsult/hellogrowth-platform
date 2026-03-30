@@ -19,9 +19,13 @@ interface NPSCampaignsProps {
   currentUser?: User;
   setCampaigns?: any;
   businessProfile?: any;
+  // Onboarding: abrir modais nativos diretamente
+  onboardingOpenTemplates?: boolean;
+  onboardingOpenAI?: boolean;
+  onboardingOpenManual?: boolean;
 }
 
-const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, onDeleteCampaign, navigateToAnalytics, onPreview, onViewReport, currentUser, businessProfile }) => {
+const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, onDeleteCampaign, navigateToAnalytics, onPreview, onViewReport, currentUser, businessProfile, onboardingOpenTemplates, onboardingOpenAI, onboardingOpenManual }) => {
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       'active': 'Ativa',
@@ -37,7 +41,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [manualMode, setManualMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // Mass Send State
   const [isMassSendOpen, setIsMassSendOpen] = useState(false);
   
@@ -215,6 +219,17 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
 
   // Template Library State — novo design estilo catálogo
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+
+  // Onboarding: abrir modais nativos quando sinalizado pelo wizard
+  useEffect(() => {
+    if (onboardingOpenTemplates) { setShowTemplateModal(true); }
+  }, [onboardingOpenTemplates]);
+  useEffect(() => {
+    if (onboardingOpenAI) { setManualMode(false); setEditingCampaign(null); setShowNPSConsultant(true); }
+  }, [onboardingOpenAI]);
+  useEffect(() => {
+    if (onboardingOpenManual) { setManualMode(true); setEditingCampaign(null); setShowNPSConsultant(true); }
+  }, [onboardingOpenManual]);
   const [allTemplates, setAllTemplates] = useState<any[]>([]);
   const [templateSegments, setTemplateSegments] = useState<string[]>([]);
   const [activeTemplateSegment, setActiveTemplateSegment] = useState<string>('Todos');
