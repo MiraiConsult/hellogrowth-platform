@@ -81,8 +81,15 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   const [showCatalogOnboarding, setShowCatalogOnboarding] = useState(false);
   const [catalogData, setCatalogData] = useState<any>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
-  const [catalogItems, setCatalogItems] = useState<{name: string; value: string; selected: boolean}[]>([]);
+  const [catalogItems, setCatalogItems] = useState<{name: string; value: string; selected: boolean; description?: string}[]>([]);
   const [importingCatalog, setImportingCatalog] = useState(false);
+  const [allSegments, setAllSegments] = useState<any[]>([]);
+  const [detectedSegment, setDetectedSegment] = useState<string>('');
+  const [selectedSegment, setSelectedSegment] = useState<string>('');
+
+  // Geração em massa de descrições
+  const [generatingBulk, setGeneratingBulk] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
 
   useEffect(() => {
     if (supabase && userId && tenantId) {
@@ -109,7 +116,7 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
     }
   };
 
-  // Busca catálogo baseado no business_type do perfil
+  // Busca todos os segmentos e detecta o do cliente
   const fetchCatalogForBusiness = async () => {
     if (!supabase || !tenantId) return;
     setCatalogLoading(true);
@@ -139,29 +146,22 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
         'auto': 'automoveis', 'oficina': 'automoveis', 'mecân': 'automoveis', 'carro': 'automoveis',
       };
 
-      let detectedSegment = '';
+      let detected = '';
       for (const [keyword, segment] of Object.entries(segmentMap)) {
-        if (businessType.includes(keyword)) {
-          detectedSegment = segment;
-          break;
-        }
+        if (businessType.includes(keyword)) { detected = segment; break; }
       }
 
-      // Buscar catálogo do segmento detectado
-      const res = await fetch(`/api/product-catalog${detectedSegment ? `?segment=${detectedSegment}` : ''}`);
-      const data = await res.json();
+      // Buscar todos os segmentos disponíveis
+      const allRes = await fetch('/api/product-catalog');
+      const allData = await allRes.json();
+      const segments = Array.isArray(allData) ? allData : [];
+      setAllSegments(segments);
+      setDetectedSegment(detected);
 
-      if (detectedSegment && data && data.products) {
-        setCatalogData(data);
-        setCatalogItems(data.products.map((p: any) => ({
-          name: p.name,
-          value: String(Math.round((p.value_min + p.value_max) / 2)),
-          selected: true
-        })));
-      } else {
-        // Sem segmento detectado — mostrar lista de segmentos
-        setCatalogData({ segments: Array.isArray(data) ? data : [] });
-        setCatalogItems([]);
+      // Carregar o segmento detectado (ou o primeiro se não detectado)
+      const segmentToLoad = detected || (segments[0]?.segment || '');
+      if (segmentToLoad) {
+        await loadSegmentProducts(segmentToLoad);
       }
       setShowCatalogOnboarding(true);
     } catch (e) {
@@ -169,6 +169,53 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
     } finally {
       setCatalogLoading(false);
     }
+  };
+
+  const loadSegmentProducts = async (segment: string) => {
+    setSelectedSegment(segment);
+    setCatalogLoading(true);
+    try {
+      const res = await fetch(`/api/product-catalog?segment=${segment}`);
+      const data = await res.json();
+      if (data && data.products) {
+        setCatalogData(data);
+        setCatalogItems(data.products.map((p: any) => ({
+          name: p.name,
+          value: String(Math.round((p.value_min + p.value_max) / 2)),
+          selected: true,
+          description: p.description || ''
+        })));
+      }
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  // Geração em massa de descrições IA para todos os produtos sem descrição
+  const generateBulkDescriptions = async () => {
+    const withoutDesc = products.filter(p => !p.ai_description);
+    if (!withoutDesc.length) {
+      showNotification('success', 'Todos os produtos já têm descrição gerada!');
+      return;
+    }
+    setGeneratingBulk(true);
+    setBulkProgress({ current: 0, total: withoutDesc.length });
+    let successCount = 0;
+    for (let i = 0; i < withoutDesc.length; i++) {
+      const product = withoutDesc[i];
+      setBulkProgress({ current: i + 1, total: withoutDesc.length });
+      try {
+        await generateAIInsights(product.id, product.name, product.value);
+        successCount++;
+      } catch (e) {
+        console.error(`Erro ao gerar para ${product.name}:`, e);
+      }
+      // Delay para não sobrecarregar a API
+      if (i < withoutDesc.length - 1) await new Promise(r => setTimeout(r, 800));
+    }
+    setGeneratingBulk(false);
+    setBulkProgress({ current: 0, total: 0 });
+    showNotification('success', `${successCount} descrições geradas com sucesso!`);
   };
 
   const importCatalogProducts = async () => {
@@ -469,11 +516,40 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
           {catalogLoading ? <Loader2 size={18} className="animate-spin" /> : <Package size={18} />}
           Catálogo do Segmento
         </button>
+        {products.filter(p => !p.ai_description).length > 0 && (
+          <button
+            onClick={generateBulkDescriptions}
+            disabled={generatingBulk}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl hover:from-purple-600 hover:to-pink-600 transition-colors shadow-lg shadow-purple-500/25 disabled:opacity-60"
+          >
+            {generatingBulk ? (
+              <><Loader2 size={18} className="animate-spin" />Gerando {bulkProgress.current}/{bulkProgress.total}...</>
+            ) : (
+              <><Sparkles size={18} />Gerar Descrições em Massa ({products.filter(p => !p.ai_description).length})</>
+            )}
+          </button>
+        )}
         <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-colors shadow-lg shadow-emerald-500/25">
           <Plus size={18} />
           Novo Produto
         </button>
       </div>
+
+      {/* Bulk generation progress bar */}
+      {generatingBulk && (
+        <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-xl">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-purple-700">Gerando descrições com IA...</span>
+            <span className="text-sm text-purple-600">{bulkProgress.current} de {bulkProgress.total}</span>
+          </div>
+          <div className="w-full bg-purple-100 rounded-full h-2">
+            <div
+              className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500"
+              style={{ width: bulkProgress.total > 0 ? `${(bulkProgress.current / bulkProgress.total) * 100}%` : '0%' }}
+            />
+          </div>
+        </div>
+      )}
 
       {importError && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700">
@@ -822,125 +898,196 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
         </div>
       )}
 
-      {/* Catalog Onboarding Modal */}
+      {/* Catalog Onboarding Modal - Premium Layout */}
       {showCatalogOnboarding && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b border-slate-100">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800">
-                  {catalogData?.segment_label
-                    ? `${catalogData.segment_icon} Catálogo: ${catalogData.segment_label}`
-                    : 'Catálogo de Produtos por Segmento'}
-                </h2>
-                <p className="text-sm text-slate-500 mt-1">
-                  {catalogItems.length > 0
-                    ? 'Selecione os produtos que deseja importar e ajuste os valores conforme sua realidade.'
-                    : 'Selecione o segmento do seu negócio para ver os produtos sugeridos.'}
-                </p>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl shadow">
+                  <Package className="text-white" size={22} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">Catálogo de Produtos</h2>
+                  <p className="text-sm text-slate-500">Escolha o segmento e selecione os produtos para importar</p>
+                </div>
               </div>
-              <button onClick={() => setShowCatalogOnboarding(false)} className="p-2 hover:bg-slate-100 rounded-lg">
-                <X size={20} />
+              <button onClick={() => setShowCatalogOnboarding(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                <X size={20} className="text-slate-500" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
-              {catalogItems.length > 0 ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-slate-500">{catalogItems.filter(i => i.selected).length} de {catalogItems.length} selecionados</span>
-                    <div className="flex gap-2">
-                      <button onClick={() => setCatalogItems(catalogItems.map(i => ({ ...i, selected: true })))} className="text-xs text-blue-600 hover:underline">Selecionar todos</button>
-                      <span className="text-slate-300">|</span>
-                      <button onClick={() => setCatalogItems(catalogItems.map(i => ({ ...i, selected: false })))} className="text-xs text-slate-500 hover:underline">Desmarcar todos</button>
-                    </div>
-                  </div>
-                  {catalogItems.map((item, i) => (
-                    <div key={i} className={`flex items-center gap-4 p-4 rounded-xl border transition-colors ${item.selected ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
-                      <input
-                        type="checkbox"
-                        checked={item.selected}
-                        onChange={(e) => {
-                          const updated = [...catalogItems];
-                          updated[i] = { ...updated[i], selected: e.target.checked };
-                          setCatalogItems(updated);
-                        }}
-                        className="w-4 h-4 accent-emerald-500"
-                      />
-                      <div className="flex-1">
-                        <input
-                          type="text"
-                          value={item.name}
-                          onChange={(e) => {
-                            const updated = [...catalogItems];
-                            updated[i] = { ...updated[i], name: e.target.value };
-                            setCatalogItems(updated);
-                          }}
-                          className="font-medium text-slate-800 bg-transparent border-none outline-none w-full text-sm"
-                        />
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-slate-400">R$</span>
-                        <input
-                          type="number"
-                          value={item.value}
-                          onChange={(e) => {
-                            const updated = [...catalogItems];
-                            updated[i] = { ...updated[i], value: e.target.value };
-                            setCatalogItems(updated);
-                          }}
-                          className="w-24 text-right text-sm font-semibold text-emerald-700 border border-slate-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-emerald-500"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                // Lista de segmentos para escolher
-                <div className="grid grid-cols-2 gap-3">
-                  {(catalogData?.segments || []).map((seg: any) => (
+            {/* Body: sidebar + content */}
+            <div className="flex flex-1 overflow-hidden">
+
+              {/* Sidebar de segmentos */}
+              <div className="w-56 flex-shrink-0 border-r border-slate-100 overflow-y-auto bg-slate-50/50 py-4">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-4 mb-3">Segmentos</p>
+                {allSegments.map((seg: any) => {
+                  const isDetected = seg.segment === detectedSegment;
+                  const isSelected = seg.segment === selectedSegment;
+                  return (
                     <button
                       key={seg.segment}
-                      onClick={async () => {
-                        setCatalogLoading(true);
-                        try {
-                          const res = await fetch(`/api/product-catalog?segment=${seg.segment}`);
-                          const data = await res.json();
-                          setCatalogData(data);
-                          setCatalogItems(data.products.map((p: any) => ({
-                            name: p.name,
-                            value: String(Math.round((p.value_min + p.value_max) / 2)),
-                            selected: true
-                          })));
-                        } finally {
-                          setCatalogLoading(false);
-                        }
-                      }}
-                      className="flex items-center gap-3 p-4 border border-slate-200 rounded-xl hover:border-emerald-300 hover:bg-emerald-50 transition-colors text-left"
+                      onClick={() => loadSegmentProducts(seg.segment)}
+                      disabled={catalogLoading}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all ${
+                        isSelected
+                          ? 'bg-emerald-50 border-r-2 border-emerald-500 text-emerald-700'
+                          : 'hover:bg-white text-slate-600 hover:text-slate-800'
+                      }`}
                     >
-                      <span className="text-2xl">{seg.segment_icon}</span>
-                      <span className="font-medium text-slate-700 text-sm">{seg.segment_label}</span>
+                      <span className="text-xl">{seg.segment_icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium block truncate">{seg.segment_label}</span>
+                        {isDetected && (
+                          <span className="text-xs text-emerald-600 font-medium">Seu segmento</span>
+                        )}
+                      </div>
                     </button>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
+
+              {/* Conteúdo: lista de produtos do segmento */}
+              <div className="flex-1 overflow-y-auto">
+                {catalogLoading ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <Loader2 className="animate-spin text-emerald-500 mx-auto mb-3" size={32} />
+                      <p className="text-slate-500 text-sm">Carregando produtos...</p>
+                    </div>
+                  </div>
+                ) : catalogData ? (
+                  <div className="p-6">
+                    {/* Cabeçalho do segmento */}
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl">{catalogData.segment_icon}</span>
+                        <div>
+                          <h3 className="font-bold text-slate-800 text-lg">{catalogData.segment_label}</h3>
+                          <p className="text-sm text-slate-500">{catalogItems.length} produtos disponíveis</p>
+                        </div>
+                        {detectedSegment === selectedSegment && (
+                          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-full">Seu segmento</span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setCatalogItems(catalogItems.map(i => ({ ...i, selected: true })))}
+                          className="text-xs px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors font-medium"
+                        >
+                          Todos
+                        </button>
+                        <button
+                          onClick={() => setCatalogItems(catalogItems.map(i => ({ ...i, selected: false })))}
+                          className="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+                        >
+                          Nenhum
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Grid de produtos */}
+                    <div className="grid grid-cols-1 gap-3">
+                      {catalogItems.map((item, i) => (
+                        <div
+                          key={i}
+                          onClick={() => {
+                            const updated = [...catalogItems];
+                            updated[i] = { ...updated[i], selected: !updated[i].selected };
+                            setCatalogItems(updated);
+                          }}
+                          className={`group flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+                            item.selected
+                              ? 'border-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50 shadow-sm'
+                              : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm'
+                          }`}
+                        >
+                          {/* Checkbox visual */}
+                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                            item.selected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 group-hover:border-emerald-300'
+                          }`}>
+                            {item.selected && (
+                              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
+
+                          {/* Nome editável */}
+                          <div className="flex-1 min-w-0">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                const updated = [...catalogItems];
+                                updated[i] = { ...updated[i], name: e.target.value };
+                                setCatalogItems(updated);
+                              }}
+                              className="font-semibold text-slate-800 bg-transparent border-none outline-none w-full text-sm focus:bg-white focus:px-2 focus:rounded-lg transition-all"
+                            />
+                            {item.description && (
+                              <p className="text-xs text-slate-400 mt-0.5 truncate">{item.description}</p>
+                            )}
+                          </div>
+
+                          {/* Preço editável */}
+                          <div
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all ${
+                              item.selected ? 'bg-white border-emerald-200' : 'bg-slate-50 border-slate-200'
+                            }`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span className="text-xs font-medium text-slate-400">R$</span>
+                            <input
+                              type="number"
+                              value={item.value}
+                              onChange={(e) => {
+                                const updated = [...catalogItems];
+                                updated[i] = { ...updated[i], value: e.target.value };
+                                setCatalogItems(updated);
+                              }}
+                              className="w-20 text-right text-sm font-bold text-emerald-700 bg-transparent border-none outline-none"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </div>
 
-            {catalogItems.length > 0 && (
-              <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
-                <button onClick={() => setShowCatalogOnboarding(false)} className="px-4 py-2 text-slate-600 hover:text-slate-800 text-sm">
+            {/* Footer */}
+            <div className="px-8 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <div className="text-sm text-slate-500">
+                {catalogItems.filter(i => i.selected).length > 0 ? (
+                  <span><strong className="text-slate-700">{catalogItems.filter(i => i.selected).length}</strong> produto{catalogItems.filter(i => i.selected).length !== 1 ? 's' : ''} selecionado{catalogItems.filter(i => i.selected).length !== 1 ? 's' : ''}</span>
+                ) : (
+                  <span className="text-slate-400">Nenhum produto selecionado</span>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCatalogOnboarding(false)}
+                  className="px-5 py-2.5 text-slate-600 hover:text-slate-800 text-sm font-medium hover:bg-slate-100 rounded-xl transition-colors"
+                >
                   Cancelar
                 </button>
                 <button
                   onClick={importCatalogProducts}
                   disabled={importingCatalog || catalogItems.filter(i => i.selected).length === 0}
-                  className="flex items-center gap-2 px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-medium disabled:opacity-50"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 shadow-lg shadow-emerald-500/25 transition-all"
                 >
                   {importingCatalog ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
                   Importar {catalogItems.filter(i => i.selected).length} produto{catalogItems.filter(i => i.selected).length !== 1 ? 's' : ''}
                 </button>
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}
