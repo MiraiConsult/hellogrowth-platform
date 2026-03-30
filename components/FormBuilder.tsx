@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift, Send, BookOpen, Search, Star } from 'lucide-react';
+import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift, Send, BookOpen, Search, Star, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
 import FormConsultant from '@/components/FormConsultant';
 import FormMassDispatchModal from '@/components/FormMassDispatchModal';
 import { supabase } from '@/lib/supabase';
@@ -54,6 +54,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [isLoadingFormTemplates, setIsLoadingFormTemplates] = useState(false);
   const [isUsingFormTemplate, setIsUsingFormTemplate] = useState<string | null>(null);
   const [formTemplateSuccess, setFormTemplateSuccess] = useState<string | null>(null);
+  const [previewFormTemplateId, setPreviewFormTemplateId] = useState<string | null>(null);
 
   const FORM_SEGMENT_ICONS: Record<string, string> = {
     'Todos': '📋', 'Clínica Odontológica': '🦷', 'Clínica de Estética': '💆', 'Restaurante / Alimentação': '🍽️',
@@ -1342,6 +1343,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                                 )}
                                 <div className="flex items-center gap-4 text-xs">
                                   <span className="flex items-center gap-1 text-slate-500">
+                                    <HelpCircle size={11} className="text-slate-400" />
                                     <span className="font-medium text-slate-700">{template.questions?.length || 0}</span> perguntas
                                   </span>
                                   <span className="flex items-center gap-1 text-amber-600 font-medium">
@@ -1349,11 +1351,42 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                                     {template.use_count || 0} uso{(template.use_count || 0) !== 1 ? 's' : ''}
                                   </span>
                                   {(template.pipeline_value_total || 0) > 0 && (
-                                    <span className="flex items-center gap-1 text-emerald-600 font-semibold">
+                                    <span className="flex items-center gap-1 text-blue-600 font-semibold">
                                       R$ {Number(template.pipeline_value_total).toLocaleString('pt-BR', { minimumFractionDigits: 0 })} em pipeline
                                     </span>
                                   )}
                                 </div>
+                                {/* Preview das perguntas */}
+                                {previewFormTemplateId === template.id && (template.questions || []).length > 0 && (
+                                  <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+                                    <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+                                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Perguntas do template</span>
+                                    </div>
+                                    <div className="divide-y divide-slate-100">
+                                      {(template.questions || []).map((q: any, idx: number) => (
+                                        <div key={q.id || idx} className="px-4 py-3 flex items-start gap-3">
+                                          <span className="shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center mt-0.5">{idx + 1}</span>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm text-gray-800 leading-snug">{q.text}</p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                              <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
+                                                {q.type === 'scale' ? 'Escala 0–10' : q.type === 'single' ? 'Múltipla escolha' : q.type === 'text' ? 'Texto livre' : q.type}
+                                              </span>
+                                              {q.required && <span className="text-[10px] text-red-400 font-medium">Obrigatória</span>}
+                                            </div>
+                                            {(q.options || []).length > 0 && (
+                                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                                {q.options.map((opt: string) => (
+                                                  <span key={opt} className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-100">{opt}</span>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                                 {(template.tags || []).length > 0 && (
                                   <div className="flex flex-wrap gap-1 mt-3">
                                     {template.tags.map((tag: string) => (
@@ -1362,24 +1395,33 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                                   </div>
                                 )}
                               </div>
-                              <button
-                                onClick={() => useFormTemplate(template.id, template.name)}
-                                disabled={!!isUsingFormTemplate}
-                                className={`shrink-0 flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl transition-all shadow-sm ${
-                                  formTemplateSuccess === template.id
-                                    ? 'bg-blue-500 text-white shadow-blue-200'
-                                    : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white disabled:opacity-50'
-                                }`}
-                              >
-                                {isUsingFormTemplate === template.id ? (
-                                  <Loader2 size={14} className="animate-spin" />
-                                ) : formTemplateSuccess === template.id ? (
-                                  <Check size={14} />
-                                ) : (
-                                  <Plus size={14} />
-                                )}
-                                {formTemplateSuccess === template.id ? 'Criado!' : 'Usar Template'}
-                              </button>
+                              <div className="flex flex-col gap-2 shrink-0">
+                                <button
+                                  onClick={() => setPreviewFormTemplateId(previewFormTemplateId === template.id ? null : template.id)}
+                                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors"
+                                >
+                                  {previewFormTemplateId === template.id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                  {previewFormTemplateId === template.id ? 'Ocultar' : 'Ver perguntas'}
+                                </button>
+                                <button
+                                  onClick={() => useFormTemplate(template.id, template.name)}
+                                  disabled={!!isUsingFormTemplate}
+                                  className={`flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl transition-all shadow-sm ${
+                                    formTemplateSuccess === template.id
+                                      ? 'bg-blue-500 text-white shadow-blue-200'
+                                      : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white disabled:opacity-50'
+                                  }`}
+                                >
+                                  {isUsingFormTemplate === template.id ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                  ) : formTemplateSuccess === template.id ? (
+                                    <Check size={14} />
+                                  ) : (
+                                    <Plus size={14} />
+                                  )}
+                                  {formTemplateSuccess === template.id ? 'Criado!' : 'Usar Template'}
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}
