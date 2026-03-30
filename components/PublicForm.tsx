@@ -305,8 +305,8 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col relative" style={{ colorScheme: 'light' }}>
-      <div className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+    <div className="min-h-screen bg-gray-50 flex flex-col relative" style={{ colorScheme: 'light', backgroundColor: '#f9fafb', color: '#111827' }}>
+      <div className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10" style={{ backgroundColor: '#ffffff', color: '#111827' }}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold">
             {companyInitial}
@@ -339,7 +339,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
         <div className="w-full max-w-2xl">
           
           {showIntro ? (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ backgroundColor: '#ffffff', color: '#111827' }}>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">{form.name}</h1>
               <p className="text-gray-600 mb-8">Por favor, preencha seus dados para iniciarmos o atendimento.</p>
               
@@ -375,7 +375,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
               </button>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 min-h-[400px] flex flex-col animate-in fade-in slide-in-from-right-8 duration-300" key={currentStep}>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 min-h-[400px] flex flex-col animate-in fade-in slide-in-from-right-8 duration-300" key={currentStep} style={{ backgroundColor: '#ffffff', color: '#111827' }}>
               <div className="flex-1">
                 <span className="text-xs font-bold text-primary-600 uppercase tracking-wider mb-2 block">
                   Pergunta {currentStep + 1} de {form.questions.length}
@@ -394,6 +394,13 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
                       value={answers[currentQuestion.id]?.value || ''}
                       onChange={(e) => handleAnswer(currentQuestion.id, e.target.value)}
                     />
+                  )}
+
+                  {(currentQuestion.type === 'multiple' || currentQuestion.type === 'multiple_choice') && currentQuestion.options && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 text-sm mb-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      <span>Você pode selecionar <strong>mais de uma opção</strong> nesta pergunta.</span>
+                    </div>
                   )}
 
                   {(currentQuestion.type === 'single' || currentQuestion.type === 'multiple' || currentQuestion.type === 'single_choice' || currentQuestion.type === 'multiple_choice') && currentQuestion.options && (

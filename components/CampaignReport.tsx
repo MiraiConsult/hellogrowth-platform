@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { Campaign, NPSResponse } from '@/types';
-import { ArrowLeft, Users, Star, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, X, Mail, Phone, Trash2, ArrowRight, History, Plus, User, Info, FileText, Layout, Search, Filter } from 'lucide-react';
+import { ArrowLeft, Users, Star, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, X, Mail, Phone, Trash2, ArrowRight, History, Plus, User, Info, FileText, Layout, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from 'react-markdown';
@@ -25,11 +25,55 @@ const CampaignReport: React.FC<CampaignReportProps> = ({ campaignId, campaigns, 
   const [isSavingNote, setIsSavingNote] = useState(false);
   const notesEndRef = useRef<HTMLDivElement>(null);
 
+  // Filter & Sort State
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [sortColumn, setSortColumn] = useState<'customerName' | 'score' | 'date' | null>('date');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
   const campaign = campaigns.find(c => c.id === campaignId);
   const campaignResponses = useMemo(() => {
     if (!campaign) return [];
     return npsData.filter(r => r.campaign === campaign.name);
   }, [campaign, npsData]);
+
+  // Filtro e ordenação
+  const filteredAndSorted = useMemo(() => {
+    let data = [...campaignResponses];
+    if (dateFrom) {
+      const from = new Date(dateFrom + 'T00:00:00');
+      data = data.filter(r => new Date(r.date || 0) >= from);
+    }
+    if (dateTo) {
+      const to = new Date(dateTo + 'T23:59:59');
+      data = data.filter(r => new Date(r.date || 0) <= to);
+    }
+    if (sortColumn) {
+      data.sort((a, b) => {
+        let valA: string | number = '';
+        let valB: string | number = '';
+        if (sortColumn === 'customerName') { valA = a.customerName?.toLowerCase() || ''; valB = b.customerName?.toLowerCase() || ''; }
+        if (sortColumn === 'score') { valA = a.score; valB = b.score; }
+        if (sortColumn === 'date') { valA = new Date(a.date || 0).getTime(); valB = new Date(b.date || 0).getTime(); }
+        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return data;
+  }, [campaignResponses, dateFrom, dateTo, sortColumn, sortDirection]);
+
+  const handleSort = (col: 'customerName' | 'score' | 'date') => {
+    if (sortColumn === col) setSortDirection(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortColumn(col); setSortDirection('asc'); }
+  };
+
+  const SortIcon = ({ col }: { col: 'customerName' | 'score' | 'date' }) => {
+    if (sortColumn !== col) return <ChevronsUpDown size={12} className="ml-1 text-gray-300" />;
+    return sortDirection === 'asc'
+      ? <ChevronUp size={12} className="ml-1 text-primary-500" />
+      : <ChevronDown size={12} className="ml-1 text-primary-500" />;
+  };
 
   const totalResponses = campaignResponses.length;
   const promoters = campaignResponses.filter(r => r.score >= 9).length;
@@ -274,12 +318,40 @@ const CampaignReport: React.FC<CampaignReportProps> = ({ campaignId, campaigns, 
       </div>
       
       {/* Table with DELETE */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4 print:hidden">
+        <h3 className="font-bold text-gray-900">Participantes e Respostas
+          <span className="ml-2 text-sm font-normal text-gray-400">{filteredAndSorted.length} de {totalResponses}</span>
+        </h3>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+            <Filter size={14} className="text-gray-400" />
+            <span className="text-xs text-gray-500 font-medium">De</span>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="text-xs text-gray-700 border-none outline-none bg-transparent cursor-pointer" />
+          </div>
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+            <span className="text-xs text-gray-500 font-medium">Até</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="text-xs text-gray-700 border-none outline-none bg-transparent cursor-pointer" />
+          </div>
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-xs text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg transition-colors font-medium">Limpar filtro</button>
+          )}
+        </div>
+      </div>
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:break-before-page">
-        <div className="px-6 py-4 border-b border-gray-100"><h3 className="font-bold text-gray-900">Participantes e Respostas</h3></div>
         <table className="w-full text-left">
-          <thead className="bg-gray-50 text-gray-500 text-xs uppercase"><tr><th className="px-6 py-3">Cliente</th><th className="px-6 py-3">Nota</th><th className="px-6 py-3">Comentário / Notas</th><th className="px-6 py-3">Data</th><th className="px-6 py-3 text-right">Ações</th></tr></thead>
+          <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+            <tr>
+              <th className="px-6 py-3"><button onClick={() => handleSort('customerName')} className="flex items-center hover:text-gray-700 transition-colors">Cliente <SortIcon col="customerName" /></button></th>
+              <th className="px-6 py-3"><button onClick={() => handleSort('score')} className="flex items-center hover:text-gray-700 transition-colors">Nota <SortIcon col="score" /></button></th>
+              <th className="px-6 py-3">Comentário / Notas</th>
+              <th className="px-6 py-3"><button onClick={() => handleSort('date')} className="flex items-center hover:text-gray-700 transition-colors">Data <SortIcon col="date" /></button></th>
+              <th className="px-6 py-3 text-right">Ações</th>
+            </tr>
+          </thead>
           <tbody className="divide-y divide-gray-100">
-            {campaignResponses.map((resp) => (
+            {filteredAndSorted.length === 0 ? (
+              <tr><td colSpan={5} className="px-6 py-10 text-center text-gray-400 text-sm">Nenhuma resposta encontrada para o período selecionado.</td></tr>
+            ) : filteredAndSorted.map((resp) => (
               <tr key={resp.id} onClick={() => setSelectedResponse(resp)} className="hover:bg-gray-50 cursor-pointer">
                 <td className="px-6 py-4 font-medium">{resp.customerName}</td>
                 <td className="px-6 py-4"><span className={`px-2 py-1 rounded text-white text-xs font-bold ${resp.score>=9?'bg-green-500':resp.score<=6?'bg-red-500':'bg-yellow-400'}`}>{resp.score}</span></td>
@@ -292,13 +364,7 @@ const CampaignReport: React.FC<CampaignReportProps> = ({ campaignId, campaigns, 
                 </td>
               </tr>
             ))}
-            {campaignResponses.length === 0 && (
-                <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                        Nenhuma resposta registrada nesta campanha ainda.
-                    </td>
-                </tr>
-            )}
+
           </tbody>
         </table>
       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift, Send } from 'lucide-react';
+import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift, Send, BookOpen, Search, Star } from 'lucide-react';
 import FormConsultant from '@/components/FormConsultant';
 import FormMassDispatchModal from '@/components/FormMassDispatchModal';
 import { supabase } from '@/lib/supabase';
@@ -44,6 +44,74 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [view, setView] = useState<'list' | 'editor' | 'consultant'>('list');
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [showConsultant, setShowConsultant] = useState(false);
+
+  // Template modal (pre-venda)
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [formTemplates, setFormTemplates] = useState<any[]>([]);
+  const [formTemplateCategories, setFormTemplateCategories] = useState<string[]>(['Todos']);
+  const [formTemplateCategoryFilter, setFormTemplateCategoryFilter] = useState('Todos');
+  const [formTemplateSearch, setFormTemplateSearch] = useState('');
+  const [isLoadingFormTemplates, setIsLoadingFormTemplates] = useState(false);
+  const [isUsingFormTemplate, setIsUsingFormTemplate] = useState<string | null>(null);
+  const [formTemplateSuccess, setFormTemplateSuccess] = useState<string | null>(null);
+
+  const loadFormTemplates = async () => {
+    setIsLoadingFormTemplates(true);
+    try {
+      const res = await fetch('/api/templates?tipoVenda=pre_venda');
+      const data = await res.json();
+      setFormTemplates(data.templates || []);
+      const cats: string[] = ['Todos', ...Array.from(new Set((data.templates || []).map((t: any) => t.category).filter(Boolean))) as string[]];
+      setFormTemplateCategories(cats);
+    } finally { setIsLoadingFormTemplates(false); }
+  };
+
+  const openFormTemplateModal = () => {
+    setShowTemplateModal(true);
+    loadFormTemplates();
+  };
+
+  const useFormTemplate = async (templateId: string, templateName: string) => {
+    if (!tenantId) return;
+    setIsUsingFormTemplate(templateId);
+    try {
+      const res = await fetch('/api/templates');
+      const data = await res.json();
+      const template = (data.templates || []).find((t: any) => t.id === templateId);
+      if (!template) return;
+      const newForm: any = {
+        id: Date.now().toString(),
+        name: templateName + ' (copia)',
+        description: template.description || '',
+        questions: (template.questions || []).map((q: any) => ({
+          id: String(Date.now() + Math.random()),
+          text: q.text,
+          type: normalizeQuestionType(q.type || 'text'),
+          options: q.options || [],
+        })),
+        active: true,
+        responses: 0,
+        tenant_id: tenantId,
+        created_at: new Date().toISOString(),
+        initialFields: [
+          { field: 'name', label: 'Nome Completo', placeholder: 'Seu nome', required: true, enabled: true },
+          { field: 'email', label: 'Email', placeholder: 'seu@email.com', required: true, enabled: true },
+          { field: 'phone', label: 'Telefone / WhatsApp', placeholder: '(00) 00000-0000', required: false, enabled: true }
+        ],
+      };
+      setFormTemplateSuccess(templateId);
+      await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId, tenantId, campaignName: newForm.name }),
+      });
+      setTimeout(() => {
+        setFormTemplateSuccess(null);
+        setShowTemplateModal(false);
+        onSaveForm(newForm);
+      }, 1500);
+    } finally { setIsUsingFormTemplate(null); }
+  };
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   
@@ -479,6 +547,12 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                 </>
               )}
             </button>
+            <button
+              onClick={openFormTemplateModal}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg flex items-center gap-2 transition-all font-medium shadow-sm"
+            >
+              <BookOpen size={18} /> Usar Template
+            </button>
             <button 
               onClick={() => {
                 setEditingFormId(null);
@@ -618,6 +692,12 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
             <Plus size={32} className="text-gray-400" />
             <span className="font-medium text-gray-400">Criar novo formulário</span>
             <div className="flex flex-col gap-2 w-full mt-1">
+              <button
+                onClick={openFormTemplateModal}
+                className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center gap-2 transition-all text-sm font-medium"
+              >
+                <BookOpen size={15} /> Template
+              </button>
               <button 
                 onClick={() => setShowConsultant(true)}
                 className="w-full px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg flex items-center justify-center gap-2 hover:shadow-lg transition-all text-sm font-medium"
@@ -1156,6 +1236,89 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
           tenantId={tenantId || ''}
           onClose={() => setIsMassFormSendOpen(false)}
         />
+      )}
+      {/* Modal de Templates Pre-venda */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-2xl my-6 shadow-2xl">
+            <div className="flex items-center justify-between p-5 border-b border-slate-200">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Templates de Formularios</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Escolha um template de pre-venda e crie seu formulario em segundos</p>
+              </div>
+              <button onClick={() => setShowTemplateModal(false)} className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200"><X size={16} /></button>
+            </div>
+            <div className="p-4">
+              <div className="flex gap-2 mb-4">
+                <div className="relative flex-1">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input type="text" placeholder="Buscar template..." value={formTemplateSearch} onChange={e => setFormTemplateSearch(e.target.value)}
+                    className="w-full text-sm pl-8 pr-3 py-2 rounded-lg border border-slate-300 bg-white focus:outline-none" />
+                </div>
+                <select value={formTemplateCategoryFilter} onChange={e => setFormTemplateCategoryFilter(e.target.value)}
+                  className="text-sm px-3 py-2 rounded-lg border border-slate-300 bg-white focus:outline-none">
+                  {formTemplateCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              </div>
+              {isLoadingFormTemplates ? (
+                <div className="flex items-center justify-center py-16"><Loader2 size={24} className="animate-spin text-blue-500" /></div>
+              ) : formTemplates.filter(t => {
+                const ms = !formTemplateSearch || t.name?.toLowerCase().includes(formTemplateSearch.toLowerCase());
+                const mc = formTemplateCategoryFilter === 'Todos' || t.category === formTemplateCategoryFilter;
+                return ms && mc;
+              }).length === 0 ? (
+                <div className="text-center py-16 text-gray-400">
+                  <BookOpen size={36} className="mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">Nenhum template de pre-venda disponivel.</p>
+                  <p className="text-xs mt-1">O administrador ainda nao publicou templates de pre-venda.</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                  {formTemplates.filter(t => {
+                    const ms = !formTemplateSearch || t.name?.toLowerCase().includes(formTemplateSearch.toLowerCase());
+                    const mc = formTemplateCategoryFilter === 'Todos' || t.category === formTemplateCategoryFilter;
+                    return ms && mc;
+                  }).map(template => (
+                    <div key={template.id} className="border border-slate-200 rounded-xl p-4 hover:border-blue-400 transition-colors">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="text-sm font-bold text-gray-900">{template.name}</span>
+                            {template.category && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{template.category}</span>}
+                            {template.ramo_negocio && <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">{template.ramo_negocio}</span>}
+                          </div>
+                          {template.description && <p className="text-xs text-gray-500 mb-2">{template.description}</p>}
+                          <div className="flex items-center gap-3 text-xs text-gray-400">
+                            <span>{template.questions?.length || 0} perguntas</span>
+                            <span className="flex items-center gap-1"><Star size={10} className="text-yellow-500" /> {template.use_count || 0} usos</span>
+                          </div>
+                          {(template.tags || []).length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {template.tags.map((tag: string) => <span key={tag} className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{tag}</span>)}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => useFormTemplate(template.id, template.name)}
+                          disabled={isUsingFormTemplate === template.id || formTemplateSuccess === template.id}
+                          className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                            formTemplateSuccess === template.id
+                              ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                              : 'bg-blue-600 hover:bg-blue-500 text-white'
+                          } disabled:opacity-60`}
+                        >
+                          {isUsingFormTemplate === template.id ? <Loader2 size={14} className="animate-spin" /> :
+                           formTemplateSuccess === template.id ? <Check size={14} /> : <BookOpen size={14} />}
+                          {formTemplateSuccess === template.id ? 'Criado!' : 'Usar'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
       {showConsultant && (
         <FormConsultant

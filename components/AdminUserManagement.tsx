@@ -5,9 +5,11 @@ import {
   Plus, Trash2, LogOut, Loader2, Users, Edit, X, Save, RefreshCw,
   Key, CheckCircle, AlertTriangle, Clock, Gift, CreditCard,
   ExternalLink, Building2, AlertCircle, Search, ChevronRight, Copy,
-  Zap, Star, UserPlus, DollarSign, Check, Moon, Sun, Send
+  Zap, Star, UserPlus, DollarSign, Check, Moon, Sun, Send, BookOpen
 } from 'lucide-react';
 import AdminBroadcast from '@/components/AdminBroadcast';
+import AdminIntelligence from '@/components/AdminIntelligence';
+import AdminTemplates from '@/components/AdminTemplates';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +42,7 @@ interface Client {
   plan: string;
   companyName?: string;
   createdAt: string;
+  lastLogin?: string | null;
   settings?: Record<string, any>;
   companies: Company[];
   primaryCompany: Company | null;
@@ -214,7 +217,25 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [isDark, setIsDark] = useState(true);
   const t = isDark ? DARK : LIGHT;
   // ── Active Tab ──
-  const [activeTab, setActiveTab] = useState<'clients' | 'broadcast'>('clients');
+  const [activeTab, setActiveTab] = useState<'clients' | 'broadcast' | 'intelligence' | 'templates'>('clients');
+
+  // ── Analytics / Intelligence ──
+  const [analyticsData, setAnalyticsData] = useState<{ global: any; tenants: any[] } | null>(null);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+
+  const fetchAnalytics = useCallback(async () => {
+    if (analyticsData) return; // já carregado
+    setIsLoadingAnalytics(true);
+    try {
+      const res = await fetch('/api/admin/analytics?type=overview');
+      const data = await res.json();
+      setAnalyticsData(data);
+    } catch (e) {
+      console.error('Error fetching analytics:', e);
+    } finally {
+      setIsLoadingAnalytics(false);
+    }
+  }, [analyticsData]);
   // ── State ──
   const [clients, setClients] = useState<Client[]>([]);
   const [stats, setStats] = useState<any>({});
@@ -306,13 +327,14 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       } else {
         const { data: existing } = await supabase.from('users').select('id').eq('email', clientForm.email.toLowerCase()).single();
         if (existing) throw new Error('E-mail já cadastrado.');
+        const companyId = crypto.randomUUID();
         const userData: any = {
           name: clientForm.name,
           email: clientForm.email.toLowerCase().trim(),
           phone: clientForm.phone || null,
           company_name: clientForm.companyName || clientForm.name,
           plan: clientForm.plan,
-          tenant_id: crypto.randomUUID(),
+          tenant_id: companyId,
           role: 'admin',
           is_owner: true,
           password: '12345',
@@ -327,7 +349,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         if (error) throw error;
         if (createdUser) {
           // Sempre criar empresa e vínculo user_companies, independente do plano
-          const companyId = crypto.randomUUID();
+          // companyId já foi gerado acima e usado como tenant_id do usuário
           const isTrialModelA = clientForm.plan === 'trial' && newClientTrialModel === 'model_a';
           const trialEndAt = isTrialModelA
             ? new Date(Date.now() + newClientTrialDays * 24 * 60 * 60 * 1000).toISOString()
@@ -445,7 +467,10 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
     if (!selectedClient) return;
     setIsSaving(true);
     try {
-      const trialEndAt = companyForm.trialEndAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const isTrialing = companyForm.subscriptionStatus === 'trialing';
+      const trialEndAt = isTrialing
+        ? (companyForm.trialEndAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString())
+        : null;
       const res = await fetch('/api/admin/clients', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -456,7 +481,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             plan: companyForm.plan.replace('hello_', ''),
             planAddons: companyForm.addons,
             subscriptionStatus: companyForm.subscriptionStatus,
-            trialModel: companyForm.trialModel || null,
+            trialModel: isTrialing ? (companyForm.trialModel || null) : null,
             trialEndAt,
             maxUsers: companyForm.maxUsers,
           },
@@ -634,6 +659,26 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                 <Users size={14} /> Clientes
               </button>
               <button
+                onClick={() => { setActiveTab('intelligence'); fetchAnalytics(); }}
+                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
+                  activeTab === 'intelligence'
+                    ? 'bg-purple-600 text-white'
+                    : `${t.btnSecondary}`
+                }`}
+              >
+                <Zap size={14} /> Inteligência
+              </button>
+              <button
+                onClick={() => setActiveTab('templates')}
+                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
+                  activeTab === 'templates'
+                    ? 'bg-emerald-600 text-white'
+                    : `${t.btnSecondary}`
+                }`}
+              >
+                <BookOpen size={14} /> Templates
+              </button>
+              <button
                 onClick={() => setActiveTab('broadcast')}
                 className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
                   activeTab === 'broadcast'
@@ -661,6 +706,29 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
 
       {activeTab === 'broadcast' && (
         <AdminBroadcast isDark={isDark} />
+      )}
+      {activeTab === 'templates' && (
+        <AdminTemplates isDark={isDark} surveysData={analyticsData} />
+      )}
+      {activeTab === 'intelligence' && (
+        isLoadingAnalytics ? (
+          <div className="flex items-center justify-center py-32">
+            <div className="text-center">
+              <div className="w-10 h-10 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className={`text-sm ${t.textMuted}`}>Carregando dados de inteligência...</p>
+            </div>
+          </div>
+        ) : analyticsData ? (
+          <AdminIntelligence
+            isDark={isDark}
+            tenants={analyticsData.tenants || []}
+            globalStats={analyticsData.global}
+          />
+        ) : (
+          <div className="flex items-center justify-center py-32">
+            <p className={`text-sm ${t.textMuted}`}>Nenhum dado disponível.</p>
+          </div>
+        )
       )}
       {activeTab === 'clients' && (
       <main className="max-w-screen-2xl mx-auto px-6 py-6 space-y-5">
@@ -731,8 +799,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             <table className="w-full">
               <thead>
                 <tr className={`border-b ${t.border}`}>
-                  {['', 'Cliente', 'Plano', 'Status', 'Modelo', 'Empresas', 'Cadastro', ''].map((h, i) => (
-                    <th key={i} className={`text-left text-xs font-semibold ${t.thead} uppercase tracking-wider px-${i === 0 || i === 7 ? '6' : '4'} py-3 ${i === 7 ? 'text-right' : ''}`}>{h}</th>
+                  {['', 'Cliente', 'Plano', 'Status', 'Modelo', 'Empresas', 'Cadastro', 'Último Acesso', ''].map((h, i) => (
+                    <th key={i} className={`text-left text-xs font-semibold ${t.thead} uppercase tracking-wider px-${i === 0 || i === 8 ? '6' : '4'} py-3 ${i === 8 ? 'text-right' : ''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -763,6 +831,16 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                       <td className="px-4 py-4"><ModelBadge model={client.consolidatedTrialModel} /></td>
                       <td className="px-4 py-4"><span className={`text-sm ${t.textSub}`}>{client.companies.length} empresa{client.companies.length !== 1 ? 's' : ''}</span></td>
                       <td className="px-4 py-4"><span className={`text-xs ${t.textMuted}`}>{new Date(client.createdAt).toLocaleDateString('pt-BR')}</span></td>
+                      <td className="px-4 py-4">
+                        {client.lastLogin ? (
+                          <div>
+                            <span className={`text-xs ${t.textMuted}`}>{new Date(client.lastLogin).toLocaleDateString('pt-BR')}</span>
+                            <p className={`text-xs ${t.textMuted} opacity-70`}>{new Date(client.lastLogin).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                        ) : (
+                          <span className={`text-xs ${t.textMuted} opacity-50`}>Nunca</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
                           <button onClick={() => openEditClient(client)} className={`p-1.5 ${t.textMuted} hover:${t.text} hover:${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg transition-colors`} title="Editar">

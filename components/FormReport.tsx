@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Form, Lead } from '@/types';
-import { ArrowLeft, ArrowRight, Users, DollarSign, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, Target, Filter, X, Mail, Phone, FileText, Edit2, Plus, Trash2, Check, AlertCircle, Zap, Send, RefreshCw, Gift } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Users, DollarSign, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, Target, Filter, X, Mail, Phone, FileText, Edit2, Plus, Trash2, Check, AlertCircle, Zap, Send, RefreshCw, Gift, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -49,6 +49,12 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
   const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [pendingUpdate, setPendingUpdate] = useState<any>(null);
 
+  // Filter & Sort State
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [sortColumn, setSortColumn] = useState<'name' | 'email' | 'status' | 'value' | 'date' | null>('date');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
   // 1. Get Form Data
   const form = forms.find(f => f.id === formId);
   
@@ -63,6 +69,46 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
         return l.formSource === form.name;
     });
   }, [form, leads]);
+
+  // Filtro e ordenação
+  const filteredAndSorted = useMemo(() => {
+    let data = [...formLeads];
+    if (dateFrom) {
+      const from = new Date(dateFrom + 'T00:00:00');
+      data = data.filter(l => new Date(l.date || 0) >= from);
+    }
+    if (dateTo) {
+      const to = new Date(dateTo + 'T23:59:59');
+      data = data.filter(l => new Date(l.date || 0) <= to);
+    }
+    if (sortColumn) {
+      data.sort((a, b) => {
+        let valA: string | number = '';
+        let valB: string | number = '';
+        if (sortColumn === 'name') { valA = a.name?.toLowerCase() || ''; valB = b.name?.toLowerCase() || ''; }
+        if (sortColumn === 'email') { valA = a.email?.toLowerCase() || ''; valB = b.email?.toLowerCase() || ''; }
+        if (sortColumn === 'status') { valA = a.status || ''; valB = b.status || ''; }
+        if (sortColumn === 'value') { valA = a.value || 0; valB = b.value || 0; }
+        if (sortColumn === 'date') { valA = new Date(a.date || 0).getTime(); valB = new Date(b.date || 0).getTime(); }
+        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return data;
+  }, [formLeads, dateFrom, dateTo, sortColumn, sortDirection]);
+
+  const handleSort = (col: 'name' | 'email' | 'status' | 'value' | 'date') => {
+    if (sortColumn === col) setSortDirection(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortColumn(col); setSortDirection('asc'); }
+  };
+
+  const SortIcon = ({ col }: { col: 'name' | 'email' | 'status' | 'value' | 'date' }) => {
+    if (sortColumn !== col) return <ChevronsUpDown size={12} className="ml-1 text-gray-300" />;
+    return sortDirection === 'asc'
+      ? <ChevronUp size={12} className="ml-1 text-primary-500" />
+      : <ChevronDown size={12} className="ml-1 text-primary-500" />;
+  };
 
   // 3. Calculate Metrics
   const totalLeads = formLeads.length;
@@ -663,23 +709,41 @@ INSTRUÇÕES DE RESPOSTA:
       </div>
 
       {/* Leads Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="font-bold text-gray-900">Leads Captados ({totalLeads})</h3>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <h3 className="font-bold text-gray-900">Leads Captados
+          <span className="ml-2 text-sm font-normal text-gray-400">{filteredAndSorted.length} de {totalLeads}</span>
+        </h3>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+            <Filter size={14} className="text-gray-400" />
+            <span className="text-xs text-gray-500 font-medium">De</span>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="text-xs text-gray-700 border-none outline-none bg-transparent cursor-pointer" />
+          </div>
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+            <span className="text-xs text-gray-500 font-medium">Até</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="text-xs text-gray-700 border-none outline-none bg-transparent cursor-pointer" />
+          </div>
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-xs text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg transition-colors font-medium">Limpar filtro</button>
+          )}
         </div>
+      </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
             <tr>
-              <th className="px-6 py-3 font-medium">Nome</th>
-              <th className="px-6 py-3 font-medium">Email</th>
-              <th className="px-6 py-3 font-medium">Status</th>
-              <th className="px-6 py-3 font-medium">Valor Oportunidade</th>
-              <th className="px-6 py-3 font-medium">Data</th>
+              <th className="px-6 py-3 font-medium"><button onClick={() => handleSort('name')} className="flex items-center hover:text-gray-700 transition-colors">Nome <SortIcon col="name" /></button></th>
+              <th className="px-6 py-3 font-medium"><button onClick={() => handleSort('email')} className="flex items-center hover:text-gray-700 transition-colors">Email <SortIcon col="email" /></button></th>
+              <th className="px-6 py-3 font-medium"><button onClick={() => handleSort('status')} className="flex items-center hover:text-gray-700 transition-colors">Status <SortIcon col="status" /></button></th>
+              <th className="px-6 py-3 font-medium"><button onClick={() => handleSort('value')} className="flex items-center hover:text-gray-700 transition-colors">Valor Oportunidade <SortIcon col="value" /></button></th>
+              <th className="px-6 py-3 font-medium"><button onClick={() => handleSort('date')} className="flex items-center hover:text-gray-700 transition-colors">Data <SortIcon col="date" /></button></th>
               <th className="px-6 py-3 font-medium"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {formLeads.map((lead) => (
+            {filteredAndSorted.length === 0 ? (
+              <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400 text-sm">Nenhum lead encontrado para o período selecionado.</td></tr>
+            ) : filteredAndSorted.map((lead) => (
               <tr 
                 key={lead.id} 
                 onClick={() => setSelectedLead(lead)}
@@ -721,13 +785,7 @@ INSTRUÇÕES DE RESPOSTA:
                 </td>
               </tr>
             ))}
-            {formLeads.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                  Nenhum lead captado por este formulário ainda.
-                </td>
-              </tr>
-            )}
+
           </tbody>
         </table>
       </div>
