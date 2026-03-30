@@ -11,12 +11,12 @@ interface AdminTemplatesProps {
   surveysData?: any;
 }
 
-const RAMOS = [
+const RAMOS_BASE = [
   'Restaurante / Alimentação', 'Saúde / Clínica / Estética', 'Varejo / Loja',
   'Serviços Gerais', 'Educação / Cursos', 'Tecnologia / Software',
   'Imobiliário', 'Financeiro / Contabilidade', 'Automotivo',
   'Hotelaria / Turismo', 'Academia / Fitness', 'Beleza / Salão',
-  'Jurídico / Advocacia', 'Construção / Reforma', 'Outro',
+  'Veterinário / Pet', 'Jurídico / Advocacia', 'Construção / Reforma', 'Outro',
 ];
 
 const TIPO_CONFIG: Record<string, { label: string; color: string }> = {
@@ -57,6 +57,20 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
   const [genDesc, setGenDesc] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pubOk, setPubOk] = useState(false);
+  const [customRamos, setCustomRamos] = useState<string[]>([]);
+  const [showNewRamo, setShowNewRamo] = useState(false);
+  const [newRamoInput, setNewRamoInput] = useState('');
+
+  const allRamos = [...RAMOS_BASE, ...customRamos.filter(r => !RAMOS_BASE.includes(r))];
+
+  const addCustomRamo = () => {
+    const v = newRamoInput.trim();
+    if (!v) return;
+    if (!customRamos.includes(v)) setCustomRamos(prev => [...prev, v]);
+    setPubForm(f => ({ ...f, ramoNegocio: v }));
+    setNewRamoInput('');
+    setShowNewRamo(false);
+  };
 
   // Edit modal
   const [editM, setEditM] = useState<{ open: boolean; tmpl: any }>({ open: false, tmpl: null });
@@ -89,6 +103,7 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
   const inferRamo = (businessType: string | null): string => {
     if (!businessType) return '';
     const bt = businessType.toLowerCase();
+    if (bt.includes('veterin') || bt.includes('pet shop') || bt.includes('petshop') || bt.includes('zoovet') || bt.includes('animal')) return 'Veterinário / Pet';
     if (bt.includes('odonto') || bt.includes('dental')) return 'Saúde / Clínica / Estética';
     if (bt.includes('estét') || bt.includes('estetica') || bt.includes('beleza') || bt.includes('salão') || bt.includes('salao') || bt.includes('barbearia')) return 'Beleza / Salão';
     if (bt.includes('restaurante') || bt.includes('alimenta') || bt.includes('food') || bt.includes('lanchonete') || bt.includes('padaria')) return 'Restaurante / Alimentação';
@@ -98,7 +113,6 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
     if (bt.includes('imobil') || bt.includes('constru') || bt.includes('incorpor')) return 'Imobiliário';
     if (bt.includes('tecnolog') || bt.includes('software') || bt.includes('ti ') || bt.includes('startup')) return 'Tecnologia / Software';
     if (bt.includes('varejo') || bt.includes('loja') || bt.includes('comércio') || bt.includes('comercio') || bt.includes('retail')) return 'Varejo / Loja';
-    if (bt.includes('pet') || bt.includes('veterin')) return 'Serviços Gerais';
     if (bt.includes('auto') || bt.includes('oficina') || bt.includes('mecân') || bt.includes('mecan')) return 'Automotivo';
     if (bt.includes('hotel') || bt.includes('pousada') || bt.includes('turism')) return 'Hotelaria / Turismo';
     if (bt.includes('financ') || bt.includes('contab') || bt.includes('contáb') || bt.includes('banco')) return 'Financeiro / Contabilidade';
@@ -416,13 +430,45 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
                       </span>
                     )}
                   </div>
-                  <select value={pubForm.ramoNegocio} onChange={e => setPubForm(f => ({ ...f, ramoNegocio: e.target.value }))}
-                    className={`w-full text-sm px-3 py-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${
-                      pubForm.ramoNegocio ? 'border-emerald-400 bg-emerald-50/40' : 'border-slate-300 bg-white'
-                    }`}>
-                    <option value="">Selecionar ramo...</option>
-                    {RAMOS.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                  <div className="flex gap-2">
+                    <select value={pubForm.ramoNegocio} onChange={e => setPubForm(f => ({ ...f, ramoNegocio: e.target.value }))}
+                      className={`flex-1 text-sm px-3 py-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${
+                        pubForm.ramoNegocio ? 'border-emerald-400 bg-emerald-50/40' : 'border-slate-300 bg-white'
+                      }`}>
+                      <option value="">Selecionar ramo...</option>
+                      {allRamos.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowNewRamo(v => !v)}
+                      title="Criar novo ramo"
+                      className={`shrink-0 flex items-center gap-1 px-3 py-2 rounded-lg border text-sm font-semibold transition-all ${
+                        showNewRamo ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-white text-slate-600 hover:border-emerald-400 hover:text-emerald-600'
+                      }`}>
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                  {showNewRamo && (
+                    <div className="mt-2 flex gap-2 items-center">
+                      <input
+                        type="text"
+                        autoFocus
+                        value={newRamoInput}
+                        onChange={e => setNewRamoInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') addCustomRamo(); if (e.key === 'Escape') { setShowNewRamo(false); setNewRamoInput(''); } }}
+                        placeholder="Ex: Veterinário / Pet, Esportes..."
+                        className="flex-1 text-sm px-3 py-2 rounded-lg border border-emerald-400 bg-emerald-50/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                      />
+                      <button type="button" onClick={addCustomRamo} disabled={!newRamoInput.trim()}
+                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
+                        <Check size={14} />
+                      </button>
+                      <button type="button" onClick={() => { setShowNewRamo(false); setNewRamoInput(''); }}
+                        className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg transition-colors">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div>
