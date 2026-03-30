@@ -76,77 +76,79 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const generatePrintCard = async () => {
     setPrintCardGenerating(true);
     try {
-      // Geração 100% client-side com Canvas HTML5
+      // Geração via HTML renderizado em canvas (html2canvas-like via iframe)
+      // Usamos um canvas off-screen com o layout correto
       const W = 1240, H = 1754;
       const canvas = document.createElement('canvas');
       canvas.width = W;
       canvas.height = H;
       const ctx = canvas.getContext('2d')!;
 
+      // Helper: desenhar retângulo arredondado
+      const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+      };
+
+      // Helper: círculo
+      const circle = (cx: number, cy: number, r: number, color: string, alpha: number) => {
+        ctx.save(); ctx.fillStyle = color; ctx.globalAlpha = alpha;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.fill(); ctx.restore();
+      };
+
       // --- Fundo verde escuro ---
       ctx.fillStyle = '#1a5c2a';
       ctx.fillRect(0, 0, W, H);
 
-      // --- Onda verde clara no rodapé ---
+      // --- Círculos decorativos (nos lados, parcialmente cortados) ---
+      circle(-80, 680, 320, '#6fcf3a', 0.9);   // esquerda superior
+      circle(20, 1000, 160, '#2d7a3a', 0.95);  // esquerda inferior pequeno
+      circle(W + 60, 560, 220, '#6fcf3a', 0.75); // direita superior
+      circle(W + 100, H - 780, 320, '#6fcf3a', 0.8); // direita inferior grande
+      circle(W - 60, H - 620, 140, '#2d7a3a', 0.95); // direita inferior pequeno
+
+      // --- Onda verde clara (abaixo do card) ---
       ctx.save();
-      ctx.fillStyle = '#c8f07a';
-      ctx.globalAlpha = 0.45;
+      ctx.fillStyle = '#b8f060';
+      ctx.globalAlpha = 0.6;
       ctx.beginPath();
-      ctx.ellipse(W / 2, H + 20, W * 0.65, 220, 0, Math.PI, 2 * Math.PI);
+      ctx.ellipse(W / 2, H - 20, W * 0.58, 240, 0, Math.PI, 2 * Math.PI);
       ctx.fill();
       ctx.restore();
 
-      // --- Círculos decorativos ---
-      const drawCircle = (cx: number, cy: number, r: number, color: string, alpha: number) => {
-        ctx.save();
-        ctx.fillStyle = color;
-        ctx.globalAlpha = alpha;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.restore();
-      };
-      drawCircle(-100, 340, 260, '#a8e063', 0.85);
-      drawCircle(-30, 520, 130, '#2d8a4e', 0.9);
-      drawCircle(W + 80, 280, 190, '#a8e063', 0.7);
-      drawCircle(W + 60, H - 520, 250, '#a8e063', 0.75);
-      drawCircle(W - 20, H - 380, 110, '#2d8a4e', 0.9);
-
       // --- Card branco ---
-      const cX = 100, cY = 80, cW = W - 200, cH = H - 280;
-      const radius = 70;
+      // Proporções: margens laterais ~120px, topo ~60px, altura do card ~1350px
+      const cX = 120, cY = 60, cW = W - 240, cH = 1380;
       ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.18)';
-      ctx.shadowBlur = 60;
-      ctx.shadowOffsetY = 16;
+      ctx.shadowColor = 'rgba(0,0,0,0.22)';
+      ctx.shadowBlur = 80;
+      ctx.shadowOffsetY = 20;
       ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.moveTo(cX + radius, cY);
-      ctx.lineTo(cX + cW - radius, cY);
-      ctx.quadraticCurveTo(cX + cW, cY, cX + cW, cY + radius);
-      ctx.lineTo(cX + cW, cY + cH - radius);
-      ctx.quadraticCurveTo(cX + cW, cY + cH, cX + cW - radius, cY + cH);
-      ctx.lineTo(cX + radius, cY + cH);
-      ctx.quadraticCurveTo(cX, cY + cH, cX, cY + cH - radius);
-      ctx.lineTo(cX, cY + radius);
-      ctx.quadraticCurveTo(cX, cY, cX + radius, cY);
-      ctx.closePath();
+      roundRect(cX, cY, cW, cH, 64);
       ctx.fill();
       ctx.restore();
 
       // --- Área da logo (topo do card) ---
-      const logoAreaH = 200;
+      const logoAreaTop = cY + 60;
+      const logoAreaH = 180;
       if (printCardLogo) {
         await new Promise<void>((resolve) => {
           const img = new Image();
           img.onload = () => {
-            const maxW = 420, maxH = 160;
+            const maxW = 520, maxH = 160;
             let iw = img.width, ih = img.height;
             const scale = Math.min(maxW / iw, maxH / ih, 1);
             iw *= scale; ih *= scale;
-            const ix = W / 2 - iw / 2;
-            const iy = cY + 40 + (logoAreaH - ih) / 2;
-            ctx.drawImage(img, ix, iy, iw, ih);
+            ctx.drawImage(img, W / 2 - iw / 2, logoAreaTop + (logoAreaH - ih) / 2, iw, ih);
             resolve();
           };
           img.onerror = () => resolve();
@@ -154,89 +156,78 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
         });
       } else if (businessProfile?.company_name) {
         ctx.fillStyle = '#1a5c2a';
-        ctx.font = 'bold 52px Arial, Helvetica, sans-serif';
+        ctx.font = 'bold 56px Arial, Helvetica, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(businessProfile.company_name, W / 2, cY + logoAreaH / 2 + 20);
+        ctx.fillText(businessProfile.company_name, W / 2, logoAreaTop + logoAreaH / 2 + 20);
       }
 
       // --- Linha divisória ---
-      const divY = cY + logoAreaH + 30;
-      ctx.strokeStyle = '#e5e7eb';
+      const divY = cY + logoAreaH + 80;
+      ctx.strokeStyle = '#e0e0e0';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(cX + 80, divY);
-      ctx.lineTo(cX + cW - 80, divY);
+      ctx.moveTo(cX + 60, divY);
+      ctx.lineTo(cX + cW - 60, divY);
       ctx.stroke();
 
       // --- Título ---
-      const titleY = divY + 90;
+      const titleY = divY + 100;
       ctx.fillStyle = '#1a5c2a';
-      ctx.font = 'bold 72px Arial, Helvetica, sans-serif';
+      ctx.font = 'bold 76px Arial, Helvetica, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('FAÇA SUA AVALIAÇÃO', W / 2, titleY);
 
       // --- Subtítulo ---
-      ctx.fillStyle = '#444444';
-      ctx.font = '42px Arial, Helvetica, sans-serif';
-      ctx.fillText('Escaneie o QR code com', W / 2, titleY + 70);
-      ctx.font = 'bold 42px Arial, Helvetica, sans-serif';
-      ctx.fillText('a câmera do seu celular', W / 2, titleY + 124);
+      ctx.fillStyle = '#555555';
+      ctx.font = '44px Arial, Helvetica, sans-serif';
+      ctx.fillText('Escaneie o QR code com', W / 2, titleY + 80);
+      ctx.font = 'bold 44px Arial, Helvetica, sans-serif';
+      ctx.fillText('a câmera do seu celular', W / 2, titleY + 140);
 
       // --- QR Code ---
-      const qrSize = 440;
+      const qrSize = 460;
+      const qrPad = 28;
+      const qrBorderR = 32;
       const qrX = W / 2 - qrSize / 2;
-      const qrY2 = titleY + 170;
-      // Borda do QR
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#e5e7eb';
-      ctx.lineWidth = 3;
-      const qrPad = 24;
-      const qrBorderR = 28;
-      const qbX = qrX - qrPad, qbY = qrY2 - qrPad, qbW = qrSize + qrPad * 2, qbH = qrSize + qrPad * 2;
+      const qrY = titleY + 190;
+      // Borda branca com sombra leve
       ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(qbX + qrBorderR, qbY);
-      ctx.lineTo(qbX + qbW - qrBorderR, qbY);
-      ctx.quadraticCurveTo(qbX + qbW, qbY, qbX + qbW, qbY + qrBorderR);
-      ctx.lineTo(qbX + qbW, qbY + qbH - qrBorderR);
-      ctx.quadraticCurveTo(qbX + qbW, qbY + qbH, qbX + qbW - qrBorderR, qbY + qbH);
-      ctx.lineTo(qbX + qrBorderR, qbY + qbH);
-      ctx.quadraticCurveTo(qbX, qbY + qbH, qbX, qbY + qbH - qrBorderR);
-      ctx.lineTo(qbX, qbY + qrBorderR);
-      ctx.quadraticCurveTo(qbX, qbY, qbX + qrBorderR, qbY);
-      ctx.closePath();
+      ctx.shadowColor = 'rgba(0,0,0,0.08)';
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#e0e0e0';
+      ctx.lineWidth = 3;
+      roundRect(qrX - qrPad, qrY - qrPad, qrSize + qrPad * 2, qrSize + qrPad * 2, qrBorderR);
       ctx.fill();
       ctx.stroke();
       ctx.restore();
-      // Imagem do QR Code via API externa
+      // QR Code image
       await new Promise<void>((resolve) => {
         const qrImg = new Image();
         qrImg.crossOrigin = 'anonymous';
-        qrImg.onload = () => { ctx.drawImage(qrImg, qrX, qrY2, qrSize, qrSize); resolve(); };
+        qrImg.onload = () => { ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize); resolve(); };
         qrImg.onerror = () => resolve();
-        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=440x440&data=${encodeURIComponent(printCardUrl)}&ecc=H&margin=2`;
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=460x460&data=${encodeURIComponent(printCardUrl)}&ecc=H&margin=2`;
       });
 
       // --- Estrelas ---
-      const starsY = qrY2 + qrSize + qrPad * 2 + 60;
+      const starsY = qrY + qrSize + qrPad * 2 + 70;
       ctx.fillStyle = '#F5C518';
-      ctx.font = '80px Arial, Helvetica, sans-serif';
+      ctx.font = '90px Arial, Helvetica, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('★★★★★', W / 2, starsY);
 
-      // --- Rodapé HelloGrowth ---
-      const footerY = H - 80;
-      ctx.font = 'bold 72px Arial, Helvetica, sans-serif';
-      ctx.textAlign = 'center';
-      // 'Hello' em verde claro
-      const helloW = ctx.measureText('Hello').width;
-      const growthW = ctx.measureText('Growth').width;
-      const totalW = helloW + growthW;
-      const startX = W / 2 - totalW / 2;
-      ctx.fillStyle = '#a8e063';
-      ctx.fillText('Hello', startX + helloW / 2, footerY);
+      // --- Rodapé HelloGrowth (fora do card, no fundo verde) ---
+      const footerY = H - 90;
+      ctx.font = 'bold 76px Arial, Helvetica, sans-serif';
+      ctx.textAlign = 'left';
+      const hW = ctx.measureText('Hello').width;
+      const gW = ctx.measureText('Growth').width;
+      const fX = W / 2 - (hW + gW) / 2;
+      ctx.fillStyle = '#b8f060';
+      ctx.fillText('Hello', fX, footerY);
       ctx.fillStyle = '#ffffff';
-      ctx.fillText('Growth', startX + helloW + growthW / 2, footerY);
+      ctx.fillText('Growth', fX + hW, footerY);
 
       // --- Exportar ---
       const dataUrl = canvas.toDataURL('image/png');
