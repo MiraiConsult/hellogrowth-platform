@@ -46,6 +46,64 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const [currentQrUrl, setCurrentQrUrl] = useState('');
   const [currentQrName, setCurrentQrName] = useState('');
 
+  // Card para impressão
+  const [printCardOpen, setPrintCardOpen] = useState(false);
+  const [printCardUrl, setPrintCardUrl] = useState('');
+  const [printCardName, setPrintCardName] = useState('');
+  const [printCardLogo, setPrintCardLogo] = useState<string | null>(null);
+  const [printCardGenerating, setPrintCardGenerating] = useState(false);
+  const [printCardPreview, setPrintCardPreview] = useState<string | null>(null);
+
+  const openPrintCard = (surveyUrl: string, surveyName: string) => {
+    setPrintCardUrl(surveyUrl);
+    setPrintCardName(surveyName);
+    setPrintCardLogo(null);
+    setPrintCardPreview(null);
+    setPrintCardOpen(true);
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result as string;
+      setPrintCardLogo(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const generatePrintCard = async () => {
+    setPrintCardGenerating(true);
+    try {
+      const res = await fetch('/api/generate-card', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          surveyUrl: printCardUrl,
+          logoBase64: printCardLogo || undefined,
+          companyName: businessProfile?.company_name || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error('Erro ao gerar card');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setPrintCardPreview(url);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPrintCardGenerating(false);
+    }
+  };
+
+  const downloadPrintCard = () => {
+    if (!printCardPreview) return;
+    const a = document.createElement('a');
+    a.href = printCardPreview;
+    a.download = `card-avaliacao-${printCardName.replace(/\s+/g, '-').toLowerCase()}.png`;
+    a.click();
+  };
+
   // States antigos removidos - agora usa apenas NPSConsultant
 
   // Template Library State — novo design estilo catálogo
@@ -266,6 +324,13 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
                     >
                         <QrCode size={16} />
                     </button>
+                    <button 
+                        onClick={() => openPrintCard(getSurveyLink(camp.id), camp.name)} 
+                        className="text-sm text-gray-500 hover:text-emerald-600 font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-emerald-50 transition-colors"
+                        title="Card para impressão"
+                    >
+                        <FileText size={16} />
+                    </button>
                     <button onClick={() => onPreview && onPreview(camp.id)} className="text-sm text-gray-500 font-medium hover:text-primary-600 flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors" title="Visualizar"><Eye size={16} /></button>
                     <button onClick={() => onViewReport ? onViewReport(camp.id) : navigateToAnalytics()} className="text-sm text-primary-600 font-medium hover:text-primary-700 px-2 py-1 rounded hover:bg-primary-50 transition-colors">Ver Relatório</button>
                 </div>
@@ -342,6 +407,116 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
                 </div>
             </div>
        )}
+
+      {/* Modal Card para Impressão */}
+      {printCardOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                  <FileText size={20} className="text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Card para Impressão</h3>
+                  <p className="text-xs text-gray-500 truncate max-w-xs">{printCardName}</p>
+                </div>
+              </div>
+              <button onClick={() => { setPrintCardOpen(false); if (printCardPreview) URL.revokeObjectURL(printCardPreview); }} className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="flex gap-0">
+              {/* Painel esquerdo: configurações */}
+              <div className="w-72 shrink-0 border-r border-slate-200 p-5 space-y-5">
+                <div>
+                  <p className="text-xs font-semibold text-gray-700 mb-2">Layout</p>
+                  <div className="rounded-xl border-2 border-emerald-500 bg-emerald-50 p-3 flex items-center gap-2">
+                    <div className="w-8 h-11 rounded bg-emerald-600 flex items-center justify-center shrink-0">
+                      <QrCode size={14} className="text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-800">HelloGrowth Padrão</p>
+                      <p className="text-[10px] text-gray-500">Verde · QR Code · Estrelas</p>
+                    </div>
+                    <Check size={14} className="ml-auto text-emerald-600" />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-gray-700 mb-2">Logo da empresa <span className="font-normal text-gray-400">(opcional)</span></p>
+                  {printCardLogo ? (
+                    <div className="relative">
+                      <img src={printCardLogo} alt="Logo" className="w-full h-24 object-contain rounded-lg border border-slate-200 bg-slate-50 p-2" />
+                      <button
+                        onClick={() => setPrintCardLogo(null)}
+                        className="absolute top-1 right-1 p-1 bg-white rounded-full shadow border border-slate-200 hover:bg-red-50 hover:text-red-500 transition-colors"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/40 transition-all">
+                      <Upload size={20} className="text-slate-400" />
+                      <span className="text-xs text-slate-500">Clique para enviar logo</span>
+                      <span className="text-[10px] text-slate-400">PNG, JPG, SVG</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                    </label>
+                  )}
+                </div>
+
+                <button
+                  onClick={generatePrintCard}
+                  disabled={printCardGenerating}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors text-sm"
+                >
+                  {printCardGenerating ? (
+                    <><Loader2 size={16} className="animate-spin" /> Gerando...</>
+                  ) : (
+                    <><Sparkles size={16} /> Gerar Card</>
+                  )}
+                </button>
+
+                {printCardPreview && (
+                  <button
+                    onClick={downloadPrintCard}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl transition-colors text-sm"
+                  >
+                    <Download size={16} /> Baixar PNG
+                  </button>
+                )}
+
+                <p className="text-[10px] text-gray-400 text-center leading-relaxed">
+                  Imagem em alta resolução (A4) pronta para impressão. Recomendamos imprimir em papel fosco.
+                </p>
+              </div>
+
+              {/* Painel direito: preview */}
+              <div className="flex-1 bg-slate-100 flex items-center justify-center p-6 min-h-[420px]">
+                {printCardPreview ? (
+                  <img
+                    src={printCardPreview}
+                    alt="Preview do card"
+                    className="max-h-[500px] max-w-full rounded-xl shadow-xl object-contain"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-4 text-center">
+                    <div className="w-20 h-20 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                      <FileText size={36} className="text-emerald-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">Preview do card</p>
+                      <p className="text-xs text-gray-400 mt-1">Adicione a logo e clique em<br/>"Gerar Card" para visualizar</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Template Library Modal — novo design estilo catálogo */}
       {showTemplateModal && (
