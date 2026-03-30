@@ -1613,7 +1613,10 @@ Responda APENAS com JSON válido (sem markdown):
         )}
 
         {currentView === 'tutorial' && (
-            <Tutorial />
+            <Tutorial onOpenOnboarding={() => {
+                localStorage.removeItem('hg_wizard_complete');
+                setShowOnboardingWizard(true);
+            }} />
         )}
 
         {currentView === 'team-management' && (
