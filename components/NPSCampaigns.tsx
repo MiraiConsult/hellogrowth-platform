@@ -114,9 +114,9 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
       ctx.ellipse(W/2, H+8, W*0.56, 95, 0, Math.PI, 2*Math.PI);
       ctx.fill(); ctx.restore();
 
-      // 4. CARD BRANCO — centralizado
-      const cX = 55, cY = 22;
-      const cW = W - 110, cH = 500;
+      // 4. CARD BRANCO — maior, mais próximo do rodapé
+      const cX = 45, cY = 18;
+      const cW = W - 90, cH = 580;
       ctx.save();
       ctx.shadowColor='rgba(0,0,0,0.20)'; ctx.shadowBlur=35; ctx.shadowOffsetY=8;
       ctx.fillStyle='#ffffff';
@@ -132,7 +132,7 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
             const mW=cW-40, mH=50;
             let iw=img.width, ih=img.height;
             const sc=Math.min(mW/iw, mH/ih, 1); iw*=sc; ih*=sc;
-            ctx.drawImage(img, W/2-iw/2, cY+16+(50-ih)/2, iw, ih);
+            ctx.drawImage(img, W/2-iw/2, cY+20+(50-ih)/2, iw, ih);
             res();
           };
           img.onerror=()=>res();
@@ -142,31 +142,31 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
         ctx.fillStyle='#1a5c2a';
         ctx.font='bold 20px Arial,Helvetica,sans-serif';
         ctx.textAlign='center';
-        ctx.fillText(businessProfile.company_name, W/2, cY+52);
+        ctx.fillText(businessProfile.company_name, W/2, cY+56);
       }
 
       // Divisória
-      const divY = cY+74;
+      const divY = cY+82;
       ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(cX+18, divY); ctx.lineTo(cX+cW-18, divY); ctx.stroke();
 
       // Título
-      const titleY = divY+48;
+      const titleY = divY+58;
       ctx.fillStyle='#1a5c2a';
-      ctx.font='bold italic 22px Arial,Helvetica,sans-serif';
+      ctx.font='bold italic 23px Arial,Helvetica,sans-serif';
       ctx.textAlign='center';
       ctx.fillText('FAÇA SUA AVALIAÇÃO', W/2, titleY);
 
       // Subtítulo
       ctx.fillStyle='#555555';
-      ctx.font='12px Arial,Helvetica,sans-serif';
-      ctx.fillText('Escaneie o QR code com', W/2, titleY+30);
-      ctx.font='bold 12px Arial,Helvetica,sans-serif';
-      ctx.fillText('a câmera do seu celular', W/2, titleY+48);
+      ctx.font='13px Arial,Helvetica,sans-serif';
+      ctx.fillText('Escaneie o QR code com', W/2, titleY+36);
+      ctx.font='bold 13px Arial,Helvetica,sans-serif';
+      ctx.fillText('a câmera do seu celular', W/2, titleY+56);
 
       // QR Code
-      const qrSize=200, qrPad=10, qrBR=12;
-      const qrX=W/2-qrSize/2, qrY=titleY+68;
+      const qrSize=210, qrPad=10, qrBR=12;
+      const qrX=W/2-qrSize/2, qrY=titleY+80;
       ctx.save(); ctx.fillStyle='#fff'; ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=1.5;
       rr(qrX-qrPad, qrY-qrPad, qrSize+qrPad*2, qrSize+qrPad*2, qrBR);
       ctx.fill(); ctx.stroke(); ctx.restore();
@@ -180,14 +180,14 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
       });
 
       // Estrelas
-      const starsY = qrY+qrSize+qrPad*2+26;
+      const starsY = qrY+qrSize+qrPad*2+34;
       ctx.fillStyle='#F5C518';
-      ctx.font='28px Arial,Helvetica,sans-serif';
+      ctx.font='30px Arial,Helvetica,sans-serif';
       ctx.textAlign='center';
       ctx.fillText('★★★★★', W/2, starsY);
 
       // 6. RODAPÉ HelloGrowth (fora do card)
-      const fY=H-36;
+      const fY=H-24;
       ctx.font='bold 24px Arial,Helvetica,sans-serif';
       ctx.textAlign='left';
       const hW=ctx.measureText('Hello').width, gW=ctx.measureText('Growth').width;
