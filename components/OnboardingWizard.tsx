@@ -1,12 +1,13 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import {
-  Building2, Star, Package, FileText, MessageSquare, Bell,
+  Building2, Star, Package, FileText, Activity, Bell,
   ChevronRight, ChevronLeft, Check, Sparkles, X, Bot, Send,
   Loader2, CheckCircle2, Zap, Plus, Trash2, Phone, Globe,
-  Instagram, Facebook, MapPin, AlertCircle, ArrowRight,
-  SkipForward, RefreshCw, Info
+  MapPin, AlertCircle, ArrowRight, SkipForward, Info,
+  LayoutTemplate, Wand2, PenLine, ArrowLeft, Search,
+  RefreshCw, Eye, ChevronDown, ChevronUp, Target
 } from 'lucide-react';
 
 const supabase = createClient(
@@ -14,6 +15,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// ─── Tipos ────────────────────────────────────────────────────────────────────
 interface OnboardingWizardProps {
   userId: string;
   tenantId: string;
@@ -22,136 +24,64 @@ interface OnboardingWizardProps {
   onComplete: () => void;
   onNavigate: (view: string) => void;
 }
+interface AIMessage { role: 'assistant' | 'user'; content: string; }
+type CreationMode = null | 'template' | 'ai' | 'manual';
 
-interface AIMessage {
-  role: 'assistant' | 'user';
-  content: string;
-}
-
-// ─── Configuração das etapas ─────────────────────────────────────────────────
+// ─── Etapas ───────────────────────────────────────────────────────────────────
 const getSteps = (plan: string) => {
-  const allSteps = [
+  const all = [
     {
-      id: 'profile',
-      key: 'step_profile_done',
-      title: 'Perfil do Negócio',
-      subtitle: 'Conte-nos sobre sua empresa',
-      icon: Building2,
-      color: 'emerald',
-      plans: ['trial', 'client', 'rating', 'growth', 'growth_lifetime'],
-      skippable: false,
-      aiIntro: `Olá! Eu sou a Giulia, sua assistente de configuração do HelloGrowth! 🌱
-
-Vamos começar pelo mais importante: o **Perfil do seu Negócio**.
-
-Quanto mais você preencher aqui, mais inteligente o sistema fica. A IA vai usar essas informações para sugerir perguntas melhores, gerar textos mais certeiros e entender o contexto do seu negócio.
-
-O campo mais importante é o **Place ID do Google** — é o código único do seu negócio no Google Maps. Com ele, clientes satisfeitos são redirecionados automaticamente para avaliar você no Google!
-
-Preencha os campos abaixo e clique em **Salvar Perfil** quando terminar. 👇`,
+      id: 'profile', key: 'step_profile_done', title: 'Perfil do Negócio',
+      subtitle: 'Informações da sua empresa', icon: Building2, color: 'emerald',
+      plans: ['trial','client','rating','growth','growth_lifetime'], skippable: false,
+      aiIntro: `Olá! Sou a **Giulia**, sua assistente de configuração! 🌱\n\nVamos começar pelo **Perfil do Negócio** — quanto mais você preencher, mais inteligente o sistema fica.\n\nVou te guiar por 3 partes simples:\n1. **Identidade** — nome e tipo do negócio\n2. **Contexto** — descrição e público-alvo\n3. **Google** — o Place ID é fundamental para redirecionar clientes satisfeitos para avaliações!\n\nPreencha com calma e clique em **Próximo** para avançar. 👇`,
     },
     {
-      id: 'nps',
-      key: 'step_nps_done',
-      title: 'Pesquisa de NPS',
-      subtitle: 'Crie sua primeira pesquisa de satisfação',
-      icon: Star,
-      color: 'yellow',
-      plans: ['trial', 'client', 'rating', 'growth', 'growth_lifetime'],
-      skippable: false,
-      aiIntro: `Agora vamos criar sua **primeira pesquisa de NPS**! ⭐
-
-O NPS é a pergunta mais poderosa: *"De 0 a 10, quanto você nos recomendaria?"*
-
-Com ela você identifica promotores (9-10), neutros (7-8) e detratores (0-6) — e redireciona automaticamente os satisfeitos para o Google.
-
-Crie uma pesquisa de **pós-venda** para enviar logo após o atendimento. É o momento em que o cliente está mais propenso a responder!
-
-Preencha o nome e clique em **Criar Pesquisa de NPS**. 👇`,
+      id: 'nps', key: 'step_nps_done', title: 'Pesquisa de NPS',
+      subtitle: 'Meça a satisfação dos seus clientes', icon: Star, color: 'yellow',
+      plans: ['trial','client','rating','growth','growth_lifetime'], skippable: false,
+      aiIntro: `Agora vamos criar sua **primeira pesquisa de NPS**! ⭐\n\nO NPS é a pergunta mais poderosa: *"De 0 a 10, quanto você nos recomendaria?"*\n\nClientes com nota **9-10** são redirecionados para o Google automaticamente. Clientes com nota baixa geram alertas internos.\n\nEscolha como quer criar:\n- **Template** — use um modelo pronto do seu segmento\n- **Com IA** — descreva e a IA monta para você\n- **Manual** — crie do zero`,
     },
     {
-      id: 'products',
-      key: 'step_products_done',
-      title: 'Produtos e Serviços',
-      subtitle: 'Cadastre o que você vende',
-      icon: Package,
-      color: 'blue',
-      plans: ['growth', 'growth_lifetime', 'client', 'trial'],
-      skippable: false,
-      aiIntro: `Ótimo progresso! Agora vamos cadastrar seus **produtos ou serviços**! 📦
-
-Isso é fundamental para que o sistema calcule o **valor de pipeline** dos seus leads e a IA sugira o produto certo na hora certa.
-
-**Não precisa cadastrar tudo agora!** Comece com os 3 ou 4 principais. Você pode adicionar mais depois.
-
-Clique em **+ Adicionar Produto** para começar. 👇`,
+      id: 'products', key: 'step_products_done', title: 'Produtos e Serviços',
+      subtitle: 'O que você vende', icon: Package, color: 'blue',
+      plans: ['growth','growth_lifetime','client','trial'], skippable: false,
+      aiIntro: `Hora de cadastrar seus **produtos ou serviços**! 📦\n\nIsso é fundamental para calcular o **valor de pipeline** dos seus leads e a IA sugerir o produto certo na hora certa.\n\nEscolha como quer criar:\n- **Template** — catálogo do seu segmento de mercado\n- **Com IA** — descreva seu negócio e a IA sugere\n- **Manual** — adicione um por um\n\nNão precisa cadastrar tudo agora — comece com os principais!`,
     },
     {
-      id: 'form',
-      key: 'step_form_done',
-      title: 'Formulário de Pré-venda',
-      subtitle: 'Crie seu formulário de captação de leads',
-      icon: FileText,
-      color: 'purple',
-      plans: ['growth', 'growth_lifetime', 'client', 'trial'],
-      skippable: false,
-      aiIntro: `Quase lá! Vamos criar seu **formulário de pré-venda**! 📋
-
-O formulário é o que você compartilha para captar novos clientes. Quando alguém preenche, você recebe uma notificação e o lead entra direto no CRM.
-
-É como ter um vendedor digital trabalhando 24/7 qualificando leads para você!
-
-Dê um nome ao formulário e clique em **Criar Formulário**. Depois você pode personalizar as perguntas na tela de Formulários. 👇`,
+      id: 'form', key: 'step_form_done', title: 'Formulário de Pré-venda',
+      subtitle: 'Capte e qualifique leads', icon: FileText, color: 'purple',
+      plans: ['growth','growth_lifetime','client','trial'], skippable: false,
+      aiIntro: `Vamos criar seu **formulário de captação de leads**! 📋\n\nO formulário é o que você compartilha para atrair novos clientes. Quando alguém preenche, você recebe uma notificação e o lead entra direto no CRM.\n\nÉ como ter um vendedor digital trabalhando 24/7!\n\nEscolha como quer criar:\n- **Template** — modelo pronto para seu segmento\n- **Com IA** — a IA cria as perguntas ideais\n- **Manual** — monte do zero`,
     },
     {
-      id: 'mbd',
-      key: 'step_mbd_done',
-      title: 'WhatsApp (MBD)',
-      subtitle: 'Automatize o envio pelo WhatsApp',
-      icon: MessageSquare,
-      color: 'green',
-      plans: ['growth', 'growth_lifetime'],
-      skippable: true,
-      aiIntro: `Agora vamos conectar o **WhatsApp** para automatizar o envio das suas pesquisas! 📱
-
-Com o MBD conectado, o sistema envia pesquisas de NPS automaticamente após atendimentos e notifica sua equipe quando uma avaliação negativa chegar.
-
-Para conectar: vá em **Configurações → Integrações** e escaneie o QR Code com seu WhatsApp.
-
-Se ainda não contratou o MBD, pode pular essa etapa por enquanto!`,
-    },
-    {
-      id: 'alerts',
-      key: 'step_alerts_done',
-      title: 'Alertas e Relatórios',
-      subtitle: 'Configure quem recebe os alertas',
-      icon: Bell,
-      color: 'orange',
-      plans: ['trial', 'client', 'rating', 'growth', 'growth_lifetime'],
-      skippable: false,
-      aiIntro: `Último passo! Vamos configurar os **alertas**! 🔔
-
-Assim você e sua equipe são notificados quando um cliente deixar uma avaliação negativa, um novo lead preencher o formulário, ou um lead de alto valor chegar.
-
-Adicione o(s) número(s) de WhatsApp que devem receber as notificações e clique em **Salvar Alertas**. 👇`,
+      id: 'mpd', key: 'step_mbd_done', title: 'Minha Presença Digital',
+      subtitle: 'Diagnóstico e monitoramento online', icon: Activity, color: 'teal',
+      plans: ['growth','growth_lifetime'], skippable: true,
+      aiIntro: `Agora vamos configurar o **MPD — Minha Presença Digital**! 🌐\n\nO MPD monitora sua presença online: avaliações no Google, menções nas redes sociais e muito mais.\n\nPara ativar, acesse **Minha Presença Digital** no menu lateral e faça o diagnóstico inicial.\n\nSe ainda não contratou o MPD, pode pular por enquanto!`,
     },
   ];
-  return allSteps.filter(s => s.plans.includes(plan));
+  return all.filter(s => s.plans.includes(plan));
 };
 
-const colorMap: Record<string, { bg: string; text: string; border: string; light: string; btn: string; ring: string }> = {
-  emerald: { bg: 'bg-emerald-500', text: 'text-emerald-600', border: 'border-emerald-400', light: 'bg-emerald-50', btn: 'bg-emerald-500 hover:bg-emerald-600', ring: 'ring-emerald-300' },
-  yellow:  { bg: 'bg-yellow-500',  text: 'text-yellow-600',  border: 'border-yellow-400',  light: 'bg-yellow-50',  btn: 'bg-yellow-500 hover:bg-yellow-600',  ring: 'ring-yellow-300'  },
-  blue:    { bg: 'bg-blue-500',    text: 'text-blue-600',    border: 'border-blue-400',    light: 'bg-blue-50',    btn: 'bg-blue-500 hover:bg-blue-600',    ring: 'ring-blue-300'    },
-  purple:  { bg: 'bg-purple-500',  text: 'text-purple-600',  border: 'border-purple-400',  light: 'bg-purple-50',  btn: 'bg-purple-500 hover:bg-purple-600',  ring: 'ring-purple-300'  },
-  green:   { bg: 'bg-green-500',   text: 'text-green-600',   border: 'border-green-400',   light: 'bg-green-50',   btn: 'bg-green-500 hover:bg-green-600',   ring: 'ring-green-300'   },
-  orange:  { bg: 'bg-orange-500',  text: 'text-orange-600',  border: 'border-orange-400',  light: 'bg-orange-50',  btn: 'bg-orange-500 hover:bg-orange-600',  ring: 'ring-orange-300'  },
+// ─── Cores ────────────────────────────────────────────────────────────────────
+const C: Record<string, { bg: string; text: string; border: string; light: string; btn: string; ring: string; sidebar: string }> = {
+  emerald: { bg:'bg-emerald-500', text:'text-emerald-600', border:'border-emerald-300', light:'bg-emerald-50', btn:'bg-emerald-500 hover:bg-emerald-600', ring:'ring-emerald-300', sidebar:'bg-emerald-500' },
+  yellow:  { bg:'bg-yellow-500',  text:'text-yellow-600',  border:'border-yellow-300',  light:'bg-yellow-50',  btn:'bg-yellow-500 hover:bg-yellow-600',  ring:'ring-yellow-300',  sidebar:'bg-yellow-500'  },
+  blue:    { bg:'bg-blue-500',    text:'text-blue-600',    border:'border-blue-300',    light:'bg-blue-50',    btn:'bg-blue-500 hover:bg-blue-600',    ring:'ring-blue-300',    sidebar:'bg-blue-500'    },
+  purple:  { bg:'bg-purple-500',  text:'text-purple-600',  border:'border-purple-300',  light:'bg-purple-50',  btn:'bg-purple-500 hover:bg-purple-600',  ring:'ring-purple-300',  sidebar:'bg-purple-500'  },
+  teal:    { bg:'bg-teal-500',    text:'text-teal-600',    border:'border-teal-300',    light:'bg-teal-50',    btn:'bg-teal-500 hover:bg-teal-600',    ring:'ring-teal-300',    sidebar:'bg-teal-500'    },
+  orange:  { bg:'bg-orange-500',  text:'text-orange-600',  border:'border-orange-300',  light:'bg-orange-50',  btn:'bg-orange-500 hover:bg-orange-600',  ring:'ring-orange-300',  sidebar:'bg-orange-500'  },
 };
+
+const BUSINESS_TYPES = [
+  'Clínica de Estética','Consultório Médico','Salão de Beleza','Academia','Restaurante',
+  'Loja de Roupas','Imobiliária','Agência de Marketing','Escritório de Advocacia',
+  'Consultoria','E-commerce','Barbearia','Pet Shop','Escola / Curso','Outro (escrever)',
+];
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function OnboardingWizard({
-  userId, tenantId, userPlan, companyName, onComplete, onNavigate
-}: OnboardingWizardProps) {
+export default function OnboardingWizard({ userId, tenantId, userPlan, companyName, onComplete, onNavigate }: OnboardingWizardProps) {
   const steps = getSteps(userPlan);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set());
@@ -159,57 +89,59 @@ export default function OnboardingWizard({
   const [userInput, setUserInput] = useState('');
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [showCompletion, setShowCompletion] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  // ── Dados de cada etapa ──
-  // Etapa 1: Perfil
+  // ── Perfil: sub-etapas ──
+  const [profileSubStep, setProfileSubStep] = useState<1|2|3>(1);
   const [profile, setProfile] = useState({
     company_name: companyName || '',
     business_type: '',
+    business_type_custom: '',
     business_description: '',
     target_audience: '',
     differentials: '',
+    main_pain_points: '',
     google_place_id: '',
-    website_url: '',
-    instagram_handle: '',
+    brand_tone: 'profissional',
   });
-  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
 
-  // Etapa 2: NPS
+  // ── NPS ──
+  const [npsMode, setNpsMode] = useState<CreationMode>(null);
   const [npsName, setNpsName] = useState('Pesquisa de Satisfação Pós-Venda');
-  const [npsDescription, setNpsDescription] = useState('Pesquisa enviada após o atendimento para medir a satisfação do cliente.');
+  const [npsDesc, setNpsDesc] = useState('Pesquisa enviada após o atendimento para medir a satisfação do cliente.');
+  const [npsAiPrompt, setNpsAiPrompt] = useState('');
+  const [npsTemplates, setNpsTemplates] = useState<any[]>([]);
+  const [npsTemplatesLoading, setNpsTemplatesLoading] = useState(false);
   const [npsCreated, setNpsCreated] = useState(false);
 
-  // Etapa 3: Produtos
-  const [products, setProducts] = useState<Array<{ name: string; value: string; description: string }>>([
-    { name: '', value: '', description: '' }
-  ]);
+  // ── Produtos ──
+  const [productsMode, setProductsMode] = useState<CreationMode>(null);
+  const [catalogSegments, setCatalogSegments] = useState<any[]>([]);
+  const [catalogItems, setCatalogItems] = useState<Array<{name:string;value:string;selected:boolean}>>([]);
+  const [selectedSegment, setSelectedSegment] = useState('');
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [manualProducts, setManualProducts] = useState([{name:'',value:'',description:''}]);
+  const [aiProductPrompt, setAiProductPrompt] = useState('');
+  const [aiProductsResult, setAiProductsResult] = useState<Array<{name:string;value:string;description:string;selected:boolean}>>([]);
   const [productsSaved, setProductsSaved] = useState(false);
 
-  // Etapa 4: Formulário
+  // ── Formulário ──
+  const [formMode, setFormMode] = useState<CreationMode>(null);
   const [formName, setFormName] = useState('Formulário de Interesse');
-  const [formDescription, setFormDescription] = useState('Formulário para captar informações de clientes interessados nos nossos serviços.');
+  const [formDesc, setFormDesc] = useState('Formulário para captar informações de clientes interessados.');
+  const [formAiPrompt, setFormAiPrompt] = useState('');
+  const [formTemplates, setFormTemplates] = useState<any[]>([]);
+  const [formTemplatesLoading, setFormTemplatesLoading] = useState(false);
   const [formCreated, setFormCreated] = useState(false);
-
-  // Etapa 5: MBD
-  const [mbdNumber, setMbdNumber] = useState('');
-
-  // Etapa 6: Alertas
-  const [alertNumbers, setAlertNumbers] = useState<string[]>(['']);
-  const [alertNewLead, setAlertNewLead] = useState(true);
-  const [alertDetractor, setAlertDetractor] = useState(true);
-  const [alertHighValue, setAlertHighValue] = useState(true);
-  const [alertsSaved, setAlertsSaved] = useState(false);
 
   const currentStep = steps[currentStepIndex];
   const totalSteps = steps.length;
   const progress = totalSteps > 0 ? (completedSteps.size / totalSteps) * 100 : 0;
 
-  // ── Carregar progresso e dados existentes ──
+  // ── Init ──
   useEffect(() => { loadProgress(); }, [tenantId]);
-
   useEffect(() => {
     if (currentStep) {
       setAiMessages([{ role: 'assistant', content: currentStep.aiIntro }]);
@@ -219,765 +151,752 @@ export default function OnboardingWizard({
 
   const loadProgress = async () => {
     try {
-      // Carregar progresso
-      const { data: prog } = await supabase
-        .from('onboarding_progress')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .maybeSingle();
-
+      const { data: prog } = await supabase.from('onboarding_progress').select('*').eq('tenant_id', tenantId).maybeSingle();
       if (prog) {
         const done = new Set<string>();
         if (prog.step_profile_done) done.add('profile');
         if (prog.step_nps_done) done.add('nps');
         if (prog.step_products_done) done.add('products');
         if (prog.step_form_done) done.add('form');
-        if (prog.step_mbd_done) done.add('mbd');
-        if (prog.step_alerts_done) done.add('alerts');
+        if (prog.step_mbd_done) done.add('mpd');
         setCompletedSteps(done);
-        const firstIncomplete = steps.findIndex(s => !done.has(s.id));
-        if (firstIncomplete >= 0) setCurrentStepIndex(firstIncomplete);
-        else if (prog.is_complete) { onComplete(); return; }
+        if (prog.is_complete) { onComplete(); return; }
+        const first = steps.findIndex(s => !done.has(s.id));
+        if (first >= 0) setCurrentStepIndex(first);
       } else {
         await supabase.from('onboarding_progress').insert({ tenant_id: tenantId, user_id: userId, current_step: 1 });
       }
-
-      // Carregar dados existentes do perfil
-      const { data: bp } = await supabase
-        .from('business_profile')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .maybeSingle();
-      if (bp) {
-        setProfile({
-          company_name: bp.company_name || companyName || '',
-          business_type: bp.business_type || '',
-          business_description: bp.business_description || '',
-          target_audience: bp.target_audience || '',
-          differentials: bp.differentials || '',
-          google_place_id: bp.google_place_id || '',
-          website_url: bp.website_url || '',
-          instagram_handle: bp.instagram_handle || '',
-        });
-      }
-
-      // Carregar alertas existentes
-      const { data: alerts } = await supabase
-        .from('alert_settings')
-        .select('*')
-        .eq('company_id', tenantId)
-        .maybeSingle();
-      if (alerts) {
-        const nums = alerts.whatsapp_numbers?.length ? alerts.whatsapp_numbers : (alerts.whatsapp_number ? [alerts.whatsapp_number] : ['']);
-        setAlertNumbers(nums);
-        setAlertNewLead(alerts.alert_new_lead ?? true);
-        setAlertDetractor(alerts.alert_detractor ?? true);
-        setAlertHighValue(alerts.alert_high_value_lead ?? true);
-      }
-    } catch (e) {
-      console.error('Erro ao carregar progresso:', e);
-    }
+      const { data: bp } = await supabase.from('business_profile').select('*').eq('tenant_id', tenantId).maybeSingle();
+      if (bp) setProfile(prev => ({
+        ...prev,
+        company_name: bp.company_name || companyName || '',
+        business_type: bp.business_type || '',
+        business_description: bp.business_description || '',
+        target_audience: bp.target_audience || '',
+        differentials: bp.differentials || '',
+        main_pain_points: bp.main_pain_points || '',
+        google_place_id: bp.google_place_id || '',
+        brand_tone: bp.brand_tone || 'profissional',
+      }));
+    } catch (e) { console.error(e); }
   };
 
-  const saveStepProgress = async (stepId: string) => {
-    const fieldMap: Record<string, string> = {
-      profile: 'step_profile_done', nps: 'step_nps_done',
-      products: 'step_products_done', form: 'step_form_done',
-      mbd: 'step_mbd_done', alerts: 'step_alerts_done',
-    };
-    const newCompleted = new Set(completedSteps);
-    newCompleted.add(stepId);
-    setCompletedSteps(newCompleted);
-    const isAllDone = steps.every(s => newCompleted.has(s.id));
-    await supabase.from('onboarding_progress').update({
-      [fieldMap[stepId]]: true,
-      current_step: currentStepIndex + 2,
-      is_complete: isAllDone,
-      completed_at: isAllDone ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString(),
-    }).eq('tenant_id', tenantId);
-    if (isAllDone) setShowCompletionModal(true);
+  const markStepDone = async (stepId: string) => {
+    const fieldMap: Record<string,string> = { profile:'step_profile_done', nps:'step_nps_done', products:'step_products_done', form:'step_form_done', mpd:'step_mbd_done' };
+    const newDone = new Set(completedSteps); newDone.add(stepId); setCompletedSteps(newDone);
+    const isAll = steps.every(s => newDone.has(s.id));
+    await supabase.from('onboarding_progress').update({ [fieldMap[stepId]]: true, current_step: currentStepIndex + 2, is_complete: isAll, completed_at: isAll ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq('tenant_id', tenantId);
+    if (isAll) { setTimeout(() => setShowCompletion(true), 600); return; }
+    const next = steps.findIndex((s, i) => i > currentStepIndex && !newDone.has(s.id));
+    setTimeout(() => setCurrentStepIndex(next >= 0 ? next : steps.findIndex(s => !newDone.has(s.id))), 800);
   };
 
-  const goNext = () => {
-    const next = steps.findIndex((s, i) => i > currentStepIndex && !completedSteps.has(s.id));
-    if (next >= 0) setCurrentStepIndex(next);
-    else {
-      const anyIncomplete = steps.findIndex(s => !completedSteps.has(s.id));
-      if (anyIncomplete >= 0) setCurrentStepIndex(anyIncomplete);
-    }
-  };
-
-  // ── Ações de cada etapa ──
-
-  const handleSaveProfile = async () => {
-    if (!profile.company_name.trim()) return;
-    setProfileLoading(true);
+  // ── Chat ──
+  const sendAiMessage = async () => {
+    if (!userInput.trim()) return;
+    const msg = userInput.trim(); setUserInput('');
+    setAiMessages(prev => [...prev, { role:'user', content:msg }]);
+    setIsAiTyping(true);
     try {
-      const data = { ...profile, user_id: userId, tenant_id: tenantId, updated_at: new Date().toISOString() };
-      const { data: existing } = await supabase.from('business_profile').select('id').eq('tenant_id', tenantId).maybeSingle();
-      if (existing) {
-        await supabase.from('business_profile').update(data).eq('tenant_id', tenantId);
-      } else {
-        await supabase.from('business_profile').insert(data);
-      }
-      setAiMessages(prev => [...prev, { role: 'assistant', content: `Perfeito! O perfil de **${profile.company_name}** foi salvo! 🎉 Agora o sistema já conhece seu negócio e vai trabalhar muito melhor para você.` }]);
-      await saveStepProgress('profile');
-      setTimeout(goNext, 1200);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setProfileLoading(false);
-    }
+      const res = await fetch('/api/onboarding/giulia-chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ messages:[...aiMessages.map(m=>({role:m.role,content:m.content})),{role:'user',content:msg}], stepTitle: currentStep.title, companyName }) });
+      const data = await res.json();
+      setAiMessages(prev => [...prev, { role:'assistant', content: data.message || 'Desculpe, não consegui responder agora!' }]);
+    } catch { setAiMessages(prev => [...prev, { role:'assistant', content:'Ops! Tive um problema técnico. Pode continuar! 😊' }]); }
+    finally { setIsAiTyping(false); setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior:'smooth' }), 100); }
   };
 
-  const handleCreateNPS = async () => {
+  // ── Ações de NPS ──
+  const loadNpsTemplates = async () => {
+    setNpsTemplatesLoading(true);
+    try {
+      const res = await fetch('/api/templates?tipoVenda=pos_venda');
+      const data = await res.json();
+      setNpsTemplates(data.templates || []);
+    } catch { setNpsTemplates([]); } finally { setNpsTemplatesLoading(false); }
+  };
+  const createNpsFromTemplate = async (tpl: any) => {
+    setIsSaving(true);
+    try {
+      await fetch('/api/templates', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ templateId: tpl.id, tenantId, campaignName: tpl.name + ' (cópia)' }) });
+      setNpsCreated(true);
+      setAiMessages(prev => [...prev, { role:'assistant', content:`Template **"${tpl.name}"** aplicado! 🌟 Sua pesquisa de NPS está pronta para uso.` }]);
+      await markStepDone('nps');
+    } catch { } finally { setIsSaving(false); }
+  };
+  const createNpsManual = async () => {
     if (!npsName.trim()) return;
     setIsSaving(true);
     try {
-      await supabase.from('campaigns').insert({
-        name: npsName,
-        description: npsDescription,
-        status: 'active',
-        questions: [],
-        initial_fields: [{ id: 'name', label: 'Nome', type: 'text', required: true }, { id: 'phone', label: 'WhatsApp', type: 'tel', required: false }],
-        google_redirect: !!profile.google_place_id,
-        google_place_id: profile.google_place_id || '',
-        enable_redirection: !!profile.google_place_id,
-        user_id: userId,
-        tenant_id: tenantId,
-      });
+      await supabase.from('campaigns').insert({ name: npsName, description: npsDesc, status:'active', questions:[], initial_fields:[{id:'name',label:'Nome',type:'text',required:true},{id:'phone',label:'WhatsApp',type:'tel',required:false}], google_redirect: !!profile.google_place_id, google_place_id: profile.google_place_id||'', enable_redirection: !!profile.google_place_id, user_id: userId, tenant_id: tenantId });
       setNpsCreated(true);
-      setAiMessages(prev => [...prev, { role: 'assistant', content: `Sua pesquisa de NPS **"${npsName}"** foi criada! 🌟 Agora você já pode começar a coletar avaliações. Você pode personalizar as perguntas depois na tela de Pesquisas.` }]);
-      await saveStepProgress('nps');
-      setTimeout(goNext, 1200);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSaving(false);
-    }
+      setAiMessages(prev => [...prev, { role:'assistant', content:`Pesquisa **"${npsName}"** criada! 🌟 Você pode personalizar as perguntas depois na tela de Pesquisas.` }]);
+      await markStepDone('nps');
+    } catch { } finally { setIsSaving(false); }
   };
-
-  const handleSaveProducts = async () => {
-    const valid = products.filter(p => p.name.trim());
-    if (valid.length === 0) return;
+  const createNpsWithAI = async () => {
+    if (!npsAiPrompt.trim()) return;
     setIsSaving(true);
     try {
-      await supabase.from('products_services').insert(
-        valid.map(p => ({
-          name: p.name.trim(),
-          value: parseFloat(p.value) || 0,
-          ai_description: p.description.trim(),
-          user_id: userId,
-          tenant_id: tenantId,
-          active: true,
-        }))
-      );
-      setProductsSaved(true);
-      setAiMessages(prev => [...prev, { role: 'assistant', content: `${valid.length} produto(s) cadastrado(s) com sucesso! 💼 Agora o sistema consegue calcular o potencial de receita dos seus leads.` }]);
-      await saveStepProgress('products');
-      setTimeout(goNext, 1200);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSaving(false);
-    }
+      const name = `NPS — ${profile.company_name || companyName}`;
+      await supabase.from('campaigns').insert({ name, description: npsAiPrompt, status:'active', questions:[], initial_fields:[{id:'name',label:'Nome',type:'text',required:true},{id:'phone',label:'WhatsApp',type:'tel',required:false}], google_redirect: !!profile.google_place_id, google_place_id: profile.google_place_id||'', enable_redirection: !!profile.google_place_id, user_id: userId, tenant_id: tenantId });
+      setNpsCreated(true);
+      setAiMessages(prev => [...prev, { role:'assistant', content:`Pesquisa criada com base na sua descrição! 🤖 Você pode editar as perguntas depois na tela de Pesquisas.` }]);
+      await markStepDone('nps');
+    } catch { } finally { setIsSaving(false); }
   };
 
-  const handleCreateForm = async () => {
+  // ── Ações de Produtos ──
+  const loadCatalog = async () => {
+    setCatalogLoading(true);
+    try {
+      const res = await fetch('/api/product-catalog');
+      const data = await res.json();
+      const segs = Array.isArray(data) ? data : [];
+      setCatalogSegments(segs);
+      if (segs.length > 0) {
+        const bt = profile.business_type.toLowerCase();
+        const match = segs.find((s:any) => bt.includes(s.segment?.toLowerCase()?.split(' ')[0]));
+        const seg = match || segs[0];
+        setSelectedSegment(seg.segment);
+        const segRes = await fetch(`/api/product-catalog?segment=${seg.segment}`);
+        const segData = await segRes.json();
+        if (segData?.products) {
+          setCatalogItems(segData.products.map((p:any) => ({ name:p.name, value:String(Math.round((p.value_min+p.value_max)/2)), selected:false })));
+        }
+      }
+    } catch { } finally { setCatalogLoading(false); }
+  };
+  const loadSegment = async (seg: string) => {
+    setSelectedSegment(seg); setCatalogLoading(true);
+    try {
+      const res = await fetch(`/api/product-catalog?segment=${seg}`);
+      const data = await res.json();
+      if (data?.products) setCatalogItems(data.products.map((p:any) => ({ name:p.name, value:String(Math.round((p.value_min+p.value_max)/2)), selected:false })));
+    } catch { } finally { setCatalogLoading(false); }
+  };
+  const saveTemplateProducts = async () => {
+    const selected = catalogItems.filter(i => i.selected);
+    if (!selected.length) return;
+    setIsSaving(true);
+    try {
+      await supabase.from('products_services').insert(selected.map(p => ({ name:p.name, value:parseFloat(p.value)||0, ai_description:'', user_id:userId, tenant_id:tenantId, active:true })));
+      setProductsSaved(true);
+      setAiMessages(prev => [...prev, { role:'assistant', content:`${selected.length} produto(s) cadastrado(s)! 💼 O sistema já consegue calcular o potencial de receita dos seus leads.` }]);
+      await markStepDone('products');
+    } catch { } finally { setIsSaving(false); }
+  };
+  const saveManualProducts = async () => {
+    const valid = manualProducts.filter(p => p.name.trim());
+    if (!valid.length) return;
+    setIsSaving(true);
+    try {
+      await supabase.from('products_services').insert(valid.map(p => ({ name:p.name.trim(), value:parseFloat(p.value)||0, ai_description:p.description.trim(), user_id:userId, tenant_id:tenantId, active:true })));
+      setProductsSaved(true);
+      setAiMessages(prev => [...prev, { role:'assistant', content:`${valid.length} produto(s) cadastrado(s) com sucesso! 💼` }]);
+      await markStepDone('products');
+    } catch { } finally { setIsSaving(false); }
+  };
+  const generateAiProducts = async () => {
+    if (!aiProductPrompt.trim()) return;
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/gemini', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt: `Você é um especialista em negócios. Com base na descrição abaixo, sugira de 5 a 8 produtos/serviços típicos para esse tipo de negócio. Retorne APENAS um JSON array: [{"name":"...","value":0,"description":"..."}]\n\nNegócio: ${aiProductPrompt}` }) });
+      const data = await res.json();
+      const text = data.text || data.response || '';
+      const match = text.match(/\[[\s\S]*\]/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        setAiProductsResult(parsed.map((p:any) => ({ ...p, value: String(p.value||0), selected:true })));
+      }
+    } catch { } finally { setIsSaving(false); }
+  };
+  const saveAiProducts = async () => {
+    const selected = aiProductsResult.filter(p => p.selected);
+    if (!selected.length) return;
+    setIsSaving(true);
+    try {
+      await supabase.from('products_services').insert(selected.map(p => ({ name:p.name, value:parseFloat(p.value)||0, ai_description:p.description, user_id:userId, tenant_id:tenantId, active:true })));
+      setProductsSaved(true);
+      setAiMessages(prev => [...prev, { role:'assistant', content:`${selected.length} produto(s) gerado(s) pela IA e salvos! 🤖💼` }]);
+      await markStepDone('products');
+    } catch { } finally { setIsSaving(false); }
+  };
+
+  // ── Ações de Formulário ──
+  const loadFormTemplates = async () => {
+    setFormTemplatesLoading(true);
+    try {
+      const res = await fetch('/api/templates?tipoVenda=pre_venda');
+      const data = await res.json();
+      setFormTemplates(data.templates || []);
+    } catch { setFormTemplates([]); } finally { setFormTemplatesLoading(false); }
+  };
+  const createFormFromTemplate = async (tpl: any) => {
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/templates');
+      const data = await res.json();
+      const template = (data.templates || []).find((t:any) => t.id === tpl.id);
+      if (!template) return;
+      await supabase.from('forms').insert({ name: tpl.name + ' (cópia)', description: template.description||'', questions: (template.questions||[]).map((q:any) => ({ ...q, id: Date.now().toString()+Math.random() })), initial_fields:[{id:'name',label:'Nome completo',type:'text',required:true},{id:'phone',label:'WhatsApp',type:'tel',required:true},{id:'email',label:'E-mail',type:'email',required:false}], active:true, user_id:userId, tenant_id:tenantId });
+      setFormCreated(true);
+      setAiMessages(prev => [...prev, { role:'assistant', content:`Template **"${tpl.name}"** aplicado! 🎯 Seu formulário está pronto para captar leads.` }]);
+      await markStepDone('form');
+    } catch { } finally { setIsSaving(false); }
+  };
+  const createFormManual = async () => {
     if (!formName.trim()) return;
     setIsSaving(true);
     try {
-      await supabase.from('forms').insert({
-        name: formName,
-        description: formDescription,
-        questions: [],
-        initial_fields: [
-          { id: 'name', label: 'Nome completo', type: 'text', required: true },
-          { id: 'phone', label: 'WhatsApp', type: 'tel', required: true },
-          { id: 'email', label: 'E-mail', type: 'email', required: false },
-        ],
-        active: true,
-        user_id: userId,
-        tenant_id: tenantId,
-      });
+      await supabase.from('forms').insert({ name:formName, description:formDesc, questions:[], initial_fields:[{id:'name',label:'Nome completo',type:'text',required:true},{id:'phone',label:'WhatsApp',type:'tel',required:true},{id:'email',label:'E-mail',type:'email',required:false}], active:true, user_id:userId, tenant_id:tenantId });
       setFormCreated(true);
-      setAiMessages(prev => [...prev, { role: 'assistant', content: `Formulário **"${formName}"** criado! 🎯 Agora você já pode começar a captar leads qualificados. Personalize as perguntas depois na tela de Formulários.` }]);
-      await saveStepProgress('form');
-      setTimeout(goNext, 1200);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSaving(false);
-    }
+      setAiMessages(prev => [...prev, { role:'assistant', content:`Formulário **"${formName}"** criado! 🎯 Personalize as perguntas depois na tela de Formulários.` }]);
+      await markStepDone('form');
+    } catch { } finally { setIsSaving(false); }
   };
-
-  const handleSkipMBD = async () => {
-    setAiMessages(prev => [...prev, { role: 'assistant', content: `Tudo bem! Você pode conectar o WhatsApp depois em **Configurações → Integrações**. Vamos continuar! 👉` }]);
-    await saveStepProgress('mbd');
-    setTimeout(goNext, 1000);
-  };
-
-  const handleSaveAlerts = async () => {
-    const validNumbers = alertNumbers.filter(n => n.trim());
+  const createFormWithAI = async () => {
+    if (!formAiPrompt.trim()) return;
     setIsSaving(true);
     try {
-      const alertData = {
-        company_id: tenantId,
-        whatsapp_number: validNumbers[0] || null,
-        whatsapp_numbers: validNumbers,
-        alert_new_lead: alertNewLead,
-        alert_detractor: alertDetractor,
-        alert_high_value_lead: alertHighValue,
-        alert_promoter: false,
-        alert_lead_won: true,
-        alert_lead_lost: false,
-        updated_at: new Date().toISOString(),
-      };
-      const { data: existing } = await supabase.from('alert_settings').select('id').eq('company_id', tenantId).maybeSingle();
-      if (existing) {
-        await supabase.from('alert_settings').update(alertData).eq('company_id', tenantId);
-      } else {
-        await supabase.from('alert_settings').insert(alertData);
-      }
-      setAlertsSaved(true);
-      setAiMessages(prev => [...prev, { role: 'assistant', content: `Alertas configurados! 🎊 Agora você vai ficar sempre informado sobre o que está acontecendo com seus clientes.` }]);
-      await saveStepProgress('alerts');
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSaving(false);
-    }
+      const res = await fetch('/api/gemini', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt: `Crie perguntas de qualificação para um formulário de pré-venda. Negócio: ${formAiPrompt}. Retorne APENAS JSON: [{"text":"...","type":"single","options":[{"id":"o1","label":"...","value":100,"script":""}]}]` }) });
+      const data = await res.json();
+      const text = data.text || data.response || '';
+      const match = text.match(/\[[\s\S]*\]/);
+      const questions = match ? JSON.parse(match[0]).map((q:any) => ({ ...q, id: Date.now().toString()+Math.random() })) : [];
+      const name = `Formulário — ${profile.company_name || companyName}`;
+      await supabase.from('forms').insert({ name, description:formAiPrompt, questions, initial_fields:[{id:'name',label:'Nome completo',type:'text',required:true},{id:'phone',label:'WhatsApp',type:'tel',required:true},{id:'email',label:'E-mail',type:'email',required:false}], active:true, user_id:userId, tenant_id:tenantId });
+      setFormCreated(true);
+      setAiMessages(prev => [...prev, { role:'assistant', content:`Formulário criado com IA! 🤖 As perguntas foram geradas especialmente para o seu negócio.` }]);
+      await markStepDone('form');
+    } catch { } finally { setIsSaving(false); }
   };
 
-  // ── Chat com a Giulia ──
-  const handleAiChat = async () => {
-    if (!userInput.trim()) return;
-    const msg = userInput.trim();
-    setUserInput('');
-    setAiMessages(prev => [...prev, { role: 'user', content: msg }]);
-    setIsAiTyping(true);
+  // ── Salvar perfil ──
+  const saveProfile = async () => {
+    if (!profile.company_name.trim()) return;
+    setProfileSaving(true);
     try {
-      const response = await fetch('/api/onboarding/giulia-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [...aiMessages.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: msg }],
-          stepTitle: currentStep.title,
-          companyName,
-        })
-      });
-      const data = await response.json();
-      setAiMessages(prev => [...prev, { role: 'assistant', content: data.message || 'Desculpe, não consegui responder agora. Tente novamente!' }]);
-    } catch {
-      setAiMessages(prev => [...prev, { role: 'assistant', content: 'Ops! Tive um problema técnico. Mas pode continuar! 😊' }]);
-    } finally {
-      setIsAiTyping(false);
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    }
+      const bt = profile.business_type === 'Outro (escrever)' ? profile.business_type_custom : profile.business_type;
+      const data = { ...profile, business_type: bt, user_id:userId, tenant_id:tenantId, updated_at:new Date().toISOString() };
+      const { data: ex } = await supabase.from('business_profile').select('id').eq('tenant_id', tenantId).maybeSingle();
+      if (ex) await supabase.from('business_profile').update(data).eq('tenant_id', tenantId);
+      else await supabase.from('business_profile').insert(data);
+      setAiMessages(prev => [...prev, { role:'assistant', content:`Perfil de **${profile.company_name}** salvo! 🎉 O sistema agora conhece seu negócio e vai trabalhar muito melhor para você.` }]);
+      await markStepDone('profile');
+    } catch { } finally { setProfileSaving(false); }
   };
 
-  // ── Renderização do conteúdo de cada etapa ──
+  // ─── Renderização do conteúdo de cada etapa ──────────────────────────────────
   const renderStepContent = () => {
-    const colors = colorMap[currentStep?.color || 'emerald'];
-    switch (currentStep?.id) {
+    const colors = C[currentStep?.color || 'emerald'];
 
-      // ── ETAPA 1: Perfil ──────────────────────────────────────────────────
-      case 'profile':
-        return (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    // ── PERFIL ──────────────────────────────────────────────────────────────
+    if (currentStep?.id === 'profile') {
+      const subStepTitles = ['Identidade', 'Contexto do Negócio', 'Google & Posicionamento'];
+      return (
+        <div className="space-y-5">
+          {/* Sub-step indicator */}
+          <div className="flex gap-2">
+            {subStepTitles.map((t, i) => (
+              <button key={i} onClick={() => setProfileSubStep((i+1) as 1|2|3)} className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold border transition-all ${profileSubStep === i+1 ? `${colors.light} ${colors.text} ${colors.border} border` : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>
+                <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-xs mr-1.5 ${profileSubStep === i+1 ? colors.bg + ' text-white' : 'bg-gray-200 text-gray-500'}`}>{i+1}</span>
+                {t}
+              </button>
+            ))}
+          </div>
+
+          {/* Sub-step 1: Identidade */}
+          {profileSubStep === 1 && (
+            <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Nome da Empresa *</label>
-                <input
-                  type="text"
-                  value={profile.company_name}
-                  onChange={e => setProfile(p => ({ ...p, company_name: e.target.value }))}
-                  placeholder="Ex: Clínica Bella Forma"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                />
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nome da Empresa *</label>
+                <input type="text" value={profile.company_name} onChange={e => setProfile(p=>({...p,company_name:e.target.value}))} placeholder="Ex: Clínica Bella Forma" className={`w-full border ${colors.border} rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ${colors.ring}`} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Tipo de Negócio</label>
-                <select
-                  value={profile.business_type}
-                  onChange={e => setProfile(p => ({ ...p, business_type: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-white"
-                >
-                  <option value="">Selecione...</option>
-                  {['Clínica de Estética','Consultório Médico','Salão de Beleza','Academia','Restaurante','Loja de Roupas','Imobiliária','Agência de Marketing','Escritório de Advocacia','Consultoria','E-commerce','Outro'].map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Tipo de Negócio</label>
+                <select value={profile.business_type} onChange={e => setProfile(p=>({...p,business_type:e.target.value}))} className={`w-full border ${colors.border} rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ${colors.ring} bg-white`}>
+                  <option value="">Selecione ou escolha "Outro"...</option>
+                  {BUSINESS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Descrição do Negócio</label>
-              <textarea
-                value={profile.business_description}
-                onChange={e => setProfile(p => ({ ...p, business_description: e.target.value }))}
-                placeholder="O que sua empresa faz? Quais problemas resolve? (a IA usa isso para gerar textos personalizados)"
-                rows={2}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 resize-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Público-alvo</label>
-                <input
-                  type="text"
-                  value={profile.target_audience}
-                  onChange={e => setProfile(p => ({ ...p, target_audience: e.target.value }))}
-                  placeholder="Ex: Mulheres 25-45 anos"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                />
+                {profile.business_type === 'Outro (escrever)' && (
+                  <input type="text" value={profile.business_type_custom} onChange={e => setProfile(p=>({...p,business_type_custom:e.target.value}))} placeholder="Descreva o tipo do seu negócio..." className={`mt-2 w-full border ${colors.border} rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ${colors.ring}`} />
+                )}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Diferenciais</label>
-                <input
-                  type="text"
-                  value={profile.differentials}
-                  onChange={e => setProfile(p => ({ ...p, differentials: e.target.value }))}
-                  placeholder="Ex: Atendimento personalizado"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                />
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Tom de Comunicação</label>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {[{v:'profissional',l:'Profissional',e:'💼'},{v:'amigavel',l:'Amigável',e:'😊'},{v:'informal',l:'Informal',e:'🎉'},{v:'direto',l:'Direto',e:'🎯'},{v:'inspirador',l:'Inspirador',e:'✨'}].map(t => (
+                    <button key={t.v} onClick={() => setProfile(p=>({...p,brand_tone:t.v}))} className={`py-2 px-2 rounded-xl text-xs font-medium border transition-all text-center ${profile.brand_tone===t.v ? `${colors.light} ${colors.text} ${colors.border} border-2` : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}>
+                      <div className="text-lg mb-0.5">{t.e}</div>{t.l}
+                    </button>
+                  ))}
+                </div>
               </div>
+              <button onClick={() => setProfileSubStep(2)} className={`w-full ${colors.btn} text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2`}>
+                Próximo <ChevronRight size={16} />
+              </button>
             </div>
+          )}
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1">
-                <MapPin size={12} className="text-emerald-500" />
-                Place ID do Google
-                <span className="bg-emerald-100 text-emerald-700 text-xs px-1.5 py-0.5 rounded-full ml-1">Importante!</span>
-              </label>
-              <input
-                type="text"
-                value={profile.google_place_id}
-                onChange={e => setProfile(p => ({ ...p, google_place_id: e.target.value }))}
-                placeholder="Ex: ChIJN1t_tDeuEmsRUsoyG83frY4"
-                className="w-full border border-emerald-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Encontre em: <a href="https://developers.google.com/maps/documentation/places/web-service/place-id" target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline">Google Place ID Finder</a> — busque seu negócio e copie o ID.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Sub-step 2: Contexto */}
+          {profileSubStep === 2 && (
+            <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1"><Globe size={11}/> Site</label>
-                <input type="text" value={profile.website_url} onChange={e => setProfile(p => ({ ...p, website_url: e.target.value }))} placeholder="https://..." className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Descrição do Negócio</label>
+                <textarea value={profile.business_description} onChange={e => setProfile(p=>({...p,business_description:e.target.value}))} placeholder="O que sua empresa faz? Quais problemas resolve? Seja detalhado — a IA usa isso para gerar textos personalizados para você." rows={3} className={`w-full border ${colors.border} rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ${colors.ring} resize-none`} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1"><Instagram size={11}/> Instagram</label>
-                <input type="text" value={profile.instagram_handle} onChange={e => setProfile(p => ({ ...p, instagram_handle: e.target.value }))} placeholder="@suaempresa" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Público-alvo</label>
+                <input type="text" value={profile.target_audience} onChange={e => setProfile(p=>({...p,target_audience:e.target.value}))} placeholder="Ex: Mulheres 25-45 anos que buscam cuidados estéticos" className={`w-full border ${colors.border} rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ${colors.ring}`} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Diferenciais</label>
+                <input type="text" value={profile.differentials} onChange={e => setProfile(p=>({...p,differentials:e.target.value}))} placeholder="Ex: Atendimento personalizado, tecnologia de ponta, 10 anos de experiência" className={`w-full border ${colors.border} rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ${colors.ring}`} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Principais dores dos seus clientes</label>
+                <input type="text" value={profile.main_pain_points} onChange={e => setProfile(p=>({...p,main_pain_points:e.target.value}))} placeholder="Ex: Falta de tempo, preço alto, mau atendimento no concorrente" className={`w-full border ${colors.border} rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ${colors.ring}`} />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setProfileSubStep(1)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium py-3 rounded-xl flex items-center justify-center gap-2 text-sm">
+                  <ChevronLeft size={16} /> Anterior
+                </button>
+                <button onClick={() => setProfileSubStep(3)} className={`flex-1 ${colors.btn} text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2`}>
+                  Próximo <ChevronRight size={16} />
+                </button>
               </div>
             </div>
+          )}
 
-            <button
-              onClick={handleSaveProfile}
-              disabled={!profile.company_name.trim() || profileLoading}
-              className={`w-full ${colors.btn} disabled:opacity-40 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2`}
-            >
-              {profileLoading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-              Salvar Perfil e Continuar
+          {/* Sub-step 3: Google */}
+          {profileSubStep === 3 && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5 flex items-center gap-1.5">
+                  <MapPin size={13} className="text-emerald-500" />
+                  Place ID do Google
+                  <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full font-semibold">Muito importante!</span>
+                </label>
+                <input type="text" value={profile.google_place_id} onChange={e => setProfile(p=>({...p,google_place_id:e.target.value}))} placeholder="Ex: ChIJN1t_tDeuEmsRUsoyG83frY4" className={`w-full border-2 ${colors.border} rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ${colors.ring}`} />
+                <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-emerald-700 mb-1">Como encontrar o Place ID?</p>
+                  <ol className="text-xs text-emerald-700 space-y-1 list-decimal ml-4">
+                    <li>Acesse <a href="https://developers.google.com/maps/documentation/places/web-service/place-id" target="_blank" rel="noopener noreferrer" className="underline font-medium">Google Place ID Finder</a></li>
+                    <li>Busque o nome do seu negócio no campo de pesquisa</li>
+                    <li>Clique no resultado correto e copie o ID exibido</li>
+                  </ol>
+                </div>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
+                <AlertCircle size={14} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700">
+                  Com o Place ID configurado, clientes com nota <strong>9-10</strong> no NPS serão redirecionados automaticamente para avaliar sua empresa no Google!
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setProfileSubStep(2)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium py-3 rounded-xl flex items-center justify-center gap-2 text-sm">
+                  <ChevronLeft size={16} /> Anterior
+                </button>
+                <button onClick={saveProfile} disabled={!profile.company_name.trim() || profileSaving} className={`flex-1 ${colors.btn} disabled:opacity-40 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2`}>
+                  {profileSaving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                  Salvar e Continuar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ── NPS ─────────────────────────────────────────────────────────────────
+    if (currentStep?.id === 'nps') {
+      const colors = C.yellow;
+      if (npsCreated) return <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-3"><CheckCircle2 size={22} className="text-green-500 flex-shrink-0" /><p className="text-sm text-green-700 font-semibold">Pesquisa de NPS criada! Avançando para a próxima etapa...</p></div>;
+
+      if (!npsMode) return (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">Como você quer criar sua pesquisa de NPS?</p>
+          <button onClick={() => { setNpsMode('template'); loadNpsTemplates(); }} className="w-full bg-white border-2 border-yellow-200 hover:border-yellow-400 hover:bg-yellow-50 rounded-xl p-4 flex items-center gap-4 transition-all group">
+            <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-yellow-200"><LayoutTemplate size={20} className="text-yellow-600" /></div>
+            <div className="text-left"><p className="font-semibold text-gray-900 text-sm">Usar Template</p><p className="text-xs text-gray-500">Modelos prontos para o seu segmento — mais rápido!</p></div>
+            <ChevronRight size={16} className="text-gray-400 ml-auto" />
+          </button>
+          <button onClick={() => setNpsMode('ai')} className="w-full bg-white border-2 border-purple-200 hover:border-purple-400 hover:bg-purple-50 rounded-xl p-4 flex items-center gap-4 transition-all group">
+            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-purple-200"><Wand2 size={20} className="text-purple-600" /></div>
+            <div className="text-left"><p className="font-semibold text-gray-900 text-sm">Criar com IA</p><p className="text-xs text-gray-500">Descreva seu negócio e a IA monta a pesquisa</p></div>
+            <ChevronRight size={16} className="text-gray-400 ml-auto" />
+          </button>
+          <button onClick={() => setNpsMode('manual')} className="w-full bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 rounded-xl p-4 flex items-center gap-4 transition-all group">
+            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200"><PenLine size={20} className="text-gray-600" /></div>
+            <div className="text-left"><p className="font-semibold text-gray-900 text-sm">Criar Manualmente</p><p className="text-xs text-gray-500">Defina o nome e configure depois</p></div>
+            <ChevronRight size={16} className="text-gray-400 ml-auto" />
+          </button>
+        </div>
+      );
+
+      if (npsMode === 'template') return (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 mb-2">
+            <button onClick={() => setNpsMode(null)} className="text-gray-400 hover:text-gray-600"><ArrowLeft size={16}/></button>
+            <p className="text-sm font-semibold text-gray-700">Escolha um template de NPS</p>
+          </div>
+          {npsTemplatesLoading ? <div className="flex items-center justify-center py-8"><Loader2 size={24} className="animate-spin text-yellow-500"/></div> : npsTemplates.length === 0 ? <p className="text-sm text-gray-400 text-center py-6">Nenhum template disponível no momento.</p> : (
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {npsTemplates.map(tpl => (
+                <div key={tpl.id} className="bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-between hover:border-yellow-300 hover:bg-yellow-50 transition-all">
+                  <div><p className="text-sm font-semibold text-gray-900">{tpl.name}</p><p className="text-xs text-gray-400">{tpl.segment || 'Geral'} · {tpl.questions?.length || 0} perguntas</p></div>
+                  <button onClick={() => createNpsFromTemplate(tpl)} disabled={isSaving} className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1 disabled:opacity-50">
+                    {isSaving ? <Loader2 size={12} className="animate-spin"/> : <Check size={12}/>} Usar
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+
+      if (npsMode === 'ai') return (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-1"><button onClick={() => setNpsMode(null)} className="text-gray-400 hover:text-gray-600"><ArrowLeft size={16}/></button><p className="text-sm font-semibold text-gray-700">Criar NPS com IA</p></div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Descreva seu negócio e o objetivo da pesquisa</label>
+            <textarea value={npsAiPrompt} onChange={e => setNpsAiPrompt(e.target.value)} placeholder="Ex: Clínica de estética que atende mulheres. Quero medir a satisfação após procedimentos e redirecionar clientes satisfeitos para o Google." rows={3} className="w-full border border-purple-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ring-purple-300 resize-none" />
+          </div>
+          <button onClick={createNpsWithAI} disabled={!npsAiPrompt.trim() || isSaving} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-40 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
+            {isSaving ? <Loader2 size={16} className="animate-spin"/> : <Wand2 size={16}/>} Criar com IA
+          </button>
+        </div>
+      );
+
+      if (npsMode === 'manual') return (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-1"><button onClick={() => setNpsMode(null)} className="text-gray-400 hover:text-gray-600"><ArrowLeft size={16}/></button><p className="text-sm font-semibold text-gray-700">Criar NPS manualmente</p></div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nome da Pesquisa *</label>
+            <input type="text" value={npsName} onChange={e => setNpsName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ring-yellow-300" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Descrição</label>
+            <textarea value={npsDesc} onChange={e => setNpsDesc(e.target.value)} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ring-yellow-300 resize-none" />
+          </div>
+          {profile.google_place_id && <div className="bg-green-50 border border-green-200 rounded-xl p-2.5 flex items-center gap-2 text-xs text-green-700"><CheckCircle2 size={13}/> Redirecionamento para o Google será ativado automaticamente!</div>}
+          <button onClick={createNpsManual} disabled={!npsName.trim() || isSaving} className="w-full bg-yellow-500 hover:bg-yellow-600 disabled:opacity-40 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
+            {isSaving ? <Loader2 size={16} className="animate-spin"/> : <Star size={16}/>} Criar Pesquisa
+          </button>
+        </div>
+      );
+    }
+
+    // ── PRODUTOS ─────────────────────────────────────────────────────────────
+    if (currentStep?.id === 'products') {
+      const colors = C.blue;
+      if (productsSaved) return <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-3"><CheckCircle2 size={22} className="text-green-500 flex-shrink-0"/><p className="text-sm text-green-700 font-semibold">Produtos salvos! Avançando...</p></div>;
+
+      if (!productsMode) return (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">Como você quer cadastrar seus produtos/serviços?</p>
+          <button onClick={() => { setProductsMode('template'); loadCatalog(); }} className="w-full bg-white border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl p-4 flex items-center gap-4 transition-all group">
+            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-blue-200"><LayoutTemplate size={20} className="text-blue-600"/></div>
+            <div className="text-left"><p className="font-semibold text-gray-900 text-sm">Catálogo por Segmento</p><p className="text-xs text-gray-500">Selecione produtos típicos do seu mercado</p></div>
+            <ChevronRight size={16} className="text-gray-400 ml-auto"/>
+          </button>
+          <button onClick={() => setProductsMode('ai')} className="w-full bg-white border-2 border-purple-200 hover:border-purple-400 hover:bg-purple-50 rounded-xl p-4 flex items-center gap-4 transition-all group">
+            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-purple-200"><Wand2 size={20} className="text-purple-600"/></div>
+            <div className="text-left"><p className="font-semibold text-gray-900 text-sm">Gerar com IA</p><p className="text-xs text-gray-500">Descreva seu negócio e a IA sugere os produtos</p></div>
+            <ChevronRight size={16} className="text-gray-400 ml-auto"/>
+          </button>
+          <button onClick={() => setProductsMode('manual')} className="w-full bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 rounded-xl p-4 flex items-center gap-4 transition-all group">
+            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200"><PenLine size={20} className="text-gray-600"/></div>
+            <div className="text-left"><p className="font-semibold text-gray-900 text-sm">Adicionar Manualmente</p><p className="text-xs text-gray-500">Cadastre seus produtos um por um</p></div>
+            <ChevronRight size={16} className="text-gray-400 ml-auto"/>
+          </button>
+        </div>
+      );
+
+      if (productsMode === 'template') return (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2"><button onClick={() => setProductsMode(null)} className="text-gray-400 hover:text-gray-600"><ArrowLeft size={16}/></button><p className="text-sm font-semibold text-gray-700">Catálogo por segmento</p></div>
+          {catalogLoading ? <div className="flex items-center justify-center py-8"><Loader2 size={24} className="animate-spin text-blue-500"/></div> : (
+            <>
+              {catalogSegments.length > 0 && (
+                <div className="flex gap-1.5 flex-wrap">
+                  {catalogSegments.map((s:any) => (
+                    <button key={s.segment} onClick={() => loadSegment(s.segment)} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${selectedSegment===s.segment ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}>{s.segment}</button>
+                  ))}
+                </div>
+              )}
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                {catalogItems.map((item, idx) => (
+                  <label key={idx} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${item.selected ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-200 hover:border-blue-200'}`}>
+                    <input type="checkbox" checked={item.selected} onChange={() => setCatalogItems(prev => prev.map((i,k) => k===idx ? {...i,selected:!i.selected} : i))} className="w-4 h-4 accent-blue-500"/>
+                    <div className="flex-1 min-w-0"><p className="text-sm font-medium text-gray-900 truncate">{item.name}</p></div>
+                    <span className="text-xs text-gray-400 flex-shrink-0">R$ {parseFloat(item.value||'0').toLocaleString('pt-BR')}</span>
+                  </label>
+                ))}
+              </div>
+              <button onClick={saveTemplateProducts} disabled={!catalogItems.some(i=>i.selected) || isSaving} className="w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-40 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
+                {isSaving ? <Loader2 size={16} className="animate-spin"/> : <Check size={16}/>} Salvar {catalogItems.filter(i=>i.selected).length} produto(s)
+              </button>
+            </>
+          )}
+        </div>
+      );
+
+      if (productsMode === 'ai') return (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2"><button onClick={() => setProductsMode(null)} className="text-gray-400 hover:text-gray-600"><ArrowLeft size={16}/></button><p className="text-sm font-semibold text-gray-700">Gerar produtos com IA</p></div>
+          {aiProductsResult.length === 0 ? (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Descreva seu negócio</label>
+                <textarea value={aiProductPrompt} onChange={e => setAiProductPrompt(e.target.value)} placeholder={`Ex: ${profile.business_description || 'Clínica de estética que oferece procedimentos faciais e corporais para mulheres'}`} rows={3} className="w-full border border-purple-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ring-purple-300 resize-none"/>
+              </div>
+              <button onClick={generateAiProducts} disabled={!aiProductPrompt.trim() || isSaving} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-40 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
+                {isSaving ? <Loader2 size={16} className="animate-spin"/> : <Wand2 size={16}/>} Gerar Sugestões
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-gray-500">Selecione os produtos que deseja cadastrar:</p>
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                {aiProductsResult.map((p, idx) => (
+                  <label key={idx} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${p.selected ? 'bg-purple-50 border-purple-300' : 'bg-white border-gray-200 hover:border-purple-200'}`}>
+                    <input type="checkbox" checked={p.selected} onChange={() => setAiProductsResult(prev => prev.map((i,k) => k===idx ? {...i,selected:!i.selected} : i))} className="w-4 h-4 accent-purple-500"/>
+                    <div className="flex-1 min-w-0"><p className="text-sm font-medium text-gray-900">{p.name}</p><p className="text-xs text-gray-400 truncate">{p.description}</p></div>
+                    <span className="text-xs text-gray-400 flex-shrink-0">R$ {parseFloat(p.value||'0').toLocaleString('pt-BR')}</span>
+                  </label>
+                ))}
+              </div>
+              <button onClick={saveAiProducts} disabled={!aiProductsResult.some(p=>p.selected) || isSaving} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-40 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
+                {isSaving ? <Loader2 size={16} className="animate-spin"/> : <Check size={16}/>} Salvar {aiProductsResult.filter(p=>p.selected).length} produto(s)
+              </button>
+            </>
+          )}
+        </div>
+      );
+
+      if (productsMode === 'manual') return (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2"><button onClick={() => setProductsMode(null)} className="text-gray-400 hover:text-gray-600"><ArrowLeft size={16}/></button><p className="text-sm font-semibold text-gray-700">Adicionar manualmente</p></div>
+          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            {manualProducts.map((prod, idx) => (
+              <div key={idx} className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-400">Produto {idx+1}</span>
+                  {manualProducts.length > 1 && <button onClick={() => setManualProducts(prev => prev.filter((_,i)=>i!==idx))} className="text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={13}/></button>}
+                </div>
+                <input type="text" value={prod.name} onChange={e => setManualProducts(prev => prev.map((p,i) => i===idx ? {...p,name:e.target.value} : p))} placeholder="Nome do produto/serviço *" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ring-blue-300"/>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="number" value={prod.value} onChange={e => setManualProducts(prev => prev.map((p,i) => i===idx ? {...p,value:e.target.value} : p))} placeholder="Preço (R$)" className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ring-blue-300"/>
+                  <input type="text" value={prod.description} onChange={e => setManualProducts(prev => prev.map((p,i) => i===idx ? {...p,description:e.target.value} : p))} placeholder="Descrição breve" className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ring-blue-300"/>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => setManualProducts(prev => [...prev, {name:'',value:'',description:''}])} className="w-full border-2 border-dashed border-blue-200 text-blue-500 hover:border-blue-400 hover:bg-blue-50 rounded-xl py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-2">
+            <Plus size={15}/> Adicionar produto
+          </button>
+          <button onClick={saveManualProducts} disabled={!manualProducts.some(p=>p.name.trim()) || isSaving} className="w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-40 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
+            {isSaving ? <Loader2 size={16} className="animate-spin"/> : <Package size={16}/>} Salvar Produtos
+          </button>
+        </div>
+      );
+    }
+
+    // ── FORMULÁRIO ───────────────────────────────────────────────────────────
+    if (currentStep?.id === 'form') {
+      const colors = C.purple;
+      if (formCreated) return <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-3"><CheckCircle2 size={22} className="text-green-500 flex-shrink-0"/><p className="text-sm text-green-700 font-semibold">Formulário criado! Avançando...</p></div>;
+
+      if (!formMode) return (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">Como você quer criar seu formulário de captação?</p>
+          <button onClick={() => { setFormMode('template'); loadFormTemplates(); }} className="w-full bg-white border-2 border-purple-200 hover:border-purple-400 hover:bg-purple-50 rounded-xl p-4 flex items-center gap-4 transition-all group">
+            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-purple-200"><LayoutTemplate size={20} className="text-purple-600"/></div>
+            <div className="text-left"><p className="font-semibold text-gray-900 text-sm">Usar Template</p><p className="text-xs text-gray-500">Modelos prontos com perguntas de qualificação</p></div>
+            <ChevronRight size={16} className="text-gray-400 ml-auto"/>
+          </button>
+          <button onClick={() => setFormMode('ai')} className="w-full bg-white border-2 border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50 rounded-xl p-4 flex items-center gap-4 transition-all group">
+            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-200"><Wand2 size={20} className="text-indigo-600"/></div>
+            <div className="text-left"><p className="font-semibold text-gray-900 text-sm">Criar com IA</p><p className="text-xs text-gray-500">A IA cria perguntas ideais para qualificar seus leads</p></div>
+            <ChevronRight size={16} className="text-gray-400 ml-auto"/>
+          </button>
+          <button onClick={() => setFormMode('manual')} className="w-full bg-white border-2 border-gray-200 hover:border-gray-400 hover:bg-gray-50 rounded-xl p-4 flex items-center gap-4 transition-all group">
+            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200"><PenLine size={20} className="text-gray-600"/></div>
+            <div className="text-left"><p className="font-semibold text-gray-900 text-sm">Criar Manualmente</p><p className="text-xs text-gray-500">Defina o nome e adicione perguntas depois</p></div>
+            <ChevronRight size={16} className="text-gray-400 ml-auto"/>
+          </button>
+        </div>
+      );
+
+      if (formMode === 'template') return (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2"><button onClick={() => setFormMode(null)} className="text-gray-400 hover:text-gray-600"><ArrowLeft size={16}/></button><p className="text-sm font-semibold text-gray-700">Templates de formulário</p></div>
+          {formTemplatesLoading ? <div className="flex items-center justify-center py-8"><Loader2 size={24} className="animate-spin text-purple-500"/></div> : formTemplates.length === 0 ? <p className="text-sm text-gray-400 text-center py-6">Nenhum template disponível.</p> : (
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {formTemplates.map(tpl => (
+                <div key={tpl.id} className="bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-between hover:border-purple-300 hover:bg-purple-50 transition-all">
+                  <div><p className="text-sm font-semibold text-gray-900">{tpl.name}</p><p className="text-xs text-gray-400">{tpl.segment || 'Geral'} · {tpl.questions?.length || 0} perguntas</p></div>
+                  <button onClick={() => createFormFromTemplate(tpl)} disabled={isSaving} className="bg-purple-500 hover:bg-purple-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1 disabled:opacity-50">
+                    {isSaving ? <Loader2 size={12} className="animate-spin"/> : <Check size={12}/>} Usar
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+
+      if (formMode === 'ai') return (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2"><button onClick={() => setFormMode(null)} className="text-gray-400 hover:text-gray-600"><ArrowLeft size={16}/></button><p className="text-sm font-semibold text-gray-700">Criar formulário com IA</p></div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Descreva seu negócio e o que quer qualificar</label>
+            <textarea value={formAiPrompt} onChange={e => setFormAiPrompt(e.target.value)} placeholder={`Ex: ${profile.business_description || 'Clínica de estética. Quero saber o procedimento de interesse, orçamento e urgência do cliente.'}`} rows={3} className="w-full border border-indigo-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ring-indigo-300 resize-none"/>
+          </div>
+          <button onClick={createFormWithAI} disabled={!formAiPrompt.trim() || isSaving} className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
+            {isSaving ? <Loader2 size={16} className="animate-spin"/> : <Wand2 size={16}/>} Criar com IA
+          </button>
+        </div>
+      );
+
+      if (formMode === 'manual') return (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2"><button onClick={() => setFormMode(null)} className="text-gray-400 hover:text-gray-600"><ArrowLeft size={16}/></button><p className="text-sm font-semibold text-gray-700">Criar formulário manualmente</p></div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nome do Formulário *</label>
+            <input type="text" value={formName} onChange={e => setFormName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ring-purple-300"/>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Descrição</label>
+            <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} rows={2} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ring-purple-300 resize-none"/>
+          </div>
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 flex items-start gap-2">
+            <Info size={13} className="text-purple-600 flex-shrink-0 mt-0.5"/>
+            <p className="text-xs text-purple-700">O formulário será criado com campos básicos (nome, WhatsApp, e-mail). Adicione perguntas personalizadas depois na tela de <strong>Formulários</strong>.</p>
+          </div>
+          <button onClick={createFormManual} disabled={!formName.trim() || isSaving} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-40 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
+            {isSaving ? <Loader2 size={16} className="animate-spin"/> : <FileText size={16}/>} Criar Formulário
+          </button>
+        </div>
+      );
+    }
+
+    // ── MPD ──────────────────────────────────────────────────────────────────
+    if (currentStep?.id === 'mpd') {
+      const colors = C.teal;
+      return (
+        <div className="space-y-4">
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 space-y-3">
+            <h4 className="font-semibold text-teal-800 text-sm flex items-center gap-2"><Activity size={16}/> O que é o MPD?</h4>
+            <p className="text-sm text-teal-700">O <strong>Minha Presença Digital</strong> é um módulo que monitora sua presença online: avaliações no Google, menções em redes sociais, pontuação de presença digital e muito mais.</p>
+            <div className="space-y-1.5">
+              {['Diagnóstico completo da sua presença online','Monitoramento de avaliações no Google','Score de presença digital com sugestões de melhoria','Relatórios periódicos de evolução'].map(item => (
+                <div key={item} className="flex items-center gap-2 text-xs text-teal-700"><CheckCircle2 size={13} className="text-teal-500 flex-shrink-0"/>{item}</div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
+            <AlertCircle size={14} className="text-amber-600 flex-shrink-0 mt-0.5"/>
+            <p className="text-xs text-amber-700">O MPD é um <strong>módulo adicional</strong> do HelloGrowth. Se você já contratou, acesse <strong>Minha Presença Digital</strong> no menu lateral para fazer o diagnóstico inicial.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => { onNavigate('digital-diagnostic'); }} className={`${colors.btn} text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 text-sm`}>
+              <ArrowRight size={16}/> Acessar MPD
+            </button>
+            <button onClick={async () => { setAiMessages(prev => [...prev, {role:'assistant',content:'Tudo bem! Você pode acessar o MPD depois no menu lateral. Vamos continuar! 👉'}]); await markStepDone('mpd'); }} className="bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium py-3 rounded-xl flex items-center justify-center gap-2 text-sm">
+              <SkipForward size={16}/> Pular por enquanto
             </button>
           </div>
-        );
-
-      // ── ETAPA 2: NPS ─────────────────────────────────────────────────────
-      case 'nps':
-        return (
-          <div className="space-y-4">
-            {npsCreated ? (
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-                <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
-                <p className="text-sm text-green-700 font-medium">Pesquisa de NPS criada com sucesso! Avançando...</p>
-              </div>
-            ) : (
-              <>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Nome da Pesquisa *</label>
-                  <input
-                    type="text"
-                    value={npsName}
-                    onChange={e => setNpsName(e.target.value)}
-                    placeholder="Ex: Pesquisa de Satisfação Pós-Venda"
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Descrição (opcional)</label>
-                  <textarea
-                    value={npsDescription}
-                    onChange={e => setNpsDescription(e.target.value)}
-                    rows={2}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300 resize-none"
-                  />
-                </div>
-
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 flex items-start gap-2">
-                  <Info size={14} className="text-yellow-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-yellow-700">
-                    A pesquisa será criada com campos básicos (nome e WhatsApp). Você pode adicionar perguntas personalizadas depois na tela de <strong>Pesquisas de NPS</strong>.
-                    {profile.google_place_id && <span className="block mt-1">✅ O redirecionamento para o Google já será ativado automaticamente com seu Place ID!</span>}
-                  </p>
-                </div>
-
-                <button
-                  onClick={handleCreateNPS}
-                  disabled={!npsName.trim() || isSaving}
-                  className={`w-full ${colors.btn} disabled:opacity-40 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2`}
-                >
-                  {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Star size={16} />}
-                  Criar Pesquisa de NPS
-                </button>
-              </>
-            )}
-          </div>
-        );
-
-      // ── ETAPA 3: Produtos ─────────────────────────────────────────────────
-      case 'products':
-        return (
-          <div className="space-y-3">
-            {productsSaved ? (
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-                <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
-                <p className="text-sm text-green-700 font-medium">Produtos salvos com sucesso! Avançando...</p>
-              </div>
-            ) : (
-              <>
-                {products.map((prod, idx) => (
-                  <div key={idx} className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-gray-500">Produto {idx + 1}</span>
-                      {products.length > 1 && (
-                        <button onClick={() => setProducts(prev => prev.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500 transition-colors">
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        value={prod.name}
-                        onChange={e => setProducts(prev => prev.map((p, i) => i === idx ? { ...p, name: e.target.value } : p))}
-                        placeholder="Nome do produto/serviço *"
-                        className="col-span-2 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                      />
-                      <input
-                        type="number"
-                        value={prod.value}
-                        onChange={e => setProducts(prev => prev.map((p, i) => i === idx ? { ...p, value: e.target.value } : p))}
-                        placeholder="Preço (R$)"
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                      />
-                      <input
-                        type="text"
-                        value={prod.description}
-                        onChange={e => setProducts(prev => prev.map((p, i) => i === idx ? { ...p, description: e.target.value } : p))}
-                        placeholder="Descrição breve"
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                      />
-                    </div>
-                  </div>
-                ))}
-
-                <button
-                  onClick={() => setProducts(prev => [...prev, { name: '', value: '', description: '' }])}
-                  className="w-full border-2 border-dashed border-blue-200 text-blue-500 hover:border-blue-400 hover:bg-blue-50 rounded-xl py-2.5 text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                >
-                  <Plus size={16} /> Adicionar outro produto
-                </button>
-
-                <button
-                  onClick={handleSaveProducts}
-                  disabled={!products.some(p => p.name.trim()) || isSaving}
-                  className={`w-full ${colors.btn} disabled:opacity-40 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2`}
-                >
-                  {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Package size={16} />}
-                  Salvar Produtos e Continuar
-                </button>
-              </>
-            )}
-          </div>
-        );
-
-      // ── ETAPA 4: Formulário ───────────────────────────────────────────────
-      case 'form':
-        return (
-          <div className="space-y-4">
-            {formCreated ? (
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-                <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
-                <p className="text-sm text-green-700 font-medium">Formulário criado com sucesso! Avançando...</p>
-              </div>
-            ) : (
-              <>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Nome do Formulário *</label>
-                  <input
-                    type="text"
-                    value={formName}
-                    onChange={e => setFormName(e.target.value)}
-                    placeholder="Ex: Formulário de Interesse"
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Descrição (opcional)</label>
-                  <textarea
-                    value={formDescription}
-                    onChange={e => setFormDescription(e.target.value)}
-                    rows={2}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 resize-none"
-                  />
-                </div>
-
-                <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 flex items-start gap-2">
-                  <Info size={14} className="text-purple-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-purple-700">
-                    O formulário será criado com campos básicos (nome, WhatsApp e e-mail). Você pode adicionar perguntas personalizadas depois na tela de <strong>Formulários</strong>.
-                  </p>
-                </div>
-
-                <button
-                  onClick={handleCreateForm}
-                  disabled={!formName.trim() || isSaving}
-                  className={`w-full ${colors.btn} disabled:opacity-40 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2`}
-                >
-                  {isSaving ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
-                  Criar Formulário e Continuar
-                </button>
-              </>
-            )}
-          </div>
-        );
-
-      // ── ETAPA 5: MBD ─────────────────────────────────────────────────────
-      case 'mbd':
-        return (
-          <div className="space-y-4">
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-3">
-              <h4 className="font-semibold text-green-800 text-sm flex items-center gap-2">
-                <MessageSquare size={16} /> Como conectar o WhatsApp (MBD)
-              </h4>
-              <ol className="space-y-2 text-sm text-green-700">
-                <li className="flex gap-2"><span className="font-bold flex-shrink-0">1.</span> Vá em <strong>Configurações → Integrações</strong> no menu lateral</li>
-                <li className="flex gap-2"><span className="font-bold flex-shrink-0">2.</span> Clique em <strong>"Conectar MBD"</strong></li>
-                <li className="flex gap-2"><span className="font-bold flex-shrink-0">3.</span> Escaneie o QR Code com o WhatsApp do número do negócio</li>
-                <li className="flex gap-2"><span className="font-bold flex-shrink-0">4.</span> Aguarde a confirmação de conexão</li>
-              </ol>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
-              <AlertCircle size={14} className="text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700">
-                Use um número de WhatsApp <strong>dedicado ao negócio</strong>, não o pessoal. Pesquisas enviadas por WhatsApp têm até 3x mais respostas que por e-mail!
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => { onNavigate('settings'); }}
-                className={`${colors.btn} text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm`}
-              >
-                <ArrowRight size={16} /> Ir para Configurações
-              </button>
-              <button
-                onClick={handleSkipMBD}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium py-3 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
-              >
-                <SkipForward size={16} /> Pular por enquanto
-              </button>
-            </div>
-          </div>
-        );
-
-      // ── ETAPA 6: Alertas ──────────────────────────────────────────────────
-      case 'alerts':
-        return (
-          <div className="space-y-4">
-            {alertsSaved ? (
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-                <CheckCircle2 size={20} className="text-green-500 flex-shrink-0" />
-                <p className="text-sm text-green-700 font-medium">Alertas configurados com sucesso!</p>
-              </div>
-            ) : (
-              <>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-2">
-                    Números de WhatsApp para receber alertas
-                  </label>
-                  <div className="space-y-2">
-                    {alertNumbers.map((num, idx) => (
-                      <div key={idx} className="flex gap-2">
-                        <div className="flex-1 flex items-center border border-gray-200 rounded-xl overflow-hidden">
-                          <span className="px-3 py-2.5 bg-gray-50 text-gray-400 text-sm border-r border-gray-200">
-                            <Phone size={14} />
-                          </span>
-                          <input
-                            type="tel"
-                            value={num}
-                            onChange={e => setAlertNumbers(prev => prev.map((n, i) => i === idx ? e.target.value : n))}
-                            placeholder="(11) 99999-9999"
-                            className="flex-1 px-3 py-2.5 text-sm focus:outline-none"
-                          />
-                        </div>
-                        {alertNumbers.length > 1 && (
-                          <button onClick={() => setAlertNumbers(prev => prev.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500 transition-colors px-2">
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    <button
-                      onClick={() => setAlertNumbers(prev => [...prev, ''])}
-                      className="text-orange-500 hover:text-orange-600 text-xs font-medium flex items-center gap-1 transition-colors"
-                    >
-                      <Plus size={12} /> Adicionar outro número
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-2">Quais alertas ativar?</label>
-                  <div className="space-y-2">
-                    {[
-                      { key: 'newLead', label: 'Novo lead (formulário preenchido)', value: alertNewLead, set: setAlertNewLead },
-                      { key: 'detractor', label: 'Detrator (nota baixa no NPS)', value: alertDetractor, set: setAlertDetractor },
-                      { key: 'highValue', label: 'Lead de alto valor', value: alertHighValue, set: setAlertHighValue },
-                    ].map(item => (
-                      <label key={item.key} className="flex items-center gap-3 cursor-pointer group">
-                        <div
-                          onClick={() => item.set(!item.value)}
-                          className={`w-10 h-5 rounded-full transition-colors flex-shrink-0 relative cursor-pointer ${item.value ? 'bg-orange-500' : 'bg-gray-200'}`}
-                        >
-                          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${item.value ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                        </div>
-                        <span className="text-sm text-gray-700">{item.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleSaveAlerts}
-                  disabled={isSaving}
-                  className={`w-full ${colors.btn} disabled:opacity-40 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2`}
-                >
-                  {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Bell size={16} />}
-                  Salvar Alertas e Concluir
-                </button>
-              </>
-            )}
-          </div>
-        );
-
-      default:
-        return null;
+          <button onClick={async () => { setAiMessages(prev => [...prev, {role:'assistant',content:'MPD marcado como concluído! ✅'}]); await markStepDone('mpd'); }} className="w-full border border-teal-300 text-teal-600 hover:bg-teal-50 font-medium py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm transition-colors">
+            <Check size={15}/> Já configurei o MPD
+          </button>
+        </div>
+      );
     }
+
+    return null;
   };
 
   // ── Modal de conclusão ────────────────────────────────────────────────────
-  if (showCompletionModal) {
+  if (showCompletion) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
         <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 text-center">
-          <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 size={40} className="text-emerald-500" />
+          <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-5">
+            <CheckCircle2 size={40} className="text-emerald-500"/>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Configuração Concluída! 🎉</h2>
-          <p className="text-gray-500 mb-2">
-            Parabéns, <strong>{companyName}</strong>! Você configurou tudo que precisa para começar a usar o HelloGrowth.
-          </p>
-          <p className="text-gray-400 text-sm mb-8">
-            Agora é só começar a coletar avaliações, captar leads e acompanhar os resultados!
-          </p>
+          <p className="text-gray-500 mb-6 text-sm">Parabéns! Você configurou tudo que precisa para começar a usar o HelloGrowth e crescer seu negócio.</p>
           <div className="grid grid-cols-2 gap-2 mb-6">
             {steps.map(s => {
               const Icon = s.icon;
               return (
                 <div key={s.id} className="flex items-center gap-2 bg-emerald-50 rounded-xl p-2.5">
-                  <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0" />
+                  <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0"/>
                   <span className="text-xs font-medium text-gray-700 truncate">{s.title}</span>
                 </div>
               );
             })}
           </div>
-          <button
-            onClick={onComplete}
-            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
-          >
-            <Zap size={18} /> Ir para o Dashboard
+          <button onClick={onComplete} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2">
+            <Zap size={18}/> Ir para o Dashboard
           </button>
         </div>
       </div>
     );
   }
 
-  const colors = colorMap[currentStep?.color || 'emerald'];
+  const colors = C[currentStep?.color || 'emerald'];
   const StepIcon = currentStep?.icon || Building2;
 
-  // ── Layout principal do modal ─────────────────────────────────────────────
+  // ── Layout principal ──────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[95vh] flex flex-col overflow-hidden">
 
         {/* Header */}
-        <div className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
-              <Sparkles size={16} className="text-white" />
+        <div className="bg-white border-b border-gray-100 px-5 py-3.5 flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Sparkles size={16} className="text-white"/>
             </div>
             <div>
-              <h1 className="text-sm font-bold text-gray-900">Configuração Inicial — HelloGrowth</h1>
+              <h1 className="text-sm font-bold text-gray-900 leading-tight">Configuração Inicial — HelloGrowth</h1>
               <p className="text-xs text-gray-400">{companyName} · {completedSteps.size}/{totalSteps} etapas concluídas</p>
             </div>
           </div>
-          {/* Barra de progresso */}
-          <div className="flex-1 mx-8 max-w-xs hidden sm:block">
+          <div className="flex-1 mx-6 hidden sm:block">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-gray-400">Progresso</span>
-              <span className="text-xs font-semibold text-emerald-600">{Math.round(progress)}%</span>
+              <span className="text-xs text-gray-400">Progresso geral</span>
+              <span className="text-xs font-bold text-emerald-600">{Math.round(progress)}%</span>
             </div>
             <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+              <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width:`${progress}%` }}/>
             </div>
           </div>
-          <button
-            onClick={() => { if (confirm('Sair da configuração? Você pode retomar depois em Ajuda → Configuração Inicial.')) onComplete(); }}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X size={20} />
+          <button onClick={() => { if (confirm('Sair da configuração? Você pode retomar depois em Ajuda → Configuração Inicial.')) onComplete(); }} className="text-gray-300 hover:text-gray-500 transition-colors flex-shrink-0">
+            <X size={20}/>
           </button>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
 
-          {/* Sidebar de steps */}
-          <div className="w-52 bg-gray-50 border-r border-gray-100 flex-shrink-0 overflow-y-auto py-4 px-3 hidden sm:block">
+          {/* Sidebar */}
+          <div className="w-56 bg-gray-50 border-r border-gray-100 flex-shrink-0 overflow-y-auto py-4 px-3 hidden sm:block">
             {steps.map((step, idx) => {
               const Icon = step.icon;
               const isDone = completedSteps.has(step.id);
               const isCurrent = idx === currentStepIndex;
-              const c = colorMap[step.color];
+              const sc = C[step.color];
               return (
-                <button
-                  key={step.id}
-                  onClick={() => setCurrentStepIndex(idx)}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-1 transition-all text-left ${
-                    isCurrent ? `bg-white shadow-sm ${c.border} border` : isDone ? 'hover:bg-white' : 'hover:bg-white'
-                  }`}
-                >
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isDone ? 'bg-emerald-500' : isCurrent ? c.bg : 'bg-gray-200'}`}>
-                    {isDone ? <Check size={13} className="text-white" /> : <Icon size={13} className={isCurrent ? 'text-white' : 'text-gray-400'} />}
+                <button key={step.id} onClick={() => setCurrentStepIndex(idx)} className={`w-full flex items-center gap-2.5 px-3 py-3 rounded-xl mb-1 transition-all text-left ${isCurrent ? `bg-white shadow-sm border ${sc.border}` : 'hover:bg-white'}`}>
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${isDone ? 'bg-emerald-500' : isCurrent ? sc.bg : 'bg-gray-200'}`}>
+                    {isDone ? <Check size={13} className="text-white"/> : <Icon size={13} className={isCurrent ? 'text-white' : 'text-gray-400'}/>}
                   </div>
                   <div className="min-w-0">
-                    <p className={`text-xs font-semibold truncate ${isCurrent ? c.text : isDone ? 'text-emerald-600' : 'text-gray-500'}`}>{step.title}</p>
-                    <p className="text-xs text-gray-400 truncate">{isDone ? 'Concluído ✓' : isCurrent ? 'Em andamento' : 'Pendente'}</p>
+                    <p className={`text-xs font-semibold truncate ${isCurrent ? sc.text : isDone ? 'text-emerald-600' : 'text-gray-500'}`}>{step.title}</p>
+                    <p className="text-xs text-gray-400 truncate">{isDone ? 'Concluído ✓' : isCurrent ? 'Em andamento' : step.skippable ? 'Opcional' : 'Pendente'}</p>
                   </div>
                 </button>
               );
@@ -987,105 +906,72 @@ export default function OnboardingWizard({
           {/* Conteúdo central */}
           <div className="flex-1 flex overflow-hidden">
 
-            {/* Formulário da etapa */}
-            <div className="flex-1 overflow-y-auto p-5">
+            {/* Formulário */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6">
               {/* Header da etapa */}
-              <div className={`${colors.light} rounded-xl p-4 mb-5 flex items-center gap-3`}>
-                <div className={`w-10 h-10 ${colors.bg} rounded-xl flex items-center justify-center flex-shrink-0`}>
-                  <StepIcon size={20} className="text-white" />
+              <div className={`${colors.light} rounded-xl p-4 mb-5 flex items-center gap-3 border ${colors.border}`}>
+                <div className={`w-11 h-11 ${colors.bg} rounded-xl flex items-center justify-center flex-shrink-0`}>
+                  <StepIcon size={22} className="text-white"/>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Etapa {currentStepIndex + 1} de {totalSteps}</p>
-                  <h2 className="font-bold text-gray-900">{currentStep?.title}</h2>
-                  <p className="text-xs text-gray-500">{currentStep?.subtitle}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Etapa {currentStepIndex+1} de {totalSteps}</p>
+                  <h2 className="font-bold text-gray-900 text-base">{currentStep?.title}</h2>
+                  <p className="text-xs text-gray-500 truncate">{currentStep?.subtitle}</p>
                 </div>
                 {completedSteps.has(currentStep?.id) && (
-                  <div className="ml-auto bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-1 rounded-full flex items-center gap-1">
-                    <Check size={11} /> Concluído
+                  <div className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 flex-shrink-0">
+                    <Check size={11}/> Concluído
                   </div>
                 )}
               </div>
 
-              {/* Conteúdo da etapa */}
               {renderStepContent()}
 
-              {/* Navegação entre etapas */}
+              {/* Navegação */}
               <div className="flex gap-2 mt-5 pt-4 border-t border-gray-100">
-                {currentStepIndex > 0 && (
-                  <button onClick={() => setCurrentStepIndex(i => i - 1)} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors">
-                    <ChevronLeft size={16} /> Anterior
-                  </button>
-                )}
-                {currentStepIndex < totalSteps - 1 && (
-                  <button onClick={() => setCurrentStepIndex(i => i + 1)} className="ml-auto flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors">
-                    Próxima <ChevronRight size={16} />
-                  </button>
-                )}
+                {currentStepIndex > 0 && <button onClick={() => setCurrentStepIndex(i=>i-1)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"><ChevronLeft size={14}/> Anterior</button>}
+                {currentStepIndex < totalSteps-1 && <button onClick={() => setCurrentStepIndex(i=>i+1)} className="ml-auto flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors">Próxima <ChevronRight size={14}/></button>}
               </div>
             </div>
 
-            {/* Chat com a Giulia */}
+            {/* Chat Giulia */}
             <div className="w-72 bg-white border-l border-gray-100 flex flex-col flex-shrink-0 hidden lg:flex">
               <div className="p-3 border-b border-gray-100 flex items-center gap-2.5 flex-shrink-0">
                 <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center">
-                  <Bot size={16} className="text-white" />
+                  <Bot size={16} className="text-white"/>
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Giulia</p>
-                  <p className="text-xs text-emerald-500 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block" /> Assistente de configuração
-                  </p>
+                  <p className="text-xs text-emerald-500 flex items-center gap-1"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block"/> Assistente de configuração</p>
                 </div>
               </div>
-
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
                 {aiMessages.map((msg, idx) => (
-                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    {msg.role === 'assistant' && (
-                      <div className="w-5 h-5 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center flex-shrink-0 mr-1.5 mt-1">
-                        <Bot size={10} className="text-white" />
-                      </div>
-                    )}
-                    <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${msg.role === 'user' ? 'bg-emerald-500 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}>
+                  <div key={idx} className={`flex ${msg.role==='user' ? 'justify-end' : 'justify-start'}`}>
+                    {msg.role==='assistant' && <div className="w-5 h-5 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center flex-shrink-0 mr-1.5 mt-1"><Bot size={10} className="text-white"/></div>}
+                    <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${msg.role==='user' ? 'bg-emerald-500 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}>
                       {msg.content.split('\n').map((line, i) => {
-                        const bold = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-                        return <p key={i} className={i > 0 ? 'mt-1' : ''} dangerouslySetInnerHTML={{ __html: bold }} />;
+                        const html = line.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>');
+                        return <p key={i} className={i>0?'mt-1':''} dangerouslySetInnerHTML={{__html:html}}/>;
                       })}
                     </div>
                   </div>
                 ))}
                 {isAiTyping && (
                   <div className="flex justify-start">
-                    <div className="w-5 h-5 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center flex-shrink-0 mr-1.5 mt-1">
-                      <Bot size={10} className="text-white" />
-                    </div>
+                    <div className="w-5 h-5 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center flex-shrink-0 mr-1.5 mt-1"><Bot size={10} className="text-white"/></div>
                     <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-3 py-2.5">
-                      <div className="flex gap-1">
-                        {[0, 150, 300].map(d => <span key={d} className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />)}
-                      </div>
+                      <div className="flex gap-1">{[0,150,300].map(d=><span key={d} className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:`${d}ms`}}/>)}</div>
                     </div>
                   </div>
                 )}
-                <div ref={messagesEndRef} />
+                <div ref={messagesEndRef}/>
               </div>
-
               <div className="p-2.5 border-t border-gray-100 flex-shrink-0">
                 <div className="flex gap-2">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={userInput}
-                    onChange={e => setUserInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleAiChat()}
-                    placeholder="Pergunte algo..."
-                    className="flex-1 bg-gray-100 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-emerald-300 placeholder-gray-400"
-                  />
-                  <button
-                    onClick={handleAiChat}
-                    disabled={!userInput.trim() || isAiTyping}
-                    className="w-8 h-8 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
-                  >
-                    <Send size={12} />
+                  <input type="text" value={userInput} onChange={e=>setUserInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&sendAiMessage()} placeholder="Pergunte algo..." className="flex-1 bg-gray-100 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-emerald-300 placeholder-gray-400"/>
+                  <button onClick={sendAiMessage} disabled={!userInput.trim()||isAiTyping} className="w-8 h-8 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white rounded-xl flex items-center justify-center transition-colors flex-shrink-0">
+                    <Send size={12}/>
                   </button>
                 </div>
               </div>
