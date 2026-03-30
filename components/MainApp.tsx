@@ -17,6 +17,7 @@ import AdminUserManagement from '@/components/AdminUserManagement';
 import OpportunityAnalysis from '@/components/OpportunityAnalysis'; 
 import Tutorial from '@/components/Tutorial'; 
 import OnboardingTour from '@/components/OnboardingTour';
+import OnboardingWizard from '@/components/OnboardingWizard';
 import DatabaseExport from '@/components/DatabaseExport';
 // NEW IMPORTS FOR HELLO GROWTH 2.0
 import DigitalDiagnostic from '@/components/DigitalDiagnostic';
@@ -109,6 +110,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   // UI State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
 
   // --- REAL DATA STATES (Fetched from Supabase) ---
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -456,14 +458,30 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
                };
                setSettings(mergedSettings);
                
-               // Check if Onboarding Needed
-               const hasSeenTour = localStorage.getItem('hg_onboarding_complete');
-               
-               // LOGIC UPDATE: Only show tour if not seen AND PlaceID is missing.
-               // Check both settings.placeId AND business_profile.google_place_id to avoid false positives
-               const hasPlaceId = !!(mergedSettings.placeId || dbBizProfile?.google_place_id);
-               if (!hasSeenTour && !hasPlaceId) {
-                   setShowTour(true);
+               // Check if New Onboarding Wizard is needed (substitui o tour antigo)
+               // Show wizard for new users who haven't completed onboarding
+               const hasCompletedOnboarding = localStorage.getItem('hg_wizard_complete');
+               if (!hasCompletedOnboarding && tenantId) {
+                 // Check onboarding_progress table
+                 try {
+                   const { data: onboardingData } = await supabase
+                     .from('onboarding_progress')
+                     .select('is_complete')
+                     .eq('tenant_id', tenantId)
+                     .maybeSingle();
+                   if (!onboardingData || !onboardingData.is_complete) {
+                     setShowOnboardingWizard(true);
+                   } else {
+                     localStorage.setItem('hg_wizard_complete', 'true');
+                   }
+                 } catch {
+                   // Se a tabela não existe ainda, verificar tour antigo como fallback
+                   const hasSeenTour = localStorage.getItem('hg_onboarding_complete');
+                   const hasPlaceId = !!(mergedSettings.placeId || dbBizProfile?.google_place_id);
+                   if (!hasSeenTour && !hasPlaceId) {
+                     setShowTour(true);
+                   }
+                 }
                }
            }
         }
@@ -1629,6 +1647,23 @@ Responda APENAS com JSON válido (sem markdown):
             <OnboardingTour 
                 onClose={() => setShowTour(false)} 
                 setCurrentView={setCurrentView}
+            />
+        )}
+
+        {showOnboardingWizard && (
+            <OnboardingWizard
+                userId={currentUser.id}
+                tenantId={getActiveTenant() || currentUser.tenantId || ''}
+                userPlan={currentUser.plan || 'trial'}
+                companyName={settings.companyName || activeCompany?.name || 'Minha Empresa'}
+                onComplete={() => {
+                    setShowOnboardingWizard(false);
+                    localStorage.setItem('hg_wizard_complete', 'true');
+                }}
+                onNavigate={(view: string) => {
+                    setShowOnboardingWizard(false);
+                    setCurrentView(view);
+                }}
             />
         )}
       </main>
