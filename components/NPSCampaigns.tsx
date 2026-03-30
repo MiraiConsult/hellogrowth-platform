@@ -76,210 +76,128 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const generatePrintCard = async () => {
     setPrintCardGenerating(true);
     try {
-      // Geração via HTML renderizado em iframe + html2canvas
-      // Escala 2x para alta resolução (impressa)
-      const SCALE = 2;
-      const W = 620 * SCALE, H = 877 * SCALE;
+      // Geração via canvas puro no browser
+      // Ordem de renderização: fundo → círculos → onda → card branco → conteúdo → rodapé
+      // Círculos são desenhados ANTES do card, ficam atrás
+      const W = 620, H = 877;
 
-      // Montar o HTML do card
-      const logoSection = printCardLogo
-        ? `<img src="${printCardLogo}" class="logo-img" alt="logo" />`
-        : `<p class="company-name">${businessProfile?.company_name || ''}</p>`;
+      // Canvas puro — ordem de renderização correta garante círculos atrás do card
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d')!;
 
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=330x330&data=${encodeURIComponent(printCardUrl)}&ecc=H&margin=2`;
+      // Helper: retângulo arredondado
+      const rr = (x: number, y: number, w: number, h: number, r: number) => {
+        ctx.beginPath();
+        ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+        ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+        ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+        ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+      };
 
-      const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8"/>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: ${W}px; height: ${H}px; overflow: hidden; background: #1a5c2a; font-family: Arial, Helvetica, sans-serif; }
-  .cL1 { position:absolute; width:380px; height:380px; background:#7ed957; opacity:0.92; border-radius:50%; top:210px; left:-136px; z-index:2; }
-  .cL2 { position:absolute; width:184px; height:184px; background:#2d7a3a; opacity:0.95; border-radius:50%; top:464px; left:-16px; z-index:3; }
-  .cR1 { position:absolute; width:244px; height:244px; background:#7ed957; opacity:0.80; border-radius:50%; top:136px; right:-76px; z-index:2; }
-  .cR2 { position:absolute; width:420px; height:420px; background:#7ed957; opacity:0.80; border-radius:50%; bottom:296px; right:-144px; z-index:2; }
-  .cR3 { position:absolute; width:164px; height:164px; background:#2d7a3a; opacity:0.95; border-radius:50%; bottom:444px; right:16px; z-index:3; }
-  .wave { position:absolute; bottom:0; left:-5%; width:110%; height:236px; background:#b8f060; opacity:0.55; border-radius:55% 55% 0 0 / 120px 120px 0 0; z-index:1; }
-  .card { position:absolute; z-index:10; background:#ffffff; border-radius:60px; left:116px; right:116px; top:44px; display:flex; flex-direction:column; align-items:center; padding:44px 68px 48px; box-shadow:0 16px 80px rgba(0,0,0,0.22); }
-  .logo-area { width:100%; height:144px; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-bottom:24px; }
-  .logo-img { max-width:520px; max-height:130px; object-fit:contain; }
-  .company-name { font-size:38px; font-weight:800; color:#1a5c2a; text-align:center; }
-  .divider { width:100%; height:2px; background:#e0e0e0; margin-bottom:40px; flex-shrink:0; }
-  .title { font-size:40px; font-weight:900; color:#1a5c2a; text-align:center; letter-spacing:1px; text-transform:uppercase; margin-bottom:28px; flex-shrink:0; }
-  .subtitle { font-size:24px; color:#555; text-align:center; line-height:1.6; margin-bottom:32px; flex-shrink:0; }
-  .subtitle strong { font-weight:700; }
-  .qr-wrap { border:3px solid #e0e0e0; border-radius:24px; padding:16px; box-shadow:0 2px 16px rgba(0,0,0,0.06); flex-shrink:0; margin-bottom:28px; }
-  .qr-wrap img { width:330px; height:330px; display:block; }
-  .stars { font-size:52px; color:#F5C518; letter-spacing:6px; flex-shrink:0; }
-  .footer { position:absolute; z-index:10; bottom:44px; left:0; right:0; text-align:center; font-size:48px; font-weight:800; }
-  .footer .hello { color:#b8f060; }
-  .footer .growth { color:#ffffff; }
-</style>
-</head>
-<body>
-  <div class="cL1"></div><div class="cL2"></div>
-  <div class="cR1"></div><div class="cR2"></div><div class="cR3"></div>
-  <div class="wave"></div>
-  <div class="card">
-    <div class="logo-area">${logoSection}</div>
-    <div class="divider"></div>
-    <p class="title">Faça sua avaliação</p>
-    <p class="subtitle">Escaneie o QR code com<br/><strong>a câmera do seu celular</strong></p>
-    <div class="qr-wrap"><img src="${qrUrl}" crossorigin="anonymous" /></div>
-    <div class="stars">★★★★★</div>
-  </div>
-  <div class="footer"><span class="hello">Hello</span><span class="growth">Growth</span></div>
-</body>
-</html>`;
+      // 1. FUNDO
+      ctx.fillStyle = '#1a5c2a';
+      ctx.fillRect(0, 0, W, H);
 
-      // Renderizar via iframe oculto + canvas
-      const blob = new Blob([html], { type: 'text/html' });
-      const blobUrl = URL.createObjectURL(blob);
+      // 2. CÍRCULOS (antes do card — ficam atrás)
+      const circ = (cx: number, cy: number, r: number, c: string, a: number) => {
+        ctx.save(); ctx.fillStyle=c; ctx.globalAlpha=a;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI); ctx.fill(); ctx.restore();
+      };
+      circ(-30, 220, 130, '#7ed957', 0.92);  // esq grande
+      circ(28, 340, 58, '#2d7a3a', 0.95);    // esq pequeno escuro
+      circ(W+30, 110, 88, '#7ed957', 0.80);  // dir topo
+      circ(W+55, H-210, 155, '#7ed957', 0.80); // dir baixo grande
+      circ(W-12, H-295, 60, '#2d7a3a', 0.95); // dir baixo pequeno
 
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const iframe = document.createElement('iframe');
-        iframe.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:${W}px;height:${H}px;border:none;`;
-        iframe.src = blobUrl;
-        document.body.appendChild(iframe);
+      // 3. ONDA
+      ctx.save(); ctx.fillStyle='#b8f060'; ctx.globalAlpha=0.55;
+      ctx.beginPath();
+      ctx.ellipse(W/2, H+10, W*0.56, 118, 0, Math.PI, 2*Math.PI);
+      ctx.fill(); ctx.restore();
 
-        iframe.onload = async () => {
-          try {
-            // Aguardar o QR Code carregar
-            await new Promise(r => setTimeout(r, 1500));
+      // 4. CARD BRANCO (depois dos círculos — fica na frente)
+      const cX=58, cY=22, cW=W-116, cH=530;
+      ctx.save();
+      ctx.shadowColor='rgba(0,0,0,0.22)'; ctx.shadowBlur=40; ctx.shadowOffsetY=10;
+      ctx.fillStyle='#ffffff';
+      rr(cX, cY, cW, cH, 30);
+      ctx.fill(); ctx.restore();
 
-            const iDoc = iframe.contentDocument!;
-            const qrImg = iDoc.querySelector('.qr-wrap img') as HTMLImageElement;
-            if (qrImg && !qrImg.complete) {
-              await new Promise(r => { qrImg.onload = r; qrImg.onerror = r; });
-            }
+      // 5. CONTEÚDO DO CARD
+      // Logo / nome
+      if (printCardLogo) {
+        await new Promise<void>(res => {
+          const img = new Image();
+          img.onload = () => {
+            const mW=cW-60, mH=60;
+            let iw=img.width, ih=img.height;
+            const sc=Math.min(mW/iw, mH/ih, 1); iw*=sc; ih*=sc;
+            ctx.drawImage(img, W/2-iw/2, cY+22+(60-ih)/2, iw, ih);
+            res();
+          };
+          img.onerror=()=>res();
+          img.src=printCardLogo;
+        });
+      } else if (businessProfile?.company_name) {
+        ctx.fillStyle='#1a5c2a';
+        ctx.font='bold 20px Arial,Helvetica,sans-serif';
+        ctx.textAlign='center';
+        ctx.fillText(businessProfile.company_name, W/2, cY+54);
+      }
 
-            // Usar html2canvas se disponível, senão fallback para canvas manual
-            const canvas = document.createElement('canvas');
-            canvas.width = W;
-            canvas.height = H;
-            const ctx = canvas.getContext('2d')!;
+      // Divisória
+      const divY = cY+80;
+      ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(cX+30, divY); ctx.lineTo(cX+cW-30, divY); ctx.stroke();
 
-            // Fallback: desenhar o card manualmente com as proporções corretas
-            // (mesmas do HTML mas em canvas)
-            const S = SCALE;
+      // Título
+      const titleY = divY+46;
+      ctx.fillStyle='#1a5c2a';
+      ctx.font='bold 22px Arial,Helvetica,sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText('FAÇA SUA AVALIAÇÃO', W/2, titleY);
 
-            // Fundo
-            ctx.fillStyle = '#1a5c2a';
-            ctx.fillRect(0, 0, W, H);
+      // Subtítulo
+      ctx.fillStyle='#555555';
+      ctx.font='13px Arial,Helvetica,sans-serif';
+      ctx.fillText('Escaneie o QR code com', W/2, titleY+28);
+      ctx.font='bold 13px Arial,Helvetica,sans-serif';
+      ctx.fillText('a câmera do seu celular', W/2, titleY+46);
 
-            // Círculos
-            const circ = (cx: number, cy: number, r: number, c: string, a: number) => {
-              ctx.save(); ctx.fillStyle = c; ctx.globalAlpha = a;
-              ctx.beginPath(); ctx.arc(cx*S, cy*S, r*S, 0, 2*Math.PI); ctx.fill(); ctx.restore();
-            };
-            circ(-68, 295, 190, '#7ed957', 0.92);
-            circ(-8, 464, 92, '#2d7a3a', 0.95);
-            circ(658, 188, 122, '#7ed957', 0.80);
-            circ(692, 729, 210, '#7ed957', 0.80);
-            circ(628, 655, 82, '#2d7a3a', 0.95);
+      // QR Code
+      const qrSize=200, qrPad=10, qrBR=12;
+      const qrX=W/2-qrSize/2, qrY=titleY+66;
+      ctx.save(); ctx.fillStyle='#fff'; ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=1.5;
+      rr(qrX-qrPad, qrY-qrPad, qrSize+qrPad*2, qrSize+qrPad*2, qrBR);
+      ctx.fill(); ctx.stroke(); ctx.restore();
 
-            // Onda
-            ctx.save(); ctx.fillStyle = '#b8f060'; ctx.globalAlpha = 0.55;
-            ctx.beginPath();
-            ctx.ellipse(W/2, H-0, W*0.55, 118*S, 0, Math.PI, 2*Math.PI);
-            ctx.fill(); ctx.restore();
-
-            // Card branco
-            const rr = (x: number, y: number, w: number, h: number, r: number) => {
-              ctx.beginPath();
-              ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-              ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-              ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-              ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
-            };
-            ctx.save(); ctx.shadowColor='rgba(0,0,0,0.22)'; ctx.shadowBlur=80*S; ctx.shadowOffsetY=20;
-            ctx.fillStyle='#ffffff';
-            rr(116*S, 44*S, (W-232*S), H-44*S-148*S, 60*S);
-            ctx.fill(); ctx.restore();
-
-            // Logo / nome
-            const logoTop = (44+44)*S, logoH = 144*S;
-            if (printCardLogo) {
-              await new Promise<void>(res => {
-                const img = new Image();
-                img.onload = () => {
-                  const mW=520*S, mH=130*S;
-                  let iw=img.width, ih=img.height;
-                  const sc=Math.min(mW/iw,mH/ih,1); iw*=sc; ih*=sc;
-                  ctx.drawImage(img, W/2-iw/2, logoTop+(logoH-ih)/2, iw, ih);
-                  res();
-                };
-                img.onerror=()=>res();
-                img.src=printCardLogo;
-              });
-            } else if (businessProfile?.company_name) {
-              ctx.fillStyle='#1a5c2a';
-              ctx.font=`bold ${38*S}px Arial,Helvetica,sans-serif`;
-              ctx.textAlign='center';
-              ctx.fillText(businessProfile.company_name, W/2, logoTop+logoH/2+14*S);
-            }
-
-            // Divisória
-            const divY = (44+44+144+24)*S;
-            ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=2;
-            ctx.beginPath(); ctx.moveTo(116*S+60*S, divY); ctx.lineTo(W-116*S-60*S, divY); ctx.stroke();
-
-            // Título
-            const titleY = divY + (40+40)*S;
-            ctx.fillStyle='#1a5c2a';
-            ctx.font=`bold ${40*S}px Arial,Helvetica,sans-serif`;
-            ctx.textAlign='center';
-            ctx.fillText('FAÇA SUA AVALIAÇÃO', W/2, titleY);
-
-            // Subtítulo
-            ctx.fillStyle='#555';
-            ctx.font=`${24*S}px Arial,Helvetica,sans-serif`;
-            ctx.fillText('Escaneie o QR code com', W/2, titleY+(24+28)*S);
-            ctx.font=`bold ${24*S}px Arial,Helvetica,sans-serif`;
-            ctx.fillText('a câmera do seu celular', W/2, titleY+(24+28+30)*S);
-
-            // QR Code
-            const qrSize=330*S, qrPad=16*S, qrBR=24*S;
-            const qrX=W/2-qrSize/2, qrY2=titleY+(24+28+30+32)*S;
-            ctx.save(); ctx.fillStyle='#fff'; ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=3;
-            rr(qrX-qrPad, qrY2-qrPad, qrSize+qrPad*2, qrSize+qrPad*2, qrBR);
-            ctx.fill(); ctx.stroke(); ctx.restore();
-
-            await new Promise<void>(res => {
-              const qi = new Image();
-              qi.crossOrigin='anonymous';
-              qi.onload=()=>{ ctx.drawImage(qi,qrX,qrY2,qrSize,qrSize); res(); };
-              qi.onerror=()=>res();
-              qi.src=`https://api.qrserver.com/v1/create-qr-code/?size=660x660&data=${encodeURIComponent(printCardUrl)}&ecc=H&margin=2`;
-            });
-
-            // Estrelas
-            const starsY = qrY2+qrSize+qrPad*2+(28*S);
-            ctx.fillStyle='#F5C518';
-            ctx.font=`${52*S}px Arial,Helvetica,sans-serif`;
-            ctx.textAlign='center';
-            ctx.fillText('★★★★★', W/2, starsY);
-
-            // Rodapé
-            const fY=H-(44*S);
-            ctx.font=`bold ${48*S}px Arial,Helvetica,sans-serif`;
-            ctx.textAlign='left';
-            const hW2=ctx.measureText('Hello').width, gW2=ctx.measureText('Growth').width;
-            const fX2=W/2-(hW2+gW2)/2;
-            ctx.fillStyle='#b8f060'; ctx.fillText('Hello',fX2,fY);
-            ctx.fillStyle='#ffffff'; ctx.fillText('Growth',fX2+hW2,fY);
-
-            resolve(canvas.toDataURL('image/png'));
-          } catch(e) { reject(e); } finally {
-            document.body.removeChild(iframe);
-            URL.revokeObjectURL(blobUrl);
-          }
-        };
-        iframe.onerror = () => { document.body.removeChild(iframe); URL.revokeObjectURL(blobUrl); reject(new Error('iframe error')); };
+      await new Promise<void>(res => {
+        const qi = new Image();
+        qi.crossOrigin='anonymous';
+        qi.onload=()=>{ ctx.drawImage(qi, qrX, qrY, qrSize, qrSize); res(); };
+        qi.onerror=()=>res();
+        qi.src=`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(printCardUrl)}&ecc=H&margin=2`;
       });
 
-      setPrintCardPreview(dataUrl);
+      // Estrelas
+      const starsY = qrY+qrSize+qrPad*2+22;
+      ctx.fillStyle='#F5C518';
+      ctx.font='28px Arial,Helvetica,sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText('★★★★★', W/2, starsY);
+
+      // 6. RODAPÉ (fora do card)
+      const fY=H-44;
+      ctx.font='bold 28px Arial,Helvetica,sans-serif';
+      ctx.textAlign='left';
+      const hW=ctx.measureText('Hello').width, gW=ctx.measureText('Growth').width;
+      const fX=W/2-(hW+gW)/2;
+      ctx.fillStyle='#b8f060'; ctx.fillText('Hello', fX, fY);
+      ctx.fillStyle='#ffffff'; ctx.fillText('Growth', fX+hW, fY);
+
+      setPrintCardPreview(canvas.toDataURL('image/png'));
     } catch (err) {
       console.error('Erro ao gerar card:', err);
     } finally {
