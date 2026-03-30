@@ -60,6 +60,13 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   const [editingField, setEditingField] = useState<{ productId: string; field: 'description' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Onboarding por catálogo
+  const [showCatalogOnboarding, setShowCatalogOnboarding] = useState(false);
+  const [catalogData, setCatalogData] = useState<any>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogItems, setCatalogItems] = useState<{name: string; value: string; selected: boolean}[]>([]);
+  const [importingCatalog, setImportingCatalog] = useState(false);
+
   useEffect(() => {
     if (supabase && userId && tenantId) {
       fetchProducts();
@@ -82,6 +89,88 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
       showNotification('error', 'Erro ao carregar produtos');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Busca catálogo baseado no business_type do perfil
+  const fetchCatalogForBusiness = async () => {
+    if (!supabase || !tenantId) return;
+    setCatalogLoading(true);
+    try {
+      // Buscar business_type do perfil
+      const { data: profile } = await supabase
+        .from('business_profile')
+        .select('business_type')
+        .eq('tenant_id', tenantId)
+        .single();
+
+      const businessType = profile?.business_type?.toLowerCase() || '';
+
+      // Mapeamento de palavras-chave para segmentos
+      const segmentMap: Record<string, string> = {
+        'odontol': 'odontologia', 'dent': 'odontologia', 'dental': 'odontologia',
+        'estétic': 'estetica', 'estetica': 'estetica', 'derma': 'estetica', 'beleza': 'estetica',
+        'restaur': 'restaurante', 'aliment': 'restaurante', 'lanche': 'restaurante', 'café': 'restaurante',
+        'academ': 'academia', 'fitness': 'academia', 'gym': 'academia', 'personal': 'academia',
+        'saúde': 'saude', 'clínica': 'saude', 'médic': 'saude', 'fisio': 'saude',
+        'salão': 'salao', 'barbearia': 'salao', 'cabeleir': 'salao',
+        'escola': 'educacao', 'educa': 'educacao', 'curso': 'educacao',
+        'varejo': 'varejo', 'loja': 'varejo', 'comércio': 'varejo',
+        'imobil': 'imoveis', 'imóvel': 'imoveis', 'constru': 'imoveis',
+        'tecnolog': 'tecnologia', 'software': 'tecnologia', 'ti ': 'tecnologia',
+        'pet': 'pets', 'veterinár': 'pets', 'animal': 'pets',
+        'auto': 'automoveis', 'oficina': 'automoveis', 'mecân': 'automoveis', 'carro': 'automoveis',
+      };
+
+      let detectedSegment = '';
+      for (const [keyword, segment] of Object.entries(segmentMap)) {
+        if (businessType.includes(keyword)) {
+          detectedSegment = segment;
+          break;
+        }
+      }
+
+      // Buscar catálogo do segmento detectado
+      const res = await fetch(`/api/product-catalog${detectedSegment ? `?segment=${detectedSegment}` : ''}`);
+      const data = await res.json();
+
+      if (detectedSegment && data && data.products) {
+        setCatalogData(data);
+        setCatalogItems(data.products.map((p: any) => ({
+          name: p.name,
+          value: String(Math.round((p.value_min + p.value_max) / 2)),
+          selected: true
+        })));
+      } else {
+        // Sem segmento detectado — mostrar lista de segmentos
+        setCatalogData({ segments: Array.isArray(data) ? data : [] });
+        setCatalogItems([]);
+      }
+      setShowCatalogOnboarding(true);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  const importCatalogProducts = async () => {
+    const selected = catalogItems.filter(i => i.selected && i.name.trim());
+    if (!selected.length || !supabase || !userId || !tenantId) return;
+    setImportingCatalog(true);
+    try {
+      const toInsert = selected.map(p => ({
+        user_id: userId,
+        tenant_id: tenantId,
+        name: p.name,
+        value: parseFloat(p.value) || 0
+      }));
+      await supabase.from('products_services').insert(toInsert);
+      await fetchProducts();
+      setShowCatalogOnboarding(false);
+      showNotification('success', `${selected.length} produtos importados com sucesso!`);
+    } finally {
+      setImportingCatalog(false);
     }
   };
 
@@ -355,6 +444,14 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
           Importar Excel
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" />
         </label>
+        <button
+          onClick={fetchCatalogForBusiness}
+          disabled={catalogLoading}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors"
+        >
+          {catalogLoading ? <Loader2 size={18} className="animate-spin" /> : <Package size={18} />}
+          Catálogo do Segmento
+        </button>
         <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-colors shadow-lg shadow-emerald-500/25">
           <Plus size={18} />
           Novo Produto
@@ -604,6 +701,129 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
                 {saving ? (<><Loader2 className="animate-spin" size={18} />Importando...</>) : (<><FileSpreadsheet size={18} />Confirmar Importação</>)}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Catalog Onboarding Modal */}
+      {showCatalogOnboarding && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">
+                  {catalogData?.segment_label
+                    ? `${catalogData.segment_icon} Catálogo: ${catalogData.segment_label}`
+                    : 'Catálogo de Produtos por Segmento'}
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  {catalogItems.length > 0
+                    ? 'Selecione os produtos que deseja importar e ajuste os valores conforme sua realidade.'
+                    : 'Selecione o segmento do seu negócio para ver os produtos sugeridos.'}
+                </p>
+              </div>
+              <button onClick={() => setShowCatalogOnboarding(false)} className="p-2 hover:bg-slate-100 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {catalogItems.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-slate-500">{catalogItems.filter(i => i.selected).length} de {catalogItems.length} selecionados</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => setCatalogItems(catalogItems.map(i => ({ ...i, selected: true })))} className="text-xs text-blue-600 hover:underline">Selecionar todos</button>
+                      <span className="text-slate-300">|</span>
+                      <button onClick={() => setCatalogItems(catalogItems.map(i => ({ ...i, selected: false })))} className="text-xs text-slate-500 hover:underline">Desmarcar todos</button>
+                    </div>
+                  </div>
+                  {catalogItems.map((item, i) => (
+                    <div key={i} className={`flex items-center gap-4 p-4 rounded-xl border transition-colors ${item.selected ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                      <input
+                        type="checkbox"
+                        checked={item.selected}
+                        onChange={(e) => {
+                          const updated = [...catalogItems];
+                          updated[i] = { ...updated[i], selected: e.target.checked };
+                          setCatalogItems(updated);
+                        }}
+                        className="w-4 h-4 accent-emerald-500"
+                      />
+                      <div className="flex-1">
+                        <input
+                          type="text"
+                          value={item.name}
+                          onChange={(e) => {
+                            const updated = [...catalogItems];
+                            updated[i] = { ...updated[i], name: e.target.value };
+                            setCatalogItems(updated);
+                          }}
+                          className="font-medium text-slate-800 bg-transparent border-none outline-none w-full text-sm"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-slate-400">R$</span>
+                        <input
+                          type="number"
+                          value={item.value}
+                          onChange={(e) => {
+                            const updated = [...catalogItems];
+                            updated[i] = { ...updated[i], value: e.target.value };
+                            setCatalogItems(updated);
+                          }}
+                          className="w-24 text-right text-sm font-semibold text-emerald-700 border border-slate-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-emerald-500"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                // Lista de segmentos para escolher
+                <div className="grid grid-cols-2 gap-3">
+                  {(catalogData?.segments || []).map((seg: any) => (
+                    <button
+                      key={seg.segment}
+                      onClick={async () => {
+                        setCatalogLoading(true);
+                        try {
+                          const res = await fetch(`/api/product-catalog?segment=${seg.segment}`);
+                          const data = await res.json();
+                          setCatalogData(data);
+                          setCatalogItems(data.products.map((p: any) => ({
+                            name: p.name,
+                            value: String(Math.round((p.value_min + p.value_max) / 2)),
+                            selected: true
+                          })));
+                        } finally {
+                          setCatalogLoading(false);
+                        }
+                      }}
+                      className="flex items-center gap-3 p-4 border border-slate-200 rounded-xl hover:border-emerald-300 hover:bg-emerald-50 transition-colors text-left"
+                    >
+                      <span className="text-2xl">{seg.segment_icon}</span>
+                      <span className="font-medium text-slate-700 text-sm">{seg.segment_label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {catalogItems.length > 0 && (
+              <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
+                <button onClick={() => setShowCatalogOnboarding(false)} className="px-4 py-2 text-slate-600 hover:text-slate-800 text-sm">
+                  Cancelar
+                </button>
+                <button
+                  onClick={importCatalogProducts}
+                  disabled={importingCatalog || catalogItems.filter(i => i.selected).length === 0}
+                  className="flex items-center gap-2 px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-medium disabled:opacity-50"
+                >
+                  {importingCatalog ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                  Importar {catalogItems.filter(i => i.selected).length} produto{catalogItems.filter(i => i.selected).length !== 1 ? 's' : ''}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
