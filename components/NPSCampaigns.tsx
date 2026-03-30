@@ -76,18 +76,15 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const generatePrintCard = async () => {
     setPrintCardGenerating(true);
     try {
-      // Geração via canvas puro no browser
-      // Ordem de renderização: fundo → círculos → onda → card branco → conteúdo → rodapé
-      // Círculos são desenhados ANTES do card, ficam atrás
-      const W = 620, H = 877;
+      // Layout 15x10cm paisagem — Canvas puro
+      // Ordem: fundo → círculos → onda → card branco → conteúdo → rodapé
+      const W = 750, H = 500;
 
-      // Canvas puro — ordem de renderização correta garante círculos atrás do card
       const canvas = document.createElement('canvas');
       canvas.width = W;
       canvas.height = H;
       const ctx = canvas.getContext('2d')!;
 
-      // Helper: retângulo arredondado
       const rr = (x: number, y: number, w: number, h: number, r: number) => {
         ctx.beginPath();
         ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
@@ -105,37 +102,46 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
         ctx.save(); ctx.fillStyle=c; ctx.globalAlpha=a;
         ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI); ctx.fill(); ctx.restore();
       };
-      circ(-30, 220, 130, '#7ed957', 0.92);  // esq grande
-      circ(28, 340, 58, '#2d7a3a', 0.95);    // esq pequeno escuro
-      circ(W+30, 110, 88, '#7ed957', 0.80);  // dir topo
-      circ(W+55, H-210, 155, '#7ed957', 0.80); // dir baixo grande
-      circ(W-12, H-295, 60, '#2d7a3a', 0.95); // dir baixo pequeno
+      circ(-20, 140, 90, '#7ed957', 0.92);
+      circ(20, 230, 40, '#2d7a3a', 0.95);
+      circ(W+20, 70, 60, '#7ed957', 0.80);
+      circ(W+35, H-110, 110, '#7ed957', 0.80);
+      circ(W-8, H-175, 42, '#2d7a3a', 0.95);
 
       // 3. ONDA
-      ctx.save(); ctx.fillStyle='#b8f060'; ctx.globalAlpha=0.55;
+      ctx.save(); ctx.fillStyle='#b8f060'; ctx.globalAlpha=0.50;
       ctx.beginPath();
-      ctx.ellipse(W/2, H+10, W*0.56, 118, 0, Math.PI, 2*Math.PI);
+      ctx.ellipse(W/2, H+8, W*0.55, 70, 0, Math.PI, 2*Math.PI);
       ctx.fill(); ctx.restore();
 
-      // 4. CARD BRANCO (depois dos círculos — fica na frente)
-      // Margens laterais de 80px para mostrar mais verde nas laterais
-      const cX=80, cY=30, cW=W-160, cH=580;
+      // 4. CARD BRANCO — centralizado
+      const cardMarginX = 50, cardMarginTop = 20, cardMarginBottom = 70;
+      const cX = cardMarginX, cY = cardMarginTop;
+      const cW = W - cardMarginX * 2, cH = H - cardMarginTop - cardMarginBottom;
       ctx.save();
-      ctx.shadowColor='rgba(0,0,0,0.22)'; ctx.shadowBlur=40; ctx.shadowOffsetY=10;
+      ctx.shadowColor='rgba(0,0,0,0.18)'; ctx.shadowBlur=30; ctx.shadowOffsetY=6;
       ctx.fillStyle='#ffffff';
-      rr(cX, cY, cW, cH, 30);
+      rr(cX, cY, cW, cH, 22);
       ctx.fill(); ctx.restore();
 
-      // 5. CONTEÚDO DO CARD
-      // Logo / nome
+      // 5. CONTEÚDO — layout horizontal: esquerda (logo+texto) | direita (QR)
+      const leftColX = cX + cW * 0.02;
+      const leftColW = cW * 0.48;
+      const rightColX = cX + cW * 0.52;
+      const rightColW = cW * 0.46;
+      const leftCenterX = leftColX + leftColW / 2;
+      const rightCenterX = rightColX + rightColW / 2;
+      const cardCenterX = cX + cW / 2;
+
+      // Logo / nome da empresa (lado esquerdo)
       if (printCardLogo) {
         await new Promise<void>(res => {
           const img = new Image();
           img.onload = () => {
-            const mW=cW-40, mH=62;
+            const mW=leftColW-30, mH=50;
             let iw=img.width, ih=img.height;
             const sc=Math.min(mW/iw, mH/ih, 1); iw*=sc; ih*=sc;
-            ctx.drawImage(img, W/2-iw/2, cY+22+(62-ih)/2, iw, ih);
+            ctx.drawImage(img, leftCenterX-iw/2, cY+18+(50-ih)/2, iw, ih);
             res();
           };
           img.onerror=()=>res();
@@ -143,33 +149,42 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
         });
       } else if (businessProfile?.company_name) {
         ctx.fillStyle='#1a5c2a';
-        ctx.font='bold 22px Arial,Helvetica,sans-serif';
+        ctx.font='bold 20px Arial,Helvetica,sans-serif';
         ctx.textAlign='center';
-        ctx.fillText(businessProfile.company_name, W/2, cY+62);
+        ctx.fillText(businessProfile.company_name, leftCenterX, cY+55);
       }
 
-      // Divisória
-      const divY = cY+88;
+      // Divisória horizontal
       ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=1;
-      ctx.beginPath(); ctx.moveTo(cX+20, divY); ctx.lineTo(cX+cW-20, divY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(leftColX+20, cY+72); ctx.lineTo(leftColX+leftColW-20, cY+72); ctx.stroke();
 
       // Título
-      const titleY = divY+52;
       ctx.fillStyle='#1a5c2a';
-      ctx.font='bold 26px Arial,Helvetica,sans-serif';
+      ctx.font='bold 24px Arial,Helvetica,sans-serif';
       ctx.textAlign='center';
-      ctx.fillText('FAÇA SUA AVALIAÇÃO', W/2, titleY);
+      ctx.fillText('FAÇA SUA', leftCenterX, cY+120);
+      ctx.fillText('AVALIAÇÃO', leftCenterX, cY+150);
 
       // Subtítulo
       ctx.fillStyle='#555555';
-      ctx.font='15px Arial,Helvetica,sans-serif';
-      ctx.fillText('Escaneie o QR code com', W/2, titleY+34);
-      ctx.font='bold 15px Arial,Helvetica,sans-serif';
-      ctx.fillText('a câmera do seu celular', W/2, titleY+54);
+      ctx.font='13px Arial,Helvetica,sans-serif';
+      ctx.fillText('Escaneie o QR code com', leftCenterX, cY+185);
+      ctx.font='bold 13px Arial,Helvetica,sans-serif';
+      ctx.fillText('a câmera do seu celular', leftCenterX, cY+203);
 
-      // QR Code
-      const qrSize=230, qrPad=12, qrBR=14;
-      const qrX=W/2-qrSize/2, qrY=titleY+80;
+      // Estrelas
+      ctx.fillStyle='#F5C518';
+      ctx.font='30px Arial,Helvetica,sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText('★★★★★', leftCenterX, cY+260);
+
+      // Divisória vertical
+      ctx.strokeStyle='#e8e8e8'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(cardCenterX, cY+25); ctx.lineTo(cardCenterX, cY+cH-25); ctx.stroke();
+
+      // QR Code (lado direito)
+      const qrSize=240, qrPad=10, qrBR=12;
+      const qrX=rightCenterX-qrSize/2, qrY=cY+(cH-qrSize)/2-10;
       ctx.save(); ctx.fillStyle='#fff'; ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=1.5;
       rr(qrX-qrPad, qrY-qrPad, qrSize+qrPad*2, qrSize+qrPad*2, qrBR);
       ctx.fill(); ctx.stroke(); ctx.restore();
@@ -179,19 +194,12 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
         qi.crossOrigin='anonymous';
         qi.onload=()=>{ ctx.drawImage(qi, qrX, qrY, qrSize, qrSize); res(); };
         qi.onerror=()=>res();
-        qi.src=`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(printCardUrl)}&ecc=H&margin=2`;
+        qi.src=`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(printCardUrl)}&ecc=H&margin=2`;
       });
 
-      // Estrelas
-      const starsY = qrY+qrSize+qrPad*2+30;
-      ctx.fillStyle='#F5C518';
-      ctx.font='32px Arial,Helvetica,sans-serif';
-      ctx.textAlign='center';
-      ctx.fillText('★★★★★', W/2, starsY);
-
-      // 6. RODAPÉ (fora do card)
-      const fY=H-44;
-      ctx.font='bold 28px Arial,Helvetica,sans-serif';
+      // 6. RODAPÉ HelloGrowth (fora do card)
+      const fY=H-18;
+      ctx.font='bold 22px Arial,Helvetica,sans-serif';
       ctx.textAlign='left';
       const hW=ctx.measureText('Hello').width, gW=ctx.measureText('Growth').width;
       const fX=W/2-(hW+gW)/2;
