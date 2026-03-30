@@ -76,9 +76,9 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const generatePrintCard = async () => {
     setPrintCardGenerating(true);
     try {
-      // Layout 15x10cm paisagem — Canvas puro
+      // Layout 10x15cm retrato — Canvas puro
       // Ordem: fundo → círculos → onda → card branco → conteúdo → rodapé
-      const W = 750, H = 500;
+      const W = 500, H = 750;
 
       const canvas = document.createElement('canvas');
       canvas.width = W;
@@ -102,46 +102,37 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
         ctx.save(); ctx.fillStyle=c; ctx.globalAlpha=a;
         ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI); ctx.fill(); ctx.restore();
       };
-      circ(-20, 140, 90, '#7ed957', 0.92);
-      circ(20, 230, 40, '#2d7a3a', 0.95);
-      circ(W+20, 70, 60, '#7ed957', 0.80);
-      circ(W+35, H-110, 110, '#7ed957', 0.80);
-      circ(W-8, H-175, 42, '#2d7a3a', 0.95);
+      circ(-25, 190, 105, '#7ed957', 0.92);
+      circ(22, 290, 48, '#2d7a3a', 0.95);
+      circ(W+22, 90, 70, '#7ed957', 0.80);
+      circ(W+40, H-180, 125, '#7ed957', 0.80);
+      circ(W-10, H-250, 50, '#2d7a3a', 0.95);
 
       // 3. ONDA
-      ctx.save(); ctx.fillStyle='#b8f060'; ctx.globalAlpha=0.50;
+      ctx.save(); ctx.fillStyle='#b8f060'; ctx.globalAlpha=0.55;
       ctx.beginPath();
-      ctx.ellipse(W/2, H+8, W*0.55, 70, 0, Math.PI, 2*Math.PI);
+      ctx.ellipse(W/2, H+8, W*0.56, 95, 0, Math.PI, 2*Math.PI);
       ctx.fill(); ctx.restore();
 
       // 4. CARD BRANCO — centralizado
-      const cardMarginX = 50, cardMarginTop = 20, cardMarginBottom = 70;
-      const cX = cardMarginX, cY = cardMarginTop;
-      const cW = W - cardMarginX * 2, cH = H - cardMarginTop - cardMarginBottom;
+      const cX = 55, cY = 22;
+      const cW = W - 110, cH = 500;
       ctx.save();
-      ctx.shadowColor='rgba(0,0,0,0.18)'; ctx.shadowBlur=30; ctx.shadowOffsetY=6;
+      ctx.shadowColor='rgba(0,0,0,0.20)'; ctx.shadowBlur=35; ctx.shadowOffsetY=8;
       ctx.fillStyle='#ffffff';
-      rr(cX, cY, cW, cH, 22);
+      rr(cX, cY, cW, cH, 24);
       ctx.fill(); ctx.restore();
 
-      // 5. CONTEÚDO — layout horizontal: esquerda (logo+texto) | direita (QR)
-      const leftColX = cX + cW * 0.02;
-      const leftColW = cW * 0.48;
-      const rightColX = cX + cW * 0.52;
-      const rightColW = cW * 0.46;
-      const leftCenterX = leftColX + leftColW / 2;
-      const rightCenterX = rightColX + rightColW / 2;
-      const cardCenterX = cX + cW / 2;
-
-      // Logo / nome da empresa (lado esquerdo)
+      // 5. CONTEÚDO DO CARD
+      // Logo / nome
       if (printCardLogo) {
         await new Promise<void>(res => {
           const img = new Image();
           img.onload = () => {
-            const mW=leftColW-30, mH=50;
+            const mW=cW-40, mH=50;
             let iw=img.width, ih=img.height;
             const sc=Math.min(mW/iw, mH/ih, 1); iw*=sc; ih*=sc;
-            ctx.drawImage(img, leftCenterX-iw/2, cY+18+(50-ih)/2, iw, ih);
+            ctx.drawImage(img, W/2-iw/2, cY+16+(50-ih)/2, iw, ih);
             res();
           };
           img.onerror=()=>res();
@@ -151,40 +142,31 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
         ctx.fillStyle='#1a5c2a';
         ctx.font='bold 20px Arial,Helvetica,sans-serif';
         ctx.textAlign='center';
-        ctx.fillText(businessProfile.company_name, leftCenterX, cY+55);
+        ctx.fillText(businessProfile.company_name, W/2, cY+52);
       }
 
-      // Divisória horizontal
+      // Divisória
+      const divY = cY+74;
       ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=1;
-      ctx.beginPath(); ctx.moveTo(leftColX+20, cY+72); ctx.lineTo(leftColX+leftColW-20, cY+72); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cX+18, divY); ctx.lineTo(cX+cW-18, divY); ctx.stroke();
 
       // Título
+      const titleY = divY+48;
       ctx.fillStyle='#1a5c2a';
-      ctx.font='bold 24px Arial,Helvetica,sans-serif';
+      ctx.font='bold italic 22px Arial,Helvetica,sans-serif';
       ctx.textAlign='center';
-      ctx.fillText('FAÇA SUA', leftCenterX, cY+120);
-      ctx.fillText('AVALIAÇÃO', leftCenterX, cY+150);
+      ctx.fillText('FAÇA SUA AVALIAÇÃO', W/2, titleY);
 
       // Subtítulo
       ctx.fillStyle='#555555';
-      ctx.font='13px Arial,Helvetica,sans-serif';
-      ctx.fillText('Escaneie o QR code com', leftCenterX, cY+185);
-      ctx.font='bold 13px Arial,Helvetica,sans-serif';
-      ctx.fillText('a câmera do seu celular', leftCenterX, cY+203);
+      ctx.font='12px Arial,Helvetica,sans-serif';
+      ctx.fillText('Escaneie o QR code com', W/2, titleY+30);
+      ctx.font='bold 12px Arial,Helvetica,sans-serif';
+      ctx.fillText('a câmera do seu celular', W/2, titleY+48);
 
-      // Estrelas
-      ctx.fillStyle='#F5C518';
-      ctx.font='30px Arial,Helvetica,sans-serif';
-      ctx.textAlign='center';
-      ctx.fillText('★★★★★', leftCenterX, cY+260);
-
-      // Divisória vertical
-      ctx.strokeStyle='#e8e8e8'; ctx.lineWidth=1;
-      ctx.beginPath(); ctx.moveTo(cardCenterX, cY+25); ctx.lineTo(cardCenterX, cY+cH-25); ctx.stroke();
-
-      // QR Code (lado direito)
-      const qrSize=240, qrPad=10, qrBR=12;
-      const qrX=rightCenterX-qrSize/2, qrY=cY+(cH-qrSize)/2-10;
+      // QR Code
+      const qrSize=200, qrPad=10, qrBR=12;
+      const qrX=W/2-qrSize/2, qrY=titleY+68;
       ctx.save(); ctx.fillStyle='#fff'; ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=1.5;
       rr(qrX-qrPad, qrY-qrPad, qrSize+qrPad*2, qrSize+qrPad*2, qrBR);
       ctx.fill(); ctx.stroke(); ctx.restore();
@@ -194,12 +176,19 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
         qi.crossOrigin='anonymous';
         qi.onload=()=>{ ctx.drawImage(qi, qrX, qrY, qrSize, qrSize); res(); };
         qi.onerror=()=>res();
-        qi.src=`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(printCardUrl)}&ecc=H&margin=2`;
+        qi.src=`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(printCardUrl)}&ecc=H&margin=2`;
       });
 
+      // Estrelas
+      const starsY = qrY+qrSize+qrPad*2+26;
+      ctx.fillStyle='#F5C518';
+      ctx.font='28px Arial,Helvetica,sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText('★★★★★', W/2, starsY);
+
       // 6. RODAPÉ HelloGrowth (fora do card)
-      const fY=H-18;
-      ctx.font='bold 22px Arial,Helvetica,sans-serif';
+      const fY=H-36;
+      ctx.font='bold 24px Arial,Helvetica,sans-serif';
       ctx.textAlign='left';
       const hW=ctx.measureText('Hello').width, gW=ctx.measureText('Growth').width;
       const fX=W/2-(hW+gW)/2;
