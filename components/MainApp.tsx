@@ -112,6 +112,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
+  // Onboarding: controla se o banner flutuante deve aparecer (wizard fechado mas não concluído)
+  const [onboardingInProgress, setOnboardingInProgress] = useState(false);
   // Onboarding: sinais de criação para marcar etapas como concluídas
   const [npsCreatedSignal, setNpsCreatedSignal] = useState(0);
   const [formCreatedSignal, setFormCreatedSignal] = useState(0);
@@ -1680,30 +1682,22 @@ Responda APENAS com JSON válido (sem markdown):
         )}
 
         {/* Banner flutuante de onboarding em andamento — aparece quando o usuário navega para módulos durante o onboarding */}
-        {!showOnboardingWizard && (() => {
-          const wizardComplete = typeof window !== 'undefined' && localStorage.getItem('hg_wizard_complete') === 'true';
-          const onboardingViews = ['nps','forms','products'];
-          if (wizardComplete || !onboardingViews.includes(currentView)) return null;
-          // Verificar se o onboarding está em andamento (não completo)
-          const onboardingInProgress = typeof window !== 'undefined' && !localStorage.getItem('hg_wizard_complete');
-          if (!onboardingInProgress) return null;
-          return (
-            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl border border-emerald-500 animate-in slide-in-from-top-2 duration-300">
-              <div className="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Sparkles size={14} className="text-white"/>
-              </div>
-              <div>
-                <p className="text-xs font-bold leading-tight">Onboarding em andamento</p>
-                <p className="text-xs text-emerald-200 leading-tight">Crie aqui e volte ao wizard para continuar</p>
-              </div>
-              <button
-                onClick={() => setShowOnboardingWizard(true)}
-                className="ml-2 flex items-center gap-1.5 bg-white text-emerald-700 text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition-colors flex-shrink-0">
-                <ArrowLeft size={12}/> Voltar ao Wizard
-              </button>
+        {!showOnboardingWizard && onboardingInProgress && ['nps','forms','products'].includes(currentView) && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl border border-emerald-500">
+            <div className="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Sparkles size={14} className="text-white"/>
             </div>
-          );
-        })()}
+            <div>
+              <p className="text-xs font-bold leading-tight">Onboarding em andamento</p>
+              <p className="text-xs text-emerald-200 leading-tight">Crie aqui e volte ao wizard para continuar</p>
+            </div>
+            <button
+              onClick={() => { setOnboardingInProgress(false); setShowOnboardingWizard(true); }}
+              className="ml-2 flex items-center gap-1.5 bg-white text-emerald-700 text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-emerald-50 transition-colors flex-shrink-0">
+              <ArrowLeft size={12}/> Voltar ao Wizard
+            </button>
+          </div>
+        )}
 
         {showTour && (
             <OnboardingTour 
@@ -1720,6 +1714,7 @@ Responda APENAS com JSON válido (sem markdown):
                 companyName={settings.companyName || activeCompany?.name || 'Minha Empresa'}
                 onComplete={() => {
                     setShowOnboardingWizard(false);
+                    setOnboardingInProgress(false);
                     localStorage.setItem('hg_wizard_complete', 'true');
                 }}
                 onNavigate={(view: string) => {
@@ -1729,15 +1724,15 @@ Responda APENAS com JSON válido (sem markdown):
                 npsCreatedSignal={npsCreatedSignal}
                 formCreatedSignal={formCreatedSignal}
                 productsCreatedSignal={productsCreatedSignal}
-                onOpenNpsTemplates={() => { setCurrentView('nps'); setOnboardingOpenNpsTemplates(prev => !prev); }}
-                onOpenNpsAI={() => { setCurrentView('nps'); setOnboardingOpenNpsAI(prev => !prev); }}
-                onOpenNpsManual={() => { setCurrentView('nps'); setOnboardingOpenNpsManual(prev => !prev); }}
-                onOpenFormTemplates={() => { setCurrentView('forms'); setOnboardingOpenFormTemplates(prev => !prev); }}
-                onOpenFormAI={() => { setCurrentView('forms'); setOnboardingOpenFormAI(prev => !prev); }}
-                onOpenFormManual={() => { setCurrentView('forms'); setOnboardingOpenFormManual(prev => !prev); }}
-                onOpenProductCatalog={() => { setCurrentView('products'); setOnboardingOpenProductCatalog(prev => !prev); }}
-                onOpenProductAI={() => { setCurrentView('products'); setOnboardingOpenProductAI(prev => !prev); }}
-                onOpenProductManual={() => { setCurrentView('products'); setOnboardingOpenProductManual(prev => !prev); }}
+                onOpenNpsTemplates={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsTemplates(prev => !prev), 150); }}
+                onOpenNpsAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsAI(prev => !prev), 150); }}
+                onOpenNpsManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsManual(prev => !prev), 150); }}
+                onOpenFormTemplates={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormTemplates(prev => !prev), 150); }}
+                onOpenFormAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormAI(prev => !prev), 150); }}
+                onOpenFormManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormManual(prev => !prev), 150); }}
+                onOpenProductCatalog={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductCatalog(prev => !prev), 150); }}
+                onOpenProductAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductAI(prev => !prev), 150); }}
+                onOpenProductManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductManual(prev => !prev), 150); }}
             />
         )}
       </main>
