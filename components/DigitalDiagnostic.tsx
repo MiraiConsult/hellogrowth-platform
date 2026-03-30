@@ -1398,6 +1398,16 @@ Responda APENAS em JSON puro (sem markdown):
               Histórico ({diagnostics.length})
             </button>
           )}
+          {/* Botão de diagnóstico manual — sempre visível quando há Place ID ou GBP conectado */}
+          {(effectivePlaceId || gbpConnected) && !isAnalyzing && (
+            <button
+              onClick={handleRunDiagnostic}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors text-sm font-medium shadow-sm"
+            >
+              <Sparkles size={15} />
+              {diagnostics.length > 0 ? 'Novo diagnóstico' : 'Gerar diagnóstico agora'}
+            </button>
+          )}
           {isAnalyzing && (
             <span className="flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-600 rounded-lg text-sm border border-primary-200">
               <Loader2 className="animate-spin" size={16} />{analysisStep || 'Atualizando...'}
@@ -2275,8 +2285,15 @@ Responda APENAS em JSON puro (sem markdown):
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
           <Globe className="mx-auto text-gray-300 mb-4" size={48} />
           <h3 className="text-lg font-semibold text-gray-800 mb-2">Nenhum diagnóstico realizado</h3>
-          <p className="text-gray-500 mb-2">O diagnóstico é gerado automaticamente toda segunda-feira às 7h.</p>
-          <p className="text-gray-400 text-sm">O primeiro diagnóstico será gerado na próxima segunda-feira de manhã.</p>
+          <p className="text-gray-500 mb-4">O diagnóstico é gerado automaticamente toda segunda-feira às 7h.</p>
+          <button
+            onClick={handleRunDiagnostic}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium text-sm transition-colors shadow-sm"
+          >
+            <Sparkles size={16} />
+            Gerar diagnóstico agora
+          </button>
+          <p className="text-gray-400 text-xs mt-3">A análise leva cerca de 30 segundos</p>
         </div>
       )}
 
