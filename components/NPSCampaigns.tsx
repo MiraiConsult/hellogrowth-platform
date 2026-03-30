@@ -76,161 +76,209 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const generatePrintCard = async () => {
     setPrintCardGenerating(true);
     try {
-      // Geração via HTML renderizado em canvas (html2canvas-like via iframe)
-      // Usamos um canvas off-screen com o layout correto
-      const W = 1240, H = 1754;
-      const canvas = document.createElement('canvas');
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext('2d')!;
+      // Geração via HTML renderizado em iframe + html2canvas
+      // Escala 2x para alta resolução (impressa)
+      const SCALE = 2;
+      const W = 620 * SCALE, H = 877 * SCALE;
 
-      // Helper: desenhar retângulo arredondado
-      const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
-        ctx.beginPath();
-        ctx.moveTo(x + r, y);
-        ctx.lineTo(x + w - r, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-        ctx.lineTo(x + w, y + h - r);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        ctx.lineTo(x + r, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-        ctx.lineTo(x, y + r);
-        ctx.quadraticCurveTo(x, y, x + r, y);
-        ctx.closePath();
-      };
+      // Montar o HTML do card
+      const logoSection = printCardLogo
+        ? `<img src="${printCardLogo}" class="logo-img" alt="logo" />`
+        : `<p class="company-name">${businessProfile?.company_name || ''}</p>`;
 
-      // Helper: círculo
-      const circle = (cx: number, cy: number, r: number, color: string, alpha: number) => {
-        ctx.save(); ctx.fillStyle = color; ctx.globalAlpha = alpha;
-        ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.fill(); ctx.restore();
-      };
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=330x330&data=${encodeURIComponent(printCardUrl)}&ecc=H&margin=2`;
 
-      // --- Fundo verde escuro ---
-      ctx.fillStyle = '#1a5c2a';
-      ctx.fillRect(0, 0, W, H);
+      const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: ${W}px; height: ${H}px; overflow: hidden; background: #1a5c2a; font-family: Arial, Helvetica, sans-serif; }
+  .cL1 { position:absolute; width:380px; height:380px; background:#7ed957; opacity:0.92; border-radius:50%; top:210px; left:-136px; z-index:2; }
+  .cL2 { position:absolute; width:184px; height:184px; background:#2d7a3a; opacity:0.95; border-radius:50%; top:464px; left:-16px; z-index:3; }
+  .cR1 { position:absolute; width:244px; height:244px; background:#7ed957; opacity:0.80; border-radius:50%; top:136px; right:-76px; z-index:2; }
+  .cR2 { position:absolute; width:420px; height:420px; background:#7ed957; opacity:0.80; border-radius:50%; bottom:296px; right:-144px; z-index:2; }
+  .cR3 { position:absolute; width:164px; height:164px; background:#2d7a3a; opacity:0.95; border-radius:50%; bottom:444px; right:16px; z-index:3; }
+  .wave { position:absolute; bottom:0; left:-5%; width:110%; height:236px; background:#b8f060; opacity:0.55; border-radius:55% 55% 0 0 / 120px 120px 0 0; z-index:1; }
+  .card { position:absolute; z-index:10; background:#ffffff; border-radius:60px; left:116px; right:116px; top:44px; display:flex; flex-direction:column; align-items:center; padding:44px 68px 48px; box-shadow:0 16px 80px rgba(0,0,0,0.22); }
+  .logo-area { width:100%; height:144px; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-bottom:24px; }
+  .logo-img { max-width:520px; max-height:130px; object-fit:contain; }
+  .company-name { font-size:38px; font-weight:800; color:#1a5c2a; text-align:center; }
+  .divider { width:100%; height:2px; background:#e0e0e0; margin-bottom:40px; flex-shrink:0; }
+  .title { font-size:40px; font-weight:900; color:#1a5c2a; text-align:center; letter-spacing:1px; text-transform:uppercase; margin-bottom:28px; flex-shrink:0; }
+  .subtitle { font-size:24px; color:#555; text-align:center; line-height:1.6; margin-bottom:32px; flex-shrink:0; }
+  .subtitle strong { font-weight:700; }
+  .qr-wrap { border:3px solid #e0e0e0; border-radius:24px; padding:16px; box-shadow:0 2px 16px rgba(0,0,0,0.06); flex-shrink:0; margin-bottom:28px; }
+  .qr-wrap img { width:330px; height:330px; display:block; }
+  .stars { font-size:52px; color:#F5C518; letter-spacing:6px; flex-shrink:0; }
+  .footer { position:absolute; z-index:10; bottom:44px; left:0; right:0; text-align:center; font-size:48px; font-weight:800; }
+  .footer .hello { color:#b8f060; }
+  .footer .growth { color:#ffffff; }
+</style>
+</head>
+<body>
+  <div class="cL1"></div><div class="cL2"></div>
+  <div class="cR1"></div><div class="cR2"></div><div class="cR3"></div>
+  <div class="wave"></div>
+  <div class="card">
+    <div class="logo-area">${logoSection}</div>
+    <div class="divider"></div>
+    <p class="title">Faça sua avaliação</p>
+    <p class="subtitle">Escaneie o QR code com<br/><strong>a câmera do seu celular</strong></p>
+    <div class="qr-wrap"><img src="${qrUrl}" crossorigin="anonymous" /></div>
+    <div class="stars">★★★★★</div>
+  </div>
+  <div class="footer"><span class="hello">Hello</span><span class="growth">Growth</span></div>
+</body>
+</html>`;
 
-      // --- Círculos decorativos (nos lados, parcialmente cortados) ---
-      circle(-80, 680, 320, '#6fcf3a', 0.9);   // esquerda superior
-      circle(20, 1000, 160, '#2d7a3a', 0.95);  // esquerda inferior pequeno
-      circle(W + 60, 560, 220, '#6fcf3a', 0.75); // direita superior
-      circle(W + 100, H - 780, 320, '#6fcf3a', 0.8); // direita inferior grande
-      circle(W - 60, H - 620, 140, '#2d7a3a', 0.95); // direita inferior pequeno
+      // Renderizar via iframe oculto + canvas
+      const blob = new Blob([html], { type: 'text/html' });
+      const blobUrl = URL.createObjectURL(blob);
 
-      // --- Onda verde clara (abaixo do card) ---
-      ctx.save();
-      ctx.fillStyle = '#b8f060';
-      ctx.globalAlpha = 0.6;
-      ctx.beginPath();
-      ctx.ellipse(W / 2, H - 20, W * 0.58, 240, 0, Math.PI, 2 * Math.PI);
-      ctx.fill();
-      ctx.restore();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:${W}px;height:${H}px;border:none;`;
+        iframe.src = blobUrl;
+        document.body.appendChild(iframe);
 
-      // --- Card branco ---
-      // Proporções: margens laterais ~120px, topo ~60px, altura do card ~1350px
-      const cX = 120, cY = 60, cW = W - 240, cH = 1380;
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.22)';
-      ctx.shadowBlur = 80;
-      ctx.shadowOffsetY = 20;
-      ctx.fillStyle = '#ffffff';
-      roundRect(cX, cY, cW, cH, 64);
-      ctx.fill();
-      ctx.restore();
+        iframe.onload = async () => {
+          try {
+            // Aguardar o QR Code carregar
+            await new Promise(r => setTimeout(r, 1500));
 
-      // --- Área da logo (topo do card) ---
-      const logoAreaTop = cY + 60;
-      const logoAreaH = 180;
-      if (printCardLogo) {
-        await new Promise<void>((resolve) => {
-          const img = new Image();
-          img.onload = () => {
-            const maxW = 520, maxH = 160;
-            let iw = img.width, ih = img.height;
-            const scale = Math.min(maxW / iw, maxH / ih, 1);
-            iw *= scale; ih *= scale;
-            ctx.drawImage(img, W / 2 - iw / 2, logoAreaTop + (logoAreaH - ih) / 2, iw, ih);
-            resolve();
-          };
-          img.onerror = () => resolve();
-          img.src = printCardLogo;
-        });
-      } else if (businessProfile?.company_name) {
-        ctx.fillStyle = '#1a5c2a';
-        ctx.font = 'bold 56px Arial, Helvetica, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(businessProfile.company_name, W / 2, logoAreaTop + logoAreaH / 2 + 20);
-      }
+            const iDoc = iframe.contentDocument!;
+            const qrImg = iDoc.querySelector('.qr-wrap img') as HTMLImageElement;
+            if (qrImg && !qrImg.complete) {
+              await new Promise(r => { qrImg.onload = r; qrImg.onerror = r; });
+            }
 
-      // --- Linha divisória ---
-      const divY = cY + logoAreaH + 80;
-      ctx.strokeStyle = '#e0e0e0';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cX + 60, divY);
-      ctx.lineTo(cX + cW - 60, divY);
-      ctx.stroke();
+            // Usar html2canvas se disponível, senão fallback para canvas manual
+            const canvas = document.createElement('canvas');
+            canvas.width = W;
+            canvas.height = H;
+            const ctx = canvas.getContext('2d')!;
 
-      // --- Título ---
-      const titleY = divY + 100;
-      ctx.fillStyle = '#1a5c2a';
-      ctx.font = 'bold 76px Arial, Helvetica, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('FAÇA SUA AVALIAÇÃO', W / 2, titleY);
+            // Fallback: desenhar o card manualmente com as proporções corretas
+            // (mesmas do HTML mas em canvas)
+            const S = SCALE;
 
-      // --- Subtítulo ---
-      ctx.fillStyle = '#555555';
-      ctx.font = '44px Arial, Helvetica, sans-serif';
-      ctx.fillText('Escaneie o QR code com', W / 2, titleY + 80);
-      ctx.font = 'bold 44px Arial, Helvetica, sans-serif';
-      ctx.fillText('a câmera do seu celular', W / 2, titleY + 140);
+            // Fundo
+            ctx.fillStyle = '#1a5c2a';
+            ctx.fillRect(0, 0, W, H);
 
-      // --- QR Code ---
-      const qrSize = 460;
-      const qrPad = 28;
-      const qrBorderR = 32;
-      const qrX = W / 2 - qrSize / 2;
-      const qrY = titleY + 190;
-      // Borda branca com sombra leve
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.08)';
-      ctx.shadowBlur = 20;
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#e0e0e0';
-      ctx.lineWidth = 3;
-      roundRect(qrX - qrPad, qrY - qrPad, qrSize + qrPad * 2, qrSize + qrPad * 2, qrBorderR);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-      // QR Code image
-      await new Promise<void>((resolve) => {
-        const qrImg = new Image();
-        qrImg.crossOrigin = 'anonymous';
-        qrImg.onload = () => { ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize); resolve(); };
-        qrImg.onerror = () => resolve();
-        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=460x460&data=${encodeURIComponent(printCardUrl)}&ecc=H&margin=2`;
+            // Círculos
+            const circ = (cx: number, cy: number, r: number, c: string, a: number) => {
+              ctx.save(); ctx.fillStyle = c; ctx.globalAlpha = a;
+              ctx.beginPath(); ctx.arc(cx*S, cy*S, r*S, 0, 2*Math.PI); ctx.fill(); ctx.restore();
+            };
+            circ(-68, 295, 190, '#7ed957', 0.92);
+            circ(-8, 464, 92, '#2d7a3a', 0.95);
+            circ(658, 188, 122, '#7ed957', 0.80);
+            circ(692, 729, 210, '#7ed957', 0.80);
+            circ(628, 655, 82, '#2d7a3a', 0.95);
+
+            // Onda
+            ctx.save(); ctx.fillStyle = '#b8f060'; ctx.globalAlpha = 0.55;
+            ctx.beginPath();
+            ctx.ellipse(W/2, H-0, W*0.55, 118*S, 0, Math.PI, 2*Math.PI);
+            ctx.fill(); ctx.restore();
+
+            // Card branco
+            const rr = (x: number, y: number, w: number, h: number, r: number) => {
+              ctx.beginPath();
+              ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+              ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+              ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+              ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+            };
+            ctx.save(); ctx.shadowColor='rgba(0,0,0,0.22)'; ctx.shadowBlur=80*S; ctx.shadowOffsetY=20;
+            ctx.fillStyle='#ffffff';
+            rr(116*S, 44*S, (W-232*S), H-44*S-148*S, 60*S);
+            ctx.fill(); ctx.restore();
+
+            // Logo / nome
+            const logoTop = (44+44)*S, logoH = 144*S;
+            if (printCardLogo) {
+              await new Promise<void>(res => {
+                const img = new Image();
+                img.onload = () => {
+                  const mW=520*S, mH=130*S;
+                  let iw=img.width, ih=img.height;
+                  const sc=Math.min(mW/iw,mH/ih,1); iw*=sc; ih*=sc;
+                  ctx.drawImage(img, W/2-iw/2, logoTop+(logoH-ih)/2, iw, ih);
+                  res();
+                };
+                img.onerror=()=>res();
+                img.src=printCardLogo;
+              });
+            } else if (businessProfile?.company_name) {
+              ctx.fillStyle='#1a5c2a';
+              ctx.font=`bold ${38*S}px Arial,Helvetica,sans-serif`;
+              ctx.textAlign='center';
+              ctx.fillText(businessProfile.company_name, W/2, logoTop+logoH/2+14*S);
+            }
+
+            // Divisória
+            const divY = (44+44+144+24)*S;
+            ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=2;
+            ctx.beginPath(); ctx.moveTo(116*S+60*S, divY); ctx.lineTo(W-116*S-60*S, divY); ctx.stroke();
+
+            // Título
+            const titleY = divY + (40+40)*S;
+            ctx.fillStyle='#1a5c2a';
+            ctx.font=`bold ${40*S}px Arial,Helvetica,sans-serif`;
+            ctx.textAlign='center';
+            ctx.fillText('FAÇA SUA AVALIAÇÃO', W/2, titleY);
+
+            // Subtítulo
+            ctx.fillStyle='#555';
+            ctx.font=`${24*S}px Arial,Helvetica,sans-serif`;
+            ctx.fillText('Escaneie o QR code com', W/2, titleY+(24+28)*S);
+            ctx.font=`bold ${24*S}px Arial,Helvetica,sans-serif`;
+            ctx.fillText('a câmera do seu celular', W/2, titleY+(24+28+30)*S);
+
+            // QR Code
+            const qrSize=330*S, qrPad=16*S, qrBR=24*S;
+            const qrX=W/2-qrSize/2, qrY2=titleY+(24+28+30+32)*S;
+            ctx.save(); ctx.fillStyle='#fff'; ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=3;
+            rr(qrX-qrPad, qrY2-qrPad, qrSize+qrPad*2, qrSize+qrPad*2, qrBR);
+            ctx.fill(); ctx.stroke(); ctx.restore();
+
+            await new Promise<void>(res => {
+              const qi = new Image();
+              qi.crossOrigin='anonymous';
+              qi.onload=()=>{ ctx.drawImage(qi,qrX,qrY2,qrSize,qrSize); res(); };
+              qi.onerror=()=>res();
+              qi.src=`https://api.qrserver.com/v1/create-qr-code/?size=660x660&data=${encodeURIComponent(printCardUrl)}&ecc=H&margin=2`;
+            });
+
+            // Estrelas
+            const starsY = qrY2+qrSize+qrPad*2+(28*S);
+            ctx.fillStyle='#F5C518';
+            ctx.font=`${52*S}px Arial,Helvetica,sans-serif`;
+            ctx.textAlign='center';
+            ctx.fillText('★★★★★', W/2, starsY);
+
+            // Rodapé
+            const fY=H-(44*S);
+            ctx.font=`bold ${48*S}px Arial,Helvetica,sans-serif`;
+            ctx.textAlign='left';
+            const hW2=ctx.measureText('Hello').width, gW2=ctx.measureText('Growth').width;
+            const fX2=W/2-(hW2+gW2)/2;
+            ctx.fillStyle='#b8f060'; ctx.fillText('Hello',fX2,fY);
+            ctx.fillStyle='#ffffff'; ctx.fillText('Growth',fX2+hW2,fY);
+
+            resolve(canvas.toDataURL('image/png'));
+          } catch(e) { reject(e); } finally {
+            document.body.removeChild(iframe);
+            URL.revokeObjectURL(blobUrl);
+          }
+        };
+        iframe.onerror = () => { document.body.removeChild(iframe); URL.revokeObjectURL(blobUrl); reject(new Error('iframe error')); };
       });
 
-      // --- Estrelas ---
-      const starsY = qrY + qrSize + qrPad * 2 + 70;
-      ctx.fillStyle = '#F5C518';
-      ctx.font = '90px Arial, Helvetica, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('★★★★★', W / 2, starsY);
-
-      // --- Rodapé HelloGrowth (fora do card, no fundo verde) ---
-      const footerY = H - 90;
-      ctx.font = 'bold 76px Arial, Helvetica, sans-serif';
-      ctx.textAlign = 'left';
-      const hW = ctx.measureText('Hello').width;
-      const gW = ctx.measureText('Growth').width;
-      const fX = W / 2 - (hW + gW) / 2;
-      ctx.fillStyle = '#b8f060';
-      ctx.fillText('Hello', fX, footerY);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText('Growth', fX + hW, footerY);
-
-      // --- Exportar ---
-      const dataUrl = canvas.toDataURL('image/png');
       setPrintCardPreview(dataUrl);
     } catch (err) {
       console.error('Erro ao gerar card:', err);
