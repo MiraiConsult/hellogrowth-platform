@@ -18,7 +18,9 @@ import {
   Eye,
   Target,
   MessageSquare,
-  ChevronRight
+  ChevronRight,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
@@ -59,6 +61,21 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [editingField, setEditingField] = useState<{ productId: string; field: 'description' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Visão grade ou lista
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('products_view_mode') as 'grid' | 'list') || 'grid';
+    }
+    return 'grid';
+  });
+
+  const toggleViewMode = (mode: 'grid' | 'list') => {
+    setViewMode(mode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('products_view_mode', mode);
+    }
+  };
 
   // Onboarding por catálogo
   const [showCatalogOnboarding, setShowCatalogOnboarding] = useState(false);
@@ -465,10 +482,36 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
         </div>
       )}
 
-      {/* Search */}
-      <div className="relative mb-6">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-        <input type="text" placeholder="Buscar produtos..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
+      {/* Search + View Toggle */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <input type="text" placeholder="Buscar produtos..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
+        </div>
+        <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-1">
+          <button
+            onClick={() => toggleViewMode('grid')}
+            title="Visão em grade"
+            className={`p-2 rounded-lg transition-colors ${
+              viewMode === 'grid'
+                ? 'bg-white text-emerald-600 shadow-sm'
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <LayoutGrid size={18} />
+          </button>
+          <button
+            onClick={() => toggleViewMode('list')}
+            title="Visão em lista"
+            className={`p-2 rounded-lg transition-colors ${
+              viewMode === 'list'
+                ? 'bg-white text-emerald-600 shadow-sm'
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <List size={18} />
+          </button>
+        </div>
       </div>
 
       {/* Products Grid */}
@@ -486,7 +529,7 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
             Adicionar Primeiro Produto
           </button>
         </div>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProducts.map((product) => (
             <div key={product.id} onClick={() => handleProductClick(product)} className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-lg hover:border-emerald-200 transition-all cursor-pointer group">
@@ -506,7 +549,6 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
                   </button>
                 </div>
               </div>
-
               {product.ai_description ? (
                 <div className="flex items-center justify-between text-sm text-slate-500">
                   <span className="flex items-center gap-2">
@@ -522,6 +564,81 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
               )}
             </div>
           ))}
+        </div>
+      ) : (
+        /* Visão Lista */
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50">
+                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-6 py-3">Produto / Serviço</th>
+                <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wide px-6 py-3">Valor</th>
+                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-6 py-3">Insights IA</th>
+                <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wide px-6 py-3">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredProducts.map((product) => (
+                <tr
+                  key={product.id}
+                  onClick={() => handleProductClick(product)}
+                  className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                >
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                        <Package size={16} className="text-emerald-600" />
+                      </div>
+                      <span className="font-medium text-slate-800 group-hover:text-emerald-600 transition-colors">{product.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <span className="font-bold text-emerald-600">
+                      R$ {(typeof product.value === 'number' ? product.value : parseFloat(String(product.value)) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                    {product.ai_description ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full">
+                        <Sparkles size={12} />
+                        Disponível
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => generateAIInsights(product.id, product.name, product.value)}
+                        disabled={generatingAI === product.id}
+                        className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-purple-600 bg-slate-100 hover:bg-purple-50 px-2.5 py-1 rounded-full transition-colors disabled:opacity-50"
+                      >
+                        {generatingAI === product.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                        {generatingAI === product.id ? 'Gerando...' : 'Gerar'}
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => setEditingProduct(product)}
+                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="Editar"
+                      >
+                        <Edit3 size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProduct(product.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Excluir"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="px-6 py-3 bg-slate-50 border-t border-slate-100">
+            <span className="text-xs text-slate-400">{filteredProducts.length} produto{filteredProducts.length !== 1 ? 's' : ''} encontrado{filteredProducts.length !== 1 ? 's' : ''}</span>
+          </div>
         </div>
       )}
 
