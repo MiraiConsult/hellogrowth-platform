@@ -76,21 +76,173 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const generatePrintCard = async () => {
     setPrintCardGenerating(true);
     try {
-      const res = await fetch('/api/generate-card', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          surveyUrl: printCardUrl,
-          logoBase64: printCardLogo || undefined,
-          companyName: businessProfile?.company_name || undefined,
-        }),
+      // Geração 100% client-side com Canvas HTML5
+      const W = 1240, H = 1754;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d')!;
+
+      // --- Fundo verde escuro ---
+      ctx.fillStyle = '#1a5c2a';
+      ctx.fillRect(0, 0, W, H);
+
+      // --- Onda verde clara no rodapé ---
+      ctx.save();
+      ctx.fillStyle = '#c8f07a';
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath();
+      ctx.ellipse(W / 2, H + 20, W * 0.65, 220, 0, Math.PI, 2 * Math.PI);
+      ctx.fill();
+      ctx.restore();
+
+      // --- Círculos decorativos ---
+      const drawCircle = (cx: number, cy: number, r: number, color: string, alpha: number) => {
+        ctx.save();
+        ctx.fillStyle = color;
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.restore();
+      };
+      drawCircle(-100, 340, 260, '#a8e063', 0.85);
+      drawCircle(-30, 520, 130, '#2d8a4e', 0.9);
+      drawCircle(W + 80, 280, 190, '#a8e063', 0.7);
+      drawCircle(W + 60, H - 520, 250, '#a8e063', 0.75);
+      drawCircle(W - 20, H - 380, 110, '#2d8a4e', 0.9);
+
+      // --- Card branco ---
+      const cX = 100, cY = 80, cW = W - 200, cH = H - 280;
+      const radius = 70;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.18)';
+      ctx.shadowBlur = 60;
+      ctx.shadowOffsetY = 16;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(cX + radius, cY);
+      ctx.lineTo(cX + cW - radius, cY);
+      ctx.quadraticCurveTo(cX + cW, cY, cX + cW, cY + radius);
+      ctx.lineTo(cX + cW, cY + cH - radius);
+      ctx.quadraticCurveTo(cX + cW, cY + cH, cX + cW - radius, cY + cH);
+      ctx.lineTo(cX + radius, cY + cH);
+      ctx.quadraticCurveTo(cX, cY + cH, cX, cY + cH - radius);
+      ctx.lineTo(cX, cY + radius);
+      ctx.quadraticCurveTo(cX, cY, cX + radius, cY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      // --- Área da logo (topo do card) ---
+      const logoAreaH = 200;
+      if (printCardLogo) {
+        await new Promise<void>((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const maxW = 420, maxH = 160;
+            let iw = img.width, ih = img.height;
+            const scale = Math.min(maxW / iw, maxH / ih, 1);
+            iw *= scale; ih *= scale;
+            const ix = W / 2 - iw / 2;
+            const iy = cY + 40 + (logoAreaH - ih) / 2;
+            ctx.drawImage(img, ix, iy, iw, ih);
+            resolve();
+          };
+          img.onerror = () => resolve();
+          img.src = printCardLogo;
+        });
+      } else if (businessProfile?.company_name) {
+        ctx.fillStyle = '#1a5c2a';
+        ctx.font = 'bold 52px Arial, Helvetica, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(businessProfile.company_name, W / 2, cY + logoAreaH / 2 + 20);
+      }
+
+      // --- Linha divisória ---
+      const divY = cY + logoAreaH + 30;
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cX + 80, divY);
+      ctx.lineTo(cX + cW - 80, divY);
+      ctx.stroke();
+
+      // --- Título ---
+      const titleY = divY + 90;
+      ctx.fillStyle = '#1a5c2a';
+      ctx.font = 'bold 72px Arial, Helvetica, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('FAÇA SUA AVALIAÇÃO', W / 2, titleY);
+
+      // --- Subtítulo ---
+      ctx.fillStyle = '#444444';
+      ctx.font = '42px Arial, Helvetica, sans-serif';
+      ctx.fillText('Escaneie o QR code com', W / 2, titleY + 70);
+      ctx.font = 'bold 42px Arial, Helvetica, sans-serif';
+      ctx.fillText('a câmera do seu celular', W / 2, titleY + 124);
+
+      // --- QR Code ---
+      const qrSize = 440;
+      const qrX = W / 2 - qrSize / 2;
+      const qrY2 = titleY + 170;
+      // Borda do QR
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.lineWidth = 3;
+      const qrPad = 24;
+      const qrBorderR = 28;
+      const qbX = qrX - qrPad, qbY = qrY2 - qrPad, qbW = qrSize + qrPad * 2, qbH = qrSize + qrPad * 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(qbX + qrBorderR, qbY);
+      ctx.lineTo(qbX + qbW - qrBorderR, qbY);
+      ctx.quadraticCurveTo(qbX + qbW, qbY, qbX + qbW, qbY + qrBorderR);
+      ctx.lineTo(qbX + qbW, qbY + qbH - qrBorderR);
+      ctx.quadraticCurveTo(qbX + qbW, qbY + qbH, qbX + qbW - qrBorderR, qbY + qbH);
+      ctx.lineTo(qbX + qrBorderR, qbY + qbH);
+      ctx.quadraticCurveTo(qbX, qbY + qbH, qbX, qbY + qbH - qrBorderR);
+      ctx.lineTo(qbX, qbY + qrBorderR);
+      ctx.quadraticCurveTo(qbX, qbY, qbX + qrBorderR, qbY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      // Imagem do QR Code via API externa
+      await new Promise<void>((resolve) => {
+        const qrImg = new Image();
+        qrImg.crossOrigin = 'anonymous';
+        qrImg.onload = () => { ctx.drawImage(qrImg, qrX, qrY2, qrSize, qrSize); resolve(); };
+        qrImg.onerror = () => resolve();
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=440x440&data=${encodeURIComponent(printCardUrl)}&ecc=H&margin=2`;
       });
-      if (!res.ok) throw new Error('Erro ao gerar card');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      setPrintCardPreview(url);
+
+      // --- Estrelas ---
+      const starsY = qrY2 + qrSize + qrPad * 2 + 60;
+      ctx.fillStyle = '#F5C518';
+      ctx.font = '80px Arial, Helvetica, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('★★★★★', W / 2, starsY);
+
+      // --- Rodapé HelloGrowth ---
+      const footerY = H - 80;
+      ctx.font = 'bold 72px Arial, Helvetica, sans-serif';
+      ctx.textAlign = 'center';
+      // 'Hello' em verde claro
+      const helloW = ctx.measureText('Hello').width;
+      const growthW = ctx.measureText('Growth').width;
+      const totalW = helloW + growthW;
+      const startX = W / 2 - totalW / 2;
+      ctx.fillStyle = '#a8e063';
+      ctx.fillText('Hello', startX + helloW / 2, footerY);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('Growth', startX + helloW + growthW / 2, footerY);
+
+      // --- Exportar ---
+      const dataUrl = canvas.toDataURL('image/png');
+      setPrintCardPreview(dataUrl);
     } catch (err) {
-      console.error(err);
+      console.error('Erro ao gerar card:', err);
     } finally {
       setPrintCardGenerating(false);
     }
