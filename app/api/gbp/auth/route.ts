@@ -13,6 +13,8 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const tenantId = searchParams.get('tenantId');
     const userId = searchParams.get('userId');
+    // forceAccount=true força o Google a exibir o seletor de contas (útil para trocar de conta)
+    const forceAccount = searchParams.get('forceAccount') === 'true';
 
     if (!tenantId || !userId) {
       return NextResponse.json({ error: 'tenantId e userId são obrigatórios' }, { status: 400 });
@@ -33,8 +35,9 @@ export async function GET(request: NextRequest) {
     const authorizeUrl = client.generateAuthUrl({
       access_type: 'offline',
       scope: GBP_SCOPES,
-      prompt: 'consent', // Forçar consent para garantir refresh_token
-      state: JSON.stringify({ tenantId, userId }), // Passar contexto pelo state
+      // consent: garante refresh_token | select_account: força escolha de conta ao trocar
+      prompt: forceAccount ? 'select_account consent' : 'consent',
+      state: JSON.stringify({ tenantId, userId }),
     });
 
     return NextResponse.redirect(authorizeUrl);

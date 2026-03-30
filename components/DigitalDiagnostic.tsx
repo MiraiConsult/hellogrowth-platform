@@ -693,20 +693,36 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
     }
   };
 
-  const handleConnectGBP = () => {
+   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+
+  const handleConnectGBP = (forceAccount = false) => {
     const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
-    window.location.href = `/api/gbp/auth?tenantId=${resolvedTenantId}&userId=${userId}`;
+    const url = `/api/gbp/auth?tenantId=${resolvedTenantId}&userId=${userId}${forceAccount ? '&forceAccount=true' : ''}`;
+    window.location.href = url;
   };
 
-  const handleDisconnectGBP = async () => {
+  const handleDisconnectGBP = async (reconnectAfter = false) => {
+    setIsDisconnecting(true);
     const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
-    await fetch('/api/gbp/disconnect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tenantId: resolvedTenantId }),
-    });
-    setGbpConnected(false);
-    setGbpMetrics(null);
+    try {
+      await fetch('/api/gbp/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: resolvedTenantId }),
+      });
+      setGbpConnected(false);
+      setGbpMetrics(null);
+      setShowDisconnectModal(false);
+      if (reconnectAfter) {
+        // Pequeno delay para garantir que o disconnect foi processado antes do redirect OAuth
+        setTimeout(() => handleConnectGBP(true), 400);
+      }
+    } catch (e) {
+      console.error('Erro ao desconectar:', e);
+    } finally {
+      setIsDisconnecting(false);
+    }
   };
 
   const latestDiagnostic = diagnostics[0];
@@ -1357,16 +1373,16 @@ Responda APENAS em JSON puro (sem markdown):
                 <CheckCircle size={13} /> Google conectado
               </span>
               <button
-                onClick={handleDisconnectGBP}
-                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-600 px-2 py-1.5 rounded-lg border border-gray-200 hover:border-red-200 transition-colors"
-                title="Desconectar Google"
+                onClick={() => setShowDisconnectModal(true)}
+                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-600 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-red-200 transition-colors"
+                title="Gerenciar conexão Google"
               >
-                <Unlink size={13} />
+                <Unlink size={13} /> Trocar conta
               </button>
             </div>
           ) : (
             <button
-              onClick={handleConnectGBP}
+              onClick={() => handleConnectGBP(false)}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm text-gray-700"
             >
               <Link2 size={15} className="text-blue-500" />
@@ -2304,6 +2320,71 @@ Responda APENAS em JSON puro (sem markdown):
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal de Desconexão / Troca de Conta Google */}
+      {showDisconnectModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => !isDisconnecting && setShowDisconnectModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+                  <Unlink size={20} className="text-red-500" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-800">Gerenciar conexão Google</h3>
+                  <p className="text-xs text-gray-500">Conta Google Business Profile conectada</p>
+                </div>
+              </div>
+            </div>
+            {/* Body */}
+            <div className="p-6 space-y-3">
+              <p className="text-sm text-gray-600 mb-4">
+                O que você deseja fazer com a conexão atual?
+              </p>
+              {/* Opção 1: Trocar de conta */}
+              <button
+                onClick={() => handleDisconnectGBP(true)}
+                disabled={isDisconnecting}
+                className="w-full flex items-start gap-4 p-4 border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors text-left disabled:opacity-50"
+              >
+                <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Link2 size={16} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-blue-800">Trocar de conta Google</p>
+                  <p className="text-xs text-blue-600 mt-0.5">Desconecta a conta atual e abre o seletor de contas do Google para conectar uma nova</p>
+                </div>
+              </button>
+              {/* Opção 2: Apenas desconectar */}
+              <button
+                onClick={() => handleDisconnectGBP(false)}
+                disabled={isDisconnecting}
+                className="w-full flex items-start gap-4 p-4 border border-gray-200 hover:bg-gray-50 rounded-xl transition-colors text-left disabled:opacity-50"
+              >
+                <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Unlink size={16} className="text-gray-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-700">Apenas desconectar</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Remove a conexão sem conectar uma nova conta. Você poderá reconectar depois.</p>
+                </div>
+              </button>
+            </div>
+            {/* Footer */}
+            <div className="px-6 pb-6">
+              <button
+                onClick={() => setShowDisconnectModal(false)}
+                disabled={isDisconnecting}
+                className="w-full py-2.5 text-sm text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+              >
+                {isDisconnecting ? (
+                  <span className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> Processando...</span>
+                ) : 'Cancelar'}
+              </button>
             </div>
           </div>
         </div>
