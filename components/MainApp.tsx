@@ -812,7 +812,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       if (data) {
         setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
         // Sinalizar para o onboarding que um formulário foi criado
-        if (showOnboardingWizard) setFormCreatedSignal(prev => prev + 1);
+        if (showOnboardingWizard || onboardingInProgress) setFormCreatedSignal(prev => prev + 1);
       }
     }
   };
@@ -900,7 +900,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       if (data) {
         setCampaigns(prev => [...prev, { ...data, npsScore: 0, responses: 0, questions: data.questions || [], initialFields: data.initial_fields || [], enableRedirection: data.enable_redirection, google_redirect: data.google_redirect, google_place_id: data.google_place_id, offer_prize: data.offer_prize, game_id: data.game_id, before_google_message: data.before_google_message, after_game_message: data.after_game_message, objective: data.objective, tone: data.tone, evaluation_points: data.evaluation_points }]);
         // Sinalizar para o onboarding que um NPS foi criado
-        if (showOnboardingWizard) setNpsCreatedSignal(prev => prev + 1);
+        if (showOnboardingWizard || onboardingInProgress) setNpsCreatedSignal(prev => prev + 1);
       }
     }
   };
@@ -1706,34 +1706,37 @@ Responda APENAS com JSON válido (sem markdown):
             />
         )}
 
-        {showOnboardingWizard && (
-            <OnboardingWizard
-                userId={currentUser.id}
-                tenantId={getActiveTenant() || currentUser.tenantId || ''}
-                userPlan={currentUser.plan || 'trial'}
-                companyName={settings.companyName || activeCompany?.name || 'Minha Empresa'}
-                onComplete={() => {
-                    setShowOnboardingWizard(false);
-                    setOnboardingInProgress(false);
-                    localStorage.setItem('hg_wizard_complete', 'true');
-                }}
-                onNavigate={(view: string) => {
-                    setShowOnboardingWizard(false);
-                    setCurrentView(view);
-                }}
-                npsCreatedSignal={npsCreatedSignal}
-                formCreatedSignal={formCreatedSignal}
-                productsCreatedSignal={productsCreatedSignal}
-                onOpenNpsTemplates={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsTemplates(prev => !prev), 150); }}
-                onOpenNpsAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsAI(prev => !prev), 150); }}
-                onOpenNpsManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsManual(prev => !prev), 150); }}
-                onOpenFormTemplates={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormTemplates(prev => !prev), 150); }}
-                onOpenFormAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormAI(prev => !prev), 150); }}
-                onOpenFormManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormManual(prev => !prev), 150); }}
-                onOpenProductCatalog={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductCatalog(prev => !prev), 150); }}
-                onOpenProductAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductAI(prev => !prev), 150); }}
-                onOpenProductManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductManual(prev => !prev), 150); }}
-            />
+        {/* OnboardingWizard: mantido montado quando onboardingInProgress para que useEffects continuem ativos */}
+        {(showOnboardingWizard || onboardingInProgress) && (
+            <div style={{ display: showOnboardingWizard ? 'block' : 'none' }}>
+              <OnboardingWizard
+                  userId={currentUser.id}
+                  tenantId={getActiveTenant() || currentUser.tenantId || ''}
+                  userPlan={currentUser.plan || 'trial'}
+                  companyName={settings.companyName || activeCompany?.name || 'Minha Empresa'}
+                  onComplete={() => {
+                      setShowOnboardingWizard(false);
+                      setOnboardingInProgress(false);
+                      localStorage.setItem('hg_wizard_complete', 'true');
+                  }}
+                  onNavigate={(view: string) => {
+                      setShowOnboardingWizard(false);
+                      setCurrentView(view);
+                  }}
+                  npsCreatedSignal={npsCreatedSignal}
+                  formCreatedSignal={formCreatedSignal}
+                  productsCreatedSignal={productsCreatedSignal}
+                  onOpenNpsTemplates={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsTemplates(prev => !prev), 150); }}
+                  onOpenNpsAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsAI(prev => !prev), 150); }}
+                  onOpenNpsManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsManual(prev => !prev), 150); }}
+                  onOpenFormTemplates={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormTemplates(prev => !prev), 150); }}
+                  onOpenFormAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormAI(prev => !prev), 150); }}
+                  onOpenFormManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormManual(prev => !prev), 150); }}
+                  onOpenProductCatalog={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductCatalog(prev => !prev), 150); }}
+                  onOpenProductAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductAI(prev => !prev), 150); }}
+                  onOpenProductManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductManual(prev => !prev), 150); }}
+              />
+            </div>
         )}
       </main>
 

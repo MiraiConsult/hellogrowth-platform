@@ -222,7 +222,11 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
 
   // Onboarding: abrir modais nativos quando sinalizado pelo wizard
   useEffect(() => {
-    if (onboardingOpenTemplates) { setShowTemplateModal(true); }
+    if (onboardingOpenTemplates) {
+      setShowTemplateModal(true);
+      loadTemplates(); // Carrega os templates ao abrir via onboarding
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingOpenTemplates]);
   useEffect(() => {
     if (onboardingOpenAI) { setManualMode(false); setEditingCampaign(null); setShowNPSConsultant(true); }

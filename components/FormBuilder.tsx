@@ -54,7 +54,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
 
   // Onboarding: abrir modais nativos quando sinalizado pelo wizard
   useEffect(() => {
-    if (onboardingOpenTemplates) { setShowTemplateModal(true); }
+    if (onboardingOpenTemplates) {
+      setShowTemplateModal(true);
+      loadFormTemplates(); // Carrega os templates ao abrir via onboarding
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingOpenTemplates]);
   useEffect(() => {
     if (onboardingOpenAI) { setShowConsultant(true); }
