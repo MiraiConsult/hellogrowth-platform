@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('campaign_templates')
-      .select('id, name, description, category, objective, tone, questions, tags, use_count, created_at, tipo_venda, ramo_negocio')
+      .select('id, name, description, category, objective, tone, questions, tags, use_count, pipeline_value_total, created_at, tipo_venda, ramo_negocio, segment')
       .eq('is_active', true)
       .order('use_count', { ascending: false });
 

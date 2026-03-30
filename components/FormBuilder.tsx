@@ -45,24 +45,33 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [showConsultant, setShowConsultant] = useState(false);
 
-  // Template modal (pre-venda)
+  // Template modal (pre-venda) — novo design estilo catálogo
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [formTemplates, setFormTemplates] = useState<any[]>([]);
-  const [formTemplateCategories, setFormTemplateCategories] = useState<string[]>(['Todos']);
-  const [formTemplateCategoryFilter, setFormTemplateCategoryFilter] = useState('Todos');
+  const [allFormTemplates, setAllFormTemplates] = useState<any[]>([]);
+  const [formTemplateSegments, setFormTemplateSegments] = useState<string[]>([]);
+  const [activeFormTemplateSegment, setActiveFormTemplateSegment] = useState<string>('Todos');
   const [formTemplateSearch, setFormTemplateSearch] = useState('');
   const [isLoadingFormTemplates, setIsLoadingFormTemplates] = useState(false);
   const [isUsingFormTemplate, setIsUsingFormTemplate] = useState<string | null>(null);
   const [formTemplateSuccess, setFormTemplateSuccess] = useState<string | null>(null);
+
+  const FORM_SEGMENT_ICONS: Record<string, string> = {
+    'Todos': '📋', 'Clínica Odontológica': '🦷', 'Clínica de Estética': '💆', 'Restaurante / Alimentação': '🍽️',
+    'Academia / Fitness': '💪', 'Clínica de Saúde / Médica': '🏥', 'Salão de Beleza / Barbearia': '✂️',
+    'Escola / Educação': '🎓', 'Varejo / Loja': '🛍️', 'Imobiliária / Construção': '🏠',
+    'Tecnologia / Software': '💻', 'Pet Shop / Veterinária': '🐾', 'Automóveis / Oficina': '🚗',
+    'Geral': '📝',
+  };
 
   const loadFormTemplates = async () => {
     setIsLoadingFormTemplates(true);
     try {
       const res = await fetch('/api/templates?tipoVenda=pre_venda');
       const data = await res.json();
-      setFormTemplates(data.templates || []);
-      const cats: string[] = ['Todos', ...Array.from(new Set((data.templates || []).map((t: any) => t.category).filter(Boolean))) as string[]];
-      setFormTemplateCategories(cats);
+      const tmps = data.templates || [];
+      setAllFormTemplates(tmps);
+      const segs = ['Todos', ...Array.from(new Set(tmps.map((t: any) => t.ramo_negocio || t.segment || 'Geral').filter(Boolean))) as string[]];
+      setFormTemplateSegments(segs);
     } finally { setIsLoadingFormTemplates(false); }
   };
 
@@ -1239,83 +1248,146 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       )}
       {/* Modal de Templates Pre-venda */}
       {showTemplateModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl w-full max-w-2xl my-6 shadow-2xl">
-            <div className="flex items-center justify-between p-5 border-b border-slate-200">
-              <div>
-                <h3 className="text-base font-bold text-gray-900">Templates de Formularios</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Escolha um template de pre-venda e crie seu formulario em segundos</p>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-5xl h-[85vh] shadow-2xl flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                  <BookOpen size={20} className="text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Templates de Formulários</h3>
+                  <p className="text-xs text-gray-500">Escolha por segmento e crie seu formulário de pré-venda em segundos</p>
+                </div>
               </div>
-              <button onClick={() => setShowTemplateModal(false)} className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200"><X size={16} /></button>
+              <button onClick={() => { setShowTemplateModal(false); setFormTemplateSearch(''); }} className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"><X size={16} /></button>
             </div>
-            <div className="p-4">
-              <div className="flex gap-2 mb-4">
-                <div className="relative flex-1">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="text" placeholder="Buscar template..." value={formTemplateSearch} onChange={e => setFormTemplateSearch(e.target.value)}
-                    className="w-full text-sm pl-8 pr-3 py-2 rounded-lg border border-slate-300 bg-white focus:outline-none" />
-                </div>
-                <select value={formTemplateCategoryFilter} onChange={e => setFormTemplateCategoryFilter(e.target.value)}
-                  className="text-sm px-3 py-2 rounded-lg border border-slate-300 bg-white focus:outline-none">
-                  {formTemplateCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-              </div>
-              {isLoadingFormTemplates ? (
-                <div className="flex items-center justify-center py-16"><Loader2 size={24} className="animate-spin text-blue-500" /></div>
-              ) : formTemplates.filter(t => {
-                const ms = !formTemplateSearch || t.name?.toLowerCase().includes(formTemplateSearch.toLowerCase());
-                const mc = formTemplateCategoryFilter === 'Todos' || t.category === formTemplateCategoryFilter;
-                return ms && mc;
-              }).length === 0 ? (
-                <div className="text-center py-16 text-gray-400">
-                  <BookOpen size={36} className="mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">Nenhum template de pre-venda disponivel.</p>
-                  <p className="text-xs mt-1">O administrador ainda nao publicou templates de pre-venda.</p>
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-                  {formTemplates.filter(t => {
-                    const ms = !formTemplateSearch || t.name?.toLowerCase().includes(formTemplateSearch.toLowerCase());
-                    const mc = formTemplateCategoryFilter === 'Todos' || t.category === formTemplateCategoryFilter;
-                    return ms && mc;
-                  }).map(template => (
-                    <div key={template.id} className="border border-slate-200 rounded-xl p-4 hover:border-blue-400 transition-colors">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="text-sm font-bold text-gray-900">{template.name}</span>
-                            {template.category && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{template.category}</span>}
-                            {template.ramo_negocio && <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">{template.ramo_negocio}</span>}
-                          </div>
-                          {template.description && <p className="text-xs text-gray-500 mb-2">{template.description}</p>}
-                          <div className="flex items-center gap-3 text-xs text-gray-400">
-                            <span>{template.questions?.length || 0} perguntas</span>
-                            <span className="flex items-center gap-1"><Star size={10} className="text-yellow-500" /> {template.use_count || 0} usos</span>
-                          </div>
-                          {(template.tags || []).length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {template.tags.map((tag: string) => <span key={tag} className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{tag}</span>)}
-                            </div>
-                          )}
+            {/* Body */}
+            <div className="flex flex-1 overflow-hidden">
+              {/* Sidebar segmentos */}
+              <div className="w-64 border-r border-slate-100 bg-slate-50 overflow-y-auto shrink-0 py-3">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-5 mb-2">Segmentos</p>
+                {isLoadingFormTemplates ? (
+                  <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-blue-500" /></div>
+                ) : formTemplateSegments.map(seg => {
+                  const count = seg === 'Todos' ? allFormTemplates.length : allFormTemplates.filter(t => (t.ramo_negocio || t.segment || 'Geral') === seg).length;
+                  const isActive = activeFormTemplateSegment === seg;
+                  return (
+                    <button key={seg} onClick={() => setActiveFormTemplateSegment(seg)}
+                      className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-all ${
+                        isActive ? 'bg-white border-r-[3px] border-blue-500 text-blue-700' : 'text-slate-600 hover:bg-white/70'
+                      }`}>
+                      <span className="text-xl shrink-0">{FORM_SEGMENT_ICONS[seg] || '📋'}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-sm font-semibold truncate ${isActive ? 'text-blue-700' : ''}`}>{seg}</span>
                         </div>
-                        <button
-                          onClick={() => useFormTemplate(template.id, template.name)}
-                          disabled={isUsingFormTemplate === template.id || formTemplateSuccess === template.id}
-                          className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                            formTemplateSuccess === template.id
-                              ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                              : 'bg-blue-600 hover:bg-blue-500 text-white'
-                          } disabled:opacity-60`}
-                        >
-                          {isUsingFormTemplate === template.id ? <Loader2 size={14} className="animate-spin" /> :
-                           formTemplateSuccess === template.id ? <Check size={14} /> : <BookOpen size={14} />}
-                          {formTemplateSuccess === template.id ? 'Criado!' : 'Usar'}
-                        </button>
+                        {count > 0 && <span className="text-[11px] text-slate-400">{count} template{count !== 1 ? 's' : ''}</span>}
                       </div>
-                    </div>
-                  ))}
+                      {count > 0 && <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                        isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500'
+                      }`}>{count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Conteúdo */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Barra de busca */}
+                <div className="px-5 py-3 border-b border-slate-100 shrink-0">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input type="text" placeholder="Buscar template..." value={formTemplateSearch} onChange={e => setFormTemplateSearch(e.target.value)}
+                      className="w-full text-sm pl-8 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-blue-400 focus:bg-white transition-colors" />
+                  </div>
                 </div>
-              )}
+                {/* Lista de templates */}
+                <div className="flex-1 overflow-y-auto p-5">
+                  {isLoadingFormTemplates ? (
+                    <div className="flex items-center justify-center h-full"><Loader2 size={28} className="animate-spin text-blue-500" /></div>
+                  ) : (() => {
+                    const filtered = allFormTemplates.filter(t => {
+                      const seg = t.ramo_negocio || t.segment || 'Geral';
+                      const matchSeg = activeFormTemplateSegment === 'Todos' || seg === activeFormTemplateSegment;
+                      const matchSearch = !formTemplateSearch || t.name?.toLowerCase().includes(formTemplateSearch.toLowerCase()) || t.description?.toLowerCase().includes(formTemplateSearch.toLowerCase());
+                      return matchSeg && matchSearch;
+                    });
+                    if (filtered.length === 0) return (
+                      <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                        <BookOpen size={48} className="mb-4 opacity-20" />
+                        <p className="text-sm font-medium">Nenhum template neste segmento</p>
+                        <p className="text-xs mt-1">Tente outro segmento ou peça ao administrador para publicar templates.</p>
+                      </div>
+                    );
+                    return (
+                      <div className="grid grid-cols-1 gap-4">
+                        {filtered.map(template => (
+                          <div key={template.id} className={`border-2 rounded-2xl p-5 transition-all hover:shadow-md ${
+                            formTemplateSuccess === template.id ? 'border-blue-400 bg-blue-50' : 'border-slate-200 hover:border-blue-300 bg-white'
+                          }`}>
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap mb-2">
+                                  <span className="text-sm font-bold text-gray-900">{template.name}</span>
+                                  {template.ramo_negocio && (
+                                    <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">{template.ramo_negocio}</span>
+                                  )}
+                                  {template.category && template.category !== 'Geral' && (
+                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{template.category}</span>
+                                  )}
+                                </div>
+                                {template.description && (
+                                  <p className="text-xs text-gray-500 mb-3 leading-relaxed">{template.description}</p>
+                                )}
+                                <div className="flex items-center gap-4 text-xs">
+                                  <span className="flex items-center gap-1 text-slate-500">
+                                    <span className="font-medium text-slate-700">{template.questions?.length || 0}</span> perguntas
+                                  </span>
+                                  <span className="flex items-center gap-1 text-amber-600 font-medium">
+                                    <Star size={11} className="fill-amber-400 text-amber-400" />
+                                    {template.use_count || 0} uso{(template.use_count || 0) !== 1 ? 's' : ''}
+                                  </span>
+                                  {(template.pipeline_value_total || 0) > 0 && (
+                                    <span className="flex items-center gap-1 text-emerald-600 font-semibold">
+                                      R$ {Number(template.pipeline_value_total).toLocaleString('pt-BR', { minimumFractionDigits: 0 })} em pipeline
+                                    </span>
+                                  )}
+                                </div>
+                                {(template.tags || []).length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-3">
+                                    {template.tags.map((tag: string) => (
+                                      <span key={tag} className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{tag}</span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => useFormTemplate(template.id, template.name)}
+                                disabled={!!isUsingFormTemplate}
+                                className={`shrink-0 flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl transition-all shadow-sm ${
+                                  formTemplateSuccess === template.id
+                                    ? 'bg-blue-500 text-white shadow-blue-200'
+                                    : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white disabled:opacity-50'
+                                }`}
+                              >
+                                {isUsingFormTemplate === template.id ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : formTemplateSuccess === template.id ? (
+                                  <Check size={14} />
+                                ) : (
+                                  <Plus size={14} />
+                                )}
+                                {formTemplateSuccess === template.id ? 'Criado!' : 'Usar Template'}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
             </div>
           </div>
         </div>
