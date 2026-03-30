@@ -85,8 +85,30 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
 
   useEffect(() => { loadSurveys(); loadTemplates(); }, [loadSurveys, loadTemplates]);
 
+  // Mapear business_type do perfil para o ramo mais próximo da lista RAMOS
+  const inferRamo = (businessType: string | null): string => {
+    if (!businessType) return '';
+    const bt = businessType.toLowerCase();
+    if (bt.includes('odonto') || bt.includes('dental')) return 'Saúde / Clínica / Estética';
+    if (bt.includes('estét') || bt.includes('estetica') || bt.includes('beleza') || bt.includes('salão') || bt.includes('salao') || bt.includes('barbearia')) return 'Beleza / Salão';
+    if (bt.includes('restaurante') || bt.includes('alimenta') || bt.includes('food') || bt.includes('lanchonete') || bt.includes('padaria')) return 'Restaurante / Alimentação';
+    if (bt.includes('academia') || bt.includes('fitness') || bt.includes('gym')) return 'Academia / Fitness';
+    if (bt.includes('clínica') || bt.includes('clinica') || bt.includes('saúde') || bt.includes('saude') || bt.includes('médic') || bt.includes('medic') || bt.includes('hospital')) return 'Saúde / Clínica / Estética';
+    if (bt.includes('escola') || bt.includes('educaç') || bt.includes('educac') || bt.includes('curso') || bt.includes('faculdade') || bt.includes('colégio') || bt.includes('colegio')) return 'Educação / Cursos';
+    if (bt.includes('imobil') || bt.includes('constru') || bt.includes('incorpor')) return 'Imobiliário';
+    if (bt.includes('tecnolog') || bt.includes('software') || bt.includes('ti ') || bt.includes('startup')) return 'Tecnologia / Software';
+    if (bt.includes('varejo') || bt.includes('loja') || bt.includes('comércio') || bt.includes('comercio') || bt.includes('retail')) return 'Varejo / Loja';
+    if (bt.includes('pet') || bt.includes('veterin')) return 'Serviços Gerais';
+    if (bt.includes('auto') || bt.includes('oficina') || bt.includes('mecân') || bt.includes('mecan')) return 'Automotivo';
+    if (bt.includes('hotel') || bt.includes('pousada') || bt.includes('turism')) return 'Hotelaria / Turismo';
+    if (bt.includes('financ') || bt.includes('contab') || bt.includes('contáb') || bt.includes('banco')) return 'Financeiro / Contabilidade';
+    if (bt.includes('jurídic') || bt.includes('juridic') || bt.includes('advoc') || bt.includes('direito')) return 'Jurídico / Advocacia';
+    return '';
+  };
+
   const openPublish = (survey: any) => {
-    setPubForm({ name: survey.name || '', description: survey.objective || '', ramoNegocio: '', tipoVenda: 'pos_venda', category: 'Geral', tags: [] });
+    const ramoInferido = inferRamo(survey.businessType);
+    setPubForm({ name: survey.name || '', description: survey.objective || '', ramoNegocio: ramoInferido, tipoVenda: 'pos_venda', category: 'Geral', tags: [] });
     setTagInput(''); setPubOk(false);
     setPub({ open: true, survey });
   };
@@ -224,6 +246,9 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`text-sm font-semibold ${t.text} truncate`}>{s.name}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${t.badge}`}>{s.companyName}</span>
+                          {s.businessType && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200 font-medium">{s.businessType}</span>
+                          )}
                           <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">{s.questionCount} perguntas</span>
                           <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">{s.responseCount} respostas</span>
                         </div>
@@ -382,9 +407,19 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Ramo do Negócio</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-gray-700">Ramo do Negócio</label>
+                    {pub.survey?.businessType && (
+                      <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                        <Sparkles size={9} />
+                        Detectado do perfil: <span className="font-bold">{pub.survey.businessType}</span>
+                      </span>
+                    )}
+                  </div>
                   <select value={pubForm.ramoNegocio} onChange={e => setPubForm(f => ({ ...f, ramoNegocio: e.target.value }))}
-                    className="w-full text-sm px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30">
+                    className={`w-full text-sm px-3 py-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${
+                      pubForm.ramoNegocio ? 'border-emerald-400 bg-emerald-50/40' : 'border-slate-300 bg-white'
+                    }`}>
                     <option value="">Selecionar ramo...</option>
                     {RAMOS.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>

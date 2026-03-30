@@ -30,6 +30,16 @@ export async function GET(request: NextRequest) {
       if (c.id) nameMap[c.id] = c.name || c.id.substring(0, 8);
     }
 
+    // Buscar business_type dos tenants via business_profile
+    const { data: profiles } = await supabase
+      .from('business_profile')
+      .select('tenant_id, business_type');
+
+    const businessTypeMap: Record<string, string> = {};
+    for (const p of profiles || []) {
+      if (p.tenant_id && p.business_type) businessTypeMap[p.tenant_id] = p.business_type;
+    }
+
     // Enriquecer campanhas com nome da empresa e estatísticas das perguntas
     const enriched = (campaigns || []).map((c) => {
       const questions = c.questions || [];
@@ -47,6 +57,7 @@ export async function GET(request: NextRequest) {
         type: c.type,
         tenantId: c.tenant_id,
         companyName: nameMap[c.tenant_id] || c.tenant_id?.substring(0, 8) || '—',
+        businessType: businessTypeMap[c.tenant_id] || null,
         questionCount: questions.length,
         questionTypes,
         questions: questions.map((q: any) => ({
