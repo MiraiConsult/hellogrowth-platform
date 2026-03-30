@@ -86,6 +86,8 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   const [allSegments, setAllSegments] = useState<any[]>([]);
   const [detectedSegment, setDetectedSegment] = useState<string>('');
   const [selectedSegment, setSelectedSegment] = useState<string>('');
+  // Multi-segmento: mapa de segmento -> itens selecionados
+  const [multiSegmentSelections, setMultiSegmentSelections] = useState<Record<string, {name: string; value: string; selected: boolean; description?: string}[]>>({});
 
   // Geração em massa de descrições
   const [generatingBulk, setGeneratingBulk] = useState(false);
@@ -179,16 +181,51 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
       const data = await res.json();
       if (data && data.products) {
         setCatalogData(data);
-        setCatalogItems(data.products.map((p: any) => ({
-          name: p.name,
-          value: String(Math.round((p.value_min + p.value_max) / 2)),
-          selected: true,
-          description: p.description || ''
-        })));
+        // Se já há seleções salvas para este segmento, restaurar; senão inicializar
+        if (multiSegmentSelections[segment]) {
+          setCatalogItems(multiSegmentSelections[segment]);
+        } else {
+          const items = data.products.map((p: any) => ({
+            name: p.name,
+            value: String(Math.round((p.value_min + p.value_max) / 2)),
+            selected: false, // começa desmarcado em outros segmentos
+            description: p.description || ''
+          }));
+          setCatalogItems(items);
+        }
       }
     } finally {
       setCatalogLoading(false);
     }
+  };
+
+  // Salva o estado atual dos itens no mapa multi-segmento
+  const saveCurrentSegmentSelections = (items: typeof catalogItems) => {
+    if (!selectedSegment) return;
+    setMultiSegmentSelections(prev => ({ ...prev, [selectedSegment]: items }));
+  };
+
+  // Conta total de produtos selecionados em todos os segmentos
+  const totalSelectedCount = () => {
+    // Itens do segmento atual (ainda não salvos no mapa)
+    const currentSelected = catalogItems.filter(i => i.selected).length;
+    // Itens dos outros segmentos já salvos
+    const otherSelected = Object.entries(multiSegmentSelections)
+      .filter(([seg]) => seg !== selectedSegment)
+      .reduce((acc, [, items]) => acc + items.filter(i => i.selected).length, 0);
+    return currentSelected + otherSelected;
+  };
+
+  // Retorna todos os itens selecionados de todos os segmentos
+  const getAllSelectedItems = () => {
+    const allItems: {name: string; value: string}[] = [];
+    // Itens do segmento atual
+    catalogItems.filter(i => i.selected && i.name.trim()).forEach(i => allItems.push(i));
+    // Itens dos outros segmentos
+    Object.entries(multiSegmentSelections)
+      .filter(([seg]) => seg !== selectedSegment)
+      .forEach(([, items]) => items.filter(i => i.selected && i.name.trim()).forEach(i => allItems.push(i)));
+    return allItems;
   };
 
   // Geração em massa de descrições IA para todos os produtos sem descrição
@@ -219,11 +256,13 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   };
 
   const importCatalogProducts = async () => {
-    const selected = catalogItems.filter(i => i.selected && i.name.trim());
-    if (!selected.length || !supabase || !userId || !tenantId) return;
+    // Salvar estado atual antes de importar
+    saveCurrentSegmentSelections(catalogItems);
+    const allSelected = getAllSelectedItems();
+    if (!allSelected.length || !supabase || !userId || !tenantId) return;
     setImportingCatalog(true);
     try {
-      const toInsert = selected.map(p => ({
+      const toInsert = allSelected.map(p => ({
         user_id: userId,
         tenant_id: tenantId,
         name: p.name,
@@ -232,7 +271,8 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
       await supabase.from('products_services').insert(toInsert);
       await fetchProducts();
       setShowCatalogOnboarding(false);
-      showNotification('success', `${selected.length} produtos importados com sucesso!`);
+      setMultiSegmentSelections({});
+      showNotification('success', `${allSelected.length} produtos importados com sucesso!`);
     } finally {
       setImportingCatalog(false);
     }
@@ -923,29 +963,43 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
             <div className="flex flex-1 overflow-hidden">
 
               {/* Sidebar de segmentos */}
-              <div className="w-56 flex-shrink-0 border-r border-slate-100 overflow-y-auto bg-slate-50/50 py-4">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-4 mb-3">Segmentos</p>
+              <div className="w-64 flex-shrink-0 border-r border-slate-100 overflow-y-auto bg-slate-50/50 py-5">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-5 mb-4">Segmentos</p>
                 {allSegments.map((seg: any) => {
                   const isDetected = seg.segment === detectedSegment;
-                  const isSelected = seg.segment === selectedSegment;
+                  const isActive = seg.segment === selectedSegment;
+                  // Conta selecionados neste segmento
+                  const segItems = seg.segment === selectedSegment
+                    ? catalogItems
+                    : (multiSegmentSelections[seg.segment] || []);
+                  const segCount = segItems.filter(i => i.selected).length;
                   return (
                     <button
                       key={seg.segment}
-                      onClick={() => loadSegmentProducts(seg.segment)}
+                      onClick={() => {
+                        // Salvar estado atual antes de trocar
+                        saveCurrentSegmentSelections(catalogItems);
+                        loadSegmentProducts(seg.segment);
+                      }}
                       disabled={catalogLoading}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-all ${
-                        isSelected
-                          ? 'bg-emerald-50 border-r-2 border-emerald-500 text-emerald-700'
+                      className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-all ${
+                        isActive
+                          ? 'bg-white border-r-[3px] border-emerald-500 text-emerald-700 shadow-sm'
                           : 'hover:bg-white text-slate-600 hover:text-slate-800'
                       }`}
                     >
-                      <span className="text-xl">{seg.segment_icon}</span>
+                      <span className="text-2xl flex-shrink-0">{seg.segment_icon}</span>
                       <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium block truncate">{seg.segment_label}</span>
+                        <span className="text-sm font-semibold block truncate">{seg.segment_label}</span>
                         {isDetected && (
-                          <span className="text-xs text-emerald-600 font-medium">Seu segmento</span>
+                          <span className="text-xs text-emerald-600 font-semibold">✦ Seu segmento</span>
                         )}
                       </div>
+                      {segCount > 0 && (
+                        <span className="flex-shrink-0 min-w-[22px] h-[22px] bg-emerald-500 text-white text-xs font-bold rounded-full flex items-center justify-center px-1">
+                          {segCount}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -1063,28 +1117,36 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
             </div>
 
             {/* Footer */}
-            <div className="px-8 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
-              <div className="text-sm text-slate-500">
-                {catalogItems.filter(i => i.selected).length > 0 ? (
-                  <span><strong className="text-slate-700">{catalogItems.filter(i => i.selected).length}</strong> produto{catalogItems.filter(i => i.selected).length !== 1 ? 's' : ''} selecionado{catalogItems.filter(i => i.selected).length !== 1 ? 's' : ''}</span>
+            <div className="px-8 py-4 border-t border-slate-100 bg-white flex items-center justify-between">
+              <div className="text-sm">
+                {totalSelectedCount() > 0 ? (
+                  <div>
+                    <span className="font-bold text-slate-800 text-base">{totalSelectedCount()}</span>
+                    <span className="text-slate-500"> produto{totalSelectedCount() !== 1 ? 's' : ''} selecionado{totalSelectedCount() !== 1 ? 's' : ''}</span>
+                    {Object.values(multiSegmentSelections).some(items => items.some(i => i.selected)) && (
+                      <span className="ml-2 text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">
+                        de múltiplos segmentos
+                      </span>
+                    )}
+                  </div>
                 ) : (
-                  <span className="text-slate-400">Nenhum produto selecionado</span>
+                  <span className="text-slate-400">Nenhum produto selecionado ainda</span>
                 )}
               </div>
               <div className="flex gap-3">
                 <button
-                  onClick={() => setShowCatalogOnboarding(false)}
+                  onClick={() => { setShowCatalogOnboarding(false); setMultiSegmentSelections({}); }}
                   className="px-5 py-2.5 text-slate-600 hover:text-slate-800 text-sm font-medium hover:bg-slate-100 rounded-xl transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={importCatalogProducts}
-                  disabled={importingCatalog || catalogItems.filter(i => i.selected).length === 0}
+                  disabled={importingCatalog || totalSelectedCount() === 0}
                   className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 shadow-lg shadow-emerald-500/25 transition-all"
                 >
                   {importingCatalog ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                  Importar {catalogItems.filter(i => i.selected).length} produto{catalogItems.filter(i => i.selected).length !== 1 ? 's' : ''}
+                  Importar {totalSelectedCount()} produto{totalSelectedCount() !== 1 ? 's' : ''}
                 </button>
               </div>
             </div>
