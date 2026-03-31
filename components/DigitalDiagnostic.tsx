@@ -1085,52 +1085,58 @@ Responda APENAS em JSON puro (sem markdown):
   };
 
   const handleRunDiagnostic = async () => {
-    if (!effectivePlaceId) {
-      setError('Configure o Google Place ID no Perfil do Negócio para analisar sua presença digital.');
+    if (!effectivePlaceId && !gbpConnected) {
+      setError('Conecte o Google Business Profile ou configure o Place ID no Perfil do Negócio.');
       return;
     }
     setIsAnalyzing(true);
     setError(null);
     try {
-      setAnalysisStep('Buscando dados do Google...');
-      const placeData = await fetchGooglePlaceData(effectivePlaceId);
-      const dataToAnalyze: GooglePlaceData = placeData && placeData.name ? placeData : {
-        name: settings.companyName || 'Seu Negócio',
-        formatted_address: '',
-        formatted_phone_number: settings.phone,
-        website: settings.website,
-        rating: 0, user_ratings_total: 0, reviews: [],
-        opening_hours: undefined, photos: [], types: ['establishment'], business_status: 'OPERATIONAL'
-      };
+      let dataToAnalyze: GooglePlaceData;
 
-      // Buscar TODAS as reviews via GBP API (se conectado)
+      // FONTE PRIMÁRIA: GBP API (quando Google está conectado)
       if (gbpConnected) {
+        setAnalysisStep('Buscando dados do Google Business Profile...');
+        const resolvedTid = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
         try {
-          setAnalysisStep('Buscando todas as avaliações do Google...');
-          const resolvedTid = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
-          const gbpReviewsRes = await fetch(`/api/gbp/reviews?tenantId=${resolvedTid}`);
-          const gbpReviewsData = await gbpReviewsRes.json();
-          if (gbpReviewsData.connected && gbpReviewsData.reviews?.length > 0) {
-            // Substituir as reviews limitadas do Places API pelas completas do GBP
-            dataToAnalyze.reviews = gbpReviewsData.reviews.map((r: any) => ({
-              author_name: r.author_name || 'Anônimo',
-              rating: r.rating || 0,
-              text: r.text || '',
-              time: r.time || 0,
-              relative_time_description: '',
-            }));
-            // Atualizar totais com dados mais precisos do GBP
-            if (gbpReviewsData.totalReviewCount) {
-              dataToAnalyze.user_ratings_total = gbpReviewsData.totalReviewCount;
-            }
-            if (gbpReviewsData.averageRating) {
-              dataToAnalyze.rating = gbpReviewsData.averageRating;
-            }
-            console.log(`[MPD] Loaded ${gbpReviewsData.reviews.length} reviews from GBP API (total: ${gbpReviewsData.totalReviewCount})`);
+          const gbpRes = await fetch(`/api/gbp/place-data?tenantId=${resolvedTid}`);
+          const gbpData = await gbpRes.json();
+          if (gbpData.connected && gbpData.placeData) {
+            dataToAnalyze = gbpData.placeData;
+            console.log(`[MPD] Loaded data from GBP API: ${gbpData.totalReviewCount} reviews, rating ${gbpData.averageRating}, ${gbpData.photoCount} photos`);
+          } else {
+            // GBP falhou, tentar fallback com Place ID
+            console.warn('[MPD] GBP API returned no data, falling back to Places API');
+            setAnalysisStep('Buscando dados via Google Places...');
+            const placeData = effectivePlaceId ? await fetchGooglePlaceData(effectivePlaceId) : null;
+            dataToAnalyze = placeData && placeData.name ? placeData : {
+              name: settings.companyName || 'Seu Negócio',
+              formatted_address: '', formatted_phone_number: settings.phone, website: settings.website,
+              rating: 0, user_ratings_total: 0, reviews: [],
+              opening_hours: undefined, photos: [], types: ['establishment'], business_status: 'OPERATIONAL'
+            };
           }
         } catch (gbpErr) {
-          console.warn('[MPD] Could not fetch GBP reviews, using Places API data:', gbpErr);
+          console.warn('[MPD] GBP API error, falling back to Places API:', gbpErr);
+          setAnalysisStep('Buscando dados via Google Places...');
+          const placeData = effectivePlaceId ? await fetchGooglePlaceData(effectivePlaceId) : null;
+          dataToAnalyze = placeData && placeData.name ? placeData : {
+            name: settings.companyName || 'Seu Negócio',
+            formatted_address: '', formatted_phone_number: settings.phone, website: settings.website,
+            rating: 0, user_ratings_total: 0, reviews: [],
+            opening_hours: undefined, photos: [], types: ['establishment'], business_status: 'OPERATIONAL'
+          };
         }
+      } else {
+        // FALLBACK: Google Places API (quando Google NÃO está conectado)
+        setAnalysisStep('Buscando dados do Google...');
+        const placeData = await fetchGooglePlaceData(effectivePlaceId);
+        dataToAnalyze = placeData && placeData.name ? placeData : {
+          name: settings.companyName || 'Seu Negócio',
+          formatted_address: '', formatted_phone_number: settings.phone, website: settings.website,
+          rating: 0, user_ratings_total: 0, reviews: [],
+          opening_hours: undefined, photos: [], types: ['establishment'], business_status: 'OPERATIONAL'
+        };
       }
 
       setAnalysisStep('Gerando to-do list...');

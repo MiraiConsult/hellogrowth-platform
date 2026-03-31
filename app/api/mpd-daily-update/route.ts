@@ -279,40 +279,38 @@ async function handleUpdate(request: NextRequest) {
   let errors = 0;
 
   try {
-    // Buscar todas as empresas com Place ID configurado
+    // Buscar todas as empresas com Place ID configurado OU GBP conectado
     const { data: profiles, error: profilesError } = await supabaseAdmin
       .from('business_profile')
-      .select('tenant_id, google_place_id, company_name, gbp_access_token, gbp_refresh_token, gbp_token_expiry, gbp_location_id, gbp_account_name')
-      .not('google_place_id', 'is', null)
-      .neq('google_place_id', '');
+      .select('tenant_id, google_place_id, company_name, gbp_access_token, gbp_refresh_token, gbp_token_expiry, gbp_location_id, gbp_account_name');
 
     if (profilesError) throw profilesError;
-    if (!profiles || profiles.length === 0) {
+    
+    // Filtrar: precisa ter Place ID OU GBP conectado
+    const eligibleProfiles = (profiles || []).filter(p => 
+      (p.google_place_id && p.google_place_id.trim() !== '') || 
+      (p.gbp_access_token && p.gbp_location_id && p.gbp_account_name)
+    );
+    
+    if (eligibleProfiles.length === 0) {
       return NextResponse.json({
-        message: 'Nenhuma empresa com Place ID configurado',
+        message: 'Nenhuma empresa com Place ID ou GBP configurado',
         processed: 0,
       });
     }
 
-    for (const profile of profiles) {
+    for (const profile of eligibleProfiles) {
       try {
         const tenantId = profile.tenant_id;
         const placeId = profile.google_place_id;
         const companyName = profile.company_name || 'Seu negócio';
+        const hasGbp = profile.gbp_access_token && profile.gbp_location_id && profile.gbp_account_name;
+        
+        let placeData: any = null;
+        let dataSource = 'none';
 
-        // Buscar dados atualizados do Google Places
-        const placeData = await fetchPlaceData(placeId);
-        if (!placeData) {
-          results.push({
-            tenantId,
-            status: 'skipped',
-            reason: 'Failed to fetch place data',
-          });
-          continue;
-        }
-
-        // Enriquecer com TODAS as reviews via GBP API (se conectado)
-        if (profile.gbp_access_token && profile.gbp_location_id && profile.gbp_account_name) {
+        // FONTE PRIMÁRIA: GBP API (quando Google está conectado)
+        if (hasGbp) {
           try {
             let gbpAccessToken = profile.gbp_access_token;
             // Refresh token se expirado
@@ -326,8 +324,20 @@ async function handleUpdate(request: NextRequest) {
                 await supabaseAdmin.from('business_profile').update({ gbp_access_token: credentials.access_token }).eq('tenant_id', tenantId);
               }
             }
+
+            // Buscar dados do Location via Business Information API
+            const locationUrl = `https://mybusinessbusinessinformation.googleapis.com/v1/${profile.gbp_account_name}/locations/${profile.gbp_location_id}?readMask=name,title,storefrontAddress,websiteUri,phoneNumbers,regularHours,metadata,profile,categories`;
+            const locationResp = await fetch(locationUrl, { headers: { Authorization: `Bearer ${gbpAccessToken}` } });
+            let locationData: any = {};
+            if (locationResp.ok) {
+              locationData = await locationResp.json();
+            }
+
+            // Buscar TODAS as reviews via GBP API com paginação
             const allGbpReviews: any[] = [];
             let nextPageToken: string | undefined;
+            let totalReviewCount = 0;
+            let averageRating = 0;
             let pageCount = 0;
             do {
               const url = new URL(`https://mybusiness.googleapis.com/v4/${profile.gbp_account_name}/locations/${profile.gbp_location_id}/reviews`);
@@ -337,27 +347,73 @@ async function handleUpdate(request: NextRequest) {
               const resp = await fetch(url.toString(), { headers: { Authorization: `Bearer ${gbpAccessToken}` } });
               if (!resp.ok) break;
               const data = await resp.json();
+              if (pageCount === 0) {
+                totalReviewCount = data.totalReviewCount || 0;
+                averageRating = data.averageRating || 0;
+              }
               for (const review of (data.reviews || [])) {
                 allGbpReviews.push({
-                  author_name: review.reviewer?.displayName || 'An\u00f4nimo',
+                  author_name: review.reviewer?.displayName || 'Anônimo',
                   rating: review.starRating === 'FIVE' ? 5 : review.starRating === 'FOUR' ? 4 : review.starRating === 'THREE' ? 3 : review.starRating === 'TWO' ? 2 : review.starRating === 'ONE' ? 1 : 0,
                   text: review.comment || '',
                   time: review.createTime ? new Date(review.createTime).getTime() / 1000 : 0,
                   relative_time_description: '',
                 });
               }
-              if (pageCount === 0 && data.totalReviewCount) placeData.user_ratings_total = data.totalReviewCount;
-              if (pageCount === 0 && data.averageRating) placeData.rating = data.averageRating;
               nextPageToken = data.nextPageToken;
               pageCount++;
             } while (nextPageToken && pageCount < 20);
-            if (allGbpReviews.length > 0) {
-              placeData.reviews = allGbpReviews;
-              console.log(`[MPD Daily] Loaded ${allGbpReviews.length} reviews from GBP for ${companyName}`);
-            }
+
+            // Buscar fotos via GBP API
+            let photos: any[] = [];
+            try {
+              const mediaUrl = `https://mybusiness.googleapis.com/v4/${profile.gbp_account_name}/locations/${profile.gbp_location_id}/media`;
+              const mediaResp = await fetch(mediaUrl, { headers: { Authorization: `Bearer ${gbpAccessToken}` } });
+              if (mediaResp.ok) {
+                const mediaData = await mediaResp.json();
+                photos = (mediaData.mediaItems || []).map((m: any) => ({ photo_reference: m.name || '', url: m.googleUrl || '' }));
+              }
+            } catch { /* ignore */ }
+
+            // Montar placeData a partir do GBP
+            const address = locationData.storefrontAddress;
+            const formattedAddress = address
+              ? [address.addressLines?.join(', '), address.locality, address.administrativeArea, address.postalCode].filter(Boolean).join(', ')
+              : '';
+
+            placeData = {
+              name: locationData.title || companyName,
+              formatted_address: formattedAddress,
+              formatted_phone_number: locationData.phoneNumbers?.primaryPhone || '',
+              website: locationData.websiteUri || '',
+              rating: averageRating,
+              user_ratings_total: totalReviewCount,
+              reviews: allGbpReviews,
+              opening_hours: locationData.regularHours ? { open_now: false, weekday_text: [] } : undefined,
+              photos: photos,
+              types: locationData.categories?.primaryCategory?.displayName ? [locationData.categories.primaryCategory.displayName] : ['establishment'],
+              business_status: 'OPERATIONAL',
+            };
+            dataSource = 'gbp_api';
+            console.log(`[MPD Daily] Loaded data from GBP API for ${companyName}: ${allGbpReviews.length} reviews, rating ${averageRating}`);
           } catch (gbpErr: any) {
-            console.warn(`[MPD Daily] GBP reviews fetch failed for ${companyName}:`, gbpErr.message);
+            console.warn(`[MPD Daily] GBP API failed for ${companyName}:`, gbpErr.message);
           }
+        }
+
+        // FALLBACK: Google Places API (se GBP não disponível ou falhou)
+        if (!placeData && placeId) {
+          placeData = await fetchPlaceData(placeId);
+          if (placeData) dataSource = 'places_api';
+        }
+
+        if (!placeData) {
+          results.push({
+            tenantId,
+            status: 'skipped',
+            reason: 'Failed to fetch data from both GBP and Places API',
+          });
+          continue;
         }
 
         // Buscar diagnóstico mais recente para comparação
