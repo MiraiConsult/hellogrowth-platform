@@ -279,6 +279,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [publicForm, setPublicForm] = useState<Form | null>(null);
   const [publicSettings, setPublicSettings] = useState<AccountSettings | undefined>(undefined);
   const [publicCompanyName, setPublicCompanyName] = useState<string>('');
+  const [publicLogoUrl, setPublicLogoUrl] = useState<string>('');
 
   // --- INITIAL DATA FETCH ---
   const fetchData = async () => {
@@ -538,12 +539,13 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
               const campaignTenantId = campaign.tenant_id || campaign.user_id;
               const { data: bizProfile } = await supabase
                 .from('business_profile')
-                .select('company_name, google_place_id')
+                .select('company_name, google_place_id, logo_url')
                 .eq('tenant_id', campaignTenantId)
                 .maybeSingle();
               
               if (bizProfile?.company_name) {
                 setPublicCompanyName(bizProfile.company_name);
+                setPublicLogoUrl((bizProfile as any).logo_url || '');
                 // Sempre usar o Place ID mais atualizado: business_profile tem prioridade sobre o salvo na campanha
                 // Isso garante que o redirecionamento funcione mesmo que a campanha tenha sido criada antes do Place ID ser cadastrado
                 const currentPlaceId = bizProfile.google_place_id || safeCampaign.google_place_id || '';
@@ -582,12 +584,13 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
             const formTenantId = form.tenant_id || form.user_id;
             const { data: formBizProfile } = await supabase
               .from('business_profile')
-              .select('company_name')
+              .select('company_name, logo_url')
               .eq('tenant_id', formTenantId)
               .maybeSingle();
             
             if (formBizProfile?.company_name) {
               setPublicCompanyName(formBizProfile.company_name);
+              setPublicLogoUrl((formBizProfile as any).logo_url || '');
             } else {
               // Fallback: buscar pelo user_id
               const { data: owner } = await supabase.from('users').select('company_name, settings').eq('id', form.user_id).single();
@@ -782,7 +785,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       user_id: currentUser.id,
       tenant_id: getActiveTenant(),
       game_enabled: form.game_enabled || false,
-      game_id: form.game_id || null
+      game_id: form.game_id || null,
+      show_logo: (form as any).show_logo || false
       // product_ids: requer migração 004 no Supabase antes de habilitar
       // product_ids: (form as any).product_ids || null
     };
@@ -875,6 +879,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       game_id: (campaign as any).game_id ?? null,
       before_google_message: (campaign as any).before_google_message ?? (campaign as any).beforeGoogleMessage ?? '',
       after_game_message: (campaign as any).after_game_message ?? (campaign as any).afterGameMessage ?? '',
+      show_logo: (campaign as any).show_logo ?? false,
       objective: (campaign as any).objective ?? '',
       tone: (campaign as any).tone ?? '',
       evaluation_points: (campaign as any).evaluation_points ?? [],
@@ -1355,6 +1360,7 @@ Responda APENAS com JSON válido (sem markdown):
       setPublicCampaign(campaign);
       setPublicSettings(settings);
       setPublicCompanyName(settings.companyName);
+      setPublicLogoUrl(businessProfile?.logo_url || '');
     }
     setPreviewCampaignId(id);
     setIsPreviewMode(true);
@@ -1366,6 +1372,7 @@ Responda APENAS com JSON válido (sem markdown):
     if (form) {
       setPublicForm(form);
       setPublicCompanyName(settings.companyName); // Set local preview name
+      setPublicLogoUrl(businessProfile?.logo_url || '');
     }
     setPreviewFormId(id);
     setIsPreviewMode(true);
@@ -1410,6 +1417,7 @@ Responda APENAS com JSON válido (sem markdown):
         isPreview={isPreviewMode} 
         settings={publicSettings} 
         companyName={publicCompanyName}
+        logoUrl={publicLogoUrl}
       />
     );
   }
@@ -1432,6 +1440,7 @@ Responda APENAS com JSON válido (sem markdown):
         onSubmit={handleFormSubmit} 
         isPreview={isPreviewMode} 
         companyName={publicCompanyName}
+        logoUrl={publicLogoUrl}
       />
     );
   }
@@ -1512,6 +1521,7 @@ Responda APENAS com JSON válido (sem markdown):
                 onboardingOpenTemplates={onboardingOpenFormTemplates}
                 onboardingOpenAI={onboardingOpenFormAI}
                 onboardingOpenManual={onboardingOpenFormManual}
+                businessProfile={businessProfile}
             />
         )}
         

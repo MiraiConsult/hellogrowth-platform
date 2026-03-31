@@ -9,6 +9,7 @@ interface PublicFormProps {
   onSubmit: (answers: any) => Promise<boolean>;
   isPreview?: boolean;
   companyName?: string;
+  logoUrl?: string;
 }
 
 // Helper para detectar se uma opção é "Outro"
@@ -40,7 +41,7 @@ const getOptionLabel = (opt: any): string => {
   return '';
 };
 
-const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPreview = false, companyName }) => {
+const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPreview = false, companyName, logoUrl }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [isCompleted, setIsCompleted] = useState(false);
@@ -308,10 +309,16 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
     <div className="min-h-screen bg-gray-50 flex flex-col relative" style={{ colorScheme: 'light', backgroundColor: '#f9fafb', color: '#111827' }}>
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10" style={{ backgroundColor: '#ffffff', color: '#111827' }}>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold">
-            {companyInitial}
-          </div>
-          <span className="font-bold text-gray-800 hidden sm:block">{displayCompanyName}</span>
+          {logoUrl && (form as any).show_logo ? (
+            <img src={logoUrl} alt={displayCompanyName} className="h-8 w-auto max-w-[140px] object-contain" />
+          ) : (
+            <>
+              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold">
+                {companyInitial}
+              </div>
+              <span className="font-bold text-gray-800 hidden sm:block">{displayCompanyName}</span>
+            </>
+          )}
         </div>
         <div className="text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full flex items-center gap-1">
           <ShieldCheck size={12} /> Ambiente Seguro

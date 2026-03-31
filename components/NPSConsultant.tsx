@@ -98,6 +98,7 @@ export default function NPSConsultant({
   const [googleRedirect, setGoogleRedirect] = useState(false);
   const [googlePlaceId, setGooglePlaceId] = useState('');
   const [offerPrize, setOfferPrize] = useState(false);
+  const [showLogo, setShowLogo] = useState(false);
   const [selectedGameId, setSelectedGameId] = useState<string>('');
   const [availableGames, setAvailableGames] = useState<any[]>([]);
   const [beforeGoogleMessage, setBeforeGoogleMessage] = useState('');
@@ -220,6 +221,7 @@ export default function NPSConsultant({
       setGoogleRedirect(existingCampaign.google_redirect || existingCampaign.enableRedirection || false);
       setGooglePlaceId(existingCampaign.google_place_id || '');
       setOfferPrize(existingCampaign.offer_prize || false);
+      setShowLogo((existingCampaign as any).show_logo || false);
       setBeforeGoogleMessage(existingCampaign.before_google_message || '');
       setAfterGameMessage(existingCampaign.after_game_message || '');
       setCampaignName(existingCampaign.name || '');
@@ -1016,6 +1018,7 @@ Responda:`;
         google_redirect: googleRedirect,
         google_place_id: googlePlaceId,
         offer_prize: offerPrize,
+        show_logo: showLogo,
         game_id: selectedGameId || null,
         before_google_message: beforeGoogleMessage,
         after_game_message: afterGameMessage,
@@ -1545,6 +1548,36 @@ Responda:`;
               <Plus className="w-4 h-4" />
               Adicionar campo
             </button>
+          </div>
+
+          {/* Logo da Empresa */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5 mt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800">Logo da Empresa</h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  {businessProfile?.logo_url
+                    ? 'Exibir sua logo no topo da pesquisa'
+                    : 'Cadastre uma logo em Configurações → Perfil do Negócio para ativar'}
+                </p>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showLogo && !!businessProfile?.logo_url}
+                  onChange={(e) => businessProfile?.logo_url && setShowLogo(e.target.checked)}
+                  disabled={!businessProfile?.logo_url}
+                  className="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500 disabled:opacity-50"
+                />
+                <span className={`font-medium text-slate-700 ${!businessProfile?.logo_url ? 'opacity-50' : ''}`}>Ativar</span>
+              </label>
+            </div>
+            {showLogo && businessProfile?.logo_url && (
+              <div className="mt-3 flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                <img src={businessProfile.logo_url} alt="Logo" className="h-10 w-auto object-contain" />
+                <p className="text-xs text-emerald-700">Esta logo aparecerá no topo da pesquisa pública</p>
+              </div>
+            )}
           </div>
 
           {/* Configuração de Roleta da Sorte (Game) */}

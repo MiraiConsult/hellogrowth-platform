@@ -19,7 +19,10 @@ import {
   Heart,
   Zap,
   ChevronRight,
-  Info
+  Info,
+  Upload,
+  Image,
+  Trash2
 } from 'lucide-react';
 
 interface BusinessProfileData {
@@ -37,6 +40,7 @@ interface BusinessProfileData {
   facebook_page: string;
   website_url: string;
   onboarding_score: number;
+  logo_url?: string;
 }
 
 interface BusinessProfileProps {
@@ -74,6 +78,8 @@ export default function BusinessProfile({ userId, onProfileUpdate }: BusinessPro
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [activeSection, setActiveSection] = useState<'basic' | 'persona' | 'integrations'>('basic');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   
   const [profile, setProfile] = useState<BusinessProfileData>({
     user_id: userId,
@@ -126,7 +132,7 @@ export default function BusinessProfile({ userId, onProfileUpdate }: BusinessPro
       try {
         const { data, error } = await supabase
           .from('business_profile')
-          .select('id, user_id, company_name, business_type, business_description, target_audience, brand_tone, differentials, main_pain_points, google_place_id, instagram_handle, facebook_page, website_url, onboarding_score')
+          .select('id, user_id, company_name, business_type, business_description, target_audience, brand_tone, differentials, main_pain_points, google_place_id, instagram_handle, facebook_page, website_url, onboarding_score, logo_url')
           .eq('tenant_id', tenantId)
           .single();
 
@@ -147,6 +153,7 @@ export default function BusinessProfile({ userId, onProfileUpdate }: BusinessPro
             website_url: data.website_url || '',
             onboarding_score: data.onboarding_score || 0,
           });
+          if (data.logo_url) setLogoUrl(data.logo_url);
         }
       } catch (error) {
         console.log('Perfil não encontrado, criando novo...');
@@ -163,6 +170,62 @@ export default function BusinessProfile({ userId, onProfileUpdate }: BusinessPro
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 4000);
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !tenantId) return;
+    
+    // Validar tipo e tamanho
+    if (!file.type.startsWith('image/')) {
+      showNotification('error', 'Apenas imagens são permitidas (PNG, JPG, SVG)');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showNotification('error', 'A imagem deve ter no máximo 2MB');
+      return;
+    }
+    
+    setUploadingLogo(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${tenantId}/logo.${ext}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(path, file, { upsert: true, contentType: file.type });
+      
+      if (uploadError) throw uploadError;
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('logos')
+        .getPublicUrl(path);
+      
+      // Adicionar cache-buster para forçar reload da imagem
+      const urlWithCacheBuster = `${publicUrl}?t=${Date.now()}`;
+      setLogoUrl(urlWithCacheBuster);
+      
+      // Salvar imediatamente no banco
+      await supabase.from('business_profile')
+        .update({ logo_url: urlWithCacheBuster })
+        .eq('tenant_id', tenantId);
+      
+      showNotification('success', 'Logo enviada com sucesso!');
+    } catch (err) {
+      console.error('Erro ao fazer upload da logo:', err);
+      showNotification('error', 'Erro ao enviar logo. Tente novamente.');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!tenantId) return;
+    setLogoUrl(null);
+    await supabase.from('business_profile')
+      .update({ logo_url: null })
+      .eq('tenant_id', tenantId);
+    showNotification('success', 'Logo removida com sucesso!');
   };
 
   const handleSave = async () => {
@@ -193,6 +256,7 @@ export default function BusinessProfile({ userId, onProfileUpdate }: BusinessPro
         instagram_handle: profile.instagram_handle,
         facebook_page: profile.facebook_page,
         website_url: profile.website_url,
+        logo_url: logoUrl,
         onboarding_score: currentScore,
         updated_at: new Date().toISOString()
       };
@@ -443,9 +507,59 @@ export default function BusinessProfile({ userId, onProfileUpdate }: BusinessPro
               </p>
             )}
           </div>
+
+          {/* Logo da Empresa */}
+          <div className="border-t border-slate-100 pt-6">
+            <label className="block text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
+              <Image size={16} className="text-slate-500" />
+              Logo da Empresa
+            </label>
+            <p className="text-xs text-slate-500 mb-4">Esta logo será exibida nos seus formulários e pesquisas quando você ativar a opção. Formatos aceitos: PNG, JPG, SVG (máx. 2MB)</p>
+            
+            {logoUrl ? (
+              <div className="flex items-center gap-4">
+                <div className="w-24 h-24 rounded-xl border-2 border-slate-200 overflow-hidden bg-white flex items-center justify-center p-2">
+                  <img src={logoUrl} alt="Logo da empresa" className="max-w-full max-h-full object-contain" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg cursor-pointer hover:bg-emerald-100 transition-colors text-sm font-medium">
+                    <Upload size={16} />
+                    {uploadingLogo ? 'Enviando...' : 'Trocar Logo'}
+                    <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" disabled={uploadingLogo} />
+                  </label>
+                  <button
+                    onClick={handleRemoveLogo}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+                  >
+                    <Trash2 size={16} />
+                    Remover Logo
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+                uploadingLogo
+                  ? 'border-emerald-300 bg-emerald-50'
+                  : 'border-slate-300 bg-slate-50 hover:border-emerald-400 hover:bg-emerald-50'
+              }`}>
+                {uploadingLogo ? (
+                  <>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mb-2"></div>
+                    <p className="text-sm text-emerald-600">Enviando logo...</p>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="text-slate-400 mb-2" size={28} />
+                    <p className="text-sm text-slate-600 font-medium">Clique para fazer upload da logo</p>
+                    <p className="text-xs text-slate-400 mt-1">PNG, JPG ou SVG • Máx. 2MB</p>
+                  </>
+                )}
+                <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" disabled={uploadingLogo} />
+              </label>
+            )}
+          </div>
         </div>
       )}
-
       {/* Seção: Persona & Comunicação */}
       {activeSection === 'persona' && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">

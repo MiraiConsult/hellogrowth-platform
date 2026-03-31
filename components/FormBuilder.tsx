@@ -27,6 +27,7 @@ interface FormBuilderProps {
   onboardingOpenTemplates?: number;
   onboardingOpenAI?: number;
   onboardingOpenManual?: number;
+  businessProfile?: any;
 }
 
 
@@ -43,7 +44,7 @@ const normalizeQuestionType = (type: string): 'text' | 'single' | 'multiple' => 
   return typeMap[type] || 'text';
 };
 
-const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId, activeCompany, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads, onboardingOpenTemplates, onboardingOpenAI, onboardingOpenManual }) => {
+const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId, activeCompany, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads, onboardingOpenTemplates, onboardingOpenAI, onboardingOpenManual, businessProfile }) => {
   const tenantId = useTenantId();
   const [view, setView] = useState<'list' | 'editor' | 'consultant'>('list');
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
@@ -159,6 +160,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [currentInitialFields, setCurrentInitialFields] = useState<InitialField[]>([]);
   const [currentGameEnabled, setCurrentGameEnabled] = useState(false);
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
+  const [currentShowLogo, setCurrentShowLogo] = useState(false);
   const [availableGames, setAvailableGames] = useState<any[]>([]);
   const [availableProducts, setAvailableProducts] = useState<any[]>([]);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
@@ -246,6 +248,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setCurrentInitialFields(form.initialFields || []);
     setCurrentGameEnabled(form.game_enabled || false);
     setCurrentGameId(form.game_id || null);
+    setCurrentShowLogo((form as any).show_logo || false);
     setSelectedProductIds((form as any).product_ids || []);
     setView('editor');
     setMenuOpenId(null);
@@ -521,6 +524,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         initialFields: currentInitialFields.length > 0 ? currentInitialFields : undefined,
         game_enabled: currentGameEnabled,
         game_id: currentGameId,
+        show_logo: currentShowLogo,
         product_ids: selectedProductIds.length > 0 ? selectedProductIds : undefined
     };
 
@@ -849,6 +853,40 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
              </div>
           </div>
           
+          {/* Logo Configuration */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-gray-700">Exibir Logo da Empresa</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  {businessProfile?.logo_url
+                    ? 'Sua logo será exibida no topo do formulário'
+                    : 'Cadastre uma logo em Configurações → Perfil do Negócio para ativar'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => businessProfile?.logo_url && setCurrentShowLogo(!currentShowLogo)}
+                disabled={!businessProfile?.logo_url}
+                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
+                  currentShowLogo && businessProfile?.logo_url ? 'bg-emerald-500' : 'bg-slate-300'
+                } ${!businessProfile?.logo_url ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    currentShowLogo && businessProfile?.logo_url ? 'translate-x-9' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            {currentShowLogo && businessProfile?.logo_url && (
+              <div className="mt-3 flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                <img src={businessProfile.logo_url} alt="Logo" className="h-10 w-auto object-contain" />
+                <p className="text-xs text-emerald-700">Esta logo aparecerá no topo do formulário público</p>
+              </div>
+            )}
+          </div>
+
           {/* Game Configuration */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
             <div className="flex items-center justify-between">

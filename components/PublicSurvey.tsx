@@ -11,6 +11,7 @@ interface PublicSurveyProps {
   isPreview?: boolean;
   settings?: any;
   companyName?: string;
+  logoUrl?: string;
 }
 
 // Helper para detectar se uma opção é "Outro"
@@ -40,7 +41,7 @@ const normalizeType = (type: string): string => {
   return typeMap[type] || 'text';
 };
 
-const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit, isPreview = false, settings, companyName }) => {
+const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit, isPreview = false, settings, companyName, logoUrl }) => {
   // State Definitions
   const [step, setStep] = useState<'intro' | 'score' | 'questions' | 'game' | 'redirecting' | 'thankyou'>('intro');
   const [score, setScore] = useState<number | null>(null);
@@ -273,10 +274,16 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
         {/* Brand Header */}
         <div className="bg-white p-6 border-b border-gray-100 flex justify-center" style={{ backgroundColor: '#ffffff' }}>
            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold">
-                  {displayCompanyName.charAt(0)}
-              </div>
-              <span className="font-bold text-gray-900">{displayCompanyName}</span>
+              {logoUrl && (campaign as any).show_logo ? (
+                <img src={logoUrl} alt={displayCompanyName} className="h-10 w-auto max-w-[160px] object-contain" />
+              ) : (
+                <>
+                  <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold">
+                      {displayCompanyName.charAt(0)}
+                  </div>
+                  <span className="font-bold text-gray-900">{displayCompanyName}</span>
+                </>
+              )}
            </div>
         </div>
 
