@@ -33,7 +33,7 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
     ? { bg: 'bg-gray-950', surface: 'bg-gray-900', border: 'border-gray-800', text: 'text-white', textSub: 'text-gray-400', textMuted: 'text-gray-500', input: 'bg-gray-800 border-gray-700 text-gray-100', badge: 'bg-gray-800 text-gray-300 border-gray-700', inner: 'bg-gray-800/40' }
     : { bg: 'bg-slate-50', surface: 'bg-white', border: 'border-slate-200', text: 'text-slate-900', textSub: 'text-slate-500', textMuted: 'text-slate-400', input: 'bg-white border-slate-300 text-slate-900', badge: 'bg-slate-100 text-slate-600 border-slate-200', inner: 'bg-slate-50' };
 
-  const [view, setView] = useState<'surveys' | 'templates'>('surveys');
+  const [view, setView] = useState<'surveys' | 'forms' | 'templates'>('surveys');
 
   // Surveys
   const [surveys, setSurveys] = useState<any[]>([]);
@@ -42,6 +42,14 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
   const [surveyCompany, setSurveyCompany] = useState('Todos');
   const [surveyCompanies, setSurveyCompanies] = useState<string[]>(['Todos']);
   const [expandedSurvey, setExpandedSurvey] = useState<string | null>(null);
+
+  // Forms (Formulários de Anamnese)
+  const [forms, setForms] = useState<any[]>([]);
+  const [loadingForms, setLoadingForms] = useState(false);
+  const [formSearch, setFormSearch] = useState('');
+  const [formCompany, setFormCompany] = useState('Todos');
+  const [formCompanies, setFormCompanies] = useState<string[]>(['Todos']);
+  const [expandedForm, setExpandedForm] = useState<string | null>(null);
 
   // Templates
   const [templates, setTemplates] = useState<any[]>([]);
@@ -88,6 +96,17 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
     } finally { setLoadingSurveys(false); }
   }, []);
 
+  const loadForms = useCallback(async () => {
+    setLoadingForms(true);
+    try {
+      const r = await fetch('/api/admin/forms');
+      const d = await r.json();
+      const list = d.forms || [];
+      setForms(list);
+      setFormCompanies(['Todos', ...Array.from(new Set(list.map((f: any) => f.companyName).filter(Boolean))) as string[]]);
+    } finally { setLoadingForms(false); }
+  }, []);
+
   const loadTemplates = useCallback(async () => {
     setLoadingTemplates(true);
     try {
@@ -97,7 +116,7 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
     } finally { setLoadingTemplates(false); }
   }, []);
 
-  useEffect(() => { loadSurveys(); loadTemplates(); }, [loadSurveys, loadTemplates]);
+  useEffect(() => { loadSurveys(); loadForms(); loadTemplates(); }, [loadSurveys, loadForms, loadTemplates]);
 
   // Mapear business_type do perfil para o ramo mais próximo da lista RAMOS
   const inferRamo = (businessType: string | null): string => {
@@ -203,6 +222,12 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
     return ms && mt;
   });
 
+  const filtForms = forms.filter(f => {
+    const ms = !formSearch || f.name?.toLowerCase().includes(formSearch.toLowerCase()) || f.companyName?.toLowerCase().includes(formSearch.toLowerCase());
+    const mc = formCompany === 'Todos' || f.companyName === formCompany;
+    return ms && mc;
+  });
+
   return (
     <div className={`min-h-screen ${t.bg} p-6`}>
       <div className="max-w-screen-xl mx-auto">
@@ -219,10 +244,14 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
 
         {/* Toggle */}
         <div className={`flex items-center gap-1 p-1 rounded-xl border ${t.border} ${t.surface} w-fit mb-6`}>
-          {([['surveys', 'Pesquisas dos Clientes', surveys.length], ['templates', 'Templates Publicados', templates.length]] as const).map(([v, label, count]) => (
-            <button key={v} onClick={() => setView(v)}
+          {([
+            ['surveys', 'Pesquisas NPS', surveys.length, 'nps'],
+            ['forms', 'Formulários', forms.length, 'form'],
+            ['templates', 'Templates Publicados', templates.length, 'tmpl'],
+          ] as const).map(([v, label, count]) => (
+            <button key={v} onClick={() => setView(v as any)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${view === v ? 'bg-emerald-600 text-white shadow-sm' : `${t.textSub}`}`}>
-              {v === 'surveys' ? <FileText size={15} /> : <BookOpen size={15} />}
+              {v === 'surveys' ? <FileText size={15} /> : v === 'forms' ? <HeartHandshake size={15} /> : <BookOpen size={15} />}
               {label}
               <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${view === v ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'}`}>{count}</span>
             </button>
@@ -293,6 +322,88 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
                                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
                                     </span>
                                     {opt}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* FORMS VIEW */}
+        {view === 'forms' && (
+          <div>
+            <div className={`flex items-center gap-3 mb-4 p-4 rounded-xl border ${t.border} ${t.surface}`}>
+              <div className="relative flex-1">
+                <Search size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
+                <input type="text" placeholder="Buscar por nome ou empresa..." value={formSearch} onChange={e => setFormSearch(e.target.value)}
+                  className={`w-full text-sm pl-8 pr-3 py-2 rounded-lg border ${t.input} focus:outline-none focus:ring-2 focus:ring-emerald-500/30`} />
+              </div>
+              <select value={formCompany} onChange={e => setFormCompany(e.target.value)} className={`text-sm px-3 py-2 rounded-lg border ${t.input} focus:outline-none`}>
+                {formCompanies.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <button onClick={loadForms} className={`p-2 rounded-lg border ${t.border} ${t.textSub} hover:text-emerald-600`}><RefreshCw size={15} /></button>
+            </div>
+
+            {loadingForms ? (
+              <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-emerald-500" /></div>
+            ) : filtForms.length === 0 ? (
+              <div className={`text-center py-20 ${t.textMuted}`}><FileText size={40} className="mx-auto mb-3 opacity-30" /><p className="text-sm">Nenhum formulário encontrado.</p></div>
+            ) : (
+              <div className="space-y-3">
+                {filtForms.map(f => (
+                  <div key={f.id} className={`rounded-xl border ${t.border} ${t.surface} overflow-hidden`}>
+                    <div className="flex items-center gap-4 p-4">
+                      <button onClick={() => setExpandedForm(expandedForm === f.id ? null : f.id)} className={`shrink-0 p-1 rounded ${t.textMuted} hover:text-emerald-600`}>
+                        {expandedForm === f.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-sm font-semibold ${t.text} truncate`}>{f.name}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${t.badge}`}>{f.companyName}</span>
+                          {f.businessType && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200 font-medium">{f.businessType}</span>
+                          )}
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">{f.questionCount} perguntas</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">{f.responseCount} respostas</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
+                            f.active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'
+                          }`}>{f.active ? 'Ativo' : 'Inativo'}</span>
+                        </div>
+                        {f.description && <p className={`text-xs ${t.textMuted} mt-1 truncate`}>{f.description}</p>}
+                      </div>
+                      <button onClick={() => openPublish(f)}
+                        className="shrink-0 flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-colors">
+                        <ArrowRight size={14} /> Publicar como Template
+                      </button>
+                    </div>
+                    {expandedForm === f.id && (
+                      <div className={`border-t ${t.border} px-4 py-3 space-y-2`}>
+                        {(f.questions || []).length === 0 ? (
+                          <p className={`text-xs ${t.textMuted} italic`}>Sem perguntas registradas.</p>
+                        ) : (f.questions || []).map((q: any, i: number) => (
+                          <div key={i} className={`p-3 rounded-lg border ${t.border} ${t.inner}`}>
+                            <div className="flex items-start gap-3 mb-2">
+                              <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-200 text-slate-600'}`}>
+                                {i + 1}
+                              </span>
+                              <p className={`text-sm font-medium ${t.text}`}>{q.text}</p>
+                            </div>
+                            {(q.options || q.choices || []).length > 0 && (
+                              <div className="ml-8 space-y-1">
+                                {(q.options || q.choices || []).map((opt: any, oi: number) => (
+                                  <div key={oi} className={`flex items-center gap-2 text-xs ${t.textSub}`}>
+                                    <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${isDark ? 'border-gray-600' : 'border-slate-300'}`}>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                    </span>
+                                    {typeof opt === 'string' ? opt : (opt.label || opt.text || JSON.stringify(opt))}
                                   </div>
                                 ))}
                               </div>

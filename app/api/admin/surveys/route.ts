@@ -20,24 +20,18 @@ export async function GET(request: NextRequest) {
     const { data: campaigns, error } = await query;
     if (error) throw error;
 
-    // Buscar nomes das empresas
-    const { data: companies } = await supabase
-      .from('companies')
-      .select('id, name');
-
-    const nameMap: Record<string, string> = {};
-    for (const c of companies || []) {
-      if (c.id) nameMap[c.id] = c.name || c.id.substring(0, 8);
-    }
-
-    // Buscar business_type dos tenants via business_profile
+    // Buscar nomes e tipos das empresas via business_profile (tenant_id -> company_name)
     const { data: profiles } = await supabase
       .from('business_profile')
-      .select('tenant_id, business_type');
+      .select('tenant_id, company_name, business_type');
 
+    const nameMap: Record<string, string> = {};
     const businessTypeMap: Record<string, string> = {};
     for (const p of profiles || []) {
-      if (p.tenant_id && p.business_type) businessTypeMap[p.tenant_id] = p.business_type;
+      if (p.tenant_id) {
+        nameMap[p.tenant_id] = p.company_name || p.tenant_id.substring(0, 8);
+        if (p.business_type) businessTypeMap[p.tenant_id] = p.business_type;
+      }
     }
 
     // Enriquecer campanhas com nome da empresa e estatísticas das perguntas
