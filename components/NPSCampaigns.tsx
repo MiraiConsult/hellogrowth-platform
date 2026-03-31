@@ -221,18 +221,19 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
   const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   // Onboarding: abrir modais nativos quando sinalizado pelo wizard
+  // Só abre se o sinal for truthy (número > 0) e não houver campanhas criadas
   useEffect(() => {
-    if (onboardingOpenTemplates) {
+    if (onboardingOpenTemplates && campaigns.length === 0) {
       setShowTemplateModal(true);
-      loadTemplates(); // Carrega os templates ao abrir via onboarding
+      loadTemplates();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingOpenTemplates]);
   useEffect(() => {
-    if (onboardingOpenAI) { setManualMode(false); setEditingCampaign(null); setShowNPSConsultant(true); }
+    if (onboardingOpenAI && campaigns.length === 0) { setManualMode(false); setEditingCampaign(null); setShowNPSConsultant(true); }
   }, [onboardingOpenAI]);
   useEffect(() => {
-    if (onboardingOpenManual) { setManualMode(true); setEditingCampaign(null); setShowNPSConsultant(true); }
+    if (onboardingOpenManual && campaigns.length === 0) { setManualMode(true); setEditingCampaign(null); setShowNPSConsultant(true); }
   }, [onboardingOpenManual]);
   const [allTemplates, setAllTemplates] = useState<any[]>([]);
   const [templateSegments, setTemplateSegments] = useState<string[]>([]);

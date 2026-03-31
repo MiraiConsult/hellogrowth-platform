@@ -53,18 +53,19 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   // Onboarding: abrir modais nativos quando sinalizado pelo wizard
+  // Só abre se não houver formulários já criados
   useEffect(() => {
-    if (onboardingOpenTemplates) {
+    if (onboardingOpenTemplates && forms.length === 0) {
       setShowTemplateModal(true);
-      loadFormTemplates(); // Carrega os templates ao abrir via onboarding
+      loadFormTemplates();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingOpenTemplates]);
   useEffect(() => {
-    if (onboardingOpenAI) { setShowConsultant(true); }
+    if (onboardingOpenAI && forms.length === 0) { setShowConsultant(true); }
   }, [onboardingOpenAI]);
   useEffect(() => {
-    if (onboardingOpenManual) { setView('editor'); setEditingFormId(null); }
+    if (onboardingOpenManual && forms.length === 0) { setView('editor'); setEditingFormId(null); }
   }, [onboardingOpenManual]);
   const [allFormTemplates, setAllFormTemplates] = useState<any[]>([]);
   const [formTemplateSegments, setFormTemplateSegments] = useState<string[]>([]);

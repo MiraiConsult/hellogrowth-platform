@@ -103,12 +103,13 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   }, [supabase, userId, tenantId]);
 
   // Onboarding: abrir modais nativos quando sinalizado pelo wizard
+  // Só abre se não houver produtos já cadastrados
   useEffect(() => {
-    if (onboardingOpenCatalog) { fetchCatalogForBusiness(); }
+    if (onboardingOpenCatalog && products.length === 0) { fetchCatalogForBusiness(); }
   }, [onboardingOpenCatalog]);
 
   useEffect(() => {
-    if (onboardingOpenManual) { setShowAddModal(true); }
+    if (onboardingOpenManual && products.length === 0) { setShowAddModal(true); }
   }, [onboardingOpenManual]);
 
   const fetchProducts = async () => {
