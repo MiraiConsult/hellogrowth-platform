@@ -205,7 +205,7 @@ export default function NPSConsultant({
         }
         
         return {
-          id: q.id || `q_${idx}`,
+          id: q.id || `q_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 5)}`,
           text: q.text || '',
           type: q.type || 'text',
           options: processedOptions,
@@ -692,11 +692,11 @@ REGRAS:
       }
       
       const questions: GeneratedQuestion[] = parsed.questions.map((q: any, index: number) => ({
-        id: `q${index + 1}`,
+        id: `q_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 5)}`,
         text: q.text,
         type: q.type,
         options: q.options ? q.options.map((opt: string, i: number) => ({
-          id: `opt${i + 1}`,
+          id: `opt_${Date.now()}_${index}_${i}_${Math.random().toString(36).slice(2, 5)}`,
           text: opt
         })) : [],
         insight: q.insight,
@@ -952,11 +952,11 @@ Responda:`;
           if (q.options && Array.isArray(q.options)) {
             processedOptions = q.options.map((opt: any, optIdx: number) => {
               if (typeof opt === 'string') {
-                return { id: `opt_${idx}_${optIdx}`, text: opt };
+                return { id: `opt_${Date.now()}_${idx}_${optIdx}_${Math.random().toString(36).slice(2,5)}`, text: opt };
               } else if (opt.text) {
-                return { id: opt.id || `opt_${idx}_${optIdx}`, text: opt.text };
+                return { id: opt.id || `opt_${Date.now()}_${idx}_${optIdx}_${Math.random().toString(36).slice(2,5)}`, text: opt.text };
               }
-              return { id: `opt_${idx}_${optIdx}`, text: String(opt) };
+              return { id: `opt_${Date.now()}_${idx}_${optIdx}_${Math.random().toString(36).slice(2,5)}`, text: String(opt) };
             });
           }
           
@@ -1042,37 +1042,43 @@ Responda:`;
 
   const handleAddQuestion = () => {
     const newQuestion: GeneratedQuestion = {
-      id: `q${generatedQuestions.length + 1}`,
+      id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       text: 'Nova pergunta',
-      type: 'text',
-      options: [],
+      type: 'single_choice',
+      options: [
+        { id: `opt_${Date.now()}_1`, text: 'Opção 1' },
+        { id: `opt_${Date.now()}_2`, text: 'Opção 2' },
+      ],
       insight: 'Pergunta customizada'
     };
-    setGeneratedQuestions([...generatedQuestions, newQuestion]);
+    setGeneratedQuestions(prev => [...prev, newQuestion]);
     setEditingQuestionId(newQuestion.id);
   };
 
   const handleDeleteQuestion = (id: string) => {
-    setGeneratedQuestions(generatedQuestions.filter(q => q.id !== id));
+    setGeneratedQuestions(prev => prev.filter(q => q.id !== id));
+    setEditingQuestionId(prev => prev === id ? null : prev);
   };
 
   const handleEditQuestion = (id: string, updates: Partial<GeneratedQuestion>) => {
-    setGeneratedQuestions(generatedQuestions.map(q => 
+    setGeneratedQuestions(prev => prev.map(q =>
       q.id === id ? { ...q, ...updates } : q
     ));
   };
 
   const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
-    if (direction === 'up' && index === 0) return;
-    if (direction === 'down' && index === generatedQuestions.length - 1) return;
-    // Não permitir mover a pergunta NPS (sempre deve ser a primeira)
-    if (generatedQuestions[index]?.type === 'nps') return;
-    // Não permitir mover para a posição 0 se a primeira pergunta for NPS
-    if (direction === 'up' && index === 1 && generatedQuestions[0]?.type === 'nps') return;
-    const newQuestions = [...generatedQuestions];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    [newQuestions[index], newQuestions[targetIndex]] = [newQuestions[targetIndex], newQuestions[index]];
-    setGeneratedQuestions(newQuestions);
+    setGeneratedQuestions(prev => {
+      if (direction === 'up' && index === 0) return prev;
+      if (direction === 'down' && index === prev.length - 1) return prev;
+      // Não permitir mover a pergunta NPS (sempre deve ser a primeira)
+      if (prev[index]?.type === 'nps') return prev;
+      // Não permitir mover para a posição 0 se a primeira pergunta for NPS
+      if (direction === 'up' && index === 1 && prev[0]?.type === 'nps') return prev;
+      const newQuestions = [...prev];
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      [newQuestions[index], newQuestions[targetIndex]] = [newQuestions[targetIndex], newQuestions[index]];
+      return newQuestions;
+    });
   };
 
   const handleMoveOption = (questionId: string, optionIndex: number, direction: 'up' | 'down') => {
@@ -1377,7 +1383,7 @@ Responda:`;
                         <button
                           onClick={() => {
                             const newOption = {
-                              id: `opt${question.options.length + 1}`,
+                              id: `opt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
                               text: `Opção ${question.options.length + 1}`
                             };
                             handleEditQuestion(question.id, { 
