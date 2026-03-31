@@ -89,7 +89,7 @@ const C: Record<string, { bg: string; text: string; border: string; light: strin
 };
 
 const BUSINESS_TYPES = [
-  'Clínica de Estética','Consultório Médico','Salão de Beleza','Academia','Restaurante',
+  'Clínica de Estética','Clínica Odontológica','Consultório Médico','Salão de Beleza','Academia','Restaurante',
   'Loja de Roupas','Imobiliária','Agência de Marketing','Escritório de Advocacia',
   'Consultoria','E-commerce','Barbearia','Pet Shop','Escola / Curso','Outro (escrever)',
 ];
