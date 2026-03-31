@@ -473,7 +473,7 @@ const ReviewsTab: React.FC<{
         </div>
 
         <div className="space-y-5">
-          {placeData.reviews.slice(0, 10).map((review, index) => {
+          {placeData.reviews.slice(0, 50).map((review, index) => {
             const isPositive = review.rating >= 4;
             const isNegative = review.rating <= 2;
             const hasSuggestion = !!suggestedReplies[index];
@@ -1102,6 +1102,36 @@ Responda APENAS em JSON puro (sem markdown):
         rating: 0, user_ratings_total: 0, reviews: [],
         opening_hours: undefined, photos: [], types: ['establishment'], business_status: 'OPERATIONAL'
       };
+
+      // Buscar TODAS as reviews via GBP API (se conectado)
+      if (gbpConnected) {
+        try {
+          setAnalysisStep('Buscando todas as avaliações do Google...');
+          const resolvedTid = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
+          const gbpReviewsRes = await fetch(`/api/gbp/reviews?tenantId=${resolvedTid}`);
+          const gbpReviewsData = await gbpReviewsRes.json();
+          if (gbpReviewsData.connected && gbpReviewsData.reviews?.length > 0) {
+            // Substituir as reviews limitadas do Places API pelas completas do GBP
+            dataToAnalyze.reviews = gbpReviewsData.reviews.map((r: any) => ({
+              author_name: r.author_name || 'Anônimo',
+              rating: r.rating || 0,
+              text: r.text || '',
+              time: r.time || 0,
+              relative_time_description: '',
+            }));
+            // Atualizar totais com dados mais precisos do GBP
+            if (gbpReviewsData.totalReviewCount) {
+              dataToAnalyze.user_ratings_total = gbpReviewsData.totalReviewCount;
+            }
+            if (gbpReviewsData.averageRating) {
+              dataToAnalyze.rating = gbpReviewsData.averageRating;
+            }
+            console.log(`[MPD] Loaded ${gbpReviewsData.reviews.length} reviews from GBP API (total: ${gbpReviewsData.totalReviewCount})`);
+          }
+        } catch (gbpErr) {
+          console.warn('[MPD] Could not fetch GBP reviews, using Places API data:', gbpErr);
+        }
+      }
 
       setAnalysisStep('Gerando to-do list...');
       const scores = calculateScores(dataToAnalyze);
