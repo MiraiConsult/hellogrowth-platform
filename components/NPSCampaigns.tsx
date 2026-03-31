@@ -20,9 +20,9 @@ interface NPSCampaignsProps {
   setCampaigns?: any;
   businessProfile?: any;
   // Onboarding: abrir modais nativos diretamente
-  onboardingOpenTemplates?: boolean;
-  onboardingOpenAI?: boolean;
-  onboardingOpenManual?: boolean;
+  onboardingOpenTemplates?: number;
+  onboardingOpenAI?: number;
+  onboardingOpenManual?: number;
 }
 
 const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, onDeleteCampaign, navigateToAnalytics, onPreview, onViewReport, currentUser, businessProfile, onboardingOpenTemplates, onboardingOpenAI, onboardingOpenManual }) => {

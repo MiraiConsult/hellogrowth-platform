@@ -24,9 +24,9 @@ interface FormBuilderProps {
   pendingAnalysisCount?: number;
   onAnalyzeAllLeads?: () => void;
   // Onboarding: abrir modais nativos diretamente
-  onboardingOpenTemplates?: boolean;
-  onboardingOpenAI?: boolean;
-  onboardingOpenManual?: boolean;
+  onboardingOpenTemplates?: number;
+  onboardingOpenAI?: number;
+  onboardingOpenManual?: number;
 }
 
 

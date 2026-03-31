@@ -119,15 +119,15 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [formCreatedSignal, setFormCreatedSignal] = useState(0);
   const [productsCreatedSignal, setProductsCreatedSignal] = useState(0);
   // Onboarding: estados para abrir modais nativos diretamente do wizard
-  const [onboardingOpenNpsTemplates, setOnboardingOpenNpsTemplates] = useState(false);
-  const [onboardingOpenNpsAI, setOnboardingOpenNpsAI] = useState(false);
-  const [onboardingOpenNpsManual, setOnboardingOpenNpsManual] = useState(false);
-  const [onboardingOpenFormTemplates, setOnboardingOpenFormTemplates] = useState(false);
-  const [onboardingOpenFormAI, setOnboardingOpenFormAI] = useState(false);
-  const [onboardingOpenFormManual, setOnboardingOpenFormManual] = useState(false);
-  const [onboardingOpenProductCatalog, setOnboardingOpenProductCatalog] = useState(false);
-  const [onboardingOpenProductAI, setOnboardingOpenProductAI] = useState(false);
-  const [onboardingOpenProductManual, setOnboardingOpenProductManual] = useState(false);
+  const [onboardingOpenNpsTemplates, setOnboardingOpenNpsTemplates] = useState(0);
+  const [onboardingOpenNpsAI, setOnboardingOpenNpsAI] = useState(0);
+  const [onboardingOpenNpsManual, setOnboardingOpenNpsManual] = useState(0);
+  const [onboardingOpenFormTemplates, setOnboardingOpenFormTemplates] = useState(0);
+  const [onboardingOpenFormAI, setOnboardingOpenFormAI] = useState(0);
+  const [onboardingOpenFormManual, setOnboardingOpenFormManual] = useState(0);
+  const [onboardingOpenProductCatalog, setOnboardingOpenProductCatalog] = useState(0);
+  const [onboardingOpenProductAI, setOnboardingOpenProductAI] = useState(0);
+  const [onboardingOpenProductManual, setOnboardingOpenProductManual] = useState(0);
 
   // --- REAL DATA STATES (Fetched from Supabase) ---
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -1726,15 +1726,15 @@ Responda APENAS com JSON válido (sem markdown):
                   npsCreatedSignal={npsCreatedSignal}
                   formCreatedSignal={formCreatedSignal}
                   productsCreatedSignal={productsCreatedSignal}
-                  onOpenNpsTemplates={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsTemplates(prev => !prev), 150); }}
-                  onOpenNpsAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsAI(prev => !prev), 150); }}
-                  onOpenNpsManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsManual(prev => !prev), 150); }}
-                  onOpenFormTemplates={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormTemplates(prev => !prev), 150); }}
-                  onOpenFormAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormAI(prev => !prev), 150); }}
-                  onOpenFormManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormManual(prev => !prev), 150); }}
-                  onOpenProductCatalog={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductCatalog(prev => !prev), 150); }}
-                  onOpenProductAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductAI(prev => !prev), 150); }}
-                  onOpenProductManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductManual(prev => !prev), 150); }}
+                  onOpenNpsTemplates={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsTemplates(Date.now()), 150); }}
+                  onOpenNpsAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsAI(Date.now()), 150); }}
+                  onOpenNpsManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('nps'); setTimeout(() => setOnboardingOpenNpsManual(Date.now()), 150); }}
+                  onOpenFormTemplates={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormTemplates(Date.now()), 150); }}
+                  onOpenFormAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormAI(Date.now()), 150); }}
+                  onOpenFormManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('forms'); setTimeout(() => setOnboardingOpenFormManual(Date.now()), 150); }}
+                  onOpenProductCatalog={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductCatalog(Date.now()), 150); }}
+                  onOpenProductAI={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductAI(Date.now()), 150); }}
+                  onOpenProductManual={() => { setShowOnboardingWizard(false); setOnboardingInProgress(true); setCurrentView('products'); setTimeout(() => setOnboardingOpenProductManual(Date.now()), 150); }}
               />
             </div>
         )}

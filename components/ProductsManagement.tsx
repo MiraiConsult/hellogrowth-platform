@@ -39,9 +39,9 @@ interface ProductsManagementProps {
   supabase: SupabaseClient | null;
   userId: string;
   // Onboarding: abrir modais nativos diretamente
-  onboardingOpenCatalog?: boolean;
-  onboardingOpenAI?: boolean;
-  onboardingOpenManual?: boolean;
+  onboardingOpenCatalog?: number;
+  onboardingOpenAI?: number;
+  onboardingOpenManual?: number;
   onProductsCreated?: () => void;
 }
 

@@ -274,18 +274,23 @@ export default function OnboardingWizard({
     setTimeout(() => setCurrentStepIndex(next >= 0 ? next : steps.findIndex(s => !newDone.has(s.id))), 800);
   };
 
-  // ── Salvar perfil ──
-  const saveProfile = async () => {
+  // ── Salvar perfil (parcial ou completo) ──
+  const persistProfile = async (markDone = false) => {
     if (!profile.company_name.trim()) return;
-    setProfileSaving(true);
     try {
       const bt = profile.business_type === 'Outro (escrever)' ? profile.business_type_custom : profile.business_type;
       const data = { ...profile, business_type: bt, user_id:userId, tenant_id:tenantId, updated_at:new Date().toISOString() };
       const { data: ex } = await supabase.from('business_profile').select('id').eq('tenant_id', tenantId).maybeSingle();
       if (ex) await supabase.from('business_profile').update(data).eq('tenant_id', tenantId);
       else await supabase.from('business_profile').insert(data);
-      await markStepDone('profile');
-    } catch { } finally { setProfileSaving(false); }
+      if (markDone) await markStepDone('profile');
+    } catch { }
+  };
+
+  const saveProfile = async () => {
+    if (!profile.company_name.trim()) return;
+    setProfileSaving(true);
+    try { await persistProfile(true); } catch { } finally { setProfileSaving(false); }
   };
 
   // ─── Renderização do conteúdo de cada etapa ──────────────────────────────────
@@ -343,7 +348,7 @@ export default function OnboardingWizard({
                   ))}
                 </div>
               </div>
-              <button onClick={() => setProfileSubStep(2)} disabled={!profile.company_name.trim()}
+              <button onClick={async () => { await persistProfile(false); setProfileSubStep(2); }} disabled={!profile.company_name.trim()}
                 className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
                 Próximo: Contexto <ChevronRight size={16} />
               </button>
@@ -391,7 +396,7 @@ export default function OnboardingWizard({
                   className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium py-3 rounded-xl flex items-center justify-center gap-2 text-sm">
                   <ChevronLeft size={16} /> Anterior
                 </button>
-                <button onClick={() => setProfileSubStep(3)}
+                <button onClick={async () => { await persistProfile(false); setProfileSubStep(3); }}
                   className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
                   Próximo: Google <ChevronRight size={16} />
                 </button>
