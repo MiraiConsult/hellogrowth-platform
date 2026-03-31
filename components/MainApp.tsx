@@ -1572,6 +1572,9 @@ Responda APENAS com JSON válido (sem markdown):
                 onLeadUpdate={(leadId, updatedData) => {
                   setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updatedData } : l));
                 }}
+                onLeadDelete={(leadId) => {
+                  setLeads(prev => prev.filter(l => l.id !== leadId));
+                }}
             />
         )}
 
