@@ -17,35 +17,31 @@ export async function GET(request: NextRequest) {
     usingKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SERVICE_ROLE' : 'ANON',
   };
 
-  // 2. Testar conexão com Supabase
+  // 2. Testar conexão com Supabase (READ ONLY — não altera dados)
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    // Tentar ler
+    // Apenas ler — NÃO fazer upsert para não sobrescrever tokens
     const { data: readData, error: readError } = await supabase
       .from('business_profile')
-      .select('tenant_id, gbp_connected_at, gbp_access_token')
+      .select('tenant_id, gbp_connected_at, gbp_access_token, gbp_refresh_token, gbp_location_id, gbp_account_name')
       .eq('tenant_id', tenantId)
       .maybeSingle();
 
     results.read = {
-      data: readData ? { tenant_id: readData.tenant_id, gbp_connected_at: readData.gbp_connected_at, has_token: !!readData.gbp_access_token } : null,
+      data: readData ? {
+        tenant_id: readData.tenant_id,
+        gbp_connected_at: readData.gbp_connected_at,
+        has_access_token: !!readData.gbp_access_token,
+        has_refresh_token: !!readData.gbp_refresh_token,
+        gbp_location_id: readData.gbp_location_id,
+        gbp_account_name: readData.gbp_account_name,
+      } : null,
       error: readError,
     };
-
-    // Tentar upsert (mesma lógica do callback)
-    const { data: upsertData, error: upsertError } = await supabase
-      .from('business_profile')
-      .upsert(
-        { tenant_id: tenantId, user_id: tenantId, gbp_connected_at: new Date().toISOString() },
-        { onConflict: 'tenant_id' }
-      )
-      .select('tenant_id, gbp_connected_at');
-
-    results.upsert = { data: upsertData, error: upsertError };
   } catch (err: any) {
     results.supabaseError = err.message;
   }
