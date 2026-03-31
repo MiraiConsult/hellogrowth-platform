@@ -7,7 +7,7 @@ import {
   Star, MapPin, Clock, Image, MessageSquare, CheckCircle, AlertTriangle,
   ChevronRight, History, Sparkles, Globe, Phone, ExternalLink, Camera,
   Calendar, Users, ThumbsUp, ThumbsDown, Eye, Lightbulb, Target, Award,
-  ArrowUp, ArrowDown, BarChart2, X, Info, Link2, Unlink, CheckSquare,
+  ArrowUp, ArrowDown, BarChart2, X, Info, CheckSquare,
   Square, TrendingDown as TrendingDownIcon, Zap, MousePointer, Navigation,
   Search, BarChart, PieChart, HelpCircle, Copy, BookOpen, Newspaper
 } from 'lucide-react';
@@ -90,24 +90,8 @@ interface DiagnosticData {
   created_at: string;
 }
 
-interface GBPMetrics {
-  connected: boolean;
-  monthlyData?: {
-    month: string;
-    label: string;
-    fullLabel: string;
-    totalImpressions: number;
-    impressionsMaps: number;
-    impressionsSearch: number;
-    callClicks: number;
-    websiteClicks: number;
-    directionRequests: number;
-    conversations: number;
-  }[];
-  keywords?: { searchKeyword: string; insightsValue: { value: string } }[];
-  error?: string;
-  needsLocationSelect?: boolean;
-}
+// GBP API desabilitada temporariamente (quota=0 no Google Cloud)
+// interface GBPMetrics { ... }
 
 interface DigitalDiagnosticProps {
   userId: string;
@@ -183,7 +167,7 @@ const METRIC_EXPLANATIONS = {
     title: 'Engajamento',
     icon: <MessageSquare size={18} className="text-green-500" />,
     description: 'O Engajamento mede se o seu negócio está ativo e gerando interações recentes no Google. Um perfil que não recebe novas avaliações há meses é visto pelo Google como menos relevante — mesmo que tenha uma nota alta. O algoritmo do Google valoriza negócios que mantmé atividade constante, pois indica que o negócio está funcionando e atendendo clientes.',
-    howCalculated: 'O cálculo combina dois fatores: avaliações recentes nos últimos 6 meses (até 50 pts, onde cada avaliação recente vale 5 pts) e volume total de avaliações (até 50 pts, crescimento logarítmico). O foco nas avaliações recentes significa que manter um fluxo constante é mais importante do que ter muitas avaliações antigas.',
+    howCalculated: 'O cálculo combina dois fatores: volume total de avaliações (até 50 pts, crescimento logarítmico) e nota média (até 50 pts). Quanto mais avaliações e melhor a nota, maior o engajamento.',
     howToImprove: [
       'Mantenha um fluxo constante de novas avaliações',
       'Responda às avaliações para incentivar mais interações',
@@ -570,18 +554,20 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'evolution' | 'reviews' | 'google-data' | 'todo'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'evolution' | 'reviews' | 'todo'>('overview');
   const [error, setError] = useState<string | null>(null);
   const [openMetricInfo, setOpenMetricInfo] = useState<keyof typeof METRIC_EXPLANATIONS | null>(null);
   const [modalCriteria, setModalCriteria] = useState<{ label: string; pts: number; maxPts: number; ok: boolean }[]>([]);
   const [modalPrevScore, setModalPrevScore] = useState<number | null>(null);
   const [modalScore, setModalScore] = useState<number>(0);
-  const [gbpMetrics, setGbpMetrics] = useState<GBPMetrics | null>(null);
-  const [gbpLoading, setGbpLoading] = useState(false);
-  const [gbpConnected, setGbpConnected] = useState(false);
-  const [locationIdInput, setLocationIdInput] = useState('');
-  const [savingLocationId, setSavingLocationId] = useState(false);
-  const [locationIdSaved, setLocationIdSaved] = useState(false);
+  // GBP API desabilitada temporariamente
+  // const [gbpMetrics, setGbpMetrics] = useState<GBPMetrics | null>(null);
+  // const [gbpLoading, setGbpLoading] = useState(false);
+  // const [gbpConnected, setGbpConnected] = useState(false);
+  // GBP Location ID input desabilitado temporariamente
+  // const [locationIdInput, setLocationIdInput] = useState('');
+  // const [savingLocationId, setSavingLocationId] = useState(false);
+  // const [locationIdSaved, setLocationIdSaved] = useState(false);
   const [todoItems, setTodoItems] = useState<TodoItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [clickedDimension, setClickedDimension] = useState<string | null>(null);
@@ -596,20 +582,6 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
 
   useEffect(() => {
     fetchDiagnostics();
-    checkGbpConnection();
-    // Verificar se voltou do OAuth
-    if (typeof window !== 'undefined') {
-      const hash = window.location.hash;
-      if (hash.includes('gbp_connected=true')) {
-        setGbpConnected(true);
-        fetchGbpMetrics();
-        window.history.replaceState(null, '', window.location.pathname + '#digital-diagnostic');
-      } else if (hash.includes('gbp_error=')) {
-        const match = hash.match(/gbp_error=([^&]+)/);
-        if (match) setError(decodeURIComponent(match[1]));
-        window.history.replaceState(null, '', window.location.pathname + '#digital-diagnostic');
-      }
-    }
   }, [userId, activeTenantId]);
 
   const fetchDiagnostics = async () => {
@@ -664,66 +636,11 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
     }
   };
 
-  const checkGbpConnection = async () => {
-    const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
-    if (!resolvedTenantId) return;
-    try {
-      const res = await fetch(`/api/gbp/metrics?tenantId=${resolvedTenantId}&months=1`);
-      const data = await res.json();
-      if (data.connected) {
-        setGbpConnected(true);
-        fetchGbpMetrics();
-      }
-    } catch { /* silently fail */ }
-  };
-
-  const fetchGbpMetrics = async () => {
-    const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
-    if (!resolvedTenantId) return;
-    setGbpLoading(true);
-    try {
-      const res = await fetch(`/api/gbp/metrics?tenantId=${resolvedTenantId}&months=6`);
-      const data: GBPMetrics = await res.json();
-      setGbpMetrics(data);
-      if (data.connected) setGbpConnected(true);
-    } catch (e) {
-      console.error('Error fetching GBP metrics:', e);
-    } finally {
-      setGbpLoading(false);
-    }
-  };
-
-   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
-  const [isDisconnecting, setIsDisconnecting] = useState(false);
-
-  const handleConnectGBP = (forceAccount = false) => {
-    const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
-    const url = `/api/gbp/auth?tenantId=${resolvedTenantId}&userId=${userId}${forceAccount ? '&forceAccount=true' : ''}`;
-    window.location.href = url;
-  };
-
-  const handleDisconnectGBP = async (reconnectAfter = false) => {
-    setIsDisconnecting(true);
-    const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
-    try {
-      await fetch('/api/gbp/disconnect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId: resolvedTenantId }),
-      });
-      setGbpConnected(false);
-      setGbpMetrics(null);
-      setShowDisconnectModal(false);
-      if (reconnectAfter) {
-        // Pequeno delay para garantir que o disconnect foi processado antes do redirect OAuth
-        setTimeout(() => handleConnectGBP(true), 400);
-      }
-    } catch (e) {
-      console.error('Erro ao desconectar:', e);
-    } finally {
-      setIsDisconnecting(false);
-    }
-  };
+  // GBP API desabilitada temporariamente — funções abaixo podem ser reativadas quando a API for habilitada no Google Cloud
+  // const checkGbpConnection = async () => { ... };
+  // const fetchGbpMetrics = async () => { ... };
+  // const handleConnectGBP = () => { ... };
+  // const handleDisconnectGBP = async () => { ... };
 
   const latestDiagnostic = diagnostics[0];
   const previousDiagnostic = diagnostics[1];
@@ -771,21 +688,11 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   };
 
   const calculateEngagementMetrics = (placeData: GooglePlaceData) => {
-    const reviews = placeData.reviews || [];
     const totalReviews = placeData.user_ratings_total || 0;
-    const recentReviews = reviews.filter(r => {
-      const reviewDate = new Date(r.time * 1000);
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      return reviewDate > sixMonthsAgo;
-    });
-    const avgRatingRecentReviews = recentReviews.length > 0
-      ? recentReviews.reduce((sum, r) => sum + r.rating, 0) / recentReviews.length : 0;
+    const rating = placeData.rating || 0;
     return {
       totalReviews,
-      recentReviewCount: recentReviews.length,
-      avgRatingRecentReviews: Math.round(avgRatingRecentReviews * 10) / 10,
-      hasRecentActivity: recentReviews.length > 0
+      avgRating: rating,
     };
   };
 
@@ -805,9 +712,10 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
       (photoCount >= 10 ? 30 : photoCount >= 3 ? 20 : photoCount >= 1 ? 10 : 0) +
       (hasHours ? 25 : 0) + (hasWebsite ? 25 : 0) + (hasPhone ? 20 : 0)
     );
+    // Engajamento baseado em volume total e nota média (Places API retorna apenas 5 reviews, não é confiável para contagem recente)
     const engagementScore = totalReviews === 0 ? 0 : Math.min(100, Math.round(
-      Math.min(50, engagementMetrics.recentReviewCount * 5) +
-      Math.min(50, Math.log10(totalReviews + 1) * 15)
+      Math.min(50, Math.log10(totalReviews + 1) * 18) +
+      Math.min(50, (rating / 5) * 50)
     ));
     const overallScore = Math.round(reputationScore * 0.4 + visibilityScore * 0.35 + engagementScore * 0.25);
 
@@ -903,12 +811,12 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
       });
     }
 
-    if (engagementMetrics.recentReviewCount < 3) {
+    if (engagementMetrics.totalReviews < 20) {
       items.push({
         id: 'recent-activity',
-        title: 'Aumentar atividade recente',
-        description: `Apenas ${engagementMetrics.recentReviewCount} avaliação(ões) nos últimos 6 meses. Use a Hello Growth para manter um fluxo constante.`,
-        impact: `+${Math.min(30, (3 - engagementMetrics.recentReviewCount) * 10)} pts no Engajamento`,
+        title: 'Aumentar volume de avaliações',
+        description: `Você tem ${engagementMetrics.totalReviews} avaliações no total. Use a Hello Growth para solicitar avaliações e manter um fluxo constante.`,
+        impact: `+${Math.min(30, Math.max(5, 20 - engagementMetrics.totalReviews))} pts no Engajamento`,
         impactScore: 15,
         priority: 'medium',
         completed: false,
@@ -956,7 +864,7 @@ DADOS REAIS:
 - Website: ${hasWebsite ? placeData.website + ' (CONFIGURADO)' : 'NÃO CONFIGURADO'}
 - Nota média: ${rating > 0 ? rating + ' estrelas' : 'SEM AVALIAÇÕES'}
 - Total de avaliações: ${totalReviews}
-- Avaliações recentes (6 meses): ${engagementMetrics.recentReviewCount}
+- Volume total de avaliações: ${engagementMetrics.totalReviews}
 - Horário: ${hasHours ? 'CONFIGURADO' : 'NÃO CONFIGURADO'}
 - Fotos: ${photoCount} ${photoCount === 0 ? '(NENHUMA)' : photoCount < 5 ? '(POUCAS)' : '(BOM VOLUME)'}
 - Benchmark do setor (${benchmark.label}): nota média ${benchmark.avgRating}, média de ${benchmark.avgReviews} avaliações
@@ -1039,7 +947,7 @@ Responda APENAS em JSON puro (sem markdown):
       recommendations.push({ priority: 'high', title: 'Obtenha suas primeiras avaliações', description: 'Peça para clientes fiéis avaliarem no Google.', impact: 'Essencial para aparecer nas buscas locais' });
     }
 
-    if (engagementMetrics.recentReviewCount > 0) strengths.push(`${engagementMetrics.recentReviewCount} avaliação(ões) recentes nos últimos 6 meses`);
+    if (engagementMetrics.totalReviews >= 20) strengths.push(`${engagementMetrics.totalReviews} avaliações no total — bom volume`);
     if (photoCount >= 10) strengths.push(`${photoCount} fotos — perfil bem ilustrado`);
     else if (photoCount > 0) { weaknesses.push(`Apenas ${photoCount} foto(s) — ideal é 10+`); recommendations.push({ priority: 'medium', title: 'Adicione mais fotos', description: 'Fotos do ambiente, produtos e equipe.', impact: 'Perfis com 10+ fotos recebem 35% mais cliques' }); }
     else { weaknesses.push('Sem fotos no perfil'); recommendations.push({ priority: 'high', title: 'Adicione fotos ao perfil', description: 'Fotos aumentam a confiança e cliques.', impact: '+35% de cliques em média' }); }
@@ -1085,8 +993,8 @@ Responda APENAS em JSON puro (sem markdown):
   };
 
   const handleRunDiagnostic = async () => {
-    if (!effectivePlaceId && !gbpConnected) {
-      setError('Conecte o Google Business Profile ou configure o Place ID no Perfil do Negócio.');
+    if (!effectivePlaceId) {
+      setError('Configure o Google Place ID no Perfil do Negócio para analisar sua presença digital.');
       return;
     }
     setIsAnalyzing(true);
@@ -1094,50 +1002,14 @@ Responda APENAS em JSON puro (sem markdown):
     try {
       let dataToAnalyze: GooglePlaceData;
 
-      // FONTE PRIMÁRIA: GBP API (quando Google está conectado)
-      if (gbpConnected) {
-        setAnalysisStep('Buscando dados do Google Business Profile...');
-        const resolvedTid = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
-        try {
-          const gbpRes = await fetch(`/api/gbp/place-data?tenantId=${resolvedTid}`);
-          const gbpData = await gbpRes.json();
-          if (gbpData.connected && gbpData.placeData) {
-            dataToAnalyze = gbpData.placeData;
-            console.log(`[MPD] Loaded data from GBP API: ${gbpData.totalReviewCount} reviews, rating ${gbpData.averageRating}, ${gbpData.photoCount} photos`);
-          } else {
-            // GBP falhou, tentar fallback com Place ID
-            console.warn('[MPD] GBP API returned no data, falling back to Places API');
-            setAnalysisStep('Buscando dados via Google Places...');
-            const placeData = effectivePlaceId ? await fetchGooglePlaceData(effectivePlaceId) : null;
-            dataToAnalyze = placeData && placeData.name ? placeData : {
-              name: settings.companyName || 'Seu Negócio',
-              formatted_address: '', formatted_phone_number: settings.phone, website: settings.website,
-              rating: 0, user_ratings_total: 0, reviews: [],
-              opening_hours: undefined, photos: [], types: ['establishment'], business_status: 'OPERATIONAL'
-            };
-          }
-        } catch (gbpErr) {
-          console.warn('[MPD] GBP API error, falling back to Places API:', gbpErr);
-          setAnalysisStep('Buscando dados via Google Places...');
-          const placeData = effectivePlaceId ? await fetchGooglePlaceData(effectivePlaceId) : null;
-          dataToAnalyze = placeData && placeData.name ? placeData : {
-            name: settings.companyName || 'Seu Negócio',
-            formatted_address: '', formatted_phone_number: settings.phone, website: settings.website,
-            rating: 0, user_ratings_total: 0, reviews: [],
-            opening_hours: undefined, photos: [], types: ['establishment'], business_status: 'OPERATIONAL'
-          };
-        }
-      } else {
-        // FALLBACK: Google Places API (quando Google NÃO está conectado)
-        setAnalysisStep('Buscando dados do Google...');
-        const placeData = await fetchGooglePlaceData(effectivePlaceId);
-        dataToAnalyze = placeData && placeData.name ? placeData : {
-          name: settings.companyName || 'Seu Negócio',
-          formatted_address: '', formatted_phone_number: settings.phone, website: settings.website,
-          rating: 0, user_ratings_total: 0, reviews: [],
-          opening_hours: undefined, photos: [], types: ['establishment'], business_status: 'OPERATIONAL'
-        };
-      }
+      setAnalysisStep('Buscando dados do Google...');
+      const placeData = await fetchGooglePlaceData(effectivePlaceId);
+      dataToAnalyze = placeData && placeData.name ? placeData : {
+        name: settings.companyName || 'Seu Negócio',
+        formatted_address: '', formatted_phone_number: settings.phone, website: settings.website,
+        rating: 0, user_ratings_total: 0, reviews: [],
+        opening_hours: undefined, photos: [], types: ['establishment'], business_status: 'OPERATIONAL'
+      };
 
       setAnalysisStep('Gerando to-do list...');
       const scores = calculateScores(dataToAnalyze);
@@ -1402,29 +1274,6 @@ Responda APENAS em JSON puro (sem markdown):
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {/* Botão conectar/desconectar Google */}
-          {gbpConnected ? (
-            <div className="flex items-center gap-2">
-              <span className="flex items-center gap-1.5 text-xs text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg">
-                <CheckCircle size={13} /> Google conectado
-              </span>
-              <button
-                onClick={() => setShowDisconnectModal(true)}
-                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-600 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-red-200 transition-colors"
-                title="Gerenciar conexão Google"
-              >
-                <Unlink size={13} /> Trocar conta
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => handleConnectGBP(false)}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm text-gray-700"
-            >
-              <Link2 size={15} className="text-blue-500" />
-              Conectar Google
-            </button>
-          )}
           {diagnostics.length > 1 && (
             <button
               onClick={() => setShowHistory(true)}
@@ -1434,8 +1283,8 @@ Responda APENAS em JSON puro (sem markdown):
               Histórico ({diagnostics.length})
             </button>
           )}
-          {/* Botão de diagnóstico manual — sempre visível quando há Place ID ou GBP conectado */}
-          {(effectivePlaceId || gbpConnected) && !isAnalyzing && (
+          {/* Botão de diagnóstico manual — visível quando há Place ID */}
+          {effectivePlaceId && !isAnalyzing && (
             <button
               onClick={handleRunDiagnostic}
               className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors text-sm font-medium shadow-sm"
@@ -1462,18 +1311,15 @@ Responda APENAS em JSON puro (sem markdown):
       )}
 
       {/* No Place ID */}
-      {!effectivePlaceId && !gbpConnected && (
+      {!effectivePlaceId && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 mb-6">
           <div className="flex items-start gap-4">
             <AlertTriangle className="text-yellow-600 mt-1" size={24} />
             <div>
               <h3 className="font-semibold text-yellow-800 mb-2">Configure sua presença digital</h3>
               <p className="text-yellow-700 mb-4">
-                Para analisar sua presença digital, conecte sua conta Google (recomendado) ou configure o Place ID manualmente no Perfil do Negócio.
+                Para analisar sua presença digital, configure o Google Place ID no Perfil do Negócio.
               </p>
-              <button onClick={handleConnectGBP} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm transition-colors">
-                <Link2 size={15} /> Conectar Google Business Profile
-              </button>
             </div>
           </div>
         </div>
@@ -1563,10 +1409,10 @@ Responda APENAS em JSON puro (sem markdown):
                 c.push({ label: 'Telefone cadastrado', pts: pd.formatted_phone_number ? 20 : 0, maxPts: 20, ok: !!pd.formatted_phone_number });
               } else if (item.key === 'engagement' && pd) {
                 const eng = calculateEngagementMetrics(pd);
-                const recentPts = Math.min(50, eng.recentReviewCount * 5);
-                const volumePts = Math.min(50, Math.round(Math.log10((pd.user_ratings_total || 0) + 1) * 15));
-                c.push({ label: `Avaliações recentes (${eng.recentReviewCount} nos últimos 6 meses)`, pts: recentPts, maxPts: 50, ok: recentPts >= 30 });
-                c.push({ label: `Volume total (${pd.user_ratings_total || 0} avaliações)`, pts: volumePts, maxPts: 50, ok: volumePts >= 30 });
+                const volumePts = Math.min(50, Math.round(Math.log10((pd.user_ratings_total || 0) + 1) * 18));
+                const ratingPts = Math.min(50, Math.round(((pd.rating || 0) / 5) * 50));
+                c.push({ label: `Volume de avaliações (${eng.totalReviews} total)`, pts: volumePts, maxPts: 50, ok: volumePts >= 30 });
+                c.push({ label: `Nota média (${pd.rating || 0}★)`, pts: ratingPts, maxPts: 50, ok: ratingPts >= 40 });
               } else if (item.key === 'overall') {
                 c.push({ label: `Reputação (peso 40%)`, pts: Math.round(aiAnalysis.scores.reputation * 0.4), maxPts: 40, ok: aiAnalysis.scores.reputation >= 70 });
                 c.push({ label: `Visibilidade (peso 35%)`, pts: Math.round(aiAnalysis.scores.visibility * 0.35), maxPts: 35, ok: aiAnalysis.scores.visibility >= 70 });
@@ -1623,7 +1469,7 @@ Responda APENAS em JSON puro (sem markdown):
             { id: 'todo', label: `To-Do (${todoItems.filter(t => !t.completed).length})`, icon: <CheckSquare size={14} /> },
             { id: 'evolution', label: 'Evolução', icon: <TrendingUp size={14} /> },
             { id: 'reviews', label: 'Avaliações', icon: <Star size={14} /> },
-            ...(gbpConnected ? [{ id: 'google-data', label: 'Dados Google', icon: <BarChart size={14} /> }] : []),
+
           ].map(tab => (
             <button
               key={tab.id}
@@ -2107,217 +1953,10 @@ Responda APENAS em JSON puro (sem markdown):
         />
       )}
 
-      {/* ── Tab: Dados Google (GBP) ── */}
-      {activeTab === 'google-data' && gbpConnected && false && (
-        <div className="space-y-6">
-          {false ? (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 flex items-center justify-center">
-              <Loader2 className="animate-spin text-primary-600 mr-3" size={24} />
-              <span className="text-gray-500">Buscando dados do Google Business Profile...</span>
-            </div>
-          ) : gbpMetrics?.monthlyData && gbpMetrics.monthlyData.length > 0 ? (
-            <>
-              {/* KPIs do último mês */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {(() => {
-                  const last = gbpMetrics.monthlyData[gbpMetrics.monthlyData.length - 1];
-                  const prev = gbpMetrics.monthlyData[gbpMetrics.monthlyData.length - 2];
-                  return [
-                    { label: 'Visualizações', value: last.totalImpressions, prev: prev?.totalImpressions, icon: <Eye size={18} className="text-blue-500" />, color: 'blue' },
-                    { label: 'Cliques para ligar', value: last.callClicks, prev: prev?.callClicks, icon: <Phone size={18} className="text-green-500" />, color: 'green' },
-                    { label: 'Cliques no site', value: last.websiteClicks, prev: prev?.websiteClicks, icon: <MousePointer size={18} className="text-purple-500" />, color: 'purple' },
-                    { label: 'Rotas solicitadas', value: last.directionRequests, prev: prev?.directionRequests, icon: <Navigation size={18} className="text-orange-500" />, color: 'orange' },
-                    { label: 'Visualiz. Maps', value: last.impressionsMaps, prev: prev?.impressionsMaps, icon: <MapPin size={18} className="text-red-500" />, color: 'red' },
-                    { label: 'Visualiz. Search', value: last.impressionsSearch, prev: prev?.impressionsSearch, icon: <Search size={18} className="text-indigo-500" />, color: 'indigo' },
-                  ].map((kpi, i) => {
-                    const delta = prev ? kpi.value - kpi.prev! : null;
-                    const pct = prev && kpi.prev ? Math.round(((kpi.value - kpi.prev) / kpi.prev) * 100) : null;
-                    return (
-                      <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-gray-500 text-xs font-medium">{kpi.label}</span>
-                          {kpi.icon}
-                        </div>
-                        <div className="text-2xl font-bold text-gray-800">{kpi.value.toLocaleString('pt-BR')}</div>
-                        {pct !== null && (
-                          <div className={`text-xs mt-1 flex items-center gap-1 ${pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {pct >= 0 ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
-                            {Math.abs(pct)}% vs mês anterior
-                          </div>
-                        )}
-                        <div className="text-xs text-gray-400 mt-0.5">{last.fullLabel}</div>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
 
-              {/* Gráfico de visualizações */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <Eye className="text-blue-500" size={20} />
-                  <h3 className="font-semibold text-gray-800">Visualizações Mensais no Google</h3>
-                </div>
-                <ResponsiveContainer width="100%" height={280}>
-                  <AreaChart data={gbpMetrics.monthlyData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend />
-                    <Area type="monotone" dataKey="impressionsSearch" name="Search" stroke="#6366f1" fill="#6366f1" fillOpacity={0.2} strokeWidth={2} />
-                    <Area type="monotone" dataKey="impressionsMaps" name="Maps" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.2} strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Gráfico de ações */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <MousePointer className="text-green-500" size={20} />
-                  <h3 className="font-semibold text-gray-800">Ações dos Clientes (Ligações, Rotas, Site)</h3>
-                </div>
-                <ResponsiveContainer width="100%" height={250}>
-                  <RechartsBarChart data={gbpMetrics.monthlyData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend />
-                    <Bar dataKey="callClicks" name="Ligações" fill="#10b981" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="websiteClicks" name="Site" fill="#6366f1" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="directionRequests" name="Rotas" fill="#f59e0b" radius={[3, 3, 0, 0]} />
-                  </RechartsBarChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Palavras-chave */}
-              {gbpMetrics.keywords && gbpMetrics.keywords.length > 0 && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Search className="text-indigo-500" size={20} />
-                    <h3 className="font-semibold text-gray-800">Palavras-chave que trouxeram clientes</h3>
-                    <span className="text-xs text-gray-400">(últimos 6 meses)</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {gbpMetrics.keywords.slice(0, 20).map((kw, i) => (
-                      <span key={i} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-sm border border-indigo-100">
-                        <Search size={11} />
-                        {kw.searchKeyword}
-                        {kw.insightsValue?.value && (
-                          <span className="font-medium text-indigo-900">{kw.insightsValue.value}</span>
-                        )}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="space-y-6">
-              {/* Mensagem de erro */}
-              {gbpMetrics?.error && gbpMetrics.error !== 'Location ID não configurado' && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-                  {gbpMetrics.error}
-                </div>
-              )}
-
-              {/* Formulário para inserir o Location ID */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                    <MapPin className="text-blue-600" size={20} />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-800">Configurar Location ID do Google</h3>
-                    <p className="text-sm text-gray-500">Necessário para visualizar métricas de desempenho</p>
-                  </div>
-                </div>
-
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5 text-sm text-blue-800">
-                  <p className="font-medium mb-2">Como encontrar seu Location ID:</p>
-                  <ol className="list-decimal list-inside space-y-1 text-blue-700">
-                    <li>Acesse <a href="https://business.google.com" target="_blank" rel="noopener noreferrer" className="underline font-medium">business.google.com</a></li>
-                    <li>Clique no seu negócio</li>
-                    <li>Olhe a URL do navegador — ela terá o formato:<br />
-                      <code className="bg-blue-100 px-1 rounded text-xs">business.google.com/u/0/edit/l/<strong>XXXXXXXXXX</strong>/...</code>
-                    </li>
-                    <li>O número após <code className="bg-blue-100 px-1 rounded text-xs">/l/</code> é o seu Location ID</li>
-                  </ol>
-                </div>
-
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    value={locationIdInput}
-                    onChange={e => setLocationIdInput(e.target.value)}
-                    placeholder="Ex: 12345678901234567"
-                    className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                  <button
-                    onClick={async () => {
-                      if (!locationIdInput.trim()) return;
-                      const resolvedTenantId = businessProfile?.tenant_id || activeTenantId || tenantId || userId;
-                      setSavingLocationId(true);
-                      try {
-                        const res = await fetch('/api/gbp/set-location', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ tenantId: resolvedTenantId, locationId: locationIdInput.trim() }),
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                          setLocationIdSaved(true);
-                          setTimeout(() => {
-                            setLocationIdSaved(false);
-                            fetchGbpMetrics();
-                          }, 1500);
-                        }
-                      } catch (e) {
-                        console.error('Error saving location ID:', e);
-                      } finally {
-                        setSavingLocationId(false);
-                      }
-                    }}
-                    disabled={savingLocationId || !locationIdInput.trim()}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {savingLocationId ? (
-                      <><Loader2 size={15} className="animate-spin" />Salvando...</>
-                    ) : locationIdSaved ? (
-                      <><CheckCircle size={15} />Salvo!</>
-                    ) : (
-                      'Salvar'
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="text-center">
-                <button onClick={fetchGbpMetrics} className="inline-flex items-center gap-2 px-4 py-2 text-gray-500 hover:text-gray-700 text-sm">
-                  <RefreshCw size={14} />Tentar novamente
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Tab: Dados Google - Em Breve ── */}
-      {activeTab === 'google-data' && gbpConnected && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
-          <div className="w-16 h-16 rounded-full bg-primary-50 flex items-center justify-center mx-auto mb-5">
-            <BarChart className="text-primary-400" size={32} />
-          </div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">Em Breve</h3>
-          <p className="text-gray-500 max-w-sm mx-auto">
-            Os dados de desempenho do Google Business Profile (visualizações, ligações, rotas e palavras-chave) estarão disponíveis em breve.
-          </p>
-        </div>
-      )}
 
       {/* No diagnostics yet */}
-      {!latestDiagnostic && !isAnalyzing && (effectivePlaceId || gbpConnected) && (
+      {!latestDiagnostic && !isAnalyzing && effectivePlaceId && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
           <Globe className="mx-auto text-gray-300 mb-4" size={48} />
           <h3 className="text-lg font-semibold text-gray-800 mb-2">Nenhum diagnóstico realizado</h3>
@@ -2378,70 +2017,7 @@ Responda APENAS em JSON puro (sem markdown):
         </div>
       )}
       {/* Modal de Desconexão / Troca de Conta Google */}
-      {showDisconnectModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => !isDisconnecting && setShowDisconnectModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className="p-6 border-b border-gray-100">
-              <div className="flex items-center gap-3 mb-1">
-                <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
-                  <Unlink size={20} className="text-red-500" />
-                </div>
-                <div>
-                  <h3 className="text-base font-semibold text-gray-800">Gerenciar conexão Google</h3>
-                  <p className="text-xs text-gray-500">Conta Google Business Profile conectada</p>
-                </div>
-              </div>
-            </div>
-            {/* Body */}
-            <div className="p-6 space-y-3">
-              <p className="text-sm text-gray-600 mb-4">
-                O que você deseja fazer com a conexão atual?
-              </p>
-              {/* Opção 1: Trocar de conta */}
-              <button
-                onClick={() => handleDisconnectGBP(true)}
-                disabled={isDisconnecting}
-                className="w-full flex items-start gap-4 p-4 border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors text-left disabled:opacity-50"
-              >
-                <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Link2 size={16} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-blue-800">Trocar de conta Google</p>
-                  <p className="text-xs text-blue-600 mt-0.5">Desconecta a conta atual e abre o seletor de contas do Google para conectar uma nova</p>
-                </div>
-              </button>
-              {/* Opção 2: Apenas desconectar */}
-              <button
-                onClick={() => handleDisconnectGBP(false)}
-                disabled={isDisconnecting}
-                className="w-full flex items-start gap-4 p-4 border border-gray-200 hover:bg-gray-50 rounded-xl transition-colors text-left disabled:opacity-50"
-              >
-                <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Unlink size={16} className="text-gray-500" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-700">Apenas desconectar</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Remove a conexão sem conectar uma nova conta. Você poderá reconectar depois.</p>
-                </div>
-              </button>
-            </div>
-            {/* Footer */}
-            <div className="px-6 pb-6">
-              <button
-                onClick={() => setShowDisconnectModal(false)}
-                disabled={isDisconnecting}
-                className="w-full py-2.5 text-sm text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
-              >
-                {isDisconnecting ? (
-                  <span className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> Processando...</span>
-                ) : 'Cancelar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };
