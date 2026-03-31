@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTenantId } from '@/hooks/useTenantId';
 import { 
   Package, 
@@ -20,7 +20,10 @@ import {
   MessageSquare,
   ChevronRight,
   LayoutGrid,
-  List
+  List,
+  CheckSquare,
+  Square,
+  ShieldAlert
 } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
@@ -95,6 +98,56 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   // Geração em massa de descrições
   const [generatingBulk, setGeneratingBulk] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
+
+  // Seleção e exclusão em massa
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [deletingBulk, setDeletingBulk] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
+  const toggleSelectProduct = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  // toggleSelectAll usa filteredProducts que é definido no render — usa ref para evitar stale closure
+  const filteredProductsRef = useRef<Product[]>([]);
+  const toggleSelectAll = useCallback(() => {
+    const fp = filteredProductsRef.current;
+    setSelectedIds(prev => prev.size === fp.length ? new Set() : new Set(fp.map(p => p.id)));
+  }, []);
+
+  const exitBulkMode = useCallback(() => {
+    setBulkSelectMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleBulkDelete = async () => {
+    if (!supabase || selectedIds.size === 0) return;
+    setDeletingBulk(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const { error } = await supabase
+        .from('products_services')
+        .delete()
+        .in('id', ids);
+      if (error) throw error;
+      setProducts(prev => prev.filter(p => !selectedIds.has(p.id)));
+      showNotification('success', `${ids.length} produto${ids.length !== 1 ? 's' : ''} excluído${ids.length !== 1 ? 's' : ''} com sucesso!`);
+      setSelectedIds(new Set());
+      setBulkSelectMode(false);
+      setShowBulkDeleteConfirm(false);
+    } catch (error) {
+      console.error('Erro ao excluir em massa:', error);
+      showNotification('error', 'Erro ao excluir produtos');
+    } finally {
+      setDeletingBulk(false);
+    }
+  };
 
   useEffect(() => {
     if (supabase && userId && tenantId) {
@@ -547,6 +600,7 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
   };
 
   const filteredProducts = products.filter((p) => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  filteredProductsRef.current = filteredProducts;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -599,7 +653,43 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
           <Plus size={18} />
           Novo Produto
         </button>
+        {filteredProducts.length > 0 && (
+          <button
+            onClick={() => { setBulkSelectMode(v => !v); setSelectedIds(new Set()); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors ${
+              bulkSelectMode
+                ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            {bulkSelectMode ? <X size={18} /> : <CheckSquare size={18} />}
+            {bulkSelectMode ? 'Cancelar Seleção' : 'Selecionar'}
+          </button>
+        )}
       </div>
+
+      {/* Barra flutuante de ações em massa */}
+      {bulkSelectMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-slate-900 text-white rounded-2xl shadow-2xl shadow-slate-900/40 animate-in fade-in slide-in-from-bottom-4">
+          <span className="text-sm font-medium">
+            {selectedIds.size} produto{selectedIds.size !== 1 ? 's' : ''} selecionado{selectedIds.size !== 1 ? 's' : ''}
+          </span>
+          <div className="w-px h-5 bg-slate-600" />
+          <button
+            onClick={() => setShowBulkDeleteConfirm(true)}
+            className="flex items-center gap-2 px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-medium transition-colors"
+          >
+            <Trash2 size={15} />
+            Excluir {selectedIds.size}
+          </button>
+          <button
+            onClick={exitBulkMode}
+            className="p-1.5 text-slate-400 hover:text-white transition-colors rounded-lg"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Bulk generation progress bar */}
       {generatingBulk && (
@@ -626,6 +716,18 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
 
       {/* Search + View Toggle */}
       <div className="flex items-center gap-3 mb-6">
+        {bulkSelectMode && (
+          <button
+            onClick={toggleSelectAll}
+            title={selectedIds.size === filteredProducts.length ? 'Desmarcar todos' : 'Selecionar todos'}
+            className="flex items-center gap-2 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-colors flex-shrink-0"
+          >
+            {selectedIds.size === filteredProducts.length && filteredProducts.length > 0
+              ? <CheckSquare size={18} className="text-emerald-600" />
+              : <Square size={18} className="text-slate-400" />}
+            Todos
+          </button>
+        )}
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input type="text" placeholder="Buscar produtos..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
@@ -674,14 +776,35 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProducts.map((product) => (
-            <div key={product.id} onClick={() => handleProductClick(product)} className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-lg hover:border-emerald-200 transition-all cursor-pointer group">
+            <div
+              key={product.id}
+              onClick={(e) => bulkSelectMode ? toggleSelectProduct(product.id, e) : handleProductClick(product)}
+              className={`bg-white rounded-2xl border-2 p-6 hover:shadow-lg transition-all cursor-pointer group ${
+                bulkSelectMode && selectedIds.has(product.id)
+                  ? 'border-emerald-400 bg-emerald-50/40 shadow-sm'
+                  : 'border-slate-200 hover:border-emerald-200'
+              }`}
+            >
               <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-lg text-slate-800 group-hover:text-emerald-600 transition-colors">{product.name}</h3>
-                  <p className="text-2xl font-bold text-emerald-600">
-                    R$ {(typeof product.value === 'number' ? product.value : parseFloat(String(product.value)) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  {bulkSelectMode && (
+                    <div
+                      onClick={(e) => toggleSelectProduct(product.id, e)}
+                      className="mt-1 flex-shrink-0"
+                    >
+                      {selectedIds.has(product.id)
+                        ? <CheckSquare size={20} className="text-emerald-500" />
+                        : <Square size={20} className="text-slate-300 group-hover:text-slate-400" />}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-lg text-slate-800 group-hover:text-emerald-600 transition-colors truncate">{product.name}</h3>
+                    <p className="text-2xl font-bold text-emerald-600">
+                      R$ {(typeof product.value === 'number' ? product.value : parseFloat(String(product.value)) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
                 </div>
+                {!bulkSelectMode && (
                 <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                   <button onClick={() => setEditingProduct(product)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
                     <Edit3 size={18} />
@@ -690,6 +813,7 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
                     <Trash2 size={18} />
                   </button>
                 </div>
+                )}
               </div>
               {product.ai_description ? (
                 <div className="flex items-center justify-between text-sm text-slate-500">
@@ -713,6 +837,15 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
+                {bulkSelectMode && (
+                  <th className="px-4 py-3 w-10">
+                    <button onClick={toggleSelectAll}>
+                      {selectedIds.size === filteredProducts.length && filteredProducts.length > 0
+                        ? <CheckSquare size={16} className="text-emerald-600" />
+                        : <Square size={16} className="text-slate-400" />}
+                    </button>
+                  </th>
+                )}
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-6 py-3">Produto / Serviço</th>
                 <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wide px-6 py-3">Valor</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-6 py-3">Insights IA</th>
@@ -723,9 +856,20 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
               {filteredProducts.map((product) => (
                 <tr
                   key={product.id}
-                  onClick={() => handleProductClick(product)}
-                  className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                  onClick={(e) => bulkSelectMode ? toggleSelectProduct(product.id, e) : handleProductClick(product)}
+                  className={`transition-colors cursor-pointer group ${
+                    bulkSelectMode && selectedIds.has(product.id)
+                      ? 'bg-emerald-50/60'
+                      : 'hover:bg-slate-50'
+                  }`}
                 >
+                  {bulkSelectMode && (
+                    <td className="px-4 py-4" onClick={(e) => toggleSelectProduct(product.id, e)}>
+                      {selectedIds.has(product.id)
+                        ? <CheckSquare size={18} className="text-emerald-500" />
+                        : <Square size={18} className="text-slate-300 group-hover:text-slate-400" />}
+                    </td>
+                  )}
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
@@ -1175,6 +1319,47 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
                   Importar {totalSelectedCount()} produto{totalSelectedCount() !== 1 ? 's' : ''}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão em Massa */}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-red-100 rounded-xl">
+                <ShieldAlert size={24} className="text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Confirmar Exclusão</h2>
+                <p className="text-sm text-slate-500">Esta ação não pode ser desfeita</p>
+              </div>
+            </div>
+            <p className="text-slate-700 mb-6">
+              Você está prestes a excluir permanentemente{' '}
+              <strong className="text-red-600">{selectedIds.size} produto{selectedIds.size !== 1 ? 's' : ''}</strong>.
+              Deseja continuar?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowBulkDeleteConfirm(false)}
+                disabled={deletingBulk}
+                className="flex-1 px-4 py-3 border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={deletingBulk}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors font-medium disabled:opacity-50"
+              >
+                {deletingBulk
+                  ? <><Loader2 className="animate-spin" size={18} />Excluindo...</>
+                  : <><Trash2 size={18} />Excluir {selectedIds.size}</>
+                }
+              </button>
             </div>
           </div>
         </div>
