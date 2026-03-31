@@ -139,9 +139,12 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
     return '';
   };
 
-  const openPublish = (survey: any) => {
+  const openPublish = (survey: any, sourceType?: 'survey' | 'form') => {
     const ramoInferido = inferRamo(survey.businessType);
-    setPubForm({ name: survey.name || '', description: survey.objective || '', ramoNegocio: ramoInferido, tipoVenda: 'pos_venda', category: 'Geral', tags: [] });
+    // Formulários de anamnese são pré-venda; pesquisas NPS são pós-venda
+    const tipoDefault = sourceType === 'form' ? 'pre_venda' : 'pos_venda';
+    const categoryDefault = sourceType === 'form' ? 'Formulário' : 'NPS';
+    setPubForm({ name: survey.name || '', description: survey.objective || '', ramoNegocio: ramoInferido, tipoVenda: tipoDefault, category: categoryDefault, tags: [] });
     setTagInput(''); setPubOk(false);
     setPub({ open: true, survey });
   };
@@ -297,7 +300,7 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
                         </div>
                         {s.objective && <p className={`text-xs ${t.textMuted} mt-1 truncate`}>{s.objective}</p>}
                       </div>
-                      <button onClick={() => openPublish(s)}
+                      <button onClick={() => openPublish(s, 'survey')}
                         className="shrink-0 flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-colors">
                         <ArrowRight size={14} /> Publicar como Template
                       </button>
@@ -379,7 +382,7 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
                         </div>
                         {f.description && <p className={`text-xs ${t.textMuted} mt-1 truncate`}>{f.description}</p>}
                       </div>
-                      <button onClick={() => openPublish(f)}
+                      <button onClick={() => openPublish(f, 'form')}
                         className="shrink-0 flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-colors">
                         <ArrowRight size={14} /> Publicar como Template
                       </button>
