@@ -133,7 +133,7 @@ export interface FormOption {
 export interface FormQuestion {
   id: string;
   text: string;
-  type: 'text' | 'single' | 'multiple';
+  type: 'text' | 'single' | 'multiple' | 'single_choice' | 'multiple_choice';
   options?: FormOption[];
 }
 

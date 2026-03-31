@@ -405,8 +405,15 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
 
                   {(currentQuestion.type === 'single' || currentQuestion.type === 'multiple' || currentQuestion.type === 'single_choice' || currentQuestion.type === 'multiple_choice') && currentQuestion.options && (
                     <div className="grid gap-3">
-                      {currentQuestion.options?.map((opt) => {
-                         const optLabel = getOptionLabel(opt);
+                      {currentQuestion.options?.map((rawOpt, optIdx) => {
+                         // Normalizar opção: suporta string simples, {text}, {label}, {id, label, ...}
+                         const rawOptAny: any = rawOpt;
+                         const normalizedLabel = typeof rawOptAny === 'string' ? rawOptAny : getOptionLabel(rawOptAny);
+                         const normalizedId = typeof rawOptAny === 'string' ? `opt_${optIdx}_${rawOptAny}` : (rawOptAny.id || `opt_${optIdx}`);
+                         const opt: any = typeof rawOptAny === 'string'
+                           ? { id: normalizedId, label: normalizedLabel }
+                           : { ...rawOptAny, id: normalizedId, label: normalizedLabel };
+                         const optLabel = normalizedLabel || '';
                          let isSelected = false;
                          if (currentQuestion.type === 'multiple' || currentQuestion.type === 'multiple_choice') {
                             const currentValues = answers[currentQuestion.id]?.value || [];
