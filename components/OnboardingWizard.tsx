@@ -279,12 +279,21 @@ export default function OnboardingWizard({
     if (!profile.company_name.trim()) return;
     try {
       const bt = profile.business_type === 'Outro (escrever)' ? profile.business_type_custom : profile.business_type;
-      const data = { ...profile, business_type: bt, user_id:userId, tenant_id:tenantId, updated_at:new Date().toISOString() };
+      // Remover campos que não existem na tabela business_profile
+      const { business_type_custom, ...profileWithoutCustom } = profile;
+      const data = { ...profileWithoutCustom, business_type: bt, user_id: userId, tenant_id: tenantId, updated_at: new Date().toISOString() };
       const { data: ex } = await supabase.from('business_profile').select('id').eq('tenant_id', tenantId).maybeSingle();
-      if (ex) await supabase.from('business_profile').update(data).eq('tenant_id', tenantId);
-      else await supabase.from('business_profile').insert(data);
+      if (ex) {
+        const result = await supabase.from('business_profile').update(data).eq('tenant_id', tenantId);
+        if (result.error) console.error('Erro ao atualizar perfil:', result.error);
+      } else {
+        const result = await supabase.from('business_profile').insert(data);
+        if (result.error) console.error('Erro ao inserir perfil:', result.error);
+      }
       if (markDone) await markStepDone('profile');
-    } catch { }
+    } catch (e) {
+      console.error('Erro ao salvar perfil no onboarding:', e);
+    }
   };
 
   const saveProfile = async () => {

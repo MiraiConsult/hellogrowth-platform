@@ -126,7 +126,7 @@ export default function BusinessProfile({ userId, onProfileUpdate }: BusinessPro
       try {
         const { data, error } = await supabase
           .from('business_profile')
-          .select('*')
+          .select('id, user_id, company_name, business_type, business_description, target_audience, brand_tone, differentials, main_pain_points, google_place_id, instagram_handle, facebook_page, website_url, onboarding_score')
           .eq('tenant_id', tenantId)
           .single();
 
@@ -178,10 +178,21 @@ export default function BusinessProfile({ userId, onProfileUpdate }: BusinessPro
 
     setSaving(true);
     try {
+      // Enviar apenas os campos que o componente gerencia (evitar enviar campos GBP/extras)
       const updatedProfile = {
-        ...profile,
         user_id: userId,
         tenant_id: tenantId,
+        company_name: profile.company_name,
+        business_type: profile.business_type,
+        business_description: profile.business_description,
+        target_audience: profile.target_audience,
+        brand_tone: profile.brand_tone,
+        differentials: profile.differentials,
+        main_pain_points: profile.main_pain_points,
+        google_place_id: profile.google_place_id,
+        instagram_handle: profile.instagram_handle,
+        facebook_page: profile.facebook_page,
+        website_url: profile.website_url,
         onboarding_score: currentScore,
         updated_at: new Date().toISOString()
       };
