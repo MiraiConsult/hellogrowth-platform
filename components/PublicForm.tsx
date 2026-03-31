@@ -518,7 +518,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
       
       <div className="py-8 text-center flex flex-col items-center gap-1">
         <span className="text-[10px] uppercase tracking-widest text-gray-300">Powered by</span>
-        <span className="text-base font-bold" style={{ color: '#16a34a' }}>Hello<span style={{ color: '#0ea5e9' }}>Growth</span></span>
+        <span className="text-base font-bold" style={{ background: 'linear-gradient(to right, #1e6b4a, #4ade80)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>HelloGrowth</span>
       </div>
     </div>
   );

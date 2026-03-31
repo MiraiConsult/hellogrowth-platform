@@ -597,7 +597,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
         <div className="bg-gray-50 p-4 border-t border-gray-100 flex justify-center items-center gap-2 text-gray-400 text-xs" style={{ backgroundColor: '#f9fafb', color: '#9ca3af' }}>
             <ShieldCheck size={12} /> Ambiente Seguro
             <span className="mx-1">•</span>
-            <span>Powered by </span><span className="font-bold" style={{ color: '#16a34a' }}>Hello<span style={{ color: '#0ea5e9' }}>Growth</span></span>
+            <span>Powered by </span><span className="font-bold" style={{ background: 'linear-gradient(to right, #1e6b4a, #4ade80)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>HelloGrowth</span>
         </div>
       </div>
     </div>
