@@ -278,14 +278,25 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
                         {(s.questions || []).length === 0 ? (
                           <p className={`text-xs ${t.textMuted} italic`}>Sem perguntas registradas.</p>
                         ) : (s.questions || []).map((q: any, i: number) => (
-                          <div key={i} className={`flex items-start gap-3 p-3 rounded-lg border ${t.border} ${t.inner}`}>
-                            <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-200 text-slate-600'}`}>
-                              {Q_LABELS[q.type] || q.type || '?'}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm ${t.text}`}>{q.text}</p>
-                              {(q.options || []).length > 0 && <p className={`text-xs ${t.textMuted} mt-1`}>Opções: {q.options.join(' · ')}</p>}
+                          <div key={i} className={`p-3 rounded-lg border ${t.border} ${t.inner}`}>
+                            <div className="flex items-start gap-3 mb-2">
+                              <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-200 text-slate-600'}`}>
+                                {i + 1}
+                              </span>
+                              <p className={`text-sm font-medium ${t.text}`}>{q.text}</p>
                             </div>
+                            {(q.options || []).length > 0 && (
+                              <div className="ml-8 space-y-1">
+                                {(q.options || []).map((opt: string, oi: number) => (
+                                  <div key={oi} className={`flex items-center gap-2 text-xs ${t.textSub}`}>
+                                    <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${isDark ? 'border-gray-600' : 'border-slate-300'}`}>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                    </span>
+                                    {opt}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -344,7 +355,9 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
                             </span>
                           </div>
                           {tmpl.description && <p className={`text-xs ${t.textMuted} truncate`}>{tmpl.description}</p>}
-                          {tmpl.source_company_name && <p className={`text-xs ${t.textMuted} mt-0.5`}>Origem: {tmpl.source_company_name}</p>}
+                          <p className={`text-xs ${t.textMuted} mt-0.5`}>
+                            Criado por: <span className="font-medium">{tmpl.source_company_name || (tmpl.created_by === 'admin' ? 'Admin HelloGrowth' : tmpl.created_by || '—')}</span>
+                          </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <button onClick={() => toggleActive(tmpl)} title={tmpl.is_active ? 'Desativar' : 'Ativar'}
@@ -362,11 +375,25 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
                       {expandedTmpl === tmpl.id && (
                         <div className={`border-t ${t.border} px-4 py-3 space-y-2`}>
                           {(tmpl.questions || []).map((q: any, i: number) => (
-                            <div key={i} className={`flex items-start gap-3 p-3 rounded-lg border ${t.border} ${t.inner}`}>
-                              <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-200 text-slate-600'}`}>
-                                {Q_LABELS[q.type] || q.type || '?'}
-                              </span>
-                              <p className={`text-sm ${t.text}`}>{q.text}</p>
+                            <div key={i} className={`p-3 rounded-lg border ${t.border} ${t.inner}`}>
+                              <div className="flex items-start gap-3 mb-2">
+                                <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-200 text-slate-600'}`}>
+                                  {i + 1}
+                                </span>
+                                <p className={`text-sm font-medium ${t.text}`}>{q.text}</p>
+                              </div>
+                              {(q.options || q.choices || []).length > 0 && (
+                                <div className="ml-8 space-y-1">
+                                  {(q.options || q.choices || []).map((opt: string, oi: number) => (
+                                    <div key={oi} className={`flex items-center gap-2 text-xs ${t.textSub}`}>
+                                      <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${isDark ? 'border-gray-600' : 'border-slate-300'}`}>
+                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                      </span>
+                                      {opt}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
