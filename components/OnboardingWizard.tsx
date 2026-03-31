@@ -156,22 +156,91 @@ export default function OnboardingWizard({
 
   const loadProgress = async () => {
     try {
-      const { data: prog } = await supabase.from('onboarding_progress').select('*').eq('tenant_id', tenantId).maybeSingle();
+      // ── Buscar dados reais para detectar etapas já concluídas ──
+      const [progRes, bpRes, npsRes, productsRes, formsRes] = await Promise.all([
+        supabase.from('onboarding_progress').select('*').eq('tenant_id', tenantId).maybeSingle(),
+        supabase.from('business_profile').select('*').eq('tenant_id', tenantId).maybeSingle(),
+        supabase.from('campaigns').select('id').eq('tenant_id', tenantId).eq('type', 'nps').limit(1),
+        supabase.from('products_services').select('id').eq('tenant_id', tenantId).limit(1),
+        supabase.from('forms').select('id').eq('tenant_id', tenantId).limit(1),
+      ]);
+
+      const prog = progRes.data;
+      const bp = bpRes.data;
+
+      // ── Detectar etapas concluídas a partir dos dados reais ──
+      const autoDetected = new Set<string>();
+
+      // Perfil: tem company_name e business_description preenchidos
+      if (bp && bp.company_name && bp.business_description) autoDetected.add('profile');
+
+      // NPS: tem pelo menos 1 campanha do tipo NPS
+      if (npsRes.data && npsRes.data.length > 0) autoDetected.add('nps');
+
+      // Produtos: tem pelo menos 1 produto cadastrado
+      if (productsRes.data && productsRes.data.length > 0) autoDetected.add('products');
+
+      // Formulário: tem pelo menos 1 formulário criado
+      if (formsRes.data && formsRes.data.length > 0) autoDetected.add('form');
+
+      // MPD: tem Google conectado (gbp_connected_at preenchido)
+      if (bp && bp.gbp_connected_at) autoDetected.add('mpd');
+
       if (prog) {
         const done = new Set<string>();
+        // Combinar: o que está salvo no progresso + o que foi detectado automaticamente
         if (prog.step_profile_done) done.add('profile');
         if (prog.step_nps_done) done.add('nps');
         if (prog.step_products_done) done.add('products');
         if (prog.step_form_done) done.add('form');
         if (prog.step_mbd_done) done.add('mpd');
+        // Adicionar as detectadas automaticamente
+        autoDetected.forEach(s => done.add(s));
         setCompletedSteps(done);
-        if (prog.is_complete) { onComplete(); return; }
+
+        // Se todas as etapas do plano estão concluídas, marcar como completo
+        const allDone = steps.every(s => done.has(s.id));
+        if (prog.is_complete || allDone) {
+          if (allDone && !prog.is_complete) {
+            // Atualizar no banco se detectamos que tudo está feito
+            const fieldUpdates: Record<string,boolean|string> = {
+              is_complete: true, completed_at: new Date().toISOString(), updated_at: new Date().toISOString()
+            };
+            autoDetected.forEach(s => {
+              const fieldMap: Record<string,string> = { profile:'step_profile_done', nps:'step_nps_done', products:'step_products_done', form:'step_form_done', mpd:'step_mbd_done' };
+              if (fieldMap[s]) fieldUpdates[fieldMap[s]] = true;
+            });
+            await supabase.from('onboarding_progress').update(fieldUpdates).eq('tenant_id', tenantId);
+          }
+          onComplete(); return;
+        }
+        // Ir para a primeira etapa não concluída
         const first = steps.findIndex(s => !done.has(s.id));
         if (first >= 0) setCurrentStepIndex(first);
+
+        // Persistir as etapas detectadas automaticamente que ainda não estavam salvas
+        if (autoDetected.size > 0) {
+          const fieldMap: Record<string,string> = { profile:'step_profile_done', nps:'step_nps_done', products:'step_products_done', form:'step_form_done', mpd:'step_mbd_done' };
+          const updates: Record<string,boolean> = {};
+          autoDetected.forEach(s => { if (fieldMap[s] && !prog[fieldMap[s]]) updates[fieldMap[s]] = true; });
+          if (Object.keys(updates).length > 0) {
+            await supabase.from('onboarding_progress').update({ ...updates, updated_at: new Date().toISOString() }).eq('tenant_id', tenantId);
+          }
+        }
       } else {
-        await supabase.from('onboarding_progress').insert({ tenant_id: tenantId, user_id: userId, current_step: 1 });
+        // Primeiro acesso: criar registro com as etapas já detectadas
+        const fieldMap: Record<string,string> = { profile:'step_profile_done', nps:'step_nps_done', products:'step_products_done', form:'step_form_done', mpd:'step_mbd_done' };
+        const initialData: Record<string,unknown> = { tenant_id: tenantId, user_id: userId, current_step: 1 };
+        autoDetected.forEach(s => { if (fieldMap[s]) initialData[fieldMap[s]] = true; });
+        setCompletedSteps(autoDetected);
+        await supabase.from('onboarding_progress').insert(initialData);
+        const allDone = steps.every(s => autoDetected.has(s.id));
+        if (allDone) { onComplete(); return; }
+        const first = steps.findIndex(s => !autoDetected.has(s.id));
+        if (first >= 0) setCurrentStepIndex(first);
       }
-      const { data: bp } = await supabase.from('business_profile').select('*').eq('tenant_id', tenantId).maybeSingle();
+
+      // ── Preencher perfil com dados existentes ──
       if (bp) setProfile(prev => ({
         ...prev,
         company_name: bp.company_name || companyName || '',
