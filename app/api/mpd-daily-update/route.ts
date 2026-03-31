@@ -282,7 +282,7 @@ async function handleUpdate(request: NextRequest) {
     // Buscar todas as empresas com Place ID configurado
     const { data: profiles, error: profilesError } = await supabaseAdmin
       .from('business_profile')
-      .select('tenant_id, google_place_id, company_name')
+      .select('tenant_id, google_place_id, company_name, gbp_access_token, gbp_refresh_token, gbp_token_expiry, gbp_location_id, gbp_account_name')
       .not('google_place_id', 'is', null)
       .neq('google_place_id', '');
 
@@ -309,6 +309,55 @@ async function handleUpdate(request: NextRequest) {
             reason: 'Failed to fetch place data',
           });
           continue;
+        }
+
+        // Enriquecer com TODAS as reviews via GBP API (se conectado)
+        if (profile.gbp_access_token && profile.gbp_location_id && profile.gbp_account_name) {
+          try {
+            let gbpAccessToken = profile.gbp_access_token;
+            // Refresh token se expirado
+            if (profile.gbp_token_expiry && new Date(profile.gbp_token_expiry) <= new Date() && profile.gbp_refresh_token) {
+              const { OAuth2Client } = await import('google-auth-library');
+              const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET);
+              client.setCredentials({ refresh_token: profile.gbp_refresh_token });
+              const { credentials } = await client.refreshAccessToken();
+              gbpAccessToken = credentials.access_token || gbpAccessToken;
+              if (credentials.access_token) {
+                await supabaseAdmin.from('business_profile').update({ gbp_access_token: credentials.access_token }).eq('tenant_id', tenantId);
+              }
+            }
+            const allGbpReviews: any[] = [];
+            let nextPageToken: string | undefined;
+            let pageCount = 0;
+            do {
+              const url = new URL(`https://mybusiness.googleapis.com/v4/${profile.gbp_account_name}/locations/${profile.gbp_location_id}/reviews`);
+              url.searchParams.set('pageSize', '50');
+              url.searchParams.set('orderBy', 'updateTime desc');
+              if (nextPageToken) url.searchParams.set('pageToken', nextPageToken);
+              const resp = await fetch(url.toString(), { headers: { Authorization: `Bearer ${gbpAccessToken}` } });
+              if (!resp.ok) break;
+              const data = await resp.json();
+              for (const review of (data.reviews || [])) {
+                allGbpReviews.push({
+                  author_name: review.reviewer?.displayName || 'An\u00f4nimo',
+                  rating: review.starRating === 'FIVE' ? 5 : review.starRating === 'FOUR' ? 4 : review.starRating === 'THREE' ? 3 : review.starRating === 'TWO' ? 2 : review.starRating === 'ONE' ? 1 : 0,
+                  text: review.comment || '',
+                  time: review.createTime ? new Date(review.createTime).getTime() / 1000 : 0,
+                  relative_time_description: '',
+                });
+              }
+              if (pageCount === 0 && data.totalReviewCount) placeData.user_ratings_total = data.totalReviewCount;
+              if (pageCount === 0 && data.averageRating) placeData.rating = data.averageRating;
+              nextPageToken = data.nextPageToken;
+              pageCount++;
+            } while (nextPageToken && pageCount < 20);
+            if (allGbpReviews.length > 0) {
+              placeData.reviews = allGbpReviews;
+              console.log(`[MPD Daily] Loaded ${allGbpReviews.length} reviews from GBP for ${companyName}`);
+            }
+          } catch (gbpErr: any) {
+            console.warn(`[MPD Daily] GBP reviews fetch failed for ${companyName}:`, gbpErr.message);
+          }
         }
 
         // Buscar diagnóstico mais recente para comparação
