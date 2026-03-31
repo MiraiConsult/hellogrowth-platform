@@ -310,7 +310,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10" style={{ backgroundColor: '#ffffff', color: '#111827' }}>
         <div className="flex items-center gap-2">
           {logoUrl && (form as any).show_logo ? (
-            <img src={logoUrl} alt={displayCompanyName} className="h-8 w-auto max-w-[140px] object-contain" />
+            <img src={logoUrl} alt={displayCompanyName} className="h-14 w-auto max-w-[220px] object-contain" />
           ) : (
             <>
               <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold">
@@ -516,8 +516,9 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
         </div>
       </div>
       
-      <div className="py-6 text-center text-gray-400 text-xs">
-        <p>Powered by HelloGrowth</p>
+      <div className="py-8 text-center flex flex-col items-center gap-1">
+        <span className="text-[10px] uppercase tracking-widest text-gray-300">Powered by</span>
+        <span className="text-base font-bold" style={{ color: '#16a34a' }}>Hello<span style={{ color: '#0ea5e9' }}>Growth</span></span>
       </div>
     </div>
   );

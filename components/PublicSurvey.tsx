@@ -275,7 +275,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
         <div className="bg-white p-6 border-b border-gray-100 flex justify-center" style={{ backgroundColor: '#ffffff' }}>
            <div className="flex items-center gap-2">
               {logoUrl && (campaign as any).show_logo ? (
-                <img src={logoUrl} alt={displayCompanyName} className="h-10 w-auto max-w-[160px] object-contain" />
+                <img src={logoUrl} alt={displayCompanyName} className="h-16 w-auto max-w-[240px] object-contain" />
               ) : (
                 <>
                   <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold">
@@ -595,7 +595,9 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
         </div>
         
         <div className="bg-gray-50 p-4 border-t border-gray-100 flex justify-center items-center gap-2 text-gray-400 text-xs" style={{ backgroundColor: '#f9fafb', color: '#9ca3af' }}>
-            <ShieldCheck size={12} /> Ambiente Seguro • Powered by HelloGrowth
+            <ShieldCheck size={12} /> Ambiente Seguro
+            <span className="mx-1">•</span>
+            <span>Powered by </span><span className="font-bold" style={{ color: '#16a34a' }}>Hello<span style={{ color: '#0ea5e9' }}>Growth</span></span>
         </div>
       </div>
     </div>

@@ -221,6 +221,7 @@ export default function NPSConsultant({
       setGoogleRedirect(existingCampaign.google_redirect || existingCampaign.enableRedirection || false);
       setGooglePlaceId(existingCampaign.google_place_id || '');
       setOfferPrize(existingCampaign.offer_prize || false);
+      setSelectedGameId((existingCampaign as any).game_id || '');
       setShowLogo((existingCampaign as any).show_logo || false);
       setBeforeGoogleMessage(existingCampaign.before_google_message || '');
       setAfterGameMessage(existingCampaign.after_game_message || '');
@@ -1602,7 +1603,7 @@ Responda:`;
                 onChange={(e) => {
                   setOfferPrize(e.target.checked);
                   if (!e.target.checked) {
-                    setSelectedGameId(null);
+                    setSelectedGameId('');
                   }
                 }}
                 className="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"
@@ -1617,7 +1618,7 @@ Responda:`;
                   {availableGames.length > 0 ? (
                     <select
                       value={selectedGameId || ''}
-                      onChange={(e) => setSelectedGameId(e.target.value || null)}
+                      onChange={(e) => setSelectedGameId(e.target.value || '')}
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
                     >
                       <option value="">Selecione uma roleta...</option>
