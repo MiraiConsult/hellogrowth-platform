@@ -200,7 +200,14 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
         } else {
           const items = data.products.map((p: any) => ({
             name: p.name,
-            value: String(Math.round((p.value_min + p.value_max) / 2)),
+            // Suporta campo 'value' direto, 'value_suggested', ou média de value_min/value_max
+            value: p.value
+              ? String(p.value)
+              : p.value_suggested
+                ? String(p.value_suggested)
+                : (p.value_min != null && p.value_max != null)
+                  ? String(Math.round((p.value_min + p.value_max) / 2))
+                  : '',
             selected: false, // começa desmarcado em outros segmentos
             description: p.description || ''
           }));
