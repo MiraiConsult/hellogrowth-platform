@@ -363,25 +363,28 @@ export default function OnboardingWizard({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1.5">Público-alvo</label>
-                  <input type="text" value={profile.target_audience}
+                  <textarea value={profile.target_audience}
                     onChange={e => setProfile(p=>({...p,target_audience:e.target.value}))}
-                    placeholder="Ex: Mulheres 25-45 anos"
-                    className="w-full border border-emerald-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ring-emerald-300" />
+                    placeholder="Ex: Mulheres 25-45 anos, interessadas em estética e bem-estar"
+                    rows={3}
+                    className="w-full border border-emerald-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ring-emerald-300 resize-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1.5">Diferenciais</label>
-                  <input type="text" value={profile.differentials}
+                  <textarea value={profile.differentials}
                     onChange={e => setProfile(p=>({...p,differentials:e.target.value}))}
-                    placeholder="Ex: 10 anos de experiência"
-                    className="w-full border border-emerald-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ring-emerald-300" />
+                    placeholder="Ex: 10 anos de experiência, atendimento personalizado, equipe especializada"
+                    rows={3}
+                    className="w-full border border-emerald-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ring-emerald-300 resize-none" />
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">Principais dores dos seus clientes</label>
-                <input type="text" value={profile.main_pain_points}
+                <textarea value={profile.main_pain_points}
                   onChange={e => setProfile(p=>({...p,main_pain_points:e.target.value}))}
                   placeholder="Ex: Falta de tempo, preço alto, mau atendimento no concorrente"
-                  className="w-full border border-emerald-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ring-emerald-300" />
+                  rows={3}
+                  className="w-full border border-emerald-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 ring-emerald-300 resize-none" />
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setProfileSubStep(1)}
