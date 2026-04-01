@@ -689,11 +689,10 @@ Retorne APENAS um JSON válido no formato:
 
                       {question.options && question.options.length > 0 && (
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {question.options.map((opt, idx) => (
-                            <span key={idx} className="px-2 py-1 bg-slate-100 rounded text-xs text-slate-600">
-                              {opt}
-                            </span>
-                          ))}
+                          {question.options.map((opt: any, idx: number) => {
+                            const label = typeof opt === 'string' ? opt : (opt?.label || opt?.text || '');
+                            return <span key={idx} className="px-2 py-1 bg-slate-100 rounded text-xs text-slate-600">{label}</span>;
+                          })}
                         </div>
                       )}
 

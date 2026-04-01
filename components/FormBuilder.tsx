@@ -118,7 +118,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
           id: String(Date.now() + Math.random()),
           text: q.text,
           type: normalizeQuestionType(q.type || 'text'),
-          options: q.options || [],
+          options: (q.options || []).map((opt: any) => typeof opt === 'string' ? { id: String(Date.now() + Math.random()), label: opt } : { id: opt.id || String(Date.now() + Math.random()), label: opt.label || opt.text || '' }),
         })),
         active: true,
         responses: 0,
@@ -1435,9 +1435,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                                             </div>
                                             {(q.options || []).length > 0 && (
                                               <div className="flex flex-wrap gap-1 mt-1.5">
-                                                {q.options.map((opt: string) => (
-                                                  <span key={opt} className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-100">{opt}</span>
-                                                ))}
+                                                {q.options.map((opt: any, oi: number) => {
+                                                  const label = typeof opt === 'string' ? opt : (opt?.label || opt?.text || '');
+                                                  return <span key={oi} className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-100">{label}</span>;
+                                                })}
                                               </div>
                                             )}
                                           </div>

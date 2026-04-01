@@ -319,12 +319,12 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
                             </div>
                             {(q.options || []).length > 0 && (
                               <div className="ml-8 space-y-1">
-                                {(q.options || []).map((opt: string, oi: number) => (
+                                {(q.options || []).map((opt: any, oi: number) => (
                                   <div key={oi} className={`flex items-center gap-2 text-xs ${t.textSub}`}>
                                     <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${isDark ? 'border-gray-600' : 'border-slate-300'}`}>
                                       <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
                                     </span>
-                                    {opt}
+                                    {typeof opt === 'string' ? opt : (opt?.label || opt?.text || JSON.stringify(opt))}
                                   </div>
                                 ))}
                               </div>
@@ -498,12 +498,12 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
                               </div>
                               {(q.options || q.choices || []).length > 0 && (
                                 <div className="ml-8 space-y-1">
-                                  {(q.options || q.choices || []).map((opt: string, oi: number) => (
+                                  {(q.options || q.choices || []).map((opt: any, oi: number) => (
                                     <div key={oi} className={`flex items-center gap-2 text-xs ${t.textSub}`}>
                                       <span className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${isDark ? 'border-gray-600' : 'border-slate-300'}`}>
                                         <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
                                       </span>
-                                      {opt}
+                                      {typeof opt === 'string' ? opt : (opt?.label || opt?.text || JSON.stringify(opt))}
                                     </div>
                                   ))}
                                 </div>

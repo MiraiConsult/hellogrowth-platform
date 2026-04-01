@@ -771,9 +771,10 @@ const NPSCampaigns: React.FC<NPSCampaignsProps> = ({ campaigns, onSaveCampaign, 
                                             </div>
                                             {(q.options || []).length > 0 && (
                                               <div className="flex flex-wrap gap-1 mt-1.5">
-                                                {q.options.map((opt: string) => (
-                                                  <span key={opt} className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100">{opt}</span>
-                                                ))}
+                                                {q.options.map((opt: any, oi: number) => {
+                                                  const label = typeof opt === 'string' ? opt : (opt?.label || opt?.text || '');
+                                                  return <span key={oi} className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100">{label}</span>;
+                                                })}
                                               </div>
                                             )}
                                           </div>
