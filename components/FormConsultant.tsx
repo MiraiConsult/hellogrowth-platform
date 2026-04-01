@@ -47,6 +47,7 @@ interface Product {
 interface QuestionOption {
   id: string;
   text: string;
+  followUpLabel?: string;
 }
 
 interface GeneratedQuestion {
@@ -1152,7 +1153,8 @@ Responda APENAS com JSON válido neste formato:
         options: q.options.map((opt, idx) => ({
           id: opt.id || `opt_${idx}`,
           label: opt.text,
-          value: 0
+          value: 0,
+          ...(opt.followUpLabel !== undefined ? { followUpLabel: opt.followUpLabel } : {})
         })),
         required: true
       })),
@@ -1806,41 +1808,82 @@ Responda agora:`;
                     <div className="space-y-2">
                       <span className="text-sm text-slate-500">Opções de resposta:</span>
                       {question.options.map((opt, optIdx) => (
-                        <div key={opt.id} className="flex items-center gap-2">
-                          <div className="flex flex-col gap-0.5">
-                            <button
-                              onClick={() => handleMoveOption(question.id, optIdx, 'up')}
-                              disabled={optIdx === 0}
-                              className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
-                              title="Mover para cima"
-                            >
-                              <ArrowUp size={12} />
-                            </button>
-                            <button
-                              onClick={() => handleMoveOption(question.id, optIdx, 'down')}
-                              disabled={optIdx === question.options.length - 1}
-                              className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
-                              title="Mover para baixo"
-                            >
-                              <ArrowDown size={12} />
-                            </button>
+                        <div key={opt.id} className="space-y-1">
+                          {/* Linha principal: input + botões */}
+                          <div className="flex items-center gap-2">
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                onClick={() => handleMoveOption(question.id, optIdx, 'up')}
+                                disabled={optIdx === 0}
+                                className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                                title="Mover para cima"
+                              >
+                                <ArrowUp size={12} />
+                              </button>
+                              <button
+                                onClick={() => handleMoveOption(question.id, optIdx, 'down')}
+                                disabled={optIdx === question.options.length - 1}
+                                className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                                title="Mover para baixo"
+                              >
+                                <ArrowDown size={12} />
+                              </button>
+                            </div>
+                            <span className="text-slate-400 text-sm w-6">{optIdx + 1}.</span>
+                            <input
+                              type="text"
+                              value={opt.text}
+                              onChange={(e) => handleEditOption(question.id, opt.id, e.target.value)}
+                              placeholder="Digite a opção..."
+                              className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                            />
+                            {question.options.length > 1 && (
+                              <button
+                                onClick={() => handleRemoveOption(question.id, opt.id)}
+                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
                           </div>
-                          <span className="text-slate-400 text-sm w-6">{optIdx + 1}.</span>
-                          <input
-                            type="text"
-                            value={opt.text}
-                            onChange={(e) => handleEditOption(question.id, opt.id, e.target.value)}
-                            placeholder="Digite a opção..."
-                            className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                          />
-                          {question.options.length > 1 && (
-                            <button
-                              onClick={() => handleRemoveOption(question.id, opt.id)}
-                              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
+                          {/* Checkbox de seguimento */}
+                          <div className="pl-14 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id={`fc-followup-${opt.id}`}
+                                checked={opt.followUpLabel !== undefined}
+                                onChange={(e) => {
+                                  const newVal = e.target.checked ? '' : undefined;
+                                  setGeneratedQuestions(prev => prev.map(q =>
+                                    q.id === question.id
+                                      ? { ...q, options: q.options.map(o => o.id === opt.id ? { ...o, followUpLabel: newVal } : o) }
+                                      : q
+                                  ));
+                                }}
+                                className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <label htmlFor={`fc-followup-${opt.id}`} className="text-xs text-slate-400 cursor-pointer hover:text-slate-600">
+                                💬 Campo de texto de seguimento (Opcional)
+                              </label>
+                            </div>
+                            {opt.followUpLabel !== undefined && (
+                              <input
+                                type="text"
+                                value={opt.followUpLabel || ''}
+                                onChange={(e) => {
+                                  setGeneratedQuestions(prev => prev.map(q =>
+                                    q.id === question.id
+                                      ? { ...q, options: q.options.map(o => o.id === opt.id ? { ...o, followUpLabel: e.target.value } : o) }
+                                      : q
+                                  ));
+                                }}
+                                placeholder="Ex: Se sim, qual?"
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                autoFocus
+                              />
+                            )}
+                          </div>
                         </div>
                       ))}
                       <button
