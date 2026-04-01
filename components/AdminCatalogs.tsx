@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Trash2, ChevronDown, ChevronUp, Package, Save, X, DollarSign, Tag } from 'lucide-react'
+import { Plus, Edit2, Trash2, ChevronDown, ChevronUp, Package, Save, X, DollarSign } from 'lucide-react'
 
 interface CatalogProduct {
   name: string
-  value_min: number
-  value_max: number
+  value: string | number
   description: string
+  // campos legados — podem existir no banco
+  value_min?: number
+  value_max?: number
 }
 
 interface ProductCatalog {
@@ -35,9 +37,27 @@ const SEGMENT_OPTIONS = [
   { value: 'automoveis', label: 'Automóveis / Oficina', icon: '🚗' },
 ]
 
-function formatCurrency(value: number) {
-  if (value >= 1000) return `R$ ${(value / 1000).toFixed(0)}k`
-  return `R$ ${value.toLocaleString('pt-BR')}`
+/** Normaliza produto do banco para o formato interno (campo value único) */
+function normalizeProduct(p: CatalogProduct): CatalogProduct {
+  // Se já tem value, usa direto
+  if (p.value !== undefined && p.value !== null && p.value !== '') {
+    return { name: p.name || '', value: p.value, description: p.description || '' }
+  }
+  // Legado: value_min / value_max → usa a média como value
+  if (p.value_min !== undefined || p.value_max !== undefined) {
+    const min = Number(p.value_min || 0)
+    const max = Number(p.value_max || 0)
+    const avg = max > 0 ? Math.round((min + max) / 2) : min
+    return { name: p.name || '', value: avg, description: p.description || '' }
+  }
+  return { name: p.name || '', value: 0, description: p.description || '' }
+}
+
+function formatCurrency(value: string | number | undefined) {
+  const num = Number(value || 0)
+  if (isNaN(num)) return 'R$ 0'
+  if (num >= 1000) return `R$ ${(num / 1000).toFixed(0)}k`
+  return `R$ ${num.toLocaleString('pt-BR')}`
 }
 
 export default function AdminCatalogs() {
@@ -53,7 +73,7 @@ export default function AdminCatalogs() {
   const [newLabel, setNewLabel] = useState('')
   const [newIcon, setNewIcon] = useState('')
   const [newProducts, setNewProducts] = useState<CatalogProduct[]>([
-    { name: '', value_min: 0, value_max: 0, description: '' }
+    { name: '', value: '', description: '' }
   ])
 
   useEffect(() => {
@@ -65,7 +85,12 @@ export default function AdminCatalogs() {
     try {
       const res = await fetch('/api/admin/catalogs')
       const data = await res.json()
-      setCatalogs(data || [])
+      // Normaliza todos os produtos ao carregar
+      const normalized = (data || []).map((cat: ProductCatalog) => ({
+        ...cat,
+        products: (cat.products || []).map(normalizeProduct)
+      }))
+      setCatalogs(normalized)
     } catch (e) {
       console.error(e)
     } finally {
@@ -114,7 +139,7 @@ export default function AdminCatalogs() {
       setNewSegment('')
       setNewLabel('')
       setNewIcon('')
-      setNewProducts([{ name: '', value_min: 0, value_max: 0, description: '' }])
+      setNewProducts([{ name: '', value: '', description: '' }])
     } finally {
       setSaving(false)
     }
@@ -137,7 +162,7 @@ export default function AdminCatalogs() {
     if (!editingCatalog) return
     setEditingCatalog({
       ...editingCatalog,
-      products: [...editingCatalog.products, { name: '', value_min: 0, value_max: 0, description: '' }]
+      products: [...editingCatalog.products, { name: '', value: '', description: '' }]
     })
   }
 
@@ -182,13 +207,13 @@ export default function AdminCatalogs() {
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="text-2xl font-bold text-slate-800">
-            {catalogs.reduce((sum, c) => sum + c.products.length, 0)}
+            {catalogs.reduce((sum, c) => sum + (c.products?.length || 0), 0)}
           </div>
           <div className="text-sm text-slate-500">Produtos genéricos no total</div>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="text-2xl font-bold text-slate-800">
-            {Math.round(catalogs.reduce((sum, c) => sum + c.products.length, 0) / Math.max(catalogs.length, 1))}
+            {Math.round(catalogs.reduce((sum, c) => sum + (c.products?.length || 0), 0) / Math.max(catalogs.length, 1))}
           </div>
           <div className="text-sm text-slate-500">Média de produtos por segmento</div>
         </div>
@@ -246,7 +271,7 @@ export default function AdminCatalogs() {
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-medium text-slate-600">Produtos Genéricos</label>
               <button
-                onClick={() => setNewProducts([...newProducts, { name: '', value_min: 0, value_max: 0, description: '' }])}
+                onClick={() => setNewProducts([...newProducts, { name: '', value: '', description: '' }])}
                 className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
               >
                 <Plus size={12} /> Adicionar produto
@@ -263,30 +288,22 @@ export default function AdminCatalogs() {
                       setNewProducts(updated)
                     }}
                     placeholder="Nome do produto/serviço"
-                    className="col-span-4 border border-slate-200 rounded px-2 py-1.5 text-sm"
+                    className="col-span-5 border border-slate-200 rounded px-2 py-1.5 text-sm"
                   />
-                  <input
-                    type="number"
-                    value={p.value_min || ''}
-                    onChange={(e) => {
-                      const updated = [...newProducts]
-                      updated[i] = { ...updated[i], value_min: Number(e.target.value) }
-                      setNewProducts(updated)
-                    }}
-                    placeholder="Valor mín R$"
-                    className="col-span-2 border border-slate-200 rounded px-2 py-1.5 text-sm"
-                  />
-                  <input
-                    type="number"
-                    value={p.value_max || ''}
-                    onChange={(e) => {
-                      const updated = [...newProducts]
-                      updated[i] = { ...updated[i], value_max: Number(e.target.value) }
-                      setNewProducts(updated)
-                    }}
-                    placeholder="Valor máx R$"
-                    className="col-span-2 border border-slate-200 rounded px-2 py-1.5 text-sm"
-                  />
+                  <div className="col-span-2 flex items-center gap-1">
+                    <span className="text-xs text-slate-400 whitespace-nowrap">R$</span>
+                    <input
+                      type="number"
+                      value={p.value || ''}
+                      onChange={(e) => {
+                        const updated = [...newProducts]
+                        updated[i] = { ...updated[i], value: e.target.value }
+                        setNewProducts(updated)
+                      }}
+                      placeholder="Valor"
+                      className="w-full border border-slate-200 rounded px-2 py-1.5 text-sm"
+                    />
+                  </div>
                   <input
                     value={p.description}
                     onChange={(e) => {
@@ -295,7 +312,7 @@ export default function AdminCatalogs() {
                       setNewProducts(updated)
                     }}
                     placeholder="Descrição breve"
-                    className="col-span-3 border border-slate-200 rounded px-2 py-1.5 text-sm"
+                    className="col-span-4 border border-slate-200 rounded px-2 py-1.5 text-sm"
                   />
                   <button
                     onClick={() => setNewProducts(newProducts.filter((_, idx) => idx !== i))}
@@ -336,7 +353,9 @@ export default function AdminCatalogs() {
                 <span className="text-2xl">{catalog.segment_icon}</span>
                 <div>
                   <div className="font-semibold text-slate-800">{catalog.segment_label}</div>
-                  <div className="text-xs text-slate-500">{catalog.products.length} produtos genéricos · slug: <code className="bg-slate-100 px-1 rounded">{catalog.segment}</code></div>
+                  <div className="text-xs text-slate-500">
+                    {catalog.products?.length || 0} produtos genéricos · slug: <code className="bg-slate-100 px-1 rounded">{catalog.segment}</code>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -389,29 +408,21 @@ export default function AdminCatalogs() {
                         </button>
                       </div>
                       <div className="space-y-2">
-                        {editingCatalog.products.map((p, i) => (
+                        {(editingCatalog.products || []).map((p, i) => (
                           <div key={i} className="grid grid-cols-12 gap-2 items-center bg-slate-50 rounded-lg p-2">
                             <input
                               value={p.name}
                               onChange={(e) => updateEditProduct(i, 'name', e.target.value)}
                               placeholder="Nome do produto/serviço"
-                              className="col-span-4 border border-slate-200 rounded px-2 py-1.5 text-sm bg-white"
+                              className="col-span-5 border border-slate-200 rounded px-2 py-1.5 text-sm bg-white"
                             />
                             <div className="col-span-2 flex items-center gap-1">
-                              <span className="text-xs text-slate-400">Mín</span>
+                              <span className="text-xs text-slate-400 whitespace-nowrap">R$</span>
                               <input
                                 type="number"
-                                value={p.value_min || ''}
-                                onChange={(e) => updateEditProduct(i, 'value_min', Number(e.target.value))}
-                                className="w-full border border-slate-200 rounded px-2 py-1.5 text-sm bg-white"
-                              />
-                            </div>
-                            <div className="col-span-2 flex items-center gap-1">
-                              <span className="text-xs text-slate-400">Máx</span>
-                              <input
-                                type="number"
-                                value={p.value_max || ''}
-                                onChange={(e) => updateEditProduct(i, 'value_max', Number(e.target.value))}
+                                value={p.value || ''}
+                                onChange={(e) => updateEditProduct(i, 'value', e.target.value)}
+                                placeholder="Valor"
                                 className="w-full border border-slate-200 rounded px-2 py-1.5 text-sm bg-white"
                               />
                             </div>
@@ -419,7 +430,7 @@ export default function AdminCatalogs() {
                               value={p.description}
                               onChange={(e) => updateEditProduct(i, 'description', e.target.value)}
                               placeholder="Descrição breve"
-                              className="col-span-3 border border-slate-200 rounded px-2 py-1.5 text-sm bg-white"
+                              className="col-span-4 border border-slate-200 rounded px-2 py-1.5 text-sm bg-white"
                             />
                             <button onClick={() => removeEditProduct(i)} className="col-span-1 text-red-400 hover:text-red-600 flex justify-center">
                               <X size={14} />
@@ -444,7 +455,7 @@ export default function AdminCatalogs() {
                 ) : (
                   /* Modo visualização */
                   <div className="grid grid-cols-2 gap-3">
-                    {catalog.products.map((p, i) => (
+                    {(catalog.products || []).map((p, i) => (
                       <div key={i} className="flex items-start gap-3 bg-slate-50 rounded-lg p-3">
                         <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
                           <Package size={14} className="text-emerald-600" />
@@ -452,12 +463,14 @@ export default function AdminCatalogs() {
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-slate-800 text-sm">{p.name}</div>
                           <div className="text-xs text-slate-500 mt-0.5 truncate">{p.description}</div>
-                          <div className="flex items-center gap-1 mt-1">
-                            <DollarSign size={10} className="text-emerald-600" />
-                            <span className="text-xs font-medium text-emerald-700">
-                              {formatCurrency(p.value_min)} – {formatCurrency(p.value_max)}
-                            </span>
-                          </div>
+                          {(p.value !== undefined && p.value !== '' && p.value !== 0) && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <DollarSign size={10} className="text-emerald-600" />
+                              <span className="text-xs font-medium text-emerald-700">
+                                {formatCurrency(p.value)}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
