@@ -479,7 +479,14 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
                // Check if New Onboarding Wizard is needed (substitui o tour antigo)
                // Show wizard for new users who haven't completed onboarding
                const hasCompletedOnboarding = localStorage.getItem('hg_wizard_complete');
-               if (!hasCompletedOnboarding && tenantId) {
+               
+               // Se o perfil do negócio já foi preenchido, não mostrar onboarding
+               const hasBusinessProfile = !!(dbBizProfile?.company_name || dbBizProfile?.business_type || dbBizProfile?.business_description);
+               
+               if (hasBusinessProfile) {
+                 // Perfil já preenchido — marcar onboarding como completo e não exibir
+                 localStorage.setItem('hg_wizard_complete', 'true');
+               } else if (!hasCompletedOnboarding && tenantId) {
                  // Check onboarding_progress table
                  try {
                    const { data: onboardingData } = await supabase
