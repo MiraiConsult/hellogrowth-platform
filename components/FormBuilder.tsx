@@ -244,7 +244,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setEditingFormId(form.id);
     setCurrentFormName(form.name);
     setCurrentFormDescription(form.description || '');
-    setCurrentQuestions(form.questions.map(q => ({ ...q, type: normalizeQuestionType(q.type), options: q.options?.map(opt => ({ ...opt, label: typeof opt.label === "object" && opt.label?.text ? opt.label.text : (opt.label || opt.text || "") })) || [] })));
+    setCurrentQuestions(form.questions.map(q => ({ ...q, type: normalizeQuestionType(q.type), options: q.options?.map(opt => ({ ...opt, label: typeof opt.label === "object" && opt.label?.text ? opt.label.text : (opt.label || opt.text || ""), ...(opt.followUpLabel !== undefined ? { followUpLabel: opt.followUpLabel } : {}) })) || [] })));
     setCurrentInitialFields(form.initialFields || []);
     setCurrentGameEnabled(form.game_enabled || false);
     setCurrentGameId(form.game_id || null);
@@ -1054,146 +1054,83 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                        <p className="text-sm font-semibold text-gray-700">Alternativas e Automações</p>
                        
                        {q.options?.map((opt, optIndex) => (
-                         <div key={opt.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200 relative group">
-                           <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <button
-                               onClick={() => handleMoveOption(q.id, optIndex, 'up')}
-                               disabled={optIndex === 0}
-                               className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-20 disabled:cursor-not-allowed"
-                               title="Mover para cima"
-                             >
-                               <ArrowUp size={12} />
-                             </button>
-                             <button
-                               onClick={() => handleMoveOption(q.id, optIndex, 'down')}
-                               disabled={optIndex === (q.options?.length ?? 1) - 1}
-                               className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-20 disabled:cursor-not-allowed"
-                               title="Mover para baixo"
-                             >
-                               <ArrowDown size={12} />
-                             </button>
-                             <button 
-                               onClick={() => removeOption(q.id, opt.id)}
-                               className="p-1 text-gray-300 hover:text-red-500 transition-colors"
-                             >
-                               <Trash2 size={14} />
-                             </button>
-                           </div>
-                           
-                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                             <div>
-                               <label className="block text-xs font-medium text-gray-500 mb-1">Rótulo da Opção</label>
-                               <input 
-                                  type="text" 
-                                  value={opt.label}
-                                  onChange={(e) => updateOption(q.id, opt.id, 'label', e.target.value)}
-                                  placeholder="Ex: Sim, tenho dor"
-                                  className="w-full rounded border-gray-300 p-2 text-sm bg-white text-gray-900"
-                                  style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                               />
+                         <div key={opt.id} className="space-y-1">
+                           {/* Linha principal: input + botões */}
+                           <div className="flex items-center gap-2">
+                             <div className="flex flex-col gap-0.5">
+                               <button onClick={() => handleMoveOption(q.id, optIndex, 'up')} disabled={optIndex === 0} className="p-0.5 text-gray-300 hover:text-gray-500 disabled:opacity-20"><ArrowUp size={11} /></button>
+                               <button onClick={() => handleMoveOption(q.id, optIndex, 'down')} disabled={optIndex === (q.options?.length ?? 1) - 1} className="p-0.5 text-gray-300 hover:text-gray-500 disabled:opacity-20"><ArrowDown size={11} /></button>
                              </div>
-                             <div>
-                               <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
-                                 <DollarSign size={12} /> Valor de Oportunidade (R$)
+                             <input
+                               type="text"
+                               value={opt.label}
+                               onChange={(e) => updateOption(q.id, opt.id, 'label', e.target.value)}
+                               placeholder="Texto da alternativa"
+                               className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-primary-400 focus:border-transparent"
+                               style={{ backgroundColor: '#ffffff', color: '#111827' }}
+                             />
+                             <button onClick={() => removeOption(q.id, opt.id)} className="p-1.5 text-gray-300 hover:text-red-500 transition-colors rounded"><Trash2 size={14} /></button>
+                           </div>
+                           {/* Checkbox de seguimento — sempre visível */}
+                           <div className="pl-10 space-y-1">
+                             <div className="flex items-center gap-2">
+                               <input
+                                 type="checkbox"
+                                 id={`followup-check-${opt.id}`}
+                                 checked={opt.followUpLabel !== undefined}
+                                 onChange={(e) => {
+                                   const newValue = e.target.checked ? '' : undefined;
+                                   updateOption(q.id, opt.id, 'followUpLabel', newValue);
+                                 }}
+                                 className="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                               />
+                               <label htmlFor={`followup-check-${opt.id}`} className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer hover:text-gray-600">
+                                 <MessageSquare size={11} /> Campo de texto de seguimento (Opcional)
                                </label>
-                               <input 
-                                  type="number" 
-                                  value={opt.value}
-                                  onChange={(e) => updateOption(q.id, opt.id, 'value', parseFloat(e.target.value))}
-                                  placeholder="0.00"
-                                  className="w-full rounded border-gray-300 p-2 text-sm text-green-700 font-medium bg-white"
-                                  style={{ backgroundColor: '#ffffff' }}
+                             </div>
+                             {opt.followUpLabel !== undefined && (
+                               <input
+                                 type="text"
+                                 value={opt.followUpLabel || ''}
+                                 onChange={(e) => updateOption(q.id, opt.id, 'followUpLabel', e.target.value)}
+                                 placeholder="Ex: Se sim, qual?"
+                                 className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs bg-white text-gray-700 placeholder-gray-400 focus:ring-1 focus:ring-primary-400"
+                                 style={{ backgroundColor: '#ffffff', color: '#374151' }}
+                                 autoFocus
                                />
-                             </div>
-                           </div>
-                           
-                           <div className="space-y-4">
-                             <div>
-                               <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
-                                 <Package size={12} /> Produto/Serviço Sugerido
-                               </label>
-                               <input 
-                                  type="text" 
-                                  value={opt.linkedProduct || ''}
-                                  onChange={(e) => updateOption(q.id, opt.id, 'linkedProduct', e.target.value)}
-                                  placeholder="Ex: Limpeza Dental"
-                                  className="w-full rounded border-gray-300 p-2 text-sm bg-white text-gray-900"
-                                  style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                               />
-                             </div>
-                             <div>
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    id={`script-check-${opt.id}`}
-                                    checked={opt.script !== undefined}
-                                    onChange={(e) => {
-                                      const newValue = e.target.checked ? '' : undefined;
-                                      updateOption(q.id, opt.id, 'script', newValue);
-                                    }}
-                                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                                  />
-                                  <label htmlFor={`script-check-${opt.id}`} className="flex items-center gap-1 text-xs font-medium text-gray-500 cursor-pointer">
-                                    <MessageSquare size={12} /> Script de Vendas (IA)
-                                  </label>
-                                </div>
-                                
-                                {opt.script !== undefined && (
-                                  <div className="mt-2">
-                                    <div className="relative">
-                                      <input 
-                                         type="text" 
-                                         value={opt.script || ''}
-                                         onChange={(e) => updateOption(q.id, opt.id, 'script', e.target.value)}
-                                         placeholder="O que o vendedor deve falar..."
-                                         className="w-full rounded border-gray-300 p-2 text-sm italic text-gray-600 pr-8 bg-white"
-                                         style={{ backgroundColor: '#ffffff' }}
-                                         autoFocus
-                                      />
-                                      <button 
-                                         onClick={() => handleGenerateScript(q.id, opt.id, q.text, opt.label)}
-                                         disabled={generatingScriptId === opt.id || !q.text || !opt.label}
-                                         className="absolute right-2 top-1/2 -translate-y-1/2 text-purple-500 hover:text-purple-700 disabled:opacity-50"
-                                         title="Gerar script com IA"
-                                      >
-                                         {generatingScriptId === opt.id ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-                                      </button>
-                                    </div>
-                                    <p className="text-xs text-gray-400 mt-1 pl-1">Dica curta para o vendedor. Aparecerá no Kanban.</p>
-                                  </div>
-                                )}
-                             </div>
-                           </div>
-
-                           <div className="mt-3 space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    id={`followup-check-${opt.id}`}
-                                    checked={opt.followUpLabel !== undefined}
-                                    onChange={(e) => {
-                                      const newValue = e.target.checked ? '' : undefined;
-                                      updateOption(q.id, opt.id, 'followUpLabel', newValue);
-                                    }}
-                                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                                  />
-                                  <label htmlFor={`followup-check-${opt.id}`} className="flex items-center gap-1 text-xs font-medium text-gray-500 cursor-pointer">
-                                    <MessageSquare size={12} /> Campo de texto de seguimento (Opcional)
-                                  </label>
-                                </div>
-                                {opt.followUpLabel !== undefined && (
-                                  <div className="pl-6">
-                                    <input
-                                      type="text"
-                                      value={opt.followUpLabel || ''}
-                                      onChange={(e) => updateOption(q.id, opt.id, 'followUpLabel', e.target.value)}
-                                      placeholder="Ex: Se sim, qual?"
-                                      className="w-full rounded border-gray-300 p-2 text-sm bg-white text-gray-900 placeholder-gray-400"
-                                      style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                                      autoFocus
-                                    />
-                                  </div>
-                                )}
+                             )}
+                             {/* Configurações avançadas colapsáveis */}
+                             <details className="group">
+                               <summary className="flex items-center gap-1 text-xs text-gray-300 cursor-pointer hover:text-gray-500 select-none list-none">
+                                 <ChevronDown size={11} className="group-open:rotate-180 transition-transform" /> Configurações avançadas
+                               </summary>
+                               <div className="mt-2 space-y-2 pl-1">
+                                 <div className="grid grid-cols-2 gap-2">
+                                   <div>
+                                     <label className="block text-xs text-gray-400 mb-1 flex items-center gap-1"><DollarSign size={10} /> Valor de Oportunidade (R$)</label>
+                                     <input type="number" value={opt.value} onChange={(e) => updateOption(q.id, opt.id, 'value', parseFloat(e.target.value))} placeholder="0.00" className="w-full rounded border-gray-200 p-1.5 text-xs text-green-700 bg-white" style={{ backgroundColor: '#ffffff' }} />
+                                   </div>
+                                   <div>
+                                     <label className="block text-xs text-gray-400 mb-1 flex items-center gap-1"><Package size={10} /> Produto/Serviço</label>
+                                     <input type="text" value={opt.linkedProduct || ''} onChange={(e) => updateOption(q.id, opt.id, 'linkedProduct', e.target.value)} placeholder="Ex: Limpeza Dental" className="w-full rounded border-gray-200 p-1.5 text-xs bg-white text-gray-700" style={{ backgroundColor: '#ffffff', color: '#374151' }} />
+                                   </div>
+                                 </div>
+                                 <div>
+                                   <div className="flex items-center gap-2 mb-1">
+                                     <input type="checkbox" id={`script-check-${opt.id}`} checked={opt.script !== undefined} onChange={(e) => { const v = e.target.checked ? '' : undefined; updateOption(q.id, opt.id, 'script', v); }} className="h-3.5 w-3.5 rounded border-gray-300" />
+                                     <label htmlFor={`script-check-${opt.id}`} className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer"><MessageSquare size={10} /> Script de Vendas (IA)</label>
+                                   </div>
+                                   {opt.script !== undefined && (
+                                     <div className="relative">
+                                       <input type="text" value={opt.script || ''} onChange={(e) => updateOption(q.id, opt.id, 'script', e.target.value)} placeholder="O que o vendedor deve falar..." className="w-full rounded border-gray-200 p-1.5 text-xs italic text-gray-600 pr-7 bg-white" style={{ backgroundColor: '#ffffff' }} autoFocus />
+                                       <button onClick={() => handleGenerateScript(q.id, opt.id, q.text, opt.label)} disabled={generatingScriptId === opt.id || !q.text || !opt.label} className="absolute right-2 top-1/2 -translate-y-1/2 text-purple-400 hover:text-purple-600 disabled:opacity-50" title="Gerar com IA">
+                                         {generatingScriptId === opt.id ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+                                       </button>
+                                     </div>
+                                   )}
+                                 </div>
+                               </div>
+                             </details>
                            </div>
                          </div>
                        ))}
@@ -1282,7 +1219,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                 : (opt.label?.text || opt.text?.text || 'Opção'))),
           value: opt.value || 0,
           linkedProduct: opt.linkedProduct || '',
-          script: opt.script || ''
+          script: opt.script || '',
+          ...(opt.followUpLabel !== undefined ? { followUpLabel: opt.followUpLabel } : {})
         })) || []
       })),
       active: existingForm?.active ?? true,
