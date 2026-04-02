@@ -857,26 +857,22 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-medium text-gray-700">Exibir Logo da Empresa</h3>
+                <h3 className="text-sm font-medium text-gray-700">Logo da Empresa</h3>
                 <p className="text-xs text-gray-500 mt-1">
                   {businessProfile?.logo_url
-                    ? 'Sua logo será exibida no topo do formulário'
+                    ? 'Exibir sua logo no topo do formulário'
                     : 'Cadastre uma logo em Configurações → Perfil do Negócio'}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setCurrentShowLogo(!currentShowLogo)}
-                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors cursor-pointer ${
-                  currentShowLogo ? 'bg-emerald-500' : 'bg-slate-300'
-                }`}
-              >
-                <span
-                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                    currentShowLogo ? 'translate-x-9' : 'translate-x-1'
-                  }`}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={currentShowLogo}
+                  onChange={(e) => setCurrentShowLogo(e.target.checked)}
+                  className="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"
                 />
-              </button>
+                <span className="font-medium text-slate-700">Ativar</span>
+              </label>
             </div>
             {currentShowLogo && businessProfile?.logo_url && (
               <div className="mt-3 flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">

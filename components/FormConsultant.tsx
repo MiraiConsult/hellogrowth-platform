@@ -2058,25 +2058,21 @@ Responda agora:`;
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-base font-semibold text-slate-800">Logo da Empresa</h3>
-              <p className="text-sm text-slate-500 mt-0.5">
+              <p className="text-sm text-slate-500 mt-1">
                 {businessProfile?.logo_url
-                  ? 'Sua logo será exibida no topo do formulário'
-                  : 'Cadastre uma logo em Configurações → Perfil do Negócio para ativar'}
+                  ? 'Exibir sua logo no topo do formulário'
+                  : 'Cadastre uma logo em Configurações → Perfil do Negócio'}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowLogo(!showLogo)}
-              className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors cursor-pointer ${
-                showLogo ? 'bg-emerald-500' : 'bg-slate-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                  showLogo ? 'translate-x-9' : 'translate-x-1'
-                }`}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showLogo}
+                onChange={(e) => setShowLogo(e.target.checked)}
+                className="w-4 h-4 text-emerald-500 rounded focus:ring-emerald-500"
               />
-            </button>
+              <span className="font-medium text-slate-700">Ativar</span>
+            </label>
           </div>
           {showLogo && businessProfile?.logo_url && (
             <div className="mt-3 flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
