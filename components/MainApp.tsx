@@ -783,7 +783,6 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   // --- CRUD HANDLERS ---
   const handleSaveForm = async (form: Form) => {
     if (!supabase) return;
-    console.log('[MainApp handleSaveForm] form.show_logo recebido:', (form as any).show_logo);
     const formData = {
       name: form.name,
       description: form.description,

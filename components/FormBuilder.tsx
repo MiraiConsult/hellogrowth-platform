@@ -528,8 +528,6 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         product_ids: selectedProductIds.length > 0 ? selectedProductIds : undefined
     };
 
-    console.log('[FormBuilder handleSave] currentShowLogo:', currentShowLogo, '| formToSave.show_logo:', formToSave.show_logo);
-
     // Trigger Parent Handler for DB Save
     onSaveForm(formToSave);
     setView('list');
@@ -1234,8 +1232,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       createdAt: existingForm?.createdAt || new Date().toISOString(),
       // CORREÇÃO: Usa o formato correto de initialFields
       initialFields: initialFieldsFormatted,
-      game_enabled: formData.game_enabled || false
-    };
+      game_enabled: formData.game_enabled || false,
+      game_id: formData.game_id || null,
+      show_logo: formData.show_logo || false
+    } as any;
     onSaveForm(newForm);
   };
 
