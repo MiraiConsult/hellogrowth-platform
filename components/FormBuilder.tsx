@@ -861,20 +861,19 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                 <p className="text-xs text-gray-500 mt-1">
                   {businessProfile?.logo_url
                     ? 'Sua logo será exibida no topo do formulário'
-                    : 'Cadastre uma logo em Configurações → Perfil do Negócio para ativar'}
+                    : 'Cadastre uma logo em Configurações → Perfil do Negócio'}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => businessProfile?.logo_url && setCurrentShowLogo(!currentShowLogo)}
-                disabled={!businessProfile?.logo_url}
-                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
-                  currentShowLogo && businessProfile?.logo_url ? 'bg-emerald-500' : 'bg-slate-300'
-                } ${!businessProfile?.logo_url ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                onClick={() => setCurrentShowLogo(!currentShowLogo)}
+                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors cursor-pointer ${
+                  currentShowLogo ? 'bg-emerald-500' : 'bg-slate-300'
+                }`}
               >
                 <span
                   className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                    currentShowLogo && businessProfile?.logo_url ? 'translate-x-9' : 'translate-x-1'
+                    currentShowLogo ? 'translate-x-9' : 'translate-x-1'
                   }`}
                 />
               </button>
@@ -883,6 +882,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
               <div className="mt-3 flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
                 <img src={businessProfile.logo_url} alt="Logo" className="h-10 w-auto object-contain" />
                 <p className="text-xs text-emerald-700">Esta logo aparecerá no topo do formulário público</p>
+              </div>
+            )}
+            {currentShowLogo && !businessProfile?.logo_url && (
+              <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                <p className="text-xs text-amber-700">⚠️ Nenhuma logo cadastrada. Acesse Configurações → Perfil do Negócio para adicionar.</p>
               </div>
             )}
           </div>

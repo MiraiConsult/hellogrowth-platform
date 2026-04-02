@@ -2066,15 +2066,14 @@ Responda agora:`;
             </div>
             <button
               type="button"
-              onClick={() => businessProfile?.logo_url && setShowLogo(!showLogo)}
-              disabled={!businessProfile?.logo_url}
-              className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
-                showLogo && businessProfile?.logo_url ? 'bg-emerald-500' : 'bg-slate-300'
-              } ${!businessProfile?.logo_url ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              onClick={() => setShowLogo(!showLogo)}
+              className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors cursor-pointer ${
+                showLogo ? 'bg-emerald-500' : 'bg-slate-300'
+              }`}
             >
               <span
                 className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                  showLogo && businessProfile?.logo_url ? 'translate-x-9' : 'translate-x-1'
+                  showLogo ? 'translate-x-9' : 'translate-x-1'
                 }`}
               />
             </button>
@@ -2083,6 +2082,11 @@ Responda agora:`;
             <div className="mt-3 flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
               <img src={businessProfile.logo_url} alt="Logo" className="h-10 w-auto object-contain" />
               <p className="text-xs text-emerald-700">Esta logo aparecerá no topo do formulário público</p>
+            </div>
+          )}
+          {showLogo && !businessProfile?.logo_url && (
+            <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+              <p className="text-xs text-amber-700">⚠️ Nenhuma logo cadastrada. Acesse Configurações → Perfil do Negócio para adicionar.</p>
             </div>
           )}
         </div>
