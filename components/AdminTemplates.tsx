@@ -707,7 +707,7 @@ export default function AdminTemplates({ isDark }: AdminTemplatesProps) {
                 <select value={editF.ramoNegocio} onChange={e => setEditF((f: any) => ({ ...f, ramoNegocio: e.target.value }))}
                   className="w-full text-sm px-3 py-2.5 rounded-lg border border-slate-300 bg-white focus:outline-none">
                   <option value="">Selecionar ramo...</option>
-                  {RAMOS.map(r => <option key={r} value={r}>{r}</option>)}
+                  {allRamos.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div>
