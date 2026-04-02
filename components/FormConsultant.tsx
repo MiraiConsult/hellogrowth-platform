@@ -153,6 +153,7 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [initialMessageSent, setInitialMessageSent] = useState(false);
   const [isEditingTone, setIsEditingTone] = useState(false); // Modo de edição de tom (reescrever perguntas existentes)
   const [gameEnabled, setGameEnabled] = useState(false); // Ativar Game no formulário
+  const [showLogo, setShowLogo] = useState(false); // Exibir logo no formulário
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [availableGames, setAvailableGames] = useState<any[]>([]);
   
@@ -1164,6 +1165,7 @@ Responda APENAS com JSON válido neste formato:
       },
       game_enabled: gameEnabled,
       game_id: selectedGameId || null,
+      show_logo: showLogo,
       status: 'active'
     };
 
@@ -2049,6 +2051,40 @@ Responda agora:`;
             placeholder="Ex: Diagnóstico de Beleza, Qualificação de Leads..."
             className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
           />
+        </div>
+
+        {/* Logo da Empresa */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-slate-800">Logo da Empresa</h3>
+              <p className="text-sm text-slate-500 mt-0.5">
+                {businessProfile?.logo_url
+                  ? 'Sua logo será exibida no topo do formulário'
+                  : 'Cadastre uma logo em Configurações → Perfil do Negócio para ativar'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => businessProfile?.logo_url && setShowLogo(!showLogo)}
+              disabled={!businessProfile?.logo_url}
+              className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
+                showLogo && businessProfile?.logo_url ? 'bg-emerald-500' : 'bg-slate-300'
+              } ${!businessProfile?.logo_url ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                  showLogo && businessProfile?.logo_url ? 'translate-x-9' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          {showLogo && businessProfile?.logo_url && (
+            <div className="mt-3 flex items-center gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+              <img src={businessProfile.logo_url} alt="Logo" className="h-10 w-auto object-contain" />
+              <p className="text-xs text-emerald-700">Esta logo aparecerá no topo do formulário público</p>
+            </div>
+          )}
         </div>
 
         {/* Configuração de Roleta da Sorte (Game) */}
