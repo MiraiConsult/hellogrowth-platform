@@ -528,6 +528,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         product_ids: selectedProductIds.length > 0 ? selectedProductIds : undefined
     };
 
+    console.log('[FormBuilder handleSave] currentShowLogo:', currentShowLogo, '| formToSave.show_logo:', formToSave.show_logo);
+
     // Trigger Parent Handler for DB Save
     onSaveForm(formToSave);
     setView('list');
