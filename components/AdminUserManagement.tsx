@@ -5,7 +5,9 @@ import {
   Plus, Trash2, LogOut, Loader2, Users, Edit, X, Save, RefreshCw,
   Key, CheckCircle, AlertTriangle, Clock, Gift, CreditCard,
   ExternalLink, Building2, AlertCircle, Search, ChevronRight, Copy,
-  Zap, Star, UserPlus, DollarSign, Check, Moon, Sun, Send, BookOpen, Package, TrendingUp
+  Zap, Star, UserPlus, DollarSign, Check, Moon, Sun, Send, BookOpen, Package, TrendingUp,
+  LayoutDashboard, Brain, MessageSquare, ChevronLeft, BarChart3,
+  Activity, Heart, FileText, MessageCircle, UserCheck, UserCog
 } from 'lucide-react';
 import AdminBroadcast from '@/components/AdminBroadcast';
 import AdminIntelligence from '@/components/AdminIntelligence';
@@ -52,6 +54,10 @@ interface Client {
   consolidatedStatus: string;
   consolidatedTrialModel: string | null;
   consolidatedDaysRemaining: number | null;
+  tenantId?: string | null;
+  sdrName?: string | null;
+  csName?: string | null;
+  internalNotes?: string | null;
 }
 
 interface AdminUserManagementProps {
@@ -220,7 +226,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [isDark, setIsDark] = useState(true);
   const t = isDark ? DARK : LIGHT;
   // ── Active Tab ──
-  const [activeTab, setActiveTab] = useState<'home' | 'clients' | 'broadcast' | 'intelligence' | 'templates' | 'catalogs' | 'financeiro'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'clients' | 'broadcast' | 'intelligence' | 'templates' | 'catalogs' | 'financeiro' | 'conteudo'>('home');
+  const [conteudoSubTab, setConteudoSubTab] = useState<'templates' | 'catalogs' | 'broadcast'>('templates');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [asaasClientMap, setAsaasClientMap] = useState<Record<string, any>>({});
   const [asaasLoaded, setAsaasLoaded] = useState(false);
 
@@ -255,6 +263,10 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  const [clientUsageMap, setClientUsageMap] = useState<Record<string, any>>({});
+  const [loadingUsage, setLoadingUsage] = useState<Record<string, boolean>>({});
+  const [editingSdrCs, setEditingSdrCs] = useState<string | null>(null);
+  const [sdrCsForm, setSdrCsForm] = useState({ sdr_name: '', cs_name: '', internal_notes: '' });
   const [paymentLinkResult, setPaymentLinkResult] = useState<{ url: string; emailSent: boolean } | null>(null);
   const [sendingLink, setSendingLink] = useState(false);
 
@@ -303,6 +315,41 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
     setTimeout(() => setToast(null), 4000);
+  };
+
+  // ── Client Usage ──
+  const fetchClientUsage = async (client: Client) => {
+    const tenantId = client.tenantId || client.primaryCompany?.id || client.companies?.[0]?.id;
+    if (!tenantId || clientUsageMap[tenantId]) return;
+    setLoadingUsage(prev => ({ ...prev, [tenantId]: true }));
+    try {
+      const res = await fetch(`/api/admin/client-usage?tenant_id=${tenantId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setClientUsageMap(prev => ({ ...prev, [tenantId]: data }));
+      }
+    } catch (err) {
+      console.error('Error fetching client usage:', err);
+    } finally {
+      setLoadingUsage(prev => ({ ...prev, [tenantId]: false }));
+    }
+  };
+
+  const handleSaveSdrCs = async (clientId: string) => {
+    try {
+      const res = await fetch('/api/admin/client-usage', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: clientId, ...sdrCsForm }),
+      });
+      if (res.ok) {
+        showToast('success', 'SDR/CS atualizado com sucesso!');
+        setEditingSdrCs(null);
+        fetchClients();
+      }
+    } catch (err) {
+      showToast('error', 'Erro ao salvar SDR/CS');
+    }
   };
 
   // ── Create Client ──
@@ -621,8 +668,16 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const btnPrimary = `flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed`;
   const btnSecondary = `flex items-center justify-center gap-2 border ${t.btnSecondary} text-sm font-medium px-4 py-2.5 rounded-lg transition-colors`;
 
+  const NAV_ITEMS = [
+    { id: 'home',         label: 'Início',       icon: <LayoutDashboard size={18} />, activeClass: 'bg-emerald-600 text-white' },
+    { id: 'clients',      label: 'Clientes',     icon: <Users size={18} />,           activeClass: 'bg-emerald-600 text-white' },
+    { id: 'financeiro',   label: 'Financeiro',   icon: <TrendingUp size={18} />,      activeClass: 'bg-violet-600 text-white' },
+    { id: 'conteudo',     label: 'Conteúdo',     icon: <BookOpen size={18} />,        activeClass: 'bg-orange-500 text-white' },
+    { id: 'intelligence', label: 'Inteligência', icon: <Brain size={18} />,           activeClass: 'bg-purple-600 text-white' },
+  ];
+
   return (
-    <div className={`min-h-screen ${t.bg} transition-colors duration-200`}>
+    <div className={`flex min-h-screen ${t.bg} transition-colors duration-200`}>
       {/* Toast */}
       {toast && (
         <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
@@ -631,112 +686,113 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         </div>
       )}
 
-      {/* Header */}
-      <header className={`${t.header} border-b px-6 py-4 sticky top-0 z-30`}>
-        <div className="max-w-screen-2xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-sm">
-              <Zap size={16} className="text-white" />
+      {/* ── SIDEBAR ── */}
+      <aside className={`
+        ${isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-slate-200'}
+        border-r h-screen flex flex-col fixed left-0 top-0 z-20
+        transition-all duration-300 ease-in-out
+        ${sidebarCollapsed ? 'w-[72px]' : 'w-60'}
+      `}>
+        {/* Logo */}
+        <div className={`px-4 py-5 flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} relative`}>
+          {!sidebarCollapsed ? (
+            <span className="font-extrabold text-xl tracking-tight select-none">
+              <span className="text-emerald-500">Hello</span>
+              <span className={isDark ? 'text-white' : 'text-slate-800'}>Growth</span>
+            </span>
+          ) : (
+            <div className="w-9 h-9 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
+              H
             </div>
-            <div>
-              <h1 className={`text-lg font-bold ${t.text}`}>HelloGrowth Admin</h1>
-              <p className={`text-xs ${t.textMuted}`}>Painel de Gestão de Clientes</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Theme Toggle */}
-            <button
-              onClick={() => setIsDark(!isDark)}
-              className={`p-2 rounded-lg border ${t.btnSecondary} transition-colors`}
-              title={isDark ? 'Modo claro' : 'Modo escuro'}
-            >
-              {isDark ? <Sun size={16} /> : <Moon size={16} />}
-            </button>
-            <div className="flex items-center gap-1 border rounded-lg overflow-hidden">
-              <button
-                onClick={() => setActiveTab('home')}
-                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
-                  activeTab === 'home'
-                    ? 'bg-emerald-600 text-white'
-                    : `${t.btnSecondary}`
-                }`}
-              >
-                <Zap size={14} /> Home
-              </button>
-              <button
-                onClick={() => setActiveTab('clients')}
-                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
-                  activeTab === 'clients'
-                    ? 'bg-emerald-600 text-white'
-                    : `${t.btnSecondary}`
-                }`}
-              >
-                <Users size={14} /> Clientes
-              </button>
-              <button
-                onClick={() => { setActiveTab('intelligence'); fetchAnalytics(); }}
-                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
-                  activeTab === 'intelligence'
-                    ? 'bg-purple-600 text-white'
-                    : `${t.btnSecondary}`
-                }`}
-              >
-                <Zap size={14} /> Inteligência
-              </button>
-              <button
-                onClick={() => setActiveTab('catalogs')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                  activeTab === 'catalogs'
-                    ? 'bg-orange-500 text-white shadow-md'
-                    : isDark ? 'text-slate-300 hover:bg-slate-700' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Package size={14} /> Catálogos
-              </button>
-              <button
-                onClick={() => setActiveTab('templates')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                  activeTab === 'templates'                 ? 'bg-emerald-600 text-white'
-                    : `${t.btnSecondary}`
-                }`}
-              >
-                <BookOpen size={14} /> Templates
-              </button>
-              <button
-                onClick={() => setActiveTab('financeiro')}
-                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
-                  activeTab === 'financeiro'
-                    ? 'bg-violet-600 text-white'
-                    : `${t.btnSecondary}`
-                }`}
-              >
-                <TrendingUp size={14} /> Financeiro
-              </button>
-              <button
-                onClick={() => setActiveTab('broadcast')}
-                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
-                  activeTab === 'broadcast'
-                    ? 'bg-emerald-600 text-white'
-                    : `${t.btnSecondary}`
-                }`}
-              >
-                <Send size={14} /> Disparo
-              </button>
-            </div>
-            {activeTab === 'clients' && (
-              <button
-                onClick={() => { setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '' }); setNewClientTrialModel('none'); setEditModal('new_client'); }}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
-              >
-                <UserPlus size={16} /> Novo Cliente
-              </button>
-            )}
-            <button onClick={onLogout} className={`flex items-center gap-2 ${t.textSub} hover:${t.text} text-sm px-3 py-2 rounded-lg hover:${isDark ? 'bg-gray-800' : 'bg-slate-100'} transition-colors`}>
-              <LogOut size={16} /> Sair
-            </button>
-          </div>
+          )}
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className={`absolute -right-3 top-6 w-6 h-6 ${
+              isDark ? 'bg-gray-900 border-gray-700 text-gray-400 hover:text-emerald-400' : 'bg-white border-slate-200 text-slate-400 hover:text-emerald-500'
+            } border rounded-full flex items-center justify-center shadow-sm transition-colors z-30`}
+          >
+            {sidebarCollapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+          </button>
         </div>
-      </header>
+
+        {!sidebarCollapsed && (
+          <div className="px-4 pb-3">
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+              isDark ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-50 text-emerald-700'
+            }`}>
+              <Zap size={10} /> Painel Admin
+            </span>
+          </div>
+        )}
+
+        <div className={`mx-4 mb-2 h-px ${isDark ? 'bg-gray-800' : 'bg-slate-100'}`} />
+
+        {/* Nav */}
+        <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
+          {NAV_ITEMS.map(item => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id as any);
+                  if (item.id === 'intelligence') fetchAnalytics();
+                }}
+                title={sidebarCollapsed ? item.label : undefined}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group relative ${
+                  isActive
+                    ? item.activeClass
+                    : isDark
+                      ? 'text-gray-400 hover:text-white hover:bg-gray-800'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <span className="shrink-0">{item.icon}</span>
+                {!sidebarCollapsed && <span>{item.label}</span>}
+                {sidebarCollapsed && (
+                  <span className="absolute left-full ml-3 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl">
+                    {item.label}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Footer */}
+        <div className={`px-2 py-2 border-t ${isDark ? 'border-gray-800' : 'border-slate-100'} space-y-0.5`}>
+          {activeTab === 'clients' && (
+            <button
+              onClick={() => { setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '' }); setNewClientTrialModel('none'); setEditModal('new_client'); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors bg-emerald-600 hover:bg-emerald-500 text-white`}
+            >
+              <span className="shrink-0"><UserPlus size={18} /></span>
+              {!sidebarCollapsed && <span>Novo Cliente</span>}
+            </button>
+          )}
+          <button
+            onClick={() => setIsDark(!isDark)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+              isDark ? 'text-gray-400 hover:text-white hover:bg-gray-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <span className="shrink-0">{isDark ? <Sun size={18} /> : <Moon size={18} />}</span>
+            {!sidebarCollapsed && <span>{isDark ? 'Modo Claro' : 'Modo Escuro'}</span>}
+          </button>
+          <button
+            onClick={onLogout}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+              isDark ? 'text-gray-400 hover:text-red-400 hover:bg-gray-800' : 'text-slate-500 hover:text-red-600 hover:bg-red-50'
+            }`}
+          >
+            <span className="shrink-0"><LogOut size={18} /></span>
+            {!sidebarCollapsed && <span>Sair</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* ── MAIN CONTENT ── */}
+      <div className={`flex-1 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'ml-[72px]' : 'ml-60'}`}>
 
       {activeTab === 'home' && (
         <AdminHome isDark={isDark} onNavigate={(tab) => setActiveTab(tab as any)} />
@@ -744,14 +800,32 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       {activeTab === 'financeiro' && (
         <AdminFinanceiro isDark={isDark} />
       )}
-      {activeTab === 'broadcast' && (
-        <AdminBroadcast isDark={isDark} />
-      )}
-      {activeTab === 'catalogs' && (
-        <AdminCatalogs isDark={isDark} />
-      )}
-      {activeTab === 'templates' && (
-        <AdminTemplates isDark={isDark} surveysData={analyticsData} />
+      {activeTab === 'conteudo' && (
+        <div className="flex flex-col min-h-screen">
+          {/* Sub-nav */}
+          <div className={`border-b ${t.border} ${t.surface} px-6 py-3 flex items-center gap-2`}>
+            {[
+              { id: 'templates', label: 'Templates', icon: <BookOpen size={14} /> },
+              { id: 'catalogs',  label: 'Catálogos',  icon: <Package size={14} /> },
+              { id: 'broadcast', label: 'Disparo',   icon: <MessageSquare size={14} /> },
+            ].map(sub => (
+              <button
+                key={sub.id}
+                onClick={() => setConteudoSubTab(sub.id as any)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  conteudoSubTab === sub.id
+                    ? 'bg-orange-500 text-white'
+                    : isDark ? 'text-gray-400 hover:text-white hover:bg-gray-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                {sub.icon}{sub.label}
+              </button>
+            ))}
+          </div>
+          {conteudoSubTab === 'templates' && <AdminTemplates isDark={isDark} surveysData={analyticsData} />}
+          {conteudoSubTab === 'catalogs' && <AdminCatalogs isDark={isDark} />}
+          {conteudoSubTab === 'broadcast' && <AdminBroadcast isDark={isDark} />}
+        </div>
       )}
       {activeTab === 'intelligence' && (
         isLoadingAnalytics ? (
@@ -842,8 +916,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             <table className="w-full">
               <thead>
                 <tr className={`border-b ${t.border}`}>
-                  {['', 'Cliente', 'Plano', 'Status', 'Modelo', 'Empresas', 'Cadastro', 'Último Acesso', ''].map((h, i) => (
-                    <th key={i} className={`text-left text-xs font-semibold ${t.thead} uppercase tracking-wider px-${i === 0 || i === 8 ? '6' : '4'} py-3 ${i === 8 ? 'text-right' : ''}`}>{h}</th>
+                  {['', 'Cliente', 'Plano', 'Status', 'Health', 'Modelo', 'Empresas', 'Cadastro', 'Último Acesso', ''].map((h, i) => (
+                    <th key={i} className={`text-left text-xs font-semibold ${t.thead} uppercase tracking-wider px-${i === 0 || i === 9 ? '6' : '4'} py-3 ${i === 9 ? 'text-right' : ''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -852,7 +926,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                   <React.Fragment key={client.id}>
                     <tr
                       className={`${t.surfaceHover} transition-colors cursor-pointer ${expandedClient === client.id ? t.surfaceExpanded : ''}`}
-                      onClick={() => setExpandedClient(expandedClient === client.id ? null : client.id)}
+                      onClick={() => { const next = expandedClient === client.id ? null : client.id; setExpandedClient(next); if (next) fetchClientUsage(client); }}
                     >
                       <td className="px-6 py-4">
                         <ChevronRight size={14} className={`${t.textMuted} transition-transform ${expandedClient === client.id ? 'rotate-90' : ''}`} />
@@ -871,6 +945,22 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                       </td>
                       <td className="px-4 py-4"><PlanBadge plan={client.plan} /></td>
                       <td className="px-4 py-4"><StatusBadge status={client.consolidatedStatus} daysRemaining={client.consolidatedDaysRemaining} /></td>
+                      <td className="px-4 py-4">
+                        {(() => {
+                          const tenantId = client.tenantId || client.primaryCompany?.id || client.companies?.[0]?.id;
+                          const usage = tenantId ? clientUsageMap[tenantId] : null;
+                          const isLoadingH = tenantId ? loadingUsage[tenantId] : false;
+                          const score = usage?.healthScore ?? null;
+                          const scoreColor = score === null ? '' : score >= 75 ? 'emerald' : score >= 50 ? 'yellow' : score >= 25 ? 'orange' : 'red';
+                          if (isLoadingH) return <Loader2 size={12} className="animate-spin text-emerald-500" />;
+                          if (score === null) return <span className={`text-xs ${t.textMuted} opacity-40`}>—</span>;
+                          return (
+                            <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-${scoreColor}-100 text-${scoreColor}-700`}>
+                              <Heart size={10} />{score}
+                            </span>
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-4"><ModelBadge model={client.consolidatedTrialModel} /></td>
                       <td className="px-4 py-4"><span className={`text-sm ${t.textSub}`}>{client.companies.length} empresa{client.companies.length !== 1 ? 's' : ''}</span></td>
                       <td className="px-4 py-4"><span className={`text-xs ${t.textMuted}`}>{new Date(client.createdAt).toLocaleDateString('pt-BR')}</span></td>
@@ -905,8 +995,118 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                     {/* Expanded Companies */}
                     {expandedClient === client.id && (
                       <tr>
-                        <td colSpan={8} className={`${t.expandBg} px-6 py-4`}>
-                          <div className="space-y-3">
+                        <td colSpan={10} className={`${t.expandBg} px-6 py-4`}>
+                          <div className="space-y-4">
+                            {/* Health Score + SDR/CS */}
+                            {(() => {
+                              const tenantId = client.tenantId || client.primaryCompany?.id || client.companies?.[0]?.id;
+                              const usage = tenantId ? clientUsageMap[tenantId] : null;
+                              const isLoadingU = tenantId ? loadingUsage[tenantId] : false;
+                              const score = usage?.healthScore ?? null;
+                              const scoreColor = score === null ? 'gray' : score >= 75 ? 'emerald' : score >= 50 ? 'yellow' : score >= 25 ? 'orange' : 'red';
+                              const scoreLabel = score === null ? '—' : score >= 75 ? 'Saudável' : score >= 50 ? 'Atenção' : score >= 25 ? 'Risco' : 'Crítico';
+                              return (
+                                <div className={`${isDark ? 'bg-gray-800/60 border-gray-700' : 'bg-white border-slate-200'} border rounded-xl p-4`}>
+                                  <div className="flex items-center justify-between mb-3">
+                                    <h4 className={`text-xs font-semibold ${t.textMuted} uppercase tracking-wider flex items-center gap-2`}>
+                                      <Heart size={12} /> Health Score de Uso
+                                    </h4>
+                                    {usage && (
+                                      <button
+                                        onClick={() => {
+                                          const phone = client.phone?.replace(/\D/g, '');
+                                          const msg = encodeURIComponent(`Olá ${client.name}! Aqui está um resumo do seu uso HelloGrowth nos últimos 30 dias:\n\n📊 Avaliações NPS recebidas: ${usage.metrics?.npsLast30Days || 0}\n📋 Respostas de formulário: ${usage.metrics?.formResponsesLast30Days || 0}\n📣 Campanhas ativas: ${usage.metrics?.activeCampaigns || 0}\n📝 Formulários ativos: ${usage.metrics?.activeForms || 0}\n\nContinue usando o HelloGrowth para crescer ainda mais! 🚀`);
+                                          window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
+                                        }}
+                                        className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-500 font-medium"
+                                      >
+                                        <MessageCircle size={12} /> Enviar relatório
+                                      </button>
+                                    )}
+                                  </div>
+                                  {isLoadingU ? (
+                                    <div className="flex items-center gap-2 py-2"><Loader2 size={14} className="animate-spin text-emerald-500" /><span className={`text-xs ${t.textMuted}`}>Carregando dados de uso...</span></div>
+                                  ) : usage ? (
+                                    <div className="space-y-3">
+                                      {/* Score bar */}
+                                      <div className="flex items-center gap-3">
+                                        <div className="flex-1">
+                                          <div className={`h-2 rounded-full ${isDark ? 'bg-gray-700' : 'bg-slate-100'}`}>
+                                            <div className={`h-2 rounded-full bg-${scoreColor}-500 transition-all`} style={{ width: `${score}%` }} />
+                                          </div>
+                                        </div>
+                                        <span className={`text-sm font-bold text-${scoreColor}-500 w-16 text-right`}>{score}/100</span>
+                                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full bg-${scoreColor}-100 text-${scoreColor}-700`}>{scoreLabel}</span>
+                                      </div>
+                                      {/* Indicators */}
+                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                        {[
+                                          { label: 'Acesso recente', ok: usage.indicators?.hasRecentLogin, detail: usage.metrics?.lastLogin ? `${new Date(usage.metrics.lastLogin).toLocaleDateString('pt-BR')}` : 'Nunca' },
+                                          { label: 'Avaliações NPS', ok: usage.indicators?.hasNpsResponses, detail: `${usage.metrics?.npsLast30Days || 0} em 30 dias` },
+                                          { label: 'Respostas Form.', ok: usage.indicators?.hasFormResponses, detail: `${usage.metrics?.formResponsesLast30Days || 0} em 30 dias` },
+                                          { label: 'Campanhas/Forms', ok: usage.indicators?.hasActiveCampaigns || usage.indicators?.hasActiveForms, detail: `${(usage.metrics?.activeCampaigns || 0) + (usage.metrics?.activeForms || 0)} ativos` },
+                                        ].map((ind, i) => (
+                                          <div key={i} className={`${isDark ? 'bg-gray-700/50' : 'bg-slate-50'} rounded-lg p-2.5 flex flex-col gap-1`}>
+                                            <div className="flex items-center gap-1.5">
+                                              {ind.ok ? <CheckCircle size={12} className="text-emerald-500 flex-shrink-0" /> : <AlertTriangle size={12} className="text-red-400 flex-shrink-0" />}
+                                              <span className={`text-xs font-medium ${t.text}`}>{ind.label}</span>
+                                            </div>
+                                            <span className={`text-xs ${t.textMuted}`}>{ind.detail}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className={`text-xs ${t.textMuted} italic`}>Clique no cliente para carregar dados de uso.</p>
+                                  )}
+                                  {/* SDR / CS */}
+                                  <div className={`mt-4 pt-4 border-t ${isDark ? 'border-gray-700' : 'border-slate-200'}`}>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <h5 className={`text-xs font-semibold ${t.textMuted} uppercase tracking-wider flex items-center gap-2`}>
+                                        <UserCog size={12} /> Equipe responsável
+                                      </h5>
+                                      {editingSdrCs !== client.id ? (
+                                        <button onClick={() => { setEditingSdrCs(client.id); setSdrCsForm({ sdr_name: client.sdrName || '', cs_name: client.csName || '', internal_notes: client.internalNotes || '' }); }} className={`text-xs ${t.textMuted} hover:${t.text} flex items-center gap-1`}>
+                                          <Edit size={11} /> Editar
+                                        </button>
+                                      ) : (
+                                        <div className="flex gap-2">
+                                          <button onClick={() => handleSaveSdrCs(client.id)} className="text-xs text-emerald-600 hover:text-emerald-500 font-medium flex items-center gap-1"><Save size={11} /> Salvar</button>
+                                          <button onClick={() => setEditingSdrCs(null)} className={`text-xs ${t.textMuted} flex items-center gap-1`}><X size={11} /> Cancelar</button>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {editingSdrCs === client.id ? (
+                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                        <div><label className={`text-xs ${t.textMuted} block mb-1`}>SDR (Fechou a venda)</label><input value={sdrCsForm.sdr_name} onChange={e => setSdrCsForm(f => ({ ...f, sdr_name: e.target.value }))} className={`w-full text-xs px-2 py-1.5 rounded-lg border ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-slate-300 text-gray-900'}`} placeholder="Nome do SDR" /></div>
+                                        <div><label className={`text-xs ${t.textMuted} block mb-1`}>CS (Customer Success)</label><input value={sdrCsForm.cs_name} onChange={e => setSdrCsForm(f => ({ ...f, cs_name: e.target.value }))} className={`w-full text-xs px-2 py-1.5 rounded-lg border ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-slate-300 text-gray-900'}`} placeholder="Nome do CS" /></div>
+                                        <div><label className={`text-xs ${t.textMuted} block mb-1`}>Notas internas</label><input value={sdrCsForm.internal_notes} onChange={e => setSdrCsForm(f => ({ ...f, internal_notes: e.target.value }))} className={`w-full text-xs px-2 py-1.5 rounded-lg border ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-slate-300 text-gray-900'}`} placeholder="Observações..." /></div>
+                                      </div>
+                                    ) : (
+                                      <div className="flex flex-wrap gap-4">
+                                        <div className="flex items-center gap-1.5">
+                                          <UserCheck size={12} className="text-blue-500" />
+                                          <span className={`text-xs ${t.textMuted}`}>SDR:</span>
+                                          <span className={`text-xs font-medium ${t.text}`}>{client.sdrName || <span className={`italic ${t.textMuted}`}>não definido</span>}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          <UserCog size={12} className="text-purple-500" />
+                                          <span className={`text-xs ${t.textMuted}`}>CS:</span>
+                                          <span className={`text-xs font-medium ${t.text}`}>{client.csName || <span className={`italic ${t.textMuted}`}>não definido</span>}</span>
+                                        </div>
+                                        {client.internalNotes && (
+                                          <div className="flex items-center gap-1.5">
+                                            <FileText size={12} className={t.textMuted} />
+                                            <span className={`text-xs ${t.textMuted}`}>{client.internalNotes}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                            {/* Empresas vinculadas */}
                             <div className="flex items-center justify-between mb-2">
                               <h4 className={`text-xs font-semibold ${t.textMuted} uppercase tracking-wider flex items-center gap-2`}>
                                 <Building2 size={12} /> Empresas vinculadas
@@ -1196,6 +1396,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
           )}
         </Modal>
       )}
+      </div>{/* end main content */}
     </div>
   );
 };

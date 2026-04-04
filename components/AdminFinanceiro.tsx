@@ -92,6 +92,8 @@ export default function AdminFinanceiro({ isDark }: AdminFinanceiroProps) {
   const [loadingSubs, setLoadingSubs] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [billingFilter, setBillingFilter] = useState('ALL');
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [payments, setPayments] = useState<Record<string, any[]>>({});
   const [loadingPayments, setLoadingPayments] = useState<string | null>(null);
@@ -181,7 +183,9 @@ export default function AdminFinanceiro({ isDark }: AdminFinanceiroProps) {
     .filter(s => {
       const matchSearch = !search || s.customerName?.toLowerCase().includes(search.toLowerCase()) || s.customerEmail?.toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === 'ALL' || s.status === statusFilter;
-      return matchSearch && matchStatus;
+      const matchBilling = billingFilter === 'ALL' || s.billingType === billingFilter;
+      const matchOverdue = !overdueOnly || s.status === 'OVERDUE';
+      return matchSearch && matchStatus && matchBilling && matchOverdue;
     })
     .sort((a, b) => {
       const order: Record<string, number> = { OVERDUE: 0, ACTIVE: 1, PENDING: 2, INACTIVE: 3, EXPIRED: 4 };
@@ -382,7 +386,17 @@ export default function AdminFinanceiro({ isDark }: AdminFinanceiroProps) {
               <option value="INACTIVE">Inativos</option>
               <option value="EXPIRED">Expirados</option>
             </select>
-            <span className={`text-xs ${t.textMuted}`}>{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</span>
+            <select value={billingFilter} onChange={e => setBillingFilter(e.target.value)} className={`text-sm px-3 py-2 rounded-lg border ${t.input} focus:outline-none`}>
+              <option value="ALL">Todas as formas</option>
+              <option value="BOLETO">Boleto</option>
+              <option value="CREDIT_CARD">Cartão</option>
+              <option value="PIX">PIX</option>
+            </select>
+            <label className={`flex items-center gap-2 text-xs ${t.textMuted} cursor-pointer select-none`}>
+              <input type="checkbox" checked={overdueOnly} onChange={e => setOverdueOnly(e.target.checked)} className="rounded" />
+              Só inadimplentes
+            </label>
+            <span className={`text-xs ${t.textMuted} ml-auto`}>{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</span>
           </div>
 
           {/* Lista */}

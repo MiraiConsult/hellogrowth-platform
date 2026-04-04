@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     // Buscar todos os usuários (exceto admin)
     let usersQuery = supabase
       .from('users')
-      .select('id, name, email, phone, plan, company_name, created_at, settings, tenant_id, role, last_login')
+      .select('id, name, email, phone, plan, company_name, created_at, settings, tenant_id, role, last_login, sdr_name, cs_name, internal_notes')
       .neq('email', 'admin@hellogrowth.com')
       .order('created_at', { ascending: false });
 
@@ -107,6 +107,10 @@ export async function GET(request: NextRequest) {
           createdAt: user.created_at,
           lastLogin: (user as any).last_login || null,
           settings: user.settings,
+          tenantId: (user as any).tenant_id || null,
+          sdrName: (user as any).sdr_name || null,
+          csName: (user as any).cs_name || null,
+          internalNotes: (user as any).internal_notes || null,
           companies: enrichedCompanies,
           primaryCompany: enrichedCompanies.find((c: any) => c.isDefault) || enrichedCompanies[0] || null,
           consolidatedStatus,
@@ -179,6 +183,9 @@ export async function PATCH(request: NextRequest) {
           plan: userData.plan,
           company_name: userData.companyName,
           ...(userData.password ? { password: userData.password } : {}),
+          ...(userData.sdrName !== undefined ? { sdr_name: userData.sdrName } : {}),
+          ...(userData.csName !== undefined ? { cs_name: userData.csName } : {}),
+          ...(userData.internalNotes !== undefined ? { internal_notes: userData.internalNotes } : {}),
         })
         .eq('id', userId);
       if (error) throw error;

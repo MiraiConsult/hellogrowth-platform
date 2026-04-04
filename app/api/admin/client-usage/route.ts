@@ -1,0 +1,187 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+
+// GET /api/admin/client-usage?tenant_id=xxx
+// Returns usage metrics for a specific tenant to calculate health score
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const tenantId = searchParams.get('tenant_id');
+
+    if (!tenantId) {
+      return NextResponse.json({ error: 'tenant_id required' }, { status: 400 });
+    }
+
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString();
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString();
+
+    // 1. NPS responses received in last 30 days
+    const { data: npsResponses, count: npsCount } = await supabase
+      .from('nps_responses')
+      .select('id, created_at, score', { count: 'exact' })
+      .eq('tenant_id', tenantId)
+      .gte('created_at', thirtyDaysAgoStr)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    // 2. Form responses received in last 30 days
+    const { data: formResponses, count: formResponseCount } = await supabase
+      .from('form_responses')
+      .select('id, created_at', { count: 'exact' })
+      .eq('tenant_id', tenantId)
+      .gte('created_at', thirtyDaysAgoStr)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    // 3. Active campaigns (NPS) in last 30 days
+    const { data: campaigns, count: campaignCount } = await supabase
+      .from('nps_campaigns')
+      .select('id, name, created_at, status', { count: 'exact' })
+      .eq('tenant_id', tenantId)
+      .gte('created_at', thirtyDaysAgoStr);
+
+    // 4. Active forms in last 30 days
+    const { data: forms, count: formCount } = await supabase
+      .from('forms')
+      .select('id, name, created_at, active', { count: 'exact' })
+      .eq('tenant_id', tenantId)
+      .eq('active', true);
+
+    // 5. Total NPS responses all time
+    const { count: totalNpsCount } = await supabase
+      .from('nps_responses')
+      .select('id', { count: 'exact' })
+      .eq('tenant_id', tenantId);
+
+    // 6. Total form responses all time
+    const { count: totalFormResponseCount } = await supabase
+      .from('form_responses')
+      .select('id', { count: 'exact' })
+      .eq('tenant_id', tenantId);
+
+    // 7. Last login from users table
+    const { data: tenantUsers } = await supabase
+      .from('users')
+      .select('last_login, name, email, sdr_name, cs_name, internal_notes')
+      .eq('tenant_id', tenantId)
+      .order('last_login', { ascending: false })
+      .limit(1);
+
+    const lastLogin = tenantUsers?.[0]?.last_login || null;
+    const sdrName = tenantUsers?.[0]?.sdr_name || null;
+    const csName = tenantUsers?.[0]?.cs_name || null;
+    const internalNotes = tenantUsers?.[0]?.internal_notes || null;
+
+    // 8. NPS responses in last 7 days
+    const { count: npsLast7Days } = await supabase
+      .from('nps_responses')
+      .select('id', { count: 'exact' })
+      .eq('tenant_id', tenantId)
+      .gte('created_at', sevenDaysAgoStr);
+
+    // 9. Form responses in last 7 days
+    const { count: formResponsesLast7Days } = await supabase
+      .from('form_responses')
+      .select('id', { count: 'exact' })
+      .eq('tenant_id', tenantId)
+      .gte('created_at', sevenDaysAgoStr);
+
+    // Calculate health score (0-100)
+    let healthScore = 0;
+    const indicators = {
+      hasRecentLogin: false,
+      hasNpsResponses: false,
+      hasFormResponses: false,
+      hasActiveCampaigns: false,
+      hasActiveForms: false,
+    };
+
+    // Last login in last 7 days = 25 pts
+    if (lastLogin && new Date(lastLogin) >= sevenDaysAgo) {
+      healthScore += 25;
+      indicators.hasRecentLogin = true;
+    }
+    // NPS responses in last 30 days = 25 pts
+    if ((npsCount || 0) > 0) {
+      healthScore += 25;
+      indicators.hasNpsResponses = true;
+    }
+    // Form responses in last 30 days = 25 pts
+    if ((formResponseCount || 0) > 0) {
+      healthScore += 25;
+      indicators.hasFormResponses = true;
+    }
+    // Active campaigns or forms = 25 pts
+    if ((campaignCount || 0) > 0 || (formCount || 0) > 0) {
+      healthScore += 25;
+      indicators.hasActiveCampaigns = (campaignCount || 0) > 0;
+      indicators.hasActiveForms = (formCount || 0) > 0;
+    }
+
+    // Monthly activity breakdown (last 6 months)
+    const monthlyActivity: { month: string; nps: number; forms: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const start = new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
+      const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59).toISOString();
+      const monthLabel = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+
+      const [{ count: mNps }, { count: mForms }] = await Promise.all([
+        supabase.from('nps_responses').select('id', { count: 'exact' }).eq('tenant_id', tenantId).gte('created_at', start).lte('created_at', end),
+        supabase.from('form_responses').select('id', { count: 'exact' }).eq('tenant_id', tenantId).gte('created_at', start).lte('created_at', end),
+      ]);
+
+      monthlyActivity.push({ month: monthLabel, nps: mNps || 0, forms: mForms || 0 });
+    }
+
+    return NextResponse.json({
+      healthScore,
+      indicators,
+      metrics: {
+        npsLast30Days: npsCount || 0,
+        formResponsesLast30Days: formResponseCount || 0,
+        npsLast7Days: npsLast7Days || 0,
+        formResponsesLast7Days: formResponsesLast7Days || 0,
+        activeCampaigns: campaignCount || 0,
+        activeForms: formCount || 0,
+        totalNpsAllTime: totalNpsCount || 0,
+        totalFormResponsesAllTime: totalFormResponseCount || 0,
+        lastLogin,
+      },
+      monthlyActivity,
+      sdrName,
+      csName,
+      internalNotes,
+    });
+  } catch (error: any) {
+    console.error('client-usage error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// PATCH /api/admin/client-usage — update sdr_name, cs_name, internal_notes
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { user_id, sdr_name, cs_name, internal_notes } = body;
+
+    if (!user_id) {
+      return NextResponse.json({ error: 'user_id required' }, { status: 400 });
+    }
+
+    const { error } = await supabase
+      .from('users')
+      .update({ sdr_name, cs_name, internal_notes })
+      .eq('id', user_id);
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
