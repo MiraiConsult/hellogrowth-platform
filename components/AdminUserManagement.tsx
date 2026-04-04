@@ -12,6 +12,7 @@ import AdminIntelligence from '@/components/AdminIntelligence';
 import AdminTemplates from '@/components/AdminTemplates';
 import AdminCatalogs from '@/components/AdminCatalogs';
 import AdminFinanceiro from '@/components/AdminFinanceiro';
+import AdminHome from '@/components/AdminHome';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -219,7 +220,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [isDark, setIsDark] = useState(true);
   const t = isDark ? DARK : LIGHT;
   // ── Active Tab ──
-  const [activeTab, setActiveTab] = useState<'clients' | 'broadcast' | 'intelligence' | 'templates' | 'catalogs' | 'financeiro'>('clients');
+  const [activeTab, setActiveTab] = useState<'home' | 'clients' | 'broadcast' | 'intelligence' | 'templates' | 'catalogs' | 'financeiro'>('home');
+  const [asaasClientMap, setAsaasClientMap] = useState<Record<string, any>>({});
+  const [asaasLoaded, setAsaasLoaded] = useState(false);
 
   // ── Analytics / Intelligence ──
   const [analyticsData, setAnalyticsData] = useState<{ global: any; tenants: any[] } | null>(null);
@@ -651,6 +654,16 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             </button>
             <div className="flex items-center gap-1 border rounded-lg overflow-hidden">
               <button
+                onClick={() => setActiveTab('home')}
+                className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
+                  activeTab === 'home'
+                    ? 'bg-emerald-600 text-white'
+                    : `${t.btnSecondary}`
+                }`}
+              >
+                <Zap size={14} /> Home
+              </button>
+              <button
                 onClick={() => setActiveTab('clients')}
                 className={`flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors ${
                   activeTab === 'clients'
@@ -725,6 +738,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         </div>
       </header>
 
+      {activeTab === 'home' && (
+        <AdminHome isDark={isDark} onNavigate={(tab) => setActiveTab(tab as any)} />
+      )}
       {activeTab === 'financeiro' && (
         <AdminFinanceiro isDark={isDark} />
       )}

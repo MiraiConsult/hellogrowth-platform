@@ -88,6 +88,9 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
 
   const [activeSection, setActiveSection] = useState<'overview' | 'trends' | 'products' | 'clients'>('overview');
 
+  // Filtro de data para Tendências NPS
+  const [trendsDatePreset, setTrendsDatePreset] = useState('12m');
+
   // Tendências
   const [trendsData, setTrendsData] = useState<any>(null);
   const [isLoadingTrends, setIsLoadingTrends] = useState(false);
@@ -113,13 +116,20 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
   const [expandedTenant, setExpandedTenant] = useState<string | null>(null);
   const [clientSearch, setClientSearch] = useState('');
 
-  const loadTrends = useCallback(async () => {
+  const loadTrends = useCallback(async (preset?: string) => {
     setIsLoadingTrends(true);
     try {
-      const res = await fetch('/api/admin/analytics?type=trends');
+      const p = preset !== undefined ? preset : trendsDatePreset;
+      const params = new URLSearchParams({ type: 'trends' });
+      const n = new Date();
+      if (p === '3m') { const f = new Date(n); f.setMonth(f.getMonth() - 3); params.set('dateFrom', f.toISOString().split('T')[0]); }
+      else if (p === '6m') { const f = new Date(n); f.setMonth(f.getMonth() - 6); params.set('dateFrom', f.toISOString().split('T')[0]); }
+      else if (p === '12m') { const f = new Date(n); f.setFullYear(f.getFullYear() - 1); params.set('dateFrom', f.toISOString().split('T')[0]); }
+      else if (p === 'year') { params.set('dateFrom', `${n.getFullYear()}-01-01`); }
+      const res = await fetch(`/api/admin/analytics?${params}`);
       setTrendsData(await res.json());
     } finally { setIsLoadingTrends(false); }
-  }, []);
+  }, [trendsDatePreset]);
 
   const loadSurveys = useCallback(async () => {
     setIsLoadingSurveys(true);
@@ -334,11 +344,27 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
         {/* ── TENDÊNCIAS NPS ── */}
         {activeSection === 'trends' && (
           <div className="space-y-5">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className={`text-base font-semibold ${t.text}`}>Evolução do NPS — Base Completa</h2>
-              <button onClick={loadTrends} disabled={isLoadingTrends} className={`flex items-center gap-1.5 text-xs ${t.textSub} hover:${t.text} transition-colors`}>
-                {isLoadingTrends ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Atualizar
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Filtros de período */}
+                <div className={`flex items-center gap-1 p-1 rounded-lg border ${t.border} ${t.surface}`}>
+                  {[{ id: '3m', label: '3 meses' }, { id: '6m', label: '6 meses' }, { id: '12m', label: '12 meses' }, { id: 'year', label: 'Este ano' }, { id: 'all', label: 'Tudo' }].map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => { setTrendsDatePreset(opt.id); setTrendsData(null); loadTrends(opt.id); }}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                        trendsDatePreset === opt.id ? 'bg-emerald-600 text-white' : `${t.textSub} hover:opacity-80`
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => loadTrends()} disabled={isLoadingTrends} className={`flex items-center gap-1.5 text-xs ${t.textSub} hover:${t.text} transition-colors`}>
+                  {isLoadingTrends ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Atualizar
+                </button>
+              </div>
             </div>
 
             {isLoadingTrends ? (
