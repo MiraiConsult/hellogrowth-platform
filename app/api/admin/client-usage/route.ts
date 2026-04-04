@@ -27,21 +27,19 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
       .limit(100);
 
-    // 2. Form responses received in last 30 days
-    const { data: formResponses, count: formResponseCount } = await supabase
-      .from('form_responses')
-      .select('id, created_at', { count: 'exact' })
-      .eq('tenant_id', tenantId)
-      .gte('created_at', thirtyDaysAgoStr)
-      .order('created_at', { ascending: false })
-      .limit(100);
-
-    // 3. Active campaigns (NPS) in last 30 days
-    const { data: campaigns, count: campaignCount } = await supabase
-      .from('nps_campaigns')
-      .select('id, name, created_at, status', { count: 'exact' })
+    // 2. Form responses (leads) received in last 30 days
+    const { count: formResponseCount } = await supabase
+      .from('leads')
+      .select('id', { count: 'exact' })
       .eq('tenant_id', tenantId)
       .gte('created_at', thirtyDaysAgoStr);
+
+    // 3. Active campaigns — using 'campaigns' table
+    const { count: campaignCount } = await supabase
+      .from('campaigns')
+      .select('id', { count: 'exact' })
+      .eq('tenant_id', tenantId)
+      .eq('status', 'active');
 
     // 4. Active forms in last 30 days
     const { data: forms, count: formCount } = await supabase
@@ -56,9 +54,9 @@ export async function GET(request: NextRequest) {
       .select('id', { count: 'exact' })
       .eq('tenant_id', tenantId);
 
-    // 6. Total form responses all time
+    // 6. Total form responses (leads) all time
     const { count: totalFormResponseCount } = await supabase
-      .from('form_responses')
+      .from('leads')
       .select('id', { count: 'exact' })
       .eq('tenant_id', tenantId);
 
@@ -82,9 +80,9 @@ export async function GET(request: NextRequest) {
       .eq('tenant_id', tenantId)
       .gte('created_at', sevenDaysAgoStr);
 
-    // 9. Form responses in last 7 days
+    // 9. Form responses (leads) in last 7 days
     const { count: formResponsesLast7Days } = await supabase
-      .from('form_responses')
+      .from('leads')
       .select('id', { count: 'exact' })
       .eq('tenant_id', tenantId)
       .gte('created_at', sevenDaysAgoStr);
@@ -132,7 +130,7 @@ export async function GET(request: NextRequest) {
 
       const [{ count: mNps }, { count: mForms }] = await Promise.all([
         supabase.from('nps_responses').select('id', { count: 'exact' }).eq('tenant_id', tenantId).gte('created_at', start).lte('created_at', end),
-        supabase.from('form_responses').select('id', { count: 'exact' }).eq('tenant_id', tenantId).gte('created_at', start).lte('created_at', end),
+        supabase.from('leads').select('id', { count: 'exact' }).eq('tenant_id', tenantId).gte('created_at', start).lte('created_at', end),
       ]);
 
       monthlyActivity.push({ month: monthLabel, nps: mNps || 0, forms: mForms || 0 });
