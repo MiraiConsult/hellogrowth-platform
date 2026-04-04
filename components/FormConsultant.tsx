@@ -1321,76 +1321,60 @@ Responda APENAS com JSON válido neste formato:
     setIsReviewChatProcessing(true);
 
     try {
-      // Detectar se é um pedido de mudança
-      const changeKeywords = [
-        'diminua', 'aumente', 'mude', 'altere', 'modifique', 'troque', 
-        'adicione', 'inclua', 'remova', 'delete', 'tire', 'ajuste', 'corrija',
-        'coloque', 'insira', 'acrescente', 'ponha', 'bote', 'crie',
-        'exclua', 'apague', 'substitua', 'reescreva', 'refatore'
-      ];
-      const isChangeRequest = changeKeywords.some(keyword => message.toLowerCase().includes(keyword));
-      
-      console.log('[ReviewChat DEBUG] Mensagem:', message);
-      console.log('[ReviewChat DEBUG] É pedido de mudança?', isChangeRequest);
+      // Prompt unificado e inteligente — a IA decide sozinha se deve ou não modificar as perguntas
+      const questionsJson = JSON.stringify(generatedQuestions.map((q, idx) => ({
+        index: idx + 1,
+        text: q.text,
+        type: q.type,
+        options: q.options.map(opt => opt.text),
+        insight: q.insight
+      })), null, 2);
 
-      const prompt = isChangeRequest 
-        ? `Você é um assistente que EXECUTA mudanças em perguntas de formulário.
+      const prompt = `Você é o Consultor IA da HelloGrowth, especialista em formulários de qualificação de leads e captura de clientes. Você é PROATIVO e EXECUTA mudanças diretamente quando solicitado.
 
-PERGUNTAS ATUAIS (JSON):
-${JSON.stringify(generatedQuestions.map(q => ({
-  text: q.text,
-  type: q.type,
-  options: q.options.map(opt => opt.text),
-  insight: q.insight
-})), null, 2)}
+CONTEXTO DO FORMULÁRIO:
+- Negócio: ${businessContext.businessType}
+- Público-alvo: ${businessContext.targetAudience}
+- Objetivo: ${businessContext.formObjective}
+- Critérios de qualificação: ${businessContext.qualificationCriteria || 'Não especificado'}
+- Tom: ${businessContext.formTone}
+- Total de perguntas: ${generatedQuestions.length}
 
-PEDIDO DO USUÁRIO: "${message}"
+PERGUNTAS ATUAIS:
+${questionsJson}
 
-INSTRUÇÕES CRÍTICAS:
-1. Identifique qual pergunta modificar (ex: "pergunta 3" = índice 2 do array)
-2. Faça a mudança EXATA solicitada:
-   - "diminua valores" = reduza números nas opções
-   - "adicione alternativa" = adicione novo item no array options
-   - "coloque alternativa com valor 2000" = adicione "R$ 2.000" nas options
-   - "remova pergunta" = retire do array
-3. Retorne OBRIGATORIAMENTE um JSON válido neste formato:
+MENSAGEM DO USUÁRIO: "${message}"
 
+INSTRUÇÕES:
+Analise a mensagem e decida:
+
+(A) Se o usuário está PEDINDO UMA MUDANÇA (alterar texto, adicionar/remover pergunta, adicionar/remover opção, mudar tipo, reescrever, traduzir, deixar mais formal/informal, etc.) → retorne JSON com as mudanças aplicadas:
 {
-  "message": "Pronto! [1 frase curta explicando o que fez]",
+  "action": "update",
+  "message": "[Confirmação curta do que foi feito, 1 frase]",
   "updated_questions": [
-    // TODAS as ${generatedQuestions.length} perguntas aqui, incluindo a modificada
-    {"text": "pergunta 1", "type": "single_choice", "options": ["op1", "op2"], "insight": "..."},
-    {"text": "pergunta 2", "type": "single_choice", "options": ["op1", "op2"], "insight": "..."},
-    {"text": "pergunta 3 MODIFICADA", "type": "single_choice", "options": ["op1", "op2", "op3 NOVA"], "insight": "..."},
-    // ... resto das perguntas
+    {"text": "...", "type": "single_choice|multiple_choice|text|scale", "options": ["op1", "op2"], "insight": "..."},
+    ... TODAS as ${generatedQuestions.length} perguntas, com as modificações aplicadas
   ]
 }
 
-ATENÇÃO: 
-- NÃO escreva texto antes ou depois do JSON
+(B) Se o usuário está FAZENDO UMA PERGUNTA sobre as perguntas, pedindo explicação, ou conversando → retorne JSON de resposta:
+{
+  "action": "reply",
+  "message": "[Resposta clara e útil, máximo 3 frases]"
+}
+
+REGRAS CRÍTICAS:
+- SEMPRE retorne JSON válido. NUNCA retorne texto puro.
+- Para mudanças: o array updated_questions DEVE conter TODAS as ${generatedQuestions.length} perguntas
+- Para mudanças de remoção: updated_questions terá menos itens (isso é correto)
+- Para adição de pergunta: updated_questions terá mais itens
 - NÃO use blocos de código markdown
-- NÃO explique, apenas RETORNE O JSON
-- O array "updated_questions" DEVE ter ${generatedQuestions.length} itens`
-        : `Você é o Consultor HelloGrowth. Responda de forma curta e amigável.
+- NÃO escreva nada fora do JSON
+- Interprete intenções vagas: "deixa mais simples" = simplifique o texto; "coloca mais opções" = adicione alternativas; "tira essa" = remova a pergunta mencionada
+- Se o usuário mencionar número ("pergunta 3"), use o índice correto (index 3 = posição 2 no array)
 
-CONTEXTO:
-- Negócio: ${businessContext.businessType}
-- Público: ${businessContext.targetAudience}
-- Critérios pedidos: ${businessContext.qualificationCriteria || 'Não especificado'}
-
-PERGUNTAS DO FORMULÁRIO:
-${generatedQuestions.map((q, idx) => `${idx + 1}. ${q.text}\nInsight: ${q.insight}`).join('\n\n')}
-
-PERGUNTA DO USUÁRIO: ${message}
-
-REGRAS:
-- Responda em texto puro (NÃO use JSON)
-- Máximo 2-3 frases
-- NÃO comece com saudações
-- Se perguntarem sobre uma pergunta específica, explique citando o que o cliente escreveu
-- Se perguntarem sobre algo dos CRITÉRIOS que não foi incluído, reconheça e ofereça adicionar
-
-Responda:`;
+Retorne APENAS o JSON:`;
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -1411,59 +1395,52 @@ Responda:`;
       const data = await response.json();
       let rawText = data.response || '';
       
-      console.log('[ReviewChat DEBUG] Resposta bruta:', rawText);
-      
-      // Limpar blocos de código
+      // Limpar blocos de código markdown se a IA retornar
       rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       
-      let displayMessage = rawText;
+      let displayMessage = '';
       let updatedQuestions = null;
       
-      // Tentar parsear como JSON
+      // Parsear JSON (o novo prompt sempre retorna JSON)
       try {
         const parsed = JSON.parse(rawText);
-        console.log('[ReviewChat DEBUG] JSON parseado:', parsed);
+        displayMessage = parsed.message || '';
         
-        displayMessage = parsed.message || parsed.text || rawText;
-        
-        if (parsed.updated_questions && Array.isArray(parsed.updated_questions)) {
-          console.log('[ReviewChat DEBUG] Perguntas atualizadas encontradas:', parsed.updated_questions.length);
+        if (parsed.action === 'update' && parsed.updated_questions && Array.isArray(parsed.updated_questions)) {
           updatedQuestions = parsed.updated_questions;
         }
       } catch (e) {
-        console.log('[ReviewChat DEBUG] Não é JSON, usando texto puro');
-        // Não é JSON, usar texto puro
+        // Fallback: a IA retornou texto puro
+        displayMessage = rawText;
       }
       
       // Aplicar perguntas atualizadas
       if (updatedQuestions && Array.isArray(updatedQuestions) && updatedQuestions.length > 0) {
-        console.log('[ReviewChat DEBUG] Aplicando perguntas atualizadas...');
         const mapped = updatedQuestions.map((q: any, idx: number) => {
-          // Processar opções
           let processedOptions: QuestionOption[] = [];
           if (q.options && Array.isArray(q.options)) {
             processedOptions = q.options.map((opt: any, optIdx: number) => {
               if (typeof opt === 'string') {
-                return { id: `opt_${idx}_${optIdx}`, text: opt };
-              } else if (opt.text) {
-                return { id: opt.id || `opt_${idx}_${optIdx}`, text: opt.text };
+                return { id: `opt_${Date.now()}_${idx}_${optIdx}_${Math.random().toString(36).slice(2,5)}`, text: opt };
+              } else if (opt && opt.text) {
+                return { id: opt.id || `opt_${Date.now()}_${idx}_${optIdx}_${Math.random().toString(36).slice(2,5)}`, text: opt.text };
               }
-              return { id: `opt_${idx}_${optIdx}`, text: String(opt) };
+              return { id: `opt_${Date.now()}_${idx}_${optIdx}_${Math.random().toString(36).slice(2,5)}`, text: String(opt) };
             });
           }
           
+          const originalQuestion = generatedQuestions[idx];
           return {
-            id: generatedQuestions[idx]?.id || `q_${Date.now()}_${idx}`,
-            text: q.text,
+            id: originalQuestion?.id || `q_${Date.now()}_${idx}`,
+            text: q.text || '',
             type: q.type || 'single_choice',
             options: processedOptions,
-            insight: q.insight || generatedQuestions[idx]?.insight || 'Atualizado via chat'
+            insight: q.insight || originalQuestion?.insight || 'Atualizado via IA'
           };
         });
         
-        console.log('[ReviewChat DEBUG] Perguntas mapeadas:', mapped.length);
         setGeneratedQuestions(mapped);
-        displayMessage = displayMessage + ' ✅';
+        displayMessage = (displayMessage || 'Pronto!') + ' ✅';
       }
 
       // Adicionar resposta da IA
@@ -1499,26 +1476,22 @@ Responda:`;
   }, [currentStep, generatedQuestions.length]);
 
   const generateStrategyExplanation = async () => {
-    console.log('[ReviewChat DEBUG] Função generateStrategyExplanation iniciada');
     setIsReviewChatProcessing(true);
     try {
-      const prompt = `Você é o Consultor HelloGrowth, um consultor simpático e direto. Faça uma saudação curta e amigável para o usuário que acabou de gerar um formulário.
+      const prompt = `Você é o Consultor IA da HelloGrowth, especialista em formulários de qualificação de leads.
 
-Negócio: ${businessContext.businessType}
-Público: ${businessContext.targetAudience}
-Dores: ${businessContext.mainPainPoints.join(', ')}
-Perguntas geradas: ${generatedQuestions.length}
+Contexto do formulário criado:
+- Negócio: ${businessContext.businessType}
+- Público-alvo: ${businessContext.targetAudience}
+- Objetivo: ${businessContext.formObjective}
+- Total de perguntas geradas: ${generatedQuestions.length}
+- Perguntas: ${generatedQuestions.map((q, i) => `${i+1}. ${q.text}`).join(' | ')}
 
-REGRAS:
-- Responda APENAS em texto puro. NUNCA use JSON.
-- Máximo 3-4 frases curtas.
-- Comece com uma saudação amigável ("Olá!" ou "E aí! 👋")
-- Mencione brevemente o negócio e diga que criou ${generatedQuestions.length} perguntas estratégicas.
-- Termine convidando a perguntar sobre qualquer pergunta ou pedir ajustes.
-- Tom: amigo consultor, leve e simpático.
-- Use 1-2 emojis no máximo.
-
-Responda agora:`;
+Retorne APENAS este JSON (sem markdown, sem texto fora do JSON):
+{
+  "action": "reply",
+  "message": "[Saudação curta e animada (1-2 frases). Diga que criou ${generatedQuestions.length} perguntas estratégicas para ${businessContext.businessType || 'o negócio'}. Convide para pedir ajustes ou tirar dúvidas. Máximo 3 frases. Tom descontraído e profissional.]"
+}`;
 
       console.log('[ReviewChat DEBUG] Preparando chamada para /api/gemini...');
       console.log('[ReviewChat DEBUG] Prompt:', prompt.substring(0, 200) + '...');
@@ -1532,51 +1505,36 @@ Responda agora:`;
       console.log('[ReviewChat DEBUG] Resposta recebida. Status:', response.status);
 
       if (response.ok) {
-        console.log('[ReviewChat DEBUG] Resposta OK! Parseando JSON...');
         const data = await response.json();
-        console.log('[ReviewChat DEBUG] Dados recebidos:', data);
-        
-        let welcomeText = data.response || data.text || '';
-        // Limpar caso a IA retorne JSON mesmo assim
-        welcomeText = welcomeText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        let rawText = (data.response || data.text || '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        let welcomeText = '';
         try {
-          const parsed = JSON.parse(welcomeText);
-          welcomeText = parsed.message || parsed.text || welcomeText;
+          const parsed = JSON.parse(rawText);
+          welcomeText = parsed.message || '';
         } catch (e) {
-          // Já é texto puro, perfeito!
+          welcomeText = rawText;
         }
-        const welcomeMessage: ChatMessage = {
+        setReviewChatMessages([{
           id: `msg_${Date.now()}`,
           role: 'assistant',
-          content: welcomeText || 'Olá! \ud83d\udc4b Sou seu Consultor de Estratégia. Pergunte sobre qualquer pergunta ou peça ajustes!',
+          content: welcomeText || `Olá! 👋 Criei ${generatedQuestions.length} perguntas estratégicas para o seu formulário. Pode pedir qualquer ajuste — alterar texto, adicionar/remover perguntas ou opções, mudar o tom, etc.`,
           timestamp: new Date()
-        };
-        console.log('[ReviewChat DEBUG] Mensagem criada:', welcomeMessage);
-        console.log('[ReviewChat DEBUG] Atualizando estado reviewChatMessages...');
-        setReviewChatMessages([welcomeMessage]);
-        console.log('[ReviewChat DEBUG] Estado atualizado com sucesso!');
+        }]);
       } else {
-        console.log('[ReviewChat DEBUG] Resposta não OK. Usando fallback...');
-        // Fallback para mensagem padrão se a IA falhar
-        const fallbackMessage: ChatMessage = {
+        setReviewChatMessages([{
           id: `msg_${Date.now()}`,
           role: 'assistant',
-          content: `Olá! 👋 Sou seu Consultor de Estratégia de Vendas.\n\nEstou aqui para:\n• Explicar o motivo de cada pergunta gerada\n• Ajustar perguntas em tempo real\n• Sugerir melhorias estratégicas\n\nPergunte qualquer coisa!`,
+          content: `Olá! 👋 Criei ${generatedQuestions.length} perguntas para o seu formulário. Pode pedir qualquer ajuste diretamente aqui!`,
           timestamp: new Date()
-        };
-        setReviewChatMessages([fallbackMessage]);
+        }]);
       }
     } catch (error) {
-      console.error('[ReviewChat DEBUG] ERRO capturado:', error);
-      console.error('Erro ao gerar explicação da estratégia:', error);
-      // Fallback
-      const fallbackMessage: ChatMessage = {
+      setReviewChatMessages([{
         id: `msg_${Date.now()}`,
         role: 'assistant',
-        content: `Olá! 👋 Sou seu Consultor de Estratégia de Vendas.\n\nEstou aqui para explicar cada pergunta e fazer ajustes. Pergunte qualquer coisa!`,
+        content: `Olá! 👋 Criei ${generatedQuestions.length} perguntas para o seu formulário. Pode pedir qualquer ajuste diretamente aqui!`,
         timestamp: new Date()
-      };
-      setReviewChatMessages([fallbackMessage]);
+      }]);
     } finally {
       setIsReviewChatProcessing(false);
     }
@@ -2204,8 +2162,29 @@ Responda agora:`;
             )}
           </div>
 
+          {/* Ações Rápidas */}
+          {!isReviewChatProcessing && (
+            <div className="px-3 pb-2 flex flex-wrap gap-1.5">
+              {[
+                'Deixa mais simples',
+                'Adiciona pergunta sobre orçamento',
+                'Reescreve mais informal',
+                'Remove a última pergunta',
+                'Explica a pergunta 1',
+              ].map((chip) => (
+                <button
+                  key={chip}
+                  onClick={() => handleReviewChatMessage(chip)}
+                  className="px-2.5 py-1 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full hover:bg-emerald-100 transition-colors"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Input do Chat */}
-          <div className="p-4 border-t border-slate-200 bg-slate-50">
+          <div className="p-3 border-t border-slate-200 bg-slate-50">
             <div className="flex gap-2">
               <input
                 type="text"
@@ -2217,7 +2196,7 @@ Responda agora:`;
                     handleReviewChatMessage(reviewChatInput);
                   }
                 }}
-                placeholder="Pergunte ou solicite ajustes..."
+                placeholder="Ex: Muda a pergunta 2 para tom mais amigável..."
                 className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 disabled={isReviewChatProcessing}
               />
