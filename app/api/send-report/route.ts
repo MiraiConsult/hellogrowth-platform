@@ -4,9 +4,10 @@ import { createClient } from '@supabase/supabase-js';
 export const maxDuration = 30;
 
 // Credenciais Z-API fixas do servidor (configuradas nas env vars do Vercel)
-const ZAPI_INSTANCE_ID = process.env.ZAPI_INSTANCE_ID!;
-const ZAPI_TOKEN = process.env.ZAPI_TOKEN!;
-const ZAPI_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN!;
+const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://miraisaleshg-evolution-api.cixapq.easypanel.host';
+
+const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY!;
+const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'Mirai Sales HG';
 
 // Supabase com service role para buscar dados sem restrição de RLS
 const supabaseAdmin = createClient(
@@ -14,29 +15,29 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Envia mensagem via Z-API
+// Envia mensagem via Evolution API
 async function sendWhatsAppMessage(
   phone: string,
   message: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    if (!ZAPI_INSTANCE_ID || !ZAPI_TOKEN || !ZAPI_CLIENT_TOKEN) {
-      return { ok: false, error: 'Credenciais Z-API não configuradas no servidor.' };
+    if (!EVOLUTION_API_KEY) {
+      return { ok: false, error: 'Credenciais Evolution API não configuradas no servidor.' };
     }
-
-    const url = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`;
+    let normalizedPhone = phone.replace(/\D/g, '');
+    if (!normalizedPhone.startsWith('55')) normalizedPhone = `55${normalizedPhone}`;
+    const url = `${EVOLUTION_API_URL}/message/sendText/${encodeURIComponent(EVOLUTION_INSTANCE)}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Client-Token': ZAPI_CLIENT_TOKEN
+        'apikey': EVOLUTION_API_KEY
       },
-      body: JSON.stringify({ phone, message })
+      body: JSON.stringify({ number: normalizedPhone, text: message })
     });
-
     const data = await response.json();
     if (!response.ok) {
-      return { ok: false, error: data?.message || `Status ${response.status}` };
+      return { ok: false, error: data?.message || data?.error || `Status ${response.status}` };
     }
     return { ok: true };
   } catch (e: any) {

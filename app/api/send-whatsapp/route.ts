@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const maxDuration = 30;
 
-const ZAPI_INSTANCE_ID = process.env.ZAPI_INSTANCE_ID!;
-const ZAPI_TOKEN = process.env.ZAPI_TOKEN!;
-const ZAPI_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN!;
+const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://miraisaleshg-evolution-api.cixapq.easypanel.host';
+const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY!;
+const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'Mirai Sales HG';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,8 +14,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'phone e message são obrigatórios.' }, { status: 400 });
     }
 
-    if (!ZAPI_INSTANCE_ID || !ZAPI_TOKEN || !ZAPI_CLIENT_TOKEN) {
-      return NextResponse.json({ ok: false, error: 'Credenciais Z-API não configuradas no servidor.' }, { status: 500 });
+    if (!EVOLUTION_API_KEY) {
+      return NextResponse.json({ ok: false, error: 'Credenciais Evolution API não configuradas no servidor.' }, { status: 500 });
     }
 
     // Normalize phone: remove non-digits, ensure country code 55
@@ -24,20 +24,23 @@ export async function POST(req: NextRequest) {
       normalizedPhone = `55${normalizedPhone}`;
     }
 
-    const url = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`;
+    const url = `${EVOLUTION_API_URL}/message/sendText/${encodeURIComponent(EVOLUTION_INSTANCE)}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Client-Token': ZAPI_CLIENT_TOKEN
+        'apikey': EVOLUTION_API_KEY
       },
-      body: JSON.stringify({ phone: normalizedPhone, message })
+      body: JSON.stringify({
+        number: normalizedPhone,
+        text: message
+      })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      return NextResponse.json({ ok: false, error: data?.message || `Status ${response.status}` }, { status: 200 });
+      return NextResponse.json({ ok: false, error: data?.message || data?.error || `Status ${response.status}` }, { status: 200 });
     }
 
     return NextResponse.json({ ok: true });

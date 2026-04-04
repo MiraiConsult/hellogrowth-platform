@@ -16,6 +16,7 @@ import AdminCatalogs from '@/components/AdminCatalogs';
 import AdminFinanceiro from '@/components/AdminFinanceiro';
 import AdminHome from '@/components/AdminHome';
 import AdminColaboradores from '@/components/AdminColaboradores';
+import AdminWhatsApp from '@/components/AdminWhatsApp';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -227,7 +228,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [isDark, setIsDark] = useState(true);
   const t = isDark ? DARK : LIGHT;
   // ── Active Tab ──
-  const [activeTab, setActiveTab] = useState<'home' | 'clients' | 'broadcast' | 'intelligence' | 'templates' | 'catalogs' | 'financeiro' | 'conteudo' | 'colaboradores'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'clients' | 'broadcast' | 'intelligence' | 'templates' | 'catalogs' | 'financeiro' | 'conteudo' | 'colaboradores' | 'whatsapp'>('home');
   const [conteudoSubTab, setConteudoSubTab] = useState<'templates' | 'catalogs' | 'broadcast'>('templates');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [asaasClientMap, setAsaasClientMap] = useState<Record<string, any>>({});
@@ -678,6 +679,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
     { id: 'conteudo',       label: 'Conteúdo',       icon: <BookOpen size={18} />,        activeClass: 'bg-orange-500 text-white' },
     { id: 'intelligence',   label: 'Inteligência',   icon: <Brain size={18} />,           activeClass: 'bg-purple-600 text-white' },
     { id: 'colaboradores',  label: 'Colaboradores',  icon: <UserCog size={18} />,         activeClass: 'bg-sky-600 text-white' },
+    { id: 'whatsapp',       label: 'WhatsApp',       icon: <MessageSquare size={18} />,   activeClass: 'bg-green-600 text-white' },
   ];
 
   return (
@@ -857,6 +859,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       )}
       {activeTab === 'colaboradores' && (
         <AdminColaboradores isDark={isDark} />
+      )}
+      {activeTab === 'whatsapp' && (
+        <AdminWhatsApp isDark={isDark} />
       )}
       {activeTab === 'clients' && (
       <main className="w-full px-6 py-6 space-y-5">

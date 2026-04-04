@@ -1,26 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 export const maxDuration = 60;
 
-const ZAPI_INSTANCE_ID = process.env.ZAPI_INSTANCE_ID!;
-const ZAPI_TOKEN = process.env.ZAPI_TOKEN!;
-const ZAPI_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN!;
+const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://miraisaleshg-evolution-api.cixapq.easypanel.host';
+
+const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY!;
+const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'Mirai Sales HG';
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
 async function sendWhatsApp(phone: string, message: string): Promise<{ ok: boolean; error?: string }> {
-  if (!ZAPI_INSTANCE_ID || !ZAPI_TOKEN || !ZAPI_CLIENT_TOKEN) {
-    return { ok: false, error: 'Credenciais Z-API não configuradas.' };
+  if (!EVOLUTION_API_KEY) {
+    return { ok: false, error: 'Credenciais Evolution API não configuradas.' };
   }
   let normalizedPhone = phone.replace(/\D/g, '');
   if (!normalizedPhone.startsWith('55')) normalizedPhone = `55${normalizedPhone}`;
   try {
-    const url = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`;
+    const url = `${EVOLUTION_API_URL}/message/sendText/${encodeURIComponent(EVOLUTION_INSTANCE)}`;
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_CLIENT_TOKEN },
-      body: JSON.stringify({ phone: normalizedPhone, message }),
+      headers: { 'Content-Type': 'application/json', 'apikey': EVOLUTION_API_KEY },
+      body: JSON.stringify({ number: normalizedPhone, text: message }),
     });
     const data = await res.json();
-    if (!res.ok) return { ok: false, error: data?.message || `Status ${res.status}` };
+    if (!res.ok) return { ok: false, error: data?.message || data?.error || `Status ${res.status}` };
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e.message };

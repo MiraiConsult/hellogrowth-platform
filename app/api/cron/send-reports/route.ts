@@ -10,9 +10,10 @@ const supabaseAdmin = createClient(
 );
 
 // Credenciais Z-API do servidor
-const ZAPI_INSTANCE_ID = process.env.ZAPI_INSTANCE_ID!;
-const ZAPI_TOKEN = process.env.ZAPI_TOKEN!;
-const ZAPI_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN!;
+const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://miraisaleshg-evolution-api.cixapq.easypanel.host';
+
+const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY!;
+const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'Mirai Sales HG';
 
 // Retorna o intervalo do dia anterior em horário de Brasília (UTC-3)
 function getYesterdayRange(): { startISO: string; endISO: string; dateLabel: string } {
@@ -193,30 +194,29 @@ async function buildMessageForPlan(
   return buildGrowthMessage(companyName, dateLabel, leads, nps);
 }
 
-// Envia mensagem via Z-API
+// Envia mensagem via Evolution API
 async function sendWhatsAppMessage(phone: string, message: string): Promise<boolean> {
-  if (!ZAPI_INSTANCE_ID || !ZAPI_TOKEN || !ZAPI_CLIENT_TOKEN) {
-    console.error('[Cron] Credenciais Z-API não configuradas');
+  if (!EVOLUTION_API_KEY) {
+    console.error('[Cron] Credenciais Evolution API não configuradas');
     return false;
   }
 
   try {
-    const url = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`;
+    let normalizedPhone = phone.replace(/\D/g, '');
+    if (!normalizedPhone.startsWith('55')) normalizedPhone = `55${normalizedPhone}`;
+    const url = `${EVOLUTION_API_URL}/message/sendText/${encodeURIComponent(EVOLUTION_INSTANCE)}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Client-Token': ZAPI_CLIENT_TOKEN
+        'apikey': EVOLUTION_API_KEY
       },
-      body: JSON.stringify({
-        phone: phone.replace(/\D/g, ''),
-        message
-      })
+      body: JSON.stringify({ number: normalizedPhone, text: message })
     });
 
     if (!response.ok) {
       const err = await response.text();
-      console.error('[Cron] Z-API error:', err);
+      console.error('[Cron] Evolution API error:', err);
       return false;
     }
 
