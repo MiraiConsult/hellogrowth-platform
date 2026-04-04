@@ -823,7 +823,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             ))}
           </div>
           {conteudoSubTab === 'templates' && <AdminTemplates isDark={isDark} surveysData={analyticsData} />}
-          {conteudoSubTab === 'catalogs' && <AdminCatalogs isDark={isDark} />}
+          {conteudoSubTab === 'catalogs' && <AdminCatalogs />}
           {conteudoSubTab === 'broadcast' && <AdminBroadcast isDark={isDark} />}
         </div>
       )}
