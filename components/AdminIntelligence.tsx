@@ -86,7 +86,7 @@ function QuestionTypeBadge({ type }: { type: string }) {
 export default function AdminIntelligence({ isDark, tenants, globalStats }: AdminIntelligenceProps) {
   const t = isDark ? DARK : LIGHT;
 
-  const [activeSection, setActiveSection] = useState<'overview' | 'trends' | 'products' | 'clients'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'trends' | 'products' | 'clients' | 'surveys'>('overview');
 
   // Filtro de data para Tendências NPS
   const [trendsDatePreset, setTrendsDatePreset] = useState('12m');
@@ -115,6 +115,9 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
   const [isLoadingTenantAI, setIsLoadingTenantAI] = useState<string | null>(null);
   const [expandedTenant, setExpandedTenant] = useState<string | null>(null);
   const [clientSearch, setClientSearch] = useState('');
+  const [clientSortField, setClientSortField] = useState<'healthScore' | 'companyName' | 'nps' | 'leads' | 'pipeline'>('healthScore');
+  const [clientSortDir, setClientSortDir] = useState<'asc' | 'desc'>('desc');
+  const [clientPlanFilter, setClientPlanFilter] = useState('all');
 
   const loadTrends = useCallback(async (preset?: string) => {
     setIsLoadingTrends(true);
@@ -196,8 +199,22 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
   }, [activeSection]);
 
   const filteredTenants = tenants
-    .filter(ten => !clientSearch || ten.companyName?.toLowerCase().includes(clientSearch.toLowerCase()))
-    .sort((a, b) => (b.healthScore || 0) - (a.healthScore || 0));
+    .filter(ten => {
+      const matchSearch = !clientSearch || ten.companyName?.toLowerCase().includes(clientSearch.toLowerCase());
+      const matchPlan = clientPlanFilter === 'all' || ten.plan === clientPlanFilter;
+      return matchSearch && matchPlan;
+    })
+    .sort((a, b) => {
+      let va: any, vb: any;
+      if (clientSortField === 'healthScore') { va = a.healthScore || 0; vb = b.healthScore || 0; }
+      else if (clientSortField === 'companyName') { va = a.companyName || ''; vb = b.companyName || ''; }
+      else if (clientSortField === 'nps') { va = a.nps?.score ?? -999; vb = b.nps?.score ?? -999; }
+      else if (clientSortField === 'leads') { va = a.leads || 0; vb = b.leads || 0; }
+      else if (clientSortField === 'pipeline') { va = a.pipeline || 0; vb = b.pipeline || 0; }
+      else { va = 0; vb = 0; }
+      if (clientSortDir === 'asc') return va > vb ? 1 : va < vb ? -1 : 0;
+      return va < vb ? 1 : va > vb ? -1 : 0;
+    });
 
   const filteredSurveys = (surveysData?.campaigns || []).filter((c: any) => {
     const matchSearch = !surveySearch || c.name?.toLowerCase().includes(surveySearch.toLowerCase());
@@ -881,15 +898,48 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
         {/* ── ANÁLISE POR CLIENTE ── */}
         {activeSection === 'clients' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <h2 className={`text-base font-semibold ${t.text}`}>Análise Individual por Cliente</h2>
-              <input
-                type="text"
-                placeholder="Buscar empresa..."
-                value={clientSearch}
-                onChange={e => setClientSearch(e.target.value)}
-                className={`text-sm px-3 py-2 rounded-lg border ${t.input} w-56`}
-              />
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h2 className={`text-base font-semibold ${t.text}`}>Análise Individual por Cliente <span className={`text-xs font-normal ${t.textMuted} ml-1`}>{filteredTenants.length} clientes</span></h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="text"
+                  placeholder="Buscar empresa..."
+                  value={clientSearch}
+                  onChange={e => setClientSearch(e.target.value)}
+                  className={`text-sm px-3 py-2 rounded-lg border ${t.input} w-44`}
+                />
+                <select
+                  value={clientPlanFilter}
+                  onChange={e => setClientPlanFilter(e.target.value)}
+                  className={`text-sm px-3 py-2 rounded-lg border ${t.input} cursor-pointer`}
+                >
+                  <option value="all">Todos os Planos</option>
+                  <option value="hello_growth">Growth</option>
+                  <option value="hello_rating">Rating</option>
+                  <option value="hello_client">Client</option>
+                  <option value="trial">Trial</option>
+                  <option value="growth_lifetime">Lifetime</option>
+                </select>
+                <select
+                  value={`${clientSortField}_${clientSortDir}`}
+                  onChange={e => {
+                    const [field, dir] = e.target.value.split('_') as any;
+                    setClientSortField(field);
+                    setClientSortDir(dir);
+                  }}
+                  className={`text-sm px-3 py-2 rounded-lg border ${t.input} cursor-pointer`}
+                >
+                  <option value="healthScore_desc">Health Score ↓</option>
+                  <option value="healthScore_asc">Health Score ↑</option>
+                  <option value="nps_desc">NPS ↓</option>
+                  <option value="nps_asc">NPS ↑</option>
+                  <option value="leads_desc">Leads ↓</option>
+                  <option value="leads_asc">Leads ↑</option>
+                  <option value="pipeline_desc">Pipeline ↓</option>
+                  <option value="companyName_asc">Nome A→Z</option>
+                  <option value="companyName_desc">Nome Z→A</option>
+                </select>
+              </div>
             </div>
 
             <div className="space-y-3">

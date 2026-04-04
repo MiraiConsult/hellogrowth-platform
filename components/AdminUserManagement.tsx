@@ -15,6 +15,7 @@ import AdminTemplates from '@/components/AdminTemplates';
 import AdminCatalogs from '@/components/AdminCatalogs';
 import AdminFinanceiro from '@/components/AdminFinanceiro';
 import AdminHome from '@/components/AdminHome';
+import AdminColaboradores from '@/components/AdminColaboradores';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -226,7 +227,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [isDark, setIsDark] = useState(true);
   const t = isDark ? DARK : LIGHT;
   // ── Active Tab ──
-  const [activeTab, setActiveTab] = useState<'home' | 'clients' | 'broadcast' | 'intelligence' | 'templates' | 'catalogs' | 'financeiro' | 'conteudo'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'clients' | 'broadcast' | 'intelligence' | 'templates' | 'catalogs' | 'financeiro' | 'conteudo' | 'colaboradores'>('home');
   const [conteudoSubTab, setConteudoSubTab] = useState<'templates' | 'catalogs' | 'broadcast'>('templates');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [asaasClientMap, setAsaasClientMap] = useState<Record<string, any>>({});
@@ -269,6 +270,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [sdrCsForm, setSdrCsForm] = useState({ sdr_name: '', cs_name: '', internal_notes: '' });
   const [paymentLinkResult, setPaymentLinkResult] = useState<{ url: string; emailSent: boolean } | null>(null);
   const [sendingLink, setSendingLink] = useState(false);
+  const [reportModal, setReportModal] = useState<{ client: Client; usage: any } | null>(null);
+  const [reportContent, setReportContent] = useState('');
 
   // ── Form states ──
   const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '' });
@@ -669,11 +672,12 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const btnSecondary = `flex items-center justify-center gap-2 border ${t.btnSecondary} text-sm font-medium px-4 py-2.5 rounded-lg transition-colors`;
 
   const NAV_ITEMS = [
-    { id: 'home',         label: 'Início',       icon: <LayoutDashboard size={18} />, activeClass: 'bg-emerald-600 text-white' },
-    { id: 'clients',      label: 'Clientes',     icon: <Users size={18} />,           activeClass: 'bg-emerald-600 text-white' },
-    { id: 'financeiro',   label: 'Financeiro',   icon: <TrendingUp size={18} />,      activeClass: 'bg-violet-600 text-white' },
-    { id: 'conteudo',     label: 'Conteúdo',     icon: <BookOpen size={18} />,        activeClass: 'bg-orange-500 text-white' },
-    { id: 'intelligence', label: 'Inteligência', icon: <Brain size={18} />,           activeClass: 'bg-purple-600 text-white' },
+    { id: 'home',           label: 'Início',         icon: <LayoutDashboard size={18} />, activeClass: 'bg-emerald-600 text-white' },
+    { id: 'clients',        label: 'Clientes',       icon: <Users size={18} />,           activeClass: 'bg-emerald-600 text-white' },
+    { id: 'financeiro',     label: 'Financeiro',     icon: <TrendingUp size={18} />,      activeClass: 'bg-violet-600 text-white' },
+    { id: 'conteudo',       label: 'Conteúdo',       icon: <BookOpen size={18} />,        activeClass: 'bg-orange-500 text-white' },
+    { id: 'intelligence',   label: 'Inteligência',   icon: <Brain size={18} />,           activeClass: 'bg-purple-600 text-white' },
+    { id: 'colaboradores',  label: 'Colaboradores',  icon: <UserCog size={18} />,         activeClass: 'bg-sky-600 text-white' },
   ];
 
   return (
@@ -795,7 +799,11 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       <div className={`flex-1 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'ml-[72px]' : 'ml-60'}`}>
 
       {activeTab === 'home' && (
-        <AdminHome isDark={isDark} onNavigate={(tab) => setActiveTab(tab as any)} />
+        <AdminHome isDark={isDark} onNavigate={(tab, filter) => {
+          setActiveTab(tab as any);
+          if (filter?.status) setStatusFilter(filter.status);
+          if (filter?.search) setSearch(filter.search);
+        }} />
       )}
       {activeTab === 'financeiro' && (
         <AdminFinanceiro isDark={isDark} />
@@ -847,8 +855,11 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
           </div>
         )
       )}
+      {activeTab === 'colaboradores' && (
+        <AdminColaboradores isDark={isDark} />
+      )}
       {activeTab === 'clients' && (
-      <main className="max-w-screen-2xl mx-auto px-6 py-6 space-y-5">
+      <main className="w-full px-6 py-6 space-y-5">
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
           {[
@@ -886,7 +897,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             </div>
             {[
               { value: planFilter, onChange: setPlanFilter, options: [['all','Todos os Planos'],['trial','Trial'],['client','Hello Client'],['rating','Hello Rating'],['growth','Hello Growth'],['growth_lifetime','Lifetime']] },
-              { value: statusFilter, onChange: setStatusFilter, options: [['all','Todos os Status'],['active','Ativos'],['trialing','Em Trial'],['trial_expired','Trial Expirado'],['past_due','Pagamento Atrasado'],['canceled','Cancelados']] },
+              { value: statusFilter, onChange: setStatusFilter, options: [['all','Todos os Status'],['active','Ativos'],['trialing','Em Trial'],['trial_expired','Trial Expirado'],['past_due','Pagamento Atrasado'],['canceled','Cancelados'],['never_login','Nunca logou']] },
               { value: modelFilter, onChange: setModelFilter, options: [['all','Todos os Modelos'],['model_a','Modelo A'],['model_b','Modelo B'],['no_model','Sem Modelo']] },
             ].map((sel, i) => (
               <select key={i} value={sel.value} onChange={e => sel.onChange(e.target.value)} className={`border rounded-lg px-3 py-2 text-sm focus:outline-none ${t.input}`}>
@@ -901,7 +912,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         </div>
 
         {/* Table */}
-        <div className={`${t.table} border rounded-xl overflow-hidden shadow-sm`}>
+        <div className="overflow-x-auto">
+        <div className={`${t.table} border rounded-xl overflow-hidden shadow-sm min-w-[900px]`}>
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="animate-spin text-emerald-500" size={32} />
@@ -1010,17 +1022,24 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                                   <div className="flex items-center justify-between mb-3">
                                     <h4 className={`text-xs font-semibold ${t.textMuted} uppercase tracking-wider flex items-center gap-2`}>
                                       <Heart size={12} /> Health Score de Uso
+                                      <span
+                                        title="O Health Score mede o engajamento do cliente com a plataforma (0-100).\n\nComo é calculado:\n• +25 pts: Acesso nos últimos 7 dias\n• +25 pts: Avaliações NPS nos últimos 30 dias\n• +25 pts: Respostas de formulário nos últimos 30 dias\n• +25 pts: Campanhas ou formulários ativos\n\nClassificação:\n• 80-100: Saudável (verde)\n• 60-79: Atenção (amarelo)\n• 40-59: Risco (laranja)\n• 0-39: Crítico (vermelho)"
+                                        className={`cursor-help text-xs px-1.5 py-0.5 rounded-full border ${isDark ? 'border-gray-600 text-gray-400 hover:bg-gray-700' : 'border-slate-300 text-slate-400 hover:bg-slate-100'} transition-colors`}
+                                      >?
+                                      </span>
                                     </h4>
                                     {usage && (
                                       <button
                                         onClick={() => {
-                                          const phone = client.phone?.replace(/\D/g, '');
-                                          const msg = encodeURIComponent(`Olá ${client.name}! Aqui está um resumo do seu uso HelloGrowth nos últimos 30 dias:\n\n📊 Avaliações NPS recebidas: ${usage.metrics?.npsLast30Days || 0}\n📋 Respostas de formulário: ${usage.metrics?.formResponsesLast30Days || 0}\n📣 Campanhas ativas: ${usage.metrics?.activeCampaigns || 0}\n📝 Formulários ativos: ${usage.metrics?.activeForms || 0}\n\nContinue usando o HelloGrowth para crescer ainda mais! 🚀`);
-                                          window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
+                                          const now = new Date();
+                                          const dateStr = now.toLocaleDateString('pt-BR');
+                                          const content = `Olá ${client.name},\n\nSegue seu relatório de uso HelloGrowth referente ao período de 30 dias (até ${dateStr}):\n\n📊 RESUMO DE USO\n\n• Avaliações NPS recebidas: ${usage.metrics?.npsLast30Days || 0}\n• Respostas de formulário: ${usage.metrics?.formResponsesLast30Days || 0}\n• Campanhas ativas: ${usage.metrics?.activeCampaigns || 0}\n• Formulários ativos: ${usage.metrics?.activeForms || 0}\n\n📈 HEALTH SCORE: ${usage.healthScore || 0}/100 (${usage.healthScore >= 80 ? 'Saudável' : usage.healthScore >= 60 ? 'Atenção' : usage.healthScore >= 40 ? 'Risco' : 'Crítico'})\n\n📌 DESTAQUES\n${usage.indicators?.hasRecentLogin ? '✅' : '⚠️'} Acesso recente à plataforma\n${usage.indicators?.hasNpsResponses ? '✅' : '⚠️'} Avaliações NPS ativas\n${usage.indicators?.hasFormResponses ? '✅' : '⚠️'} Respostas de formulário\n${(usage.indicators?.hasActiveCampaigns || usage.indicators?.hasActiveForms) ? '✅' : '⚠️'} Campanhas/Formulários ativos\n\nQualquer dúvida, estamos à disposição!\n\nEquipe HelloGrowth`;
+                                          setReportContent(content);
+                                          setReportModal({ client, usage });
                                         }}
                                         className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-500 font-medium"
                                       >
-                                        <MessageCircle size={12} /> Enviar relatório
+                                        <FileText size={12} /> Gerar relatório
                                       </button>
                                     )}
                                   </div>
@@ -1171,9 +1190,96 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             </table>
           )}
         </div>
+        </div>
       </main>
       )}
       {/* ── Modals ── */}
+
+      {/* Report Modal */}
+      {reportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className={`${t.modalBg} border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto`}>
+            <div className={`flex items-center justify-between p-5 border-b ${t.border}`}>
+              <div>
+                <h2 className={`text-base font-bold ${t.text}`}>Relatório de Uso — {reportModal.client.name}</h2>
+                <p className={`text-xs ${t.textMuted} mt-0.5`}>Edite o conteúdo antes de enviar ou baixar em PDF</p>
+              </div>
+              <button onClick={() => setReportModal(null)} className={`p-1.5 rounded-lg ${t.surfaceHover}`}><X size={16} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* Editable text area */}
+              <div>
+                <label className={`text-xs font-semibold ${t.textMuted} uppercase tracking-wider block mb-2`}>Conteúdo do Relatório</label>
+                <textarea
+                  value={reportContent}
+                  onChange={e => setReportContent(e.target.value)}
+                  rows={16}
+                  className={`w-full text-sm px-3 py-2.5 rounded-xl border font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500 ${isDark ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-slate-50 border-slate-200 text-gray-800'}`}
+                />
+              </div>
+              {/* Health Score summary */}
+              <div className={`${isDark ? 'bg-gray-800' : 'bg-slate-50'} rounded-xl p-4 border ${t.border}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`text-xs font-semibold ${t.textMuted} uppercase tracking-wider`}>Health Score</span>
+                  <span className={`text-lg font-bold ${reportModal.usage.healthScore >= 80 ? 'text-emerald-500' : reportModal.usage.healthScore >= 60 ? 'text-yellow-500' : reportModal.usage.healthScore >= 40 ? 'text-orange-500' : 'text-red-500'}`}>{reportModal.usage.healthScore || 0}/100</span>
+                </div>
+                <div className={`h-2 rounded-full ${isDark ? 'bg-gray-700' : 'bg-slate-200'}`}>
+                  <div
+                    className={`h-2 rounded-full ${reportModal.usage.healthScore >= 80 ? 'bg-emerald-500' : reportModal.usage.healthScore >= 60 ? 'bg-yellow-500' : reportModal.usage.healthScore >= 40 ? 'bg-orange-500' : 'bg-red-500'}`}
+                    style={{ width: `${reportModal.usage.healthScore || 0}%` }}
+                  />
+                </div>
+              </div>
+              {/* Action buttons */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => {
+                    const phone = reportModal.client.phone?.replace(/\D/g, '');
+                    if (!phone) { alert('Cliente sem telefone cadastrado.'); return; }
+                    const msg = encodeURIComponent(reportContent);
+                    window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-semibold transition-colors"
+                >
+                  <MessageCircle size={16} /> Enviar via WhatsApp
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch('/api/admin/generate-report', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content: reportContent, clientName: reportModal.client.name, healthScore: reportModal.usage.healthScore }),
+                      });
+                      if (!res.ok) throw new Error('Erro ao gerar relatório');
+                      const html = await res.text();
+                      const blob = new Blob([html], { type: 'text/html' });
+                      const url = URL.createObjectURL(blob);
+                      const win = window.open(url, '_blank');
+                      if (win) {
+                        win.onload = () => {
+                          setTimeout(() => { win.print(); }, 500);
+                        };
+                      }
+                    } catch (err) {
+                      alert('Erro ao gerar relatório. Tente novamente.');
+                    }
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"
+                >
+                  <FileText size={16} /> Visualizar / Imprimir PDF
+                </button>
+                <button
+                  onClick={() => setReportModal(null)}
+                  className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border text-sm font-medium transition-colors ${isDark ? 'border-gray-700 text-gray-300 hover:bg-gray-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* New Client */}
       {editModal === 'new_client' && (

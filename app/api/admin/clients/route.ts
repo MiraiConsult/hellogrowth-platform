@@ -127,7 +127,9 @@ export async function GET(request: NextRequest) {
       filtered = filtered.filter(u => u.plan === planFilter || u.primaryCompany?.plan === planFilter);
     }
 
-    if (statusFilter !== 'all') {
+    if (statusFilter === 'never_login') {
+      filtered = filtered.filter(u => !u.lastLogin);
+    } else if (statusFilter !== 'all') {
       filtered = filtered.filter(u => u.consolidatedStatus === statusFilter);
     }
 

@@ -8,7 +8,7 @@ import {
 
 interface AdminHomeProps {
   isDark?: boolean;
-  onNavigate: (tab: string) => void;
+  onNavigate: (tab: string, filter?: { status?: string; search?: string }) => void;
 }
 
 const DARK = {
@@ -170,22 +170,22 @@ export default function AdminHome({ isDark = false, onNavigate }: AdminHomeProps
       type: 'warning',
       icon: <Clock size={14} />,
       text: `${urgentTrials} cliente${urgentTrials > 1 ? 's' : ''} com trial expirando em até 3 dias`,
-      action: () => onNavigate('clients'),
-      actionLabel: 'Ver clientes',
+      action: () => onNavigate('clients', { status: 'trialing' }),
+      actionLabel: 'Ver clientes →',
     },
     overdueCount > 0 && {
       type: 'danger',
       icon: <AlertTriangle size={14} />,
       text: `${overdueCount} assinatura${overdueCount > 1 ? 's' : ''} inadimplente${overdueCount > 1 ? 's' : ''} — ${fmt(overdueAmount)} em aberto`,
       action: () => onNavigate('financeiro'),
-      actionLabel: 'Ver financeiro',
+      actionLabel: 'Ver financeiro →',
     },
     neverLoggedIn > 0 && {
       type: 'info',
       icon: <AlertCircle size={14} />,
       text: `${neverLoggedIn} cliente${neverLoggedIn > 1 ? 's' : ''} nunca fizeram login na plataforma`,
-      action: () => onNavigate('clients'),
-      actionLabel: 'Ver clientes',
+      action: () => onNavigate('clients', { status: 'never_login' }),
+      actionLabel: 'Ver clientes →',
     },
   ].filter(Boolean) as any[];
 
