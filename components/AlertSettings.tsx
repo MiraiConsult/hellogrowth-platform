@@ -193,7 +193,8 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
   };
 
   const handleTest = async () => {
-    const testNumber = settings.whatsapp_numbers[0] || settings.whatsapp_number;
+    // Usa o primeiro número salvo, ou o número digitado no campo, ou o campo legado
+    const testNumber = settings.whatsapp_numbers[0] || whatsInput.trim() || settings.whatsapp_number;
     if (!testNumber) {
       setError('Adicione ao menos um número de WhatsApp antes de testar.');
       return;
@@ -201,20 +202,20 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
     setTesting(true);
     setError(null);
     try {
-      const res = await fetch('/api/send-report', {
+      // Usa a rota de status/teste do admin que já funciona com Evolution API
+      const res = await fetch('/api/admin/whatsapp-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'test',
-          companyId,
-          whatsappNumber: testNumber,
+          phone: testNumber,
+          message: `✅ *HelloGrowth — Teste de Alertas*\n\n🏢 ${companyName}\n\nSeus alertas por WhatsApp estão configurados e funcionando! 🎉\n\nVocê receberá notificações em tempo real sobre:\n• Novos leads\n• Detratores NPS\n• Leads de alto valor\n• Trials expirando\n\n_HelloGrowth — Plataforma de Gestão Comercial_`,
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Falha no envio');
+      if (!json.ok) throw new Error(json.error || 'Falha no envio. Verifique se as variáveis EVOLUTION_API_KEY estão configuradas no Vercel.');
       alert('✅ Mensagem de teste enviada com sucesso!');
     } catch (e: any) {
-      setError(e.message);
+      setError(`Erro ao enviar: ${e.message}`);
     } finally {
       setTesting(false);
     }
@@ -280,7 +281,7 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
           </button>
           <button
             onClick={handleTest}
-            disabled={testing || settings.whatsapp_numbers.length === 0}
+            disabled={testing || (settings.whatsapp_numbers.length === 0 && !whatsInput.trim())}
             className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
           >
             {testing ? <Loader2 size={14} className="animate-spin" /> : <TestTube size={14} />}
