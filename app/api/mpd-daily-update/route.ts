@@ -25,9 +25,9 @@ const supabaseAdmin = createClient(
 
 const GOOGLE_PLACES_API_KEY =
   process.env.GOOGLE_PLACES_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY || '';
-const ZAPI_INSTANCE_ID = process.env.ZAPI_INSTANCE_ID!;
-const ZAPI_TOKEN = process.env.ZAPI_TOKEN!;
-const ZAPI_CLIENT_TOKEN = process.env.ZAPI_CLIENT_TOKEN!;
+const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://miraisaleshg-evolution-api.cixapq.easypanel.host';
+const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY!;
+const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'Mirai Sales HG';
 const CRON_SECRET = process.env.CRON_SECRET || 'hellogrowth-cron-2025';
 const GEMINI_API_KEY =
   process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
@@ -189,19 +189,19 @@ Responda apenas com o texto do resumo, sem títulos ou formatação.`;
 }
 
 async function sendWhatsApp(phone: string, message: string): Promise<boolean> {
-  if (!ZAPI_INSTANCE_ID || !ZAPI_TOKEN || !ZAPI_CLIENT_TOKEN) return false;
+  if (!EVOLUTION_API_KEY) return false;
   try {
-    const res = await fetch(
-      `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Client-Token': ZAPI_CLIENT_TOKEN,
-        },
-        body: JSON.stringify({ phone, message }),
-      }
-    );
+    let normalizedPhone = phone.replace(/\D/g, '');
+    if (!normalizedPhone.startsWith('55')) normalizedPhone = `55${normalizedPhone}`;
+    const url = `${EVOLUTION_API_URL}/message/sendText/${encodeURIComponent(EVOLUTION_INSTANCE)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': EVOLUTION_API_KEY,
+      },
+      body: JSON.stringify({ number: normalizedPhone, text: message }),
+    });
     return res.ok;
   } catch {
     return false;

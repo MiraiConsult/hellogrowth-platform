@@ -125,7 +125,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ sent: false, reason: 'Sem configuração de alertas' });
     }
 
-    if (!settings.whatsapp_number) {
+    // Suporte a múltiplos números com fallback para campo legado
+    const numbers: string[] = [
+      ...(Array.isArray(settings.whatsapp_numbers) ? settings.whatsapp_numbers : []),
+    ];
+    if (settings.whatsapp_number && !numbers.includes(settings.whatsapp_number)) {
+      numbers.unshift(settings.whatsapp_number);
+    }
+    if (numbers.length === 0) {
       return NextResponse.json({ sent: false, reason: 'Número de WhatsApp não configurado' });
     }
 
@@ -146,9 +153,9 @@ export async function POST(request: NextRequest) {
     // Buscar nome da empresa se não foi passado pelo frontend
     let companyName = data.companyName;
     if (!companyName) {
-      // Tentar buscar em business_profiles primeiro
+      // Tentar buscar em business_profile primeiro
       const { data: bizProfile } = await supabaseAdmin
-        .from('business_profiles')
+        .from('business_profile')
         .select('company_name')
         .eq('tenant_id', companyId)
         .maybeSingle();
@@ -165,11 +172,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Monta e envia a mensagem
+    // Monta e envia a mensagem para todos os números cadastrados
     const message = buildMessage(type, { ...data, companyName });
-    const sent = await sendWhatsApp(settings.whatsapp_number, message);
+    const results = await Promise.all(numbers.map(num => sendWhatsApp(num, message)));
+    const sent = results.some(r => r);
 
-    return NextResponse.json({ sent, type, phone: settings.whatsapp_number });
+    return NextResponse.json({ sent, type, phones: numbers, sentCount: results.filter(Boolean).length });
   } catch (e: any) {
     console.error('[send-alert] Erro:', e);
     return NextResponse.json({ error: e.message }, { status: 500 });
