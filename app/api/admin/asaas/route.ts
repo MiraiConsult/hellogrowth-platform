@@ -204,8 +204,20 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      // Buscar cobranças em atraso para identificar assinaturas inadimplentes
+      // (o Asaas mantém a assinatura como ACTIVE mesmo com cobranças OVERDUE)
+      let overdueSubscriptionIds = new Set<string>();
+      try {
+        const overduePays = await asaasGet('/payments?status=OVERDUE&limit=100');
+        const overdueList: any[] = overduePays.data || [];
+        overdueList.forEach((p: any) => {
+          if (p.subscription) overdueSubscriptionIds.add(p.subscription);
+        });
+      } catch { /* ignore */ }
+
       const enriched = allSubs.map((sub: any) => {
         const customer = customerMap[sub.customer] || {};
+        const hasOverdue = overdueSubscriptionIds.has(sub.id) || sub.status === 'OVERDUE';
         return {
           id: sub.id,
           customerId: sub.customer,
@@ -213,13 +225,15 @@ export async function GET(request: NextRequest) {
           customerEmail: customer.email || '—',
           customerPhone: customer.mobilePhone || customer.phone || '—',
           value: sub.value,
-          status: sub.status,
+          status: hasOverdue ? 'OVERDUE' : sub.status,
+          originalStatus: sub.status,
           billingType: sub.billingType,
           cycle: sub.cycle,
           nextDueDate: sub.nextDueDate,
           dateCreated: sub.dateCreated,
           description: sub.description,
           deleted: sub.deleted,
+          hasOverdue,
         };
       });
 
