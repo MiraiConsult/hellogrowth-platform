@@ -119,6 +119,30 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
   const [clientSortDir, setClientSortDir] = useState<'asc' | 'desc'>('desc');
   const [clientPlanFilter, setClientPlanFilter] = useState('all');
 
+  // Ordenação da tabela de ranking (visão geral)
+  const [rankSortField, setRankSortField] = useState<'healthScore' | 'companyName' | 'nps' | 'responses' | 'leads' | 'pipeline' | 'trend' | 'plan'>('healthScore');
+  const [rankSortDir, setRankSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const handleRankSort = (field: typeof rankSortField) => {
+    if (rankSortField === field) setRankSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setRankSortField(field); setRankSortDir('desc'); }
+  };
+
+  const rankSortedTenants = [...tenants].sort((a, b) => {
+    let va: any, vb: any;
+    if (rankSortField === 'healthScore') { va = a.healthScore || 0; vb = b.healthScore || 0; }
+    else if (rankSortField === 'companyName') { va = a.companyName || ''; vb = b.companyName || ''; }
+    else if (rankSortField === 'nps') { va = a.nps?.score ?? -999; vb = b.nps?.score ?? -999; }
+    else if (rankSortField === 'responses') { va = a.nps?.totalResponses || 0; vb = b.nps?.totalResponses || 0; }
+    else if (rankSortField === 'leads') { va = a.leads?.total || 0; vb = b.leads?.total || 0; }
+    else if (rankSortField === 'pipeline') { va = a.leads?.pipelineValue || 0; vb = b.leads?.pipelineValue || 0; }
+    else if (rankSortField === 'trend') { va = a.nps?.trend || ''; vb = b.nps?.trend || ''; }
+    else if (rankSortField === 'plan') { va = a.plan || ''; vb = b.plan || ''; }
+    else { va = 0; vb = 0; }
+    if (typeof va === 'string') return rankSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    return rankSortDir === 'asc' ? (va > vb ? 1 : va < vb ? -1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0);
+  });
+
   const loadTrends = useCallback(async (preset?: string) => {
     setIsLoadingTrends(true);
     try {
@@ -286,19 +310,36 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className={`text-xs ${t.textMuted} border-b ${t.border}`}>
-                      <th className="text-left py-2 pr-4">Empresa</th>
-                      <th className="text-center py-2 px-3">Plano</th>
-                      <th className="text-center py-2 px-3">NPS</th>
-                      <th className="text-center py-2 px-3">Respostas</th>
-                      <th className="text-center py-2 px-3">Leads</th>
-                      <th className="text-center py-2 px-3">Pipeline</th>
-                      <th className="text-center py-2 px-3">Tendência</th>
-                      <th className="text-left py-2 pl-3 w-40">Health Score</th>
+                    <tr className={`text-xs border-b ${t.border}`}>
+                      {([
+                        { label: 'Empresa', field: 'companyName', align: 'left' },
+                        { label: 'Plano', field: 'plan', align: 'center' },
+                        { label: 'NPS', field: 'nps', align: 'center' },
+                        { label: 'Respostas', field: 'responses', align: 'center' },
+                        { label: 'Leads', field: 'leads', align: 'center' },
+                        { label: 'Pipeline', field: 'pipeline', align: 'center' },
+                        { label: 'Tendência', field: 'trend', align: 'center' },
+                        { label: 'Health Score', field: 'healthScore', align: 'left' },
+                      ] as { label: string; field: typeof rankSortField; align: string }[]).map(col => (
+                        <th
+                          key={col.field}
+                          onClick={() => handleRankSort(col.field)}
+                          className={`py-2.5 px-3 font-semibold cursor-pointer select-none whitespace-nowrap group transition-colors hover:text-emerald-500 ${
+                            col.align === 'left' ? 'text-left' : 'text-center'
+                          } ${rankSortField === col.field ? 'text-emerald-500' : t.textMuted}`}
+                        >
+                          <span className={`inline-flex items-center gap-1 ${col.align === 'center' ? 'justify-center' : ''}`}>
+                            {col.label}
+                            {rankSortField === col.field
+                              ? (rankSortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />)
+                              : <ChevronDown size={11} className="opacity-25 group-hover:opacity-60" />}
+                          </span>
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className={`divide-y ${t.border}`}>
-                    {[...tenants].sort((a, b) => (b.healthScore || 0) - (a.healthScore || 0)).map((tenant) => (
+                    {rankSortedTenants.map((tenant) => (
                       <tr key={tenant.tenantId} className={`${t.tableRow} transition-colors`}>
                         <td className={`py-3 pr-4 font-semibold ${t.text}`}>{tenant.companyName}</td>
                         <td className="py-3 px-3 text-center"><PlanBadge plan={tenant.plan} /></td>
