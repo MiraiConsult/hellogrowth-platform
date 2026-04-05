@@ -193,15 +193,32 @@ export default function AdminColaboradores({ isDark = false }: Props) {
           const asSDR = users.filter((u: ClienteDoColaborador) => u.sdr_name === col.name);
           const asCS = users.filter((u: ClienteDoColaborador) => u.cs_name === col.name);
 
-          const activePlans = ['active', 'hello_growth', 'hello_rating', 'hello_client', 'lifetime'];
-          const activeClients = asSDR.filter((u: any) => activePlans.includes(u.plan)).length;
-          const trialingClients = asSDR.filter((u: any) => u.plan === 'trial').length;
-          const expiredClients = asSDR.filter((u: any) => u.plan === 'expired' || u.plan === 'trial_expired').length;
-          const mrrContribution = activeClients * 149.90;
+          // Usar consolidatedStatus (retornado pela API) para classificar clientes
+          const isActiveStatus = (u: ClienteDoColaborador) =>
+            u.status === 'active' || (!u.status && (u.plan === 'growth' || u.plan === 'rating' || u.plan === 'growth_lifetime' || u.plan === 'client'));
+          const isTrialStatus = (u: ClienteDoColaborador) =>
+            u.status === 'trialing' || (!u.status && u.plan === 'trial');
+          const isExpiredStatus = (u: ClienteDoColaborador) =>
+            u.status === 'trial_expired' || u.status === 'canceled' || u.status === 'past_due' ||
+            (!u.status && (u.plan === 'expired' || u.plan === 'trial_expired'));
+
+          const activeClients = asSDR.filter(isActiveStatus).length;
+          const trialingClients = asSDR.filter(isTrialStatus).length;
+          const expiredClients = asSDR.filter(isExpiredStatus).length;
+
+          // MRR: plano growth = R$149,90 | rating = R$99,90 | client = R$99,90
+          const planMrr = (u: ClienteDoColaborador) => {
+            if (u.plan === 'growth' || u.plan === 'hello_growth') return 149.90;
+            if (u.plan === 'rating' || u.plan === 'hello_rating') return 99.90;
+            if (u.plan === 'client' || u.plan === 'hello_client') return 99.90;
+            if (u.plan === 'growth_lifetime') return 149.90;
+            return 0;
+          };
+          const mrrContribution = asSDR.filter(isActiveStatus).reduce((sum, u) => sum + planMrr(u), 0);
           const conversionRate = asSDR.length > 0 ? Math.round((activeClients / asSDR.length) * 100) : 0;
 
           // Avg health score for CS clients
-          const csClients = asCS.filter((u: any) => activePlans.includes(u.plan));
+          const csClients = asCS.filter(isActiveStatus);
           const avgHealthScore = csClients.length > 0
             ? Math.round(csClients.reduce((sum: number, u: any) => sum + calcHealthScore(u), 0) / csClients.length)
             : 0;
@@ -299,7 +316,9 @@ export default function AdminColaboradores({ isDark = false }: Props) {
   // Profile view
   if (selectedColaborador) {
     const col = colaboradores.find(c => c.id === selectedColaborador.id);
-    const activePlans = ['active', 'hello_growth', 'hello_rating', 'hello_client', 'lifetime'];
+    // Classificação por status consolidado
+    const isActiveStatus = (u: ClienteDoColaborador) =>
+      u.status === 'active' || (!u.status && (u.plan === 'growth' || u.plan === 'rating' || u.plan === 'growth_lifetime' || u.plan === 'client'));
     const sdrClients = allClients.filter(u => u.sdr_name === selectedColaborador.name);
     const csClients = allClients.filter(u => u.cs_name === selectedColaborador.name);
     const displayClients = profileTab === 'sdr' ? sdrClients : csClients;
@@ -367,7 +386,7 @@ export default function AdminColaboradores({ isDark = false }: Props) {
             {
               label: 'Clientes como CS',
               value: selectedColaborador.clientsAsCS,
-              sub: `${csClients.filter(u => activePlans.includes(u.plan)).length} ativos`,
+              sub: `${csClients.filter(isActiveStatus).length} ativos`,
               icon: <Users size={16} />,
               color: 'text-emerald-600',
               bg: 'bg-emerald-50',
@@ -431,7 +450,7 @@ export default function AdminColaboradores({ isDark = false }: Props) {
                   style={{ width: `${selectedColaborador.avgHealthScore}%` }}
                 />
               </div>
-              <div className={`text-xs ${t.textMuted} mt-1`}>{csClients.filter(u => activePlans.includes(u.plan)).length} clientes ativos em CS</div>
+              <div className={`text-xs ${t.textMuted} mt-1`}>{csClients.filter(isActiveStatus).length} clientes ativos em CS</div>
             </div>
             {/* Trial/Expirados */}
             <div>
@@ -491,7 +510,7 @@ export default function AdminColaboradores({ isDark = false }: Props) {
                 <tbody className={`divide-y ${t.divider}`}>
                   {displayClients.map(client => {
                     const health = calcHealthScore(client);
-                    const isActive = activePlans.includes(client.plan);
+                    const isActive = isActiveStatus(client);
                     const lastLogin = client.last_login ? new Date(client.last_login).toLocaleDateString('pt-BR') : '—';
                     return (
                       <tr key={client.id} className={`${t.surfaceHover} transition-colors`}>
