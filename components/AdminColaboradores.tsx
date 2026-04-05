@@ -161,19 +161,37 @@ export default function AdminColaboradores({ isDark = false }: Props) {
       if (error) throw error;
       setColaboradores(data || []);
 
-      // Fetch all clients
-      const { data: users } = await supabase
-        .from('users')
-        .select('id, name, email, company, plan, sdr_name, cs_name, last_login, created_at')
-        .neq('email', 'admin@hellogrowth.com')
-        .neq('email', '');
+      // Fetch all clients via admin API (uses service role key, bypasses RLS)
+      let users: ClienteDoColaborador[] = [];
+      try {
+        const res = await fetch('/api/admin/clients');
+        if (res.ok) {
+          const json = await res.json();
+          const raw: any[] = json.clients || json.users || (Array.isArray(json) ? json : []);
+          users = raw.map((u: any) => ({
+            id: u.id,
+            name: u.name || '',
+            email: u.email || '',
+            company: u.companyName || u.company_name || u.company || '',
+            plan: u.plan || u.primaryCompany?.plan || '',
+            status: u.consolidatedStatus || u.status || '',
+            sdr_name: u.sdrName ?? u.sdr_name ?? null,
+            cs_name: u.csName ?? u.cs_name ?? null,
+            last_login: u.lastLogin ?? u.last_login ?? null,
+            created_at: u.createdAt || u.created_at || '',
+            mrr: 0,
+          }));
+        }
+      } catch (e) {
+        console.error('Error fetching clients for colaboradores:', e);
+      }
 
-      setAllClients((users || []) as ClienteDoColaborador[]);
+      setAllClients(users);
 
       if (data && data.length > 0) {
         const metricsData: ColaboradorMetrics[] = data.map((col: Colaborador) => {
-          const asSDR = (users || []).filter((u: any) => u.sdr_name === col.name);
-          const asCS = (users || []).filter((u: any) => u.cs_name === col.name);
+          const asSDR = users.filter((u: ClienteDoColaborador) => u.sdr_name === col.name);
+          const asCS = users.filter((u: ClienteDoColaborador) => u.cs_name === col.name);
 
           const activePlans = ['active', 'hello_growth', 'hello_rating', 'hello_client', 'lifetime'];
           const activeClients = asSDR.filter((u: any) => activePlans.includes(u.plan)).length;
