@@ -338,6 +338,21 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
     setTimeout(() => setToast(null), 4000);
   };
 
+  // Atualiza um cliente no estado local sem recarregar toda a lista (preserva scroll e filtros)
+  const updateClientInState = (clientId: string, patch: Partial<Client>) => {
+    setClients(prev => prev.map(c => c.id === clientId ? { ...c, ...patch } : c));
+  };
+
+  // Atualiza uma empresa de um cliente no estado local
+  const updateCompanyInState = (clientId: string, companyId: string, patch: Partial<Company>) => {
+    setClients(prev => prev.map(c => {
+      if (c.id !== clientId) return c;
+      const updatedCompanies = c.companies.map(co => co.id === companyId ? { ...co, ...patch } : co);
+      const updatedPrimary = c.primaryCompany?.id === companyId ? { ...c.primaryCompany, ...patch } : c.primaryCompany;
+      return { ...c, companies: updatedCompanies, primaryCompany: updatedPrimary };
+    }));
+  };
+
   // ── Client Usage ──
   const fetchClientUsage = async (client: Client) => {
     const tenantId = client.tenantId || client.primaryCompany?.id || client.companies?.[0]?.id;
@@ -366,7 +381,12 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       if (res.ok) {
         showToast('success', 'SDR/CS atualizado com sucesso!');
         setEditingSdrCs(null);
-        fetchClients();
+        // Atualiza localmente sem recarregar a lista
+        updateClientInState(clientId, {
+          sdrName: sdrCsForm.sdr_name || null,
+          csName: sdrCsForm.cs_name || null,
+          internalNotes: sdrCsForm.internal_notes || null,
+        });
       }
     } catch (err) {
       showToast('error', 'Erro ao salvar SDR/CS');
@@ -492,7 +512,14 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       if (!res.ok) throw new Error((await res.json()).error);
       showToast('success', 'Cliente atualizado!');
       setEditModal(null);
-      fetchClients();
+      // Atualiza localmente sem recarregar
+      updateClientInState(selectedClient.id, {
+        name: clientForm.name,
+        email: clientForm.email,
+        phone: clientForm.phone || undefined,
+        plan: clientForm.plan,
+        companyName: clientForm.companyName,
+      });
     } catch (err: any) {
       showToast('error', err.message || 'Erro ao atualizar.');
     } finally {
@@ -527,7 +554,16 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       if (!res.ok) throw new Error((await res.json()).error);
       showToast('success', 'Empresa atualizada!');
       setEditModal(null);
-      fetchClients();
+      // Atualiza localmente sem recarregar
+      updateCompanyInState(selectedClient.id, editingCompany.id, {
+        name: companyForm.name,
+        plan: companyForm.plan.replace('hello_', ''),
+        plan_addons: companyForm.addons,
+        subscription_status: companyForm.subscriptionStatus,
+        trial_model: companyForm.trialModel || null,
+        trial_end_at: companyForm.trialEndAt || null,
+        max_users: companyForm.maxUsers,
+      });
     } catch (err: any) {
       showToast('error', err.message || 'Erro ao atualizar empresa.');
     } finally {
@@ -563,6 +599,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       if (!res.ok) throw new Error((await res.json()).error);
       showToast('success', 'Empresa adicionada!');
       setEditModal(null);
+      // Empresa nova precisa do ID gerado pelo servidor — faz refresh silencioso
       fetchClients();
     } catch (err: any) {
       showToast('error', err.message || 'Erro ao adicionar empresa.');
@@ -582,7 +619,15 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       });
       if (!res.ok) throw new Error((await res.json()).error);
       showToast('success', 'Empresa removida.');
-      fetchClients();
+      // Remove empresa do estado local
+      setClients(prev => prev.map(c => {
+        if (c.id !== client.id) return c;
+        const updatedCompanies = c.companies.filter(co => co.id !== companyId);
+        const updatedPrimary = c.primaryCompany?.id === companyId
+          ? (updatedCompanies[0] || null)
+          : c.primaryCompany;
+        return { ...c, companies: updatedCompanies, primaryCompany: updatedPrimary };
+      }));
     } catch (err: any) {
       showToast('error', err.message || 'Erro ao remover empresa.');
     }
@@ -596,7 +641,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       if (!res.ok) throw new Error((await res.json()).error);
       showToast('success', 'Cliente excluído.');
       if (expandedClient === client.id) setExpandedClient(null);
-      fetchClients();
+      // Remove do estado local sem recarregar
+      setClients(prev => prev.filter(c => c.id !== client.id));
     } catch (err: any) {
       showToast('error', err.message || 'Erro ao excluir.');
     }
@@ -633,7 +679,13 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erro ao gerar link');
       setPaymentLinkResult({ url: data.paymentUrl, emailSent: data.emailSent });
-      fetchClients();
+      // Atualiza o link de pagamento na empresa localmente
+      if (selectedClient && data.paymentUrl) {
+        updateCompanyInState(selectedClient.id, company.id, {
+          paymentLinkUrl: data.paymentUrl,
+          paymentLinkSentAt: new Date().toISOString(),
+        });
+      }
     } catch (err: any) {
       showToast('error', err.message || 'Erro ao gerar link de pagamento.');
     } finally {
