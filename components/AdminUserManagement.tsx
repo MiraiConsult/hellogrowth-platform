@@ -269,6 +269,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [loadingUsage, setLoadingUsage] = useState<Record<string, boolean>>({});
   const [editingSdrCs, setEditingSdrCs] = useState<string | null>(null);
   const [sdrCsForm, setSdrCsForm] = useState({ sdr_name: '', cs_name: '', internal_notes: '' });
+  const [colaboradoresList, setColaboradoresList] = useState<{ id: string; name: string; role: string }[]>([]);
   const [paymentLinkResult, setPaymentLinkResult] = useState<{ url: string; emailSent: boolean } | null>(null);
   const [sendingLink, setSendingLink] = useState(false);
   const [reportModal, setReportModal] = useState<{ client: Client; usage: any } | null>(null);
@@ -288,6 +289,22 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [paymentLinkForm, setPaymentLinkForm] = useState({
     plan: 'hello_growth', userCount: 1, addons: { game: false, mpd: false }, customNote: '',
   });
+
+  // ── Fetch Colaboradores ──
+  useEffect(() => {
+    const fetchColaboradores = async () => {
+      try {
+        const { data } = await supabase
+          .from('colaboradores')
+          .select('id, name, role')
+          .order('name');
+        if (data) setColaboradoresList(data);
+      } catch (err) {
+        console.error('Error fetching colaboradores:', err);
+      }
+    };
+    fetchColaboradores();
+  }, []);
 
   // ── Fetch ──
   const fetchClients = useCallback(async () => {
@@ -1102,8 +1119,44 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                                     </div>
                                     {editingSdrCs === client.id ? (
                                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                                        <div><label className={`text-xs ${t.textMuted} block mb-1`}>SDR (Fechou a venda)</label><input value={sdrCsForm.sdr_name} onChange={e => setSdrCsForm(f => ({ ...f, sdr_name: e.target.value }))} className={`w-full text-xs px-2 py-1.5 rounded-lg border ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-slate-300 text-gray-900'}`} placeholder="Nome do SDR" /></div>
-                                        <div><label className={`text-xs ${t.textMuted} block mb-1`}>CS (Customer Success)</label><input value={sdrCsForm.cs_name} onChange={e => setSdrCsForm(f => ({ ...f, cs_name: e.target.value }))} className={`w-full text-xs px-2 py-1.5 rounded-lg border ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-slate-300 text-gray-900'}`} placeholder="Nome do CS" /></div>
+                                        <div>
+                                          <label className={`text-xs ${t.textMuted} block mb-1`}>SDR (Fechou a venda)</label>
+                                          <select
+                                            value={sdrCsForm.sdr_name}
+                                            onChange={e => setSdrCsForm(f => ({ ...f, sdr_name: e.target.value }))}
+                                            className={`w-full text-xs px-2 py-1.5 rounded-lg border ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-slate-300 text-gray-900'}`}
+                                          >
+                                            <option value="">-- Nenhum --</option>
+                                            {colaboradoresList
+                                              .filter(c => c.role === 'sdr' || c.role === 'gerente' || c.role === 'outro')
+                                              .map(c => (
+                                                <option key={c.id} value={c.name}>{c.name}</option>
+                                              ))}
+                                            {/* Se o valor atual não está na lista, mostra como opção */}
+                                            {sdrCsForm.sdr_name && !colaboradoresList.some(c => c.name === sdrCsForm.sdr_name) && (
+                                              <option value={sdrCsForm.sdr_name}>{sdrCsForm.sdr_name} (manual)</option>
+                                            )}
+                                          </select>
+                                        </div>
+                                        <div>
+                                          <label className={`text-xs ${t.textMuted} block mb-1`}>CS (Customer Success)</label>
+                                          <select
+                                            value={sdrCsForm.cs_name}
+                                            onChange={e => setSdrCsForm(f => ({ ...f, cs_name: e.target.value }))}
+                                            className={`w-full text-xs px-2 py-1.5 rounded-lg border ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-slate-300 text-gray-900'}`}
+                                          >
+                                            <option value="">-- Nenhum --</option>
+                                            {colaboradoresList
+                                              .filter(c => c.role === 'cs' || c.role === 'gerente' || c.role === 'outro')
+                                              .map(c => (
+                                                <option key={c.id} value={c.name}>{c.name}</option>
+                                              ))}
+                                            {/* Se o valor atual não está na lista, mostra como opção */}
+                                            {sdrCsForm.cs_name && !colaboradoresList.some(c => c.name === sdrCsForm.cs_name) && (
+                                              <option value={sdrCsForm.cs_name}>{sdrCsForm.cs_name} (manual)</option>
+                                            )}
+                                          </select>
+                                        </div>
                                         <div><label className={`text-xs ${t.textMuted} block mb-1`}>Notas internas</label><input value={sdrCsForm.internal_notes} onChange={e => setSdrCsForm(f => ({ ...f, internal_notes: e.target.value }))} className={`w-full text-xs px-2 py-1.5 rounded-lg border ${isDark ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-slate-300 text-gray-900'}`} placeholder="Observações..." /></div>
                                       </div>
                                     ) : (
