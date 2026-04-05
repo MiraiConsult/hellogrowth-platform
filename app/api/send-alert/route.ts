@@ -37,12 +37,25 @@ const ALERT_FIELD_MAP: Record<AlertType, string> = {
   stale_lead: 'alert_stale_lead',
 };
 
+// Normaliza número de telefone para o formato esperado pela Evolution API
+// Suporte a números brasileiros com ou sem o 9 extra
+function normalizePhone(phone: string): string {
+  let n = phone.replace(/\D/g, '');
+  // Adiciona DDI 55 se não tiver
+  if (!n.startsWith('55')) n = `55${n}`;
+  // Números brasileiros com 13 dígitos (55 + DDD + 9 + 8 dígitos)
+  // A Evolution API espera 12 dígitos para celulares (55 + DDD + 8 dígitos)
+  // Mas para celulares com 9 na frente (regiões que adotaram), mantém 13
+  // Regra: se tem 13 dígitos e o 5º dígito é 9, é celular com 9 extra
+  // Deixamos como está — a Evolution API lida com ambos os formatos
+  return n;
+}
+
 // Envia mensagem via Evolution API
-async function sendWhatsApp(phone: string, message: string): Promise<boolean> {
-  if (!EVOLUTION_API_KEY) return false;
+async function sendWhatsApp(phone: string, message: string): Promise<{ ok: boolean; phone: string }> {
+  if (!EVOLUTION_API_KEY) return { ok: false, phone };
   try {
-    let normalizedPhone = phone.replace(/\D/g, '');
-    if (!normalizedPhone.startsWith('55')) normalizedPhone = `55${normalizedPhone}`;
+    const normalizedPhone = normalizePhone(phone);
     const url = `${EVOLUTION_API_URL}/message/sendText/${encodeURIComponent(EVOLUTION_INSTANCE)}`;
     const res = await fetch(url, {
       method: 'POST',
@@ -52,9 +65,14 @@ async function sendWhatsApp(phone: string, message: string): Promise<boolean> {
       },
       body: JSON.stringify({ number: normalizedPhone, text: message }),
     });
-    return res.ok;
-  } catch {
-    return false;
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      console.error(`[send-alert] Falha ao enviar para ${normalizedPhone}: ${res.status} ${err}`);
+    }
+    return { ok: res.ok, phone: normalizedPhone };
+  } catch (e) {
+    console.error(`[send-alert] Exceção ao enviar para ${phone}:`, e);
+    return { ok: false, phone };
   }
 }
 
@@ -175,9 +193,12 @@ export async function POST(request: NextRequest) {
     // Monta e envia a mensagem para todos os números cadastrados
     const message = buildMessage(type, { ...data, companyName });
     const results = await Promise.all(numbers.map(num => sendWhatsApp(num, message)));
-    const sent = results.some(r => r);
+    const sent = results.some(r => r.ok);
+    const sentCount = results.filter(r => r.ok).length;
+    const failedPhones = results.filter(r => !r.ok).map(r => r.phone);
 
-    return NextResponse.json({ sent, type, phones: numbers, sentCount: results.filter(Boolean).length });
+    console.log(`[send-alert] type=${type} sent=${sent} total=${numbers.length} ok=${sentCount} failed=${failedPhones.join(',')}`);
+    return NextResponse.json({ sent, type, phones: numbers, sentCount, failedPhones });
   } catch (e: any) {
     console.error('[send-alert] Erro:', e);
     return NextResponse.json({ error: e.message }, { status: 500 });

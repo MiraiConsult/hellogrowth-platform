@@ -240,19 +240,11 @@ export async function GET(request: NextRequest) {
   console.log(`[Cron] Executando relatório diário — dados de: ${dateLabel}`);
 
   try {
-    // Busca todos os clientes com relatório diário habilitado e número de WhatsApp
-    // Faz join com companies para obter o plano
+    // Busca todos os clientes com relatório diário habilitado
     const { data: settings, error } = await supabaseAdmin
       .from('report_settings')
-      .select(`
-        *,
-        companies (
-          name,
-          plan
-        )
-      `)
-      .eq('daily_enabled', true)
-      .not('whatsapp_number', 'is', null);
+      .select('*')
+      .eq('daily_enabled', true);
 
     if (error) {
       console.error('[Cron] Erro ao buscar configurações:', error);
@@ -269,23 +261,43 @@ export async function GET(request: NextRequest) {
 
     for (const setting of settings) {
       const tenantId = setting.company_id;
-      const companyData = (setting as any).companies;
-      const companyName = companyData?.name || 'Sua Empresa';
-      const plan = companyData?.plan || 'hello_growth';
 
-      console.log(`[Cron] Processando ${companyName} — plano: ${plan}`);
+      // Busca nome e plano via tabela users (tabela correta no schema do HelloGrowth)
+      const { data: userProfile } = await supabaseAdmin
+        .from('users')
+        .select('company_name, plan, settings')
+        .eq('id', tenantId)
+        .maybeSingle();
+      const companyName = userProfile?.company_name || userProfile?.settings?.companyName || 'Sua Empresa';
+      const plan = userProfile?.plan || 'hello_growth';
+
+      // Monta lista de números: array whatsapp_numbers + campo legado whatsapp_number
+      const numbers: string[] = [
+        ...(Array.isArray(setting.whatsapp_numbers) ? setting.whatsapp_numbers : []),
+      ];
+      if (setting.whatsapp_number && !numbers.includes(setting.whatsapp_number)) {
+        numbers.unshift(setting.whatsapp_number);
+      }
+      if (numbers.length === 0) {
+        console.log(`[Cron] Sem número para ${companyName}, pulando`);
+        continue;
+      }
+
+      console.log(`[Cron] Processando ${companyName} — plano: ${plan} — números: ${numbers.join(', ')}`);
 
       // Monta a mensagem de acordo com o plano
       const message = await buildMessageForPlan(plan, companyName, dateLabel, tenantId);
 
-      const sent = await sendWhatsAppMessage(setting.whatsapp_number, message);
+      // Envia para TODOS os números cadastrados
+      const sendResults = await Promise.all(numbers.map(num => sendWhatsAppMessage(num, message)));
+      const sent = sendResults.some(Boolean);
 
       if (sent) {
         totalSent++;
-        results.push({ tenantId, companyName, plan, whatsapp: setting.whatsapp_number });
-        console.log(`[Cron] ✅ Enviado para ${companyName} (${setting.whatsapp_number}) — plano: ${plan}`);
+        results.push({ tenantId, companyName, plan, phones: numbers });
+        console.log(`[Cron] ✅ Enviado para ${companyName} (${numbers.join(', ')}) — plano: ${plan}`);
       } else {
-        console.error(`[Cron] ❌ Falha ao enviar para ${companyName} (${setting.whatsapp_number})`);
+        console.error(`[Cron] ❌ Falha ao enviar para ${companyName} (${numbers.join(', ')})`);
       }
     }
 

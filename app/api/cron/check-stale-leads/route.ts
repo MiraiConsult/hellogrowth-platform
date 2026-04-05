@@ -16,6 +16,17 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
+// Retorna todos os números configurados (array + legado)
+function getNumbers(config: { whatsapp_number?: string; whatsapp_numbers?: string[] }): string[] {
+  const numbers: string[] = [
+    ...(Array.isArray(config.whatsapp_numbers) ? config.whatsapp_numbers : []),
+  ];
+  if (config.whatsapp_number && !numbers.includes(config.whatsapp_number)) {
+    numbers.unshift(config.whatsapp_number);
+  }
+  return numbers.filter(Boolean);
+}
+
 async function sendWhatsApp(phone: string, message: string): Promise<boolean> {
   if (!EVOLUTION_API_KEY) return false;
   try {
@@ -49,9 +60,8 @@ export async function GET(request: NextRequest) {
     // Busca todas as empresas com alerta de lead parado habilitado
     const { data: alertConfigs, error: alertError } = await supabaseAdmin
       .from('alert_settings')
-      .select('company_id, whatsapp_number, stale_lead_days')
-      .eq('alert_stale_lead', true)
-      .not('whatsapp_number', 'is', null);
+      .select('company_id, whatsapp_number, whatsapp_numbers, stale_lead_days')
+      .eq('alert_stale_lead', true);
 
     if (alertError || !alertConfigs || alertConfigs.length === 0) {
       return NextResponse.json({ message: 'Nenhuma empresa com alerta de lead parado habilitado', sent: 0 });
@@ -60,18 +70,20 @@ export async function GET(request: NextRequest) {
     let totalSent = 0;
 
     for (const config of alertConfigs) {
+      const numbers = getNumbers(config);
+      if (numbers.length === 0) continue;
+
       const staleDays = config.stale_lead_days || 7;
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - staleDays);
 
-      // Busca nome da empresa
-      const { data: company } = await supabaseAdmin
-        .from('companies')
-        .select('name')
+      // Busca nome da empresa via users (tabela correta)
+      const { data: userProfile } = await supabaseAdmin
+        .from('users')
+        .select('company_name, settings')
         .eq('id', config.company_id)
-        .single();
-
-      const companyName = company?.name || 'Sua Empresa';
+        .maybeSingle();
+      const companyName = userProfile?.company_name || userProfile?.settings?.companyName || 'Sua Empresa';
 
       // Busca leads parados (não vendidos, não perdidos, sem atualização recente)
       const { data: staleLeads } = await supabaseAdmin
@@ -92,10 +104,12 @@ export async function GET(request: NextRequest) {
 
         const message = `⚠️ *Lead Parado — ${companyName}*\n\n👤 ${lead.name || 'Sem nome'}\n💰 ${formatCurrency(lead.value || 0)}\n📋 Etapa: ${lead.status || '—'}\n🕐 Parado há *${staleDaysActual} dia(s)*\n\n💡 Retome o contato!\n\n_HelloGrowth_`;
 
-        const sent = await sendWhatsApp(config.whatsapp_number, message);
+        // Envia para TODOS os números cadastrados
+        const results = await Promise.all(numbers.map(num => sendWhatsApp(num, message)));
+        const sent = results.some(Boolean);
         if (sent) {
           totalSent++;
-          console.log(`[Cron] ✅ Alerta de lead parado enviado: ${lead.name} (${companyName})`);
+          console.log(`[Cron] ✅ Alerta de lead parado enviado: ${lead.name} (${companyName}) → ${numbers.join(', ')}`);
         }
       }
     }
