@@ -18,6 +18,7 @@ import AdminHome from '@/components/AdminHome';
 import AdminColaboradores from '@/components/AdminColaboradores';
 import AdminWhatsApp from '@/components/AdminWhatsApp';
 import AdminKanban from '@/components/AdminKanban';
+import ClientProfile from '@/components/ClientProfile';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -282,6 +283,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [sdrCsForm, setSdrCsForm] = useState({ sdr_name: '', cs_name: '', internal_notes: '' });
   const [colaboradoresList, setColaboradoresList] = useState<{ id: string; name: string; role: string }[]>([]);
   const [paymentLinkResult, setPaymentLinkResult] = useState<{ url: string; emailSent: boolean } | null>(null);
+  const [profileClient, setProfileClient] = useState<Client | null>(null);
   const [sendingLink, setSendingLink] = useState(false);
   const [reportModal, setReportModal] = useState<{ client: Client; usage: any } | null>(null);
   const [reportContent, setReportContent] = useState('');
@@ -1113,6 +1115,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => setProfileClient(client)} className={`p-1.5 ${t.textMuted} hover:text-emerald-500 hover:${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg transition-colors`} title="Ver perfil">
+                            <FileText size={14} />
+                          </button>
                           <button onClick={() => openEditClient(client)} className={`p-1.5 ${t.textMuted} hover:${t.text} hover:${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg transition-colors`} title="Editar">
                             <Edit size={14} />
                           </button>
@@ -1664,6 +1669,16 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         </Modal>
       )}
       </div>{/* end main content */}
+
+      {/* Client Profile Slide-over */}
+      {profileClient && (
+        <ClientProfile
+          client={profileClient}
+          isDark={isDark}
+          onClose={() => setProfileClient(null)}
+          adminName="Admin"
+        />
+      )}
     </div>
   );
 };

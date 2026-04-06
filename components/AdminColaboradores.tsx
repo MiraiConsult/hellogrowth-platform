@@ -7,6 +7,7 @@ import {
   ExternalLink, Heart
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import ClientProfile from '@/components/ClientProfile';
 
 interface Colaborador {
   id: string;
@@ -139,6 +140,7 @@ export default function AdminColaboradores({ isDark = false }: Props) {
   const [search, setSearch] = useState('');
   const [selectedColaborador, setSelectedColaborador] = useState<ColaboradorMetrics | null>(null);
   const [profileTab, setProfileTab] = useState<'sdr' | 'cs'>('sdr');
+  const [profileClient, setProfileClient] = useState<ClienteDoColaborador | null>(null);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
@@ -513,7 +515,7 @@ export default function AdminColaboradores({ isDark = false }: Props) {
                     const isActive = isActiveStatus(client);
                     const lastLogin = client.last_login ? new Date(client.last_login).toLocaleDateString('pt-BR') : '—';
                     return (
-                      <tr key={client.id} className={`${t.surfaceHover} transition-colors`}>
+                      <tr key={client.id} className={`${t.surfaceHover} transition-colors cursor-pointer`} onClick={() => setProfileClient(client)}>
                         <td className="px-4 py-3.5">
                           <div className={`font-semibold text-sm ${t.text}`}>{client.name || client.email}</div>
                           <div className={`text-xs ${t.textMuted}`}>{client.company || client.email}</div>
@@ -875,6 +877,31 @@ export default function AdminColaboradores({ isDark = false }: Props) {
           </div>
         </div>
       )}
+    {/* Client Profile Slide-over */}
+    {profileClient && (
+      <ClientProfile
+        client={{
+          id: profileClient.id,
+          name: profileClient.name,
+          email: profileClient.email,
+          phone: undefined,
+          plan: profileClient.plan,
+          companyName: profileClient.company,
+          createdAt: profileClient.created_at,
+          lastLogin: profileClient.last_login,
+          companies: [],
+          primaryCompany: null,
+          consolidatedStatus: profileClient.status,
+          consolidatedTrialModel: null,
+          consolidatedDaysRemaining: null,
+          sdrName: profileClient.sdr_name,
+          csName: profileClient.cs_name,
+        }}
+        isDark={isDark}
+        onClose={() => setProfileClient(null)}
+        adminName="Admin"
+      />
+    )}
     </main>
   );
 }
