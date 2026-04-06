@@ -948,7 +948,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         <AdminWhatsApp isDark={isDark} />
       )}
       {activeTab === 'clients' && (
-      <main className="w-full px-6 py-6 space-y-5">
+      <main className="w-full min-w-0 px-6 py-6 space-y-5">
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
           {[
@@ -1001,8 +1001,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto w-full">
-        <div className={`${t.table} border rounded-xl overflow-hidden shadow-sm`} style={{minWidth: '900px'}}>
+        <div className="w-full overflow-x-auto rounded-xl border shadow-sm">
+        <div className={`${t.table} overflow-hidden`} style={{minWidth: '900px'}}>
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="animate-spin text-emerald-500" size={32} />
