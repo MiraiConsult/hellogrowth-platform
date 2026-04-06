@@ -879,7 +879,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       </aside>
 
       {/* ── MAIN CONTENT ── */}
-      <div className={`flex-1 min-h-screen min-w-0 overflow-x-auto transition-all duration-300 ${sidebarCollapsed ? 'ml-[72px]' : 'ml-60'}`}>
+      <div className={`flex-1 min-h-screen overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'ml-[72px]' : 'ml-60'}`}>
 
       {activeTab === 'home' && (
         <AdminHome isDark={isDark} onNavigate={(tab, filter) => {
@@ -948,7 +948,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         <AdminWhatsApp isDark={isDark} />
       )}
       {activeTab === 'clients' && (
-      <main className="w-full min-w-0 px-6 py-6 space-y-5">
+      <main className="w-full overflow-x-auto px-6 py-6 space-y-5">
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
           {[
@@ -1001,8 +1001,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         </div>
 
         {/* Table */}
-        <div className="w-full overflow-x-auto rounded-xl border shadow-sm">
-        <div className={`${t.table} overflow-hidden`} style={{minWidth: '900px'}}>
+        <div className="rounded-xl border shadow-sm" style={{minWidth: '900px'}}>
+        <div className={`${t.table} overflow-hidden`}>
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="animate-spin text-emerald-500" size={32} />
