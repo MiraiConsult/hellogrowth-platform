@@ -764,7 +764,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   ];
 
   return (
-    <div className={`flex min-h-screen ${t.bg} transition-colors duration-200 overflow-x-hidden`}>
+    <div className={`flex min-h-screen ${t.bg} transition-colors duration-200`}>
       {/* Toast */}
       {toast && (
         <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
@@ -879,7 +879,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       </aside>
 
       {/* ── MAIN CONTENT ── */}
-      <div className={`flex-1 min-h-screen min-w-0 overflow-x-hidden transition-all duration-300 ${sidebarCollapsed ? 'ml-[72px]' : 'ml-60'}`}>
+      <div className={`flex-1 min-h-screen min-w-0 overflow-x-auto transition-all duration-300 ${sidebarCollapsed ? 'ml-[72px]' : 'ml-60'}`}>
 
       {activeTab === 'home' && (
         <AdminHome isDark={isDark} onNavigate={(tab, filter) => {
