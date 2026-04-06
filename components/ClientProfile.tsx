@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X, User, Mail, Phone, Building2, Calendar, Clock, Heart,
   FileText, Plus, Trash2, Edit2, Save, XCircle, Tag,
@@ -239,7 +240,7 @@ export default function ClientProfile({ client, isDark, onClose, adminName = 'Ad
   const healthScore = client.settings?.health_score ?? null;
   const initials = client.name.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
 
-  return (
+  const content = (
     <>
       {/* Backdrop */}
       <div
@@ -248,7 +249,7 @@ export default function ClientProfile({ client, isDark, onClose, adminName = 'Ad
       />
 
       {/* Slide-over panel */}
-      <div className={`fixed right-0 top-0 h-full w-full max-w-xl z-50 shadow-2xl flex flex-col ${t.bg} border-l ${t.border}`}>
+      <div className={`fixed right-0 top-0 h-full w-full max-w-xl z-[9999] shadow-2xl flex flex-col ${t.bg} border-l ${t.border}`}>
 
         {/* Header */}
         <div className={`flex items-start justify-between px-6 py-5 border-b ${t.border}`}>
@@ -605,4 +606,7 @@ export default function ClientProfile({ client, isDark, onClose, adminName = 'Ad
       </div>
     </>
   );
+
+  if (typeof window === 'undefined') return null;
+  return createPortal(content, document.body);
 }
