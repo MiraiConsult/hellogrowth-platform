@@ -7,7 +7,7 @@ import {
   ExternalLink, Building2, AlertCircle, Search, ChevronRight, Copy,
   Zap, Star, UserPlus, DollarSign, Check, Moon, Sun, Send, BookOpen, Package, TrendingUp,
   LayoutDashboard, Brain, MessageSquare, ChevronLeft, BarChart3,
-  Activity, Heart, FileText, MessageCircle, UserCheck, UserCog
+  Activity, Heart, FileText, MessageCircle, UserCheck, UserCog, Kanban
 } from 'lucide-react';
 import AdminBroadcast from '@/components/AdminBroadcast';
 import AdminIntelligence from '@/components/AdminIntelligence';
@@ -17,6 +17,7 @@ import AdminFinanceiro from '@/components/AdminFinanceiro';
 import AdminHome from '@/components/AdminHome';
 import AdminColaboradores from '@/components/AdminColaboradores';
 import AdminWhatsApp from '@/components/AdminWhatsApp';
+import AdminKanban from '@/components/AdminKanban';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -228,7 +229,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [isDark, setIsDark] = useState(true);
   const t = isDark ? DARK : LIGHT;
   // ── Active Tab ──
-  const [activeTab, setActiveTab] = useState<'home' | 'clients' | 'broadcast' | 'intelligence' | 'templates' | 'catalogs' | 'financeiro' | 'conteudo' | 'colaboradores' | 'whatsapp'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'clients' | 'broadcast' | 'intelligence' | 'templates' | 'catalogs' | 'financeiro' | 'conteudo' | 'colaboradores' | 'kanban' | 'whatsapp'>('home');
   const [conteudoSubTab, setConteudoSubTab] = useState<'templates' | 'catalogs' | 'broadcast'>('templates');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [asaasClientMap, setAsaasClientMap] = useState<Record<string, any>>({});
@@ -748,6 +749,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
     { id: 'conteudo',       label: 'Conteúdo',       icon: <BookOpen size={18} />,        activeClass: 'bg-orange-500 text-white' },
     { id: 'intelligence',   label: 'Inteligência',   icon: <Brain size={18} />,           activeClass: 'bg-purple-600 text-white' },
     { id: 'colaboradores',  label: 'Colaboradores',  icon: <UserCog size={18} />,         activeClass: 'bg-sky-600 text-white' },
+    { id: 'kanban',         label: 'Kanban CS',      icon: <Kanban size={18} />,          activeClass: 'bg-violet-600 text-white' },
     { id: 'whatsapp',       label: 'WhatsApp',       icon: <MessageSquare size={18} />,   activeClass: 'bg-green-600 text-white' },
   ];
 
@@ -928,6 +930,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       )}
       {activeTab === 'colaboradores' && (
         <AdminColaboradores isDark={isDark} />
+      )}
+      {activeTab === 'kanban' && (
+        <AdminKanban isDark={isDark} />
       )}
       {activeTab === 'whatsapp' && (
         <AdminWhatsApp isDark={isDark} />
