@@ -879,7 +879,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       </aside>
 
       {/* ── MAIN CONTENT ── */}
-      <div className={`flex-1 min-h-screen overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'ml-[72px]' : 'ml-60'}`}>
+      <div className={`flex-1 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'ml-[72px]' : 'ml-60'}`}>
 
       {activeTab === 'home' && (
         <AdminHome isDark={isDark} onNavigate={(tab, filter) => {
