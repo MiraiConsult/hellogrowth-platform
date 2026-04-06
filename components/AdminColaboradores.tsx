@@ -599,6 +599,32 @@ export default function AdminColaboradores({ isDark = false }: Props) {
             </div>
           </div>
         )}
+
+        {/* Client Profile Slide-over (perfil individual do colaborador) */}
+        {profileClient && (
+          <ClientProfile
+            client={{
+              id: profileClient.id,
+              name: profileClient.name,
+              email: profileClient.email,
+              phone: undefined,
+              plan: profileClient.plan,
+              companyName: profileClient.company,
+              createdAt: profileClient.created_at,
+              lastLogin: profileClient.last_login,
+              companies: [],
+              primaryCompany: null,
+              consolidatedStatus: profileClient.status,
+              consolidatedTrialModel: null,
+              consolidatedDaysRemaining: null,
+              sdrName: profileClient.sdr_name,
+              csName: profileClient.cs_name,
+            }}
+            isDark={isDark}
+            onClose={() => setProfileClient(null)}
+            adminName="Admin"
+          />
+        )}
       </main>
     );
   }
