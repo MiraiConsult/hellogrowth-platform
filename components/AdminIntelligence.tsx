@@ -261,7 +261,7 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
       : `${t.badge} hover:opacity-80`}`;
 
   return (
-    <div className={`min-h-screen ${t.bg}`}>
+    <div className={`min-h-screen min-w-0 overflow-x-hidden ${t.bg}`}>
       <div className="max-w-screen-2xl mx-auto px-6 py-6 space-y-6">
 
         {/* Navegação */}

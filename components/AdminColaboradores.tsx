@@ -603,7 +603,7 @@ export default function AdminColaboradores({ isDark = false }: Props) {
 
   // List view
   return (
-    <main className="w-full px-6 py-6 space-y-6">
+    <main className="w-full min-w-0 px-6 py-6 space-y-6 overflow-x-hidden">
       {/* Toast */}
       {toast && (
         <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>

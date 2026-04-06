@@ -260,6 +260,16 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [planFilter, setPlanFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [modelFilter, setModelFilter] = useState('all');
+  const [clientSortField, setClientSortField] = useState<string>('createdAt');
+  const [clientSortDir, setClientSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleClientSort = (field: string) => {
+    if (clientSortField === field) {
+      setClientSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setClientSortField(field);
+      setClientSortDir('desc');
+    }
+  };
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [editModal, setEditModal] = useState<'client' | 'company' | 'new_client' | 'new_company' | 'payment_link' | null>(null);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
@@ -754,7 +764,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   ];
 
   return (
-    <div className={`flex min-h-screen ${t.bg} transition-colors duration-200`}>
+    <div className={`flex min-h-screen ${t.bg} transition-colors duration-200 overflow-x-hidden`}>
       {/* Toast */}
       {toast && (
         <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
@@ -869,7 +879,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       </aside>
 
       {/* ── MAIN CONTENT ── */}
-      <div className={`flex-1 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'ml-[72px]' : 'ml-60'}`}>
+      <div className={`flex-1 min-h-screen min-w-0 overflow-x-hidden transition-all duration-300 ${sidebarCollapsed ? 'ml-[72px]' : 'ml-60'}`}>
 
       {activeTab === 'home' && (
         <AdminHome isDark={isDark} onNavigate={(tab, filter) => {
@@ -991,8 +1001,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
-        <div className={`${t.table} border rounded-xl overflow-hidden shadow-sm min-w-[900px]`}>
+        <div className="overflow-x-auto w-full">
+        <div className={`${t.table} border rounded-xl overflow-hidden shadow-sm`} style={{minWidth: '900px'}}>
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="animate-spin text-emerald-500" size={32} />
@@ -1007,13 +1017,49 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             <table className="w-full">
               <thead>
                 <tr className={`border-b ${t.border}`}>
-                  {['', 'Cliente', 'Plano', 'Status', 'Health', 'Modelo', 'Empresas', 'Cadastro', 'Último Acesso', ''].map((h, i) => (
-                    <th key={i} className={`text-left text-xs font-semibold ${t.thead} uppercase tracking-wider px-${i === 0 || i === 9 ? '6' : '4'} py-3 ${i === 9 ? 'text-right' : ''}`}>{h}</th>
+                  {[
+                    { label: '', field: null, px: 'px-6' },
+                    { label: 'Cliente', field: 'name', px: 'px-6' },
+                    { label: 'Plano', field: 'plan', px: 'px-4' },
+                    { label: 'Status', field: 'consolidatedStatus', px: 'px-4' },
+                    { label: 'Health', field: null, px: 'px-4' },
+                    { label: 'Modelo', field: null, px: 'px-4' },
+                    { label: 'Empresas', field: null, px: 'px-4' },
+                    { label: 'Cadastro', field: 'createdAt', px: 'px-4' },
+                    { label: 'Último Acesso', field: 'lastLogin', px: 'px-4' },
+                    { label: '', field: null, px: 'px-6 text-right' },
+                  ].map((h, i) => (
+                    <th
+                      key={i}
+                      onClick={() => h.field && handleClientSort(h.field)}
+                      className={`text-left text-xs font-semibold ${t.thead} uppercase tracking-wider ${h.px} py-3 select-none ${h.field ? 'cursor-pointer hover:text-emerald-500 transition-colors' : ''}`}
+                    >
+                      <span className="flex items-center gap-1">
+                        {h.label}
+                        {h.field && (
+                          <span className={`text-xs ${clientSortField === h.field ? 'opacity-100' : 'opacity-30'}`}>
+                            {clientSortField === h.field ? (clientSortDir === 'asc' ? '↑' : '↓') : '↕'}
+                          </span>
+                        )}
+                      </span>
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody className={`divide-y ${t.divider}`}>
-                {clients.map(client => (
+                {[...clients].sort((a, b) => {
+                  const dir = clientSortDir === 'asc' ? 1 : -1;
+                  if (clientSortField === 'name') return dir * (a.name || '').localeCompare(b.name || '');
+                  if (clientSortField === 'plan') return dir * (a.plan || '').localeCompare(b.plan || '');
+                  if (clientSortField === 'consolidatedStatus') return dir * (a.consolidatedStatus || '').localeCompare(b.consolidatedStatus || '');
+                  if (clientSortField === 'createdAt') return dir * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                  if (clientSortField === 'lastLogin') {
+                    const aT = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
+                    const bT = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
+                    return dir * (aT - bT);
+                  }
+                  return 0;
+                }).map(client => (
                   <React.Fragment key={client.id}>
                     <tr
                       className={`${t.surfaceHover} transition-colors cursor-pointer ${expandedClient === client.id ? t.surfaceExpanded : ''}`}

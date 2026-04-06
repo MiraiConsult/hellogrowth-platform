@@ -202,7 +202,7 @@ export default function AdminFinanceiro({ isDark }: AdminFinanceiroProps) {
     : [];
 
   return (
-    <div className={`min-h-screen ${t.bg} p-4 md:p-6`}>
+    <div className={`min-h-screen min-w-0 overflow-x-hidden ${t.bg} p-4 md:p-6`}>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>

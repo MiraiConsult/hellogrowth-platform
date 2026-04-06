@@ -293,7 +293,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   }
 
   return (
-    <main className={`w-full min-h-screen ${t.bg} px-6 py-6`}>
+    <main className={`w-full min-w-0 min-h-screen overflow-x-hidden ${t.bg} px-6 py-6`}>
       {toast && (
         <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
           {toast.text}
