@@ -197,7 +197,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
               : (typeof opt.text === 'string' && opt.text.trim() ? opt.text : '');
             return {
               id: opt.id ? String(opt.id) : `opt_${qIdx}_${idx}`,
-              text: optText
+              text: optText,
+              ...(opt.followUpLabel !== undefined ? { followUpLabel: opt.followUpLabel } : {})
             };
           }).filter((opt: QuestionOption) => opt.text.trim() !== ''); // Remover opções vazias
         }
