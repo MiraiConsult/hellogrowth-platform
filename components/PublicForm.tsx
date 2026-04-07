@@ -54,6 +54,59 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   const [patientData, setPatientData] = useState({ name: '', email: '', phone: '' });
   const [showIntro, setShowIntro] = useState(true);
 
+  // Persistência de progresso via localStorage
+  const STORAGE_KEY = `hg_form_progress_${form.id}`;
+  const [savedProgress, setSavedProgress] = useState<{ step: number; answers: Record<string, any>; patientData: { name: string; email: string; phone: string } } | null>(null);
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
+
+  // Carregar progresso salvo ao montar o componente
+  useEffect(() => {
+    if (isPreview) return; // Não persistir em modo preview
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Só mostrar banner se há pelo menos uma resposta salva
+        if (parsed && parsed.step >= 0 && Object.keys(parsed.answers || {}).length > 0) {
+          setSavedProgress(parsed);
+          setShowResumePrompt(true);
+        }
+      }
+    } catch (e) {
+      // Ignorar erros de localStorage
+    }
+  }, []);
+
+  // Salvar progresso automaticamente a cada mudança
+  useEffect(() => {
+    if (isPreview || showIntro || isCompleted) return;
+    try {
+      const progress = { step: currentStep, answers, patientData };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    } catch (e) {
+      // Ignorar erros de localStorage
+    }
+  }, [currentStep, answers, patientData, showIntro, isCompleted]);
+
+  const handleResume = () => {
+    if (!savedProgress) return;
+    setPatientData(savedProgress.patientData || { name: '', email: '', phone: '' });
+    setAnswers(savedProgress.answers || {});
+    setCurrentStep(savedProgress.step || 0);
+    setShowIntro(false);
+    setShowResumePrompt(false);
+  };
+
+  const handleStartFresh = () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    setSavedProgress(null);
+    setShowResumePrompt(false);
+  };
+
+  const clearProgress = () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  };
+
   // Carregar dados do game (prêmios reais) quando o form tem game_id
   useEffect(() => {
     const gameId = form.game_id;
@@ -182,6 +235,8 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
       try {
         const success = await onSubmit({ patient: patientData, answers });
         if (success) {
+          // Limpar progresso salvo após envio bem-sucedido
+          clearProgress();
           // Mostrar tela de "analisando" por 5 segundos antes de concluir
           setShowAnalyzingScreen(true);
           setTimeout(() => {
@@ -347,6 +402,36 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
           
           {showIntro ? (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ backgroundColor: '#ffffff', color: '#111827' }}>
+              {/* Banner de retomada de progresso */}
+              {showResumePrompt && savedProgress && (
+                <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl animate-in fade-in duration-300">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-emerald-800 mb-0.5">Você tem um preenchimento em andamento</p>
+                      <p className="text-xs text-emerald-600 mb-3">
+                        Pergunta {savedProgress.step + 1} de {form.questions.length} &mdash; {Object.keys(savedProgress.answers).length} {Object.keys(savedProgress.answers).length === 1 ? 'resposta salva' : 'respostas salvas'}
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleResume}
+                          className="flex-1 py-2 px-3 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-colors"
+                        >
+                          Continuar de onde parei
+                        </button>
+                        <button
+                          onClick={handleStartFresh}
+                          className="py-2 px-3 bg-white border border-emerald-300 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-50 transition-colors"
+                        >
+                          Começar do zero
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               <h1 className="text-2xl font-bold text-gray-900 mb-2">{form.name}</h1>
               <p className="text-gray-600 mb-8">Por favor, preencha seus dados para iniciarmos o atendimento.</p>
               
