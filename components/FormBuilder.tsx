@@ -131,11 +131,12 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         ],
       };
       setFormTemplateSuccess(templateId);
-      await fetch('/api/templates', {
+      // Apenas incrementar o contador de uso do template (sem criar campanha na tabela campaigns)
+      await fetch(`/api/templates/${templateId}/use`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ templateId, tenantId, campaignName: newForm.name }),
-      });
+        body: JSON.stringify({ templateId }),
+      }).catch(() => {}); // ignora erro se endpoint não existir
       setTimeout(() => {
         setFormTemplateSuccess(null);
         setShowTemplateModal(false);
