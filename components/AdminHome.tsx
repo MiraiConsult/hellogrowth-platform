@@ -9,6 +9,7 @@ import {
 interface AdminHomeProps {
   isDark?: boolean;
   onNavigate: (tab: string, filter?: { status?: string; search?: string }) => void;
+  hideFinancial?: boolean;
 }
 
 const DARK = {
@@ -54,7 +55,7 @@ function timeAgo(dateStr: string) {
   return `${days}d atrás`;
 }
 
-export default function AdminHome({ isDark = false, onNavigate }: AdminHomeProps) {
+export default function AdminHome({ isDark = false, onNavigate, hideFinancial = false }: AdminHomeProps) {
   const t = isDark ? DARK : LIGHT;
   const [loading, setLoading] = useState(true);
   const [asaasData, setAsaasData] = useState<any>(null);
@@ -64,13 +65,19 @@ export default function AdminHome({ isDark = false, onNavigate }: AdminHomeProps
   const load = async () => {
     setLoading(true);
     try {
-      const [asaasRes, clientsRes] = await Promise.all([
-        fetch('/api/admin/asaas?action=overview'),
-        fetch('/api/admin/clients'),
-      ]);
-      const [asaas, clients] = await Promise.all([asaasRes.json(), clientsRes.json()]);
-      setAsaasData(asaas);
-      setClientsData(clients);
+      if (hideFinancial) {
+        const clientsRes = await fetch('/api/admin/clients');
+        const clients = await clientsRes.json();
+        setClientsData(clients);
+      } else {
+        const [asaasRes, clientsRes] = await Promise.all([
+          fetch('/api/admin/asaas?action=overview'),
+          fetch('/api/admin/clients'),
+        ]);
+        const [asaas, clients] = await Promise.all([asaasRes.json(), clientsRes.json()]);
+        setAsaasData(asaas);
+        setClientsData(clients);
+      }
       setLastUpdated(new Date());
     } catch (e) {
       console.error(e);
@@ -109,42 +116,53 @@ export default function AdminHome({ isDark = false, onNavigate }: AdminHomeProps
   ).length;
 
   const kpis = [
-    {
-      label: 'MRR',
-      value: fmt(mrr),
-      sub: `ARR: ${fmt(arr)}`,
-      icon: <DollarSign size={18} />,
-      color: 'text-emerald-500',
-      bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50',
-      onClick: () => onNavigate('financeiro'),
-    },
-    {
-      label: 'Assinantes Ativos',
-      value: activeSubs,
-      sub: `${totalSubs} total`,
-      icon: <CheckCircle size={18} />,
-      color: 'text-blue-500',
-      bg: isDark ? 'bg-blue-500/10' : 'bg-blue-50',
-      onClick: () => onNavigate('financeiro'),
-    },
-    {
-      label: 'Inadimplentes',
-      value: overdueCount,
-      sub: overdueAmount > 0 ? `${fmt(overdueAmount)} em aberto` : 'Nenhum em aberto',
-      icon: <AlertTriangle size={18} />,
-      color: overdueCount > 0 ? 'text-red-500' : 'text-slate-400',
-      bg: overdueCount > 0 ? (isDark ? 'bg-red-500/10' : 'bg-red-50') : (isDark ? 'bg-gray-800' : 'bg-slate-50'),
-      onClick: () => onNavigate('financeiro'),
-    },
-    {
-      label: 'Ticket Médio',
-      value: fmt(ticketMedio),
-      sub: `Churn: ${churnRate.toFixed(1)}%`,
-      icon: <TrendingUp size={18} />,
-      color: 'text-violet-500',
-      bg: isDark ? 'bg-violet-500/10' : 'bg-violet-50',
-      onClick: () => onNavigate('financeiro'),
-    },
+    ...(!hideFinancial ? [
+      {
+        label: 'MRR',
+        value: fmt(mrr),
+        sub: `ARR: ${fmt(arr)}`,
+        icon: <DollarSign size={18} />,
+        color: 'text-emerald-500',
+        bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50',
+        onClick: () => onNavigate('financeiro'),
+      },
+      {
+        label: 'Assinantes Ativos',
+        value: activeSubs,
+        sub: `${totalSubs} total`,
+        icon: <CheckCircle size={18} />,
+        color: 'text-blue-500',
+        bg: isDark ? 'bg-blue-500/10' : 'bg-blue-50',
+        onClick: () => onNavigate('financeiro'),
+      },
+      {
+        label: 'Inadimplentes',
+        value: overdueCount,
+        sub: overdueAmount > 0 ? `${fmt(overdueAmount)} em aberto` : 'Nenhum em aberto',
+        icon: <AlertTriangle size={18} />,
+        color: overdueCount > 0 ? 'text-red-500' : 'text-slate-400',
+        bg: overdueCount > 0 ? (isDark ? 'bg-red-500/10' : 'bg-red-50') : (isDark ? 'bg-gray-800' : 'bg-slate-50'),
+        onClick: () => onNavigate('financeiro'),
+      },
+      {
+        label: 'Ticket Médio',
+        value: fmt(ticketMedio),
+        sub: `Churn: ${churnRate.toFixed(1)}%`,
+        icon: <TrendingUp size={18} />,
+        color: 'text-violet-500',
+        bg: isDark ? 'bg-violet-500/10' : 'bg-violet-50',
+        onClick: () => onNavigate('financeiro'),
+      },
+      {
+        label: 'Recebido este mês',
+        value: fmt(receivedAmount),
+        sub: 'Pagamentos confirmados',
+        icon: <CreditCard size={18} />,
+        color: 'text-amber-500',
+        bg: isDark ? 'bg-amber-500/10' : 'bg-amber-50',
+        onClick: () => onNavigate('financeiro'),
+      },
+    ] : []),
     {
       label: 'Clientes (plataforma)',
       value: stats.total || 0,
@@ -153,15 +171,6 @@ export default function AdminHome({ isDark = false, onNavigate }: AdminHomeProps
       color: 'text-teal-500',
       bg: isDark ? 'bg-teal-500/10' : 'bg-teal-50',
       onClick: () => onNavigate('clients'),
-    },
-    {
-      label: 'Recebido este mês',
-      value: fmt(receivedAmount),
-      sub: 'Pagamentos confirmados',
-      icon: <CreditCard size={18} />,
-      color: 'text-amber-500',
-      bg: isDark ? 'bg-amber-500/10' : 'bg-amber-50',
-      onClick: () => onNavigate('financeiro'),
     },
   ];
 
@@ -173,7 +182,7 @@ export default function AdminHome({ isDark = false, onNavigate }: AdminHomeProps
       action: () => onNavigate('clients', { status: 'trialing' }),
       actionLabel: 'Ver clientes →',
     },
-    overdueCount > 0 && {
+    !hideFinancial && overdueCount > 0 && {
       type: 'danger',
       icon: <AlertTriangle size={14} />,
       text: `${overdueCount} assinatura${overdueCount > 1 ? 's' : ''} inadimplente${overdueCount > 1 ? 's' : ''} — ${fmt(overdueAmount)} em aberto`,
@@ -197,7 +206,7 @@ export default function AdminHome({ isDark = false, onNavigate }: AdminHomeProps
 
   const quickLinks = [
     { label: 'Clientes', icon: <Users size={16} />, tab: 'clients', color: 'text-emerald-500', desc: 'Gerenciar usuários e planos' },
-    { label: 'Financeiro', icon: <DollarSign size={16} />, tab: 'financeiro', color: 'text-violet-500', desc: 'Assinaturas e cobranças' },
+    ...(!hideFinancial ? [{ label: 'Financeiro', icon: <DollarSign size={16} />, tab: 'financeiro', color: 'text-violet-500', desc: 'Assinaturas e cobranças' }] : []),
     { label: 'Inteligência', icon: <Zap size={16} />, tab: 'intelligence', color: 'text-purple-500', desc: 'NPS, leads e tendências' },
     { label: 'Templates', icon: <BarChart2 size={16} />, tab: 'templates', color: 'text-blue-500', desc: 'Formulários e pesquisas' },
     { label: 'Catálogos', icon: <Activity size={16} />, tab: 'catalogs', color: 'text-orange-500', desc: 'Produtos por segmento' },
@@ -329,7 +338,7 @@ export default function AdminHome({ isDark = false, onNavigate }: AdminHomeProps
         </div>
 
         {/* Linha: Distribuição de planos + Status financeiro */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 ${!hideFinancial ? 'lg:grid-cols-2' : ''} gap-4`}>
 
           {/* Distribuição de planos */}
           <div className={`${t.card} border rounded-xl shadow-sm`}>
@@ -366,33 +375,35 @@ export default function AdminHome({ isDark = false, onNavigate }: AdminHomeProps
             </div>
           </div>
 
-          {/* Status financeiro Asaas */}
-          <div className={`${t.card} border rounded-xl shadow-sm`}>
-            <div className={`flex items-center justify-between px-5 py-4 border-b ${t.border}`}>
-              <div className="flex items-center gap-2">
-                <DollarSign size={16} className="text-emerald-500" />
-                <h2 className={`text-sm font-semibold ${t.text}`}>Resumo Financeiro</h2>
-              </div>
-              <button onClick={() => onNavigate('financeiro')} className={`text-xs ${t.textMuted} hover:text-emerald-500 flex items-center gap-1 transition-colors`}>
-                Ver detalhes <ArrowRight size={12} />
-              </button>
-            </div>
-            <div className="p-5 space-y-3">
-              {[
-                { label: 'MRR (Receita Mensal)', value: fmt(mrr), color: 'text-emerald-500' },
-                { label: 'ARR (Receita Anual)', value: fmt(arr), color: 'text-emerald-400' },
-                { label: 'Ticket Médio', value: fmt(ticketMedio), color: 'text-blue-500' },
-                { label: 'Recebido este mês', value: fmt(receivedAmount), color: 'text-teal-500' },
-                { label: 'Em aberto (inadimplência)', value: fmt(overdueAmount), color: overdueAmount > 0 ? 'text-red-500' : 'text-slate-400' },
-                { label: 'Churn Rate', value: `${churnRate.toFixed(1)}%`, color: churnRate > 10 ? 'text-red-500' : 'text-slate-400' },
-              ].map((item, i) => (
-                <div key={i} className={`flex items-center justify-between py-1.5 border-b ${t.border} last:border-0`}>
-                  <span className={`text-xs ${t.textSub}`}>{item.label}</span>
-                  <span className={`text-sm font-bold ${item.color}`}>{item.value}</span>
+          {/* Status financeiro Asaas - apenas quando não está oculto */}
+          {!hideFinancial && (
+            <div className={`${t.card} border rounded-xl shadow-sm`}>
+              <div className={`flex items-center justify-between px-5 py-4 border-b ${t.border}`}>
+                <div className="flex items-center gap-2">
+                  <DollarSign size={16} className="text-emerald-500" />
+                  <h2 className={`text-sm font-semibold ${t.text}`}>Resumo Financeiro</h2>
                 </div>
-              ))}
+                <button onClick={() => onNavigate('financeiro')} className={`text-xs ${t.textMuted} hover:text-emerald-500 flex items-center gap-1 transition-colors`}>
+                  Ver detalhes <ArrowRight size={12} />
+                </button>
+              </div>
+              <div className="p-5 space-y-3">
+                {[
+                  { label: 'MRR (Receita Mensal)', value: fmt(mrr), color: 'text-emerald-500' },
+                  { label: 'ARR (Receita Anual)', value: fmt(arr), color: 'text-emerald-400' },
+                  { label: 'Ticket Médio', value: fmt(ticketMedio), color: 'text-blue-500' },
+                  { label: 'Recebido este mês', value: fmt(receivedAmount), color: 'text-teal-500' },
+                  { label: 'Em aberto (inadimplência)', value: fmt(overdueAmount), color: overdueAmount > 0 ? 'text-red-500' : 'text-slate-400' },
+                  { label: 'Churn Rate', value: `${churnRate.toFixed(1)}%`, color: churnRate > 10 ? 'text-red-500' : 'text-slate-400' },
+                ].map((item, i) => (
+                  <div key={i} className={`flex items-center justify-between py-1.5 border-b ${t.border} last:border-0`}>
+                    <span className={`text-xs ${t.textSub}`}>{item.label}</span>
+                    <span className={`text-sm font-bold ${item.color}`}>{item.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
       </div>

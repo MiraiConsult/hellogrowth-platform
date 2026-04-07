@@ -50,6 +50,7 @@ interface ColaboradorMetrics {
 
 interface Props {
   isDark?: boolean;
+  hideFinancial?: boolean;
 }
 
 const DARK = {
@@ -124,7 +125,7 @@ function calcHealthScore(client: ClienteDoColaborador): number {
   return score;
 }
 
-export default function AdminColaboradores({ isDark = false }: Props) {
+export default function AdminColaboradores({ isDark = false, hideFinancial = false }: Props) {
   const t = isDark ? DARK : LIGHT;
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [metrics, setMetrics] = useState<ColaboradorMetrics[]>([]);
@@ -401,14 +402,14 @@ export default function AdminColaboradores({ isDark = false }: Props) {
               color: 'text-purple-600',
               bg: 'bg-purple-50',
             },
-            {
+            ...(!hideFinancial ? [{
               label: 'MRR Estimado',
               value: `R$ ${selectedColaborador.mrrContribution.toFixed(0)}`,
               sub: 'clientes ativos',
               icon: <DollarSign size={16} />,
               color: 'text-amber-600',
               bg: 'bg-amber-50',
-            },
+            }] : []),
           ].map((kpi, i) => (
             <div key={i} className={`${t.kpi} border ${t.border} rounded-xl p-4 shadow-sm`}>
               <div className={`flex items-center gap-1.5 text-xs mb-2 ${kpi.color}`}>{kpi.icon}<span>{kpi.label}</span></div>
@@ -659,7 +660,7 @@ export default function AdminColaboradores({ isDark = false }: Props) {
           { label: 'Total Colaboradores', value: colaboradores.length, icon: <UserCog size={16} />, color: 'text-sky-600' },
           { label: 'SDRs', value: colaboradores.filter(c => c.role === 'sdr').length, icon: <TrendingUp size={16} />, color: 'text-blue-600' },
           { label: 'CS (Customer Success)', value: colaboradores.filter(c => c.role === 'cs').length, icon: <Users size={16} />, color: 'text-emerald-600' },
-          { label: 'MRR Total (Est.)', value: `R$ ${totalMRR.toFixed(0)}`, icon: <DollarSign size={16} />, color: 'text-amber-600' },
+          ...(!hideFinancial ? [{ label: 'MRR Total (Est.)', value: `R$ ${totalMRR.toFixed(0)}`, icon: <DollarSign size={16} />, color: 'text-amber-600' }] : []),
         ].map((kpi, i) => (
           <div key={i} className={`${t.kpi} border ${t.border} rounded-xl p-4 shadow-sm`}>
             <div className={`flex items-center gap-1.5 text-xs mb-2 ${kpi.color}`}>{kpi.icon}<span>{kpi.label}</span></div>
@@ -750,7 +751,7 @@ export default function AdminColaboradores({ isDark = false }: Props) {
                     { label: 'Expirados', field: 'expiredClients' as keyof ColaboradorMetrics },
                     { label: 'Conversão', field: 'conversionRate' as keyof ColaboradorMetrics },
                     { label: 'Health Médio', field: 'avgHealthScore' as keyof ColaboradorMetrics },
-                    { label: 'MRR Est.', field: 'mrrContribution' as keyof ColaboradorMetrics },
+                    ...(!hideFinancial ? [{ label: 'MRR Est.', field: 'mrrContribution' as keyof ColaboradorMetrics }] : []),
                     { label: '', field: null },
                   ].map((h, i) => (
                     <th
@@ -825,9 +826,11 @@ export default function AdminColaboradores({ isDark = false }: Props) {
                           <span className={`text-xs font-semibold ${getHealthColor(m.avgHealthScore)}`}>{m.avgHealthScore}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3.5">
-                        <span className="text-sm font-semibold text-amber-600">R$ {m.mrrContribution.toFixed(0)}</span>
-                      </td>
+                      {!hideFinancial && (
+                        <td className="px-4 py-3.5">
+                          <span className="text-sm font-semibold text-amber-600">R$ {m.mrrContribution.toFixed(0)}</span>
+                        </td>
+                      )}
                       <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-2 justify-end">
                           <button

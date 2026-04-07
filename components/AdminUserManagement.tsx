@@ -7,7 +7,7 @@ import {
   ExternalLink, Building2, AlertCircle, Search, ChevronRight, Copy,
   Zap, Star, UserPlus, DollarSign, Check, Moon, Sun, Send, BookOpen, Package, TrendingUp,
   LayoutDashboard, Brain, MessageSquare, ChevronLeft, BarChart3,
-  Activity, Heart, FileText, MessageCircle, UserCheck, UserCog, Kanban
+  Activity, Heart, FileText, MessageCircle, UserCheck, UserCog, Kanban, Lock, Eye, EyeOff
 } from 'lucide-react';
 import AdminBroadcast from '@/components/AdminBroadcast';
 import AdminIntelligence from '@/components/AdminIntelligence';
@@ -233,6 +233,13 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
   const [activeTab, setActiveTab] = useState<'home' | 'clients' | 'broadcast' | 'intelligence' | 'templates' | 'catalogs' | 'financeiro' | 'conteudo' | 'colaboradores' | 'kanban' | 'whatsapp'>('home');
   const [conteudoSubTab, setConteudoSubTab] = useState<'templates' | 'catalogs' | 'broadcast'>('templates');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // ── Financeiro Password Protection ──
+  const [financeiroUnlocked, setFinanceiroUnlocked] = useState(false);
+  const [showFinanceiroModal, setShowFinanceiroModal] = useState(false);
+  const [financeiroPassword, setFinanceiroPassword] = useState('');
+  const [financeiroPasswordError, setFinanceiroPasswordError] = useState(false);
+  const [financeiroShowPwd, setFinanceiroShowPwd] = useState(false);
+  const FINANCEIRO_PASSWORD = '2002';
   const [asaasClientMap, setAsaasClientMap] = useState<Record<string, any>>({});
   const [asaasLoaded, setAsaasLoaded] = useState(false);
 
@@ -824,6 +831,12 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
               <button
                 key={item.id}
                 onClick={() => {
+                  if (item.id === 'financeiro' && !financeiroUnlocked) {
+                    setShowFinanceiroModal(true);
+                    setFinanceiroPassword('');
+                    setFinanceiroPasswordError(false);
+                    return;
+                  }
                   setActiveTab(item.id as any);
                   if (item.id === 'intelligence') fetchAnalytics();
                 }}
@@ -884,14 +897,100 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       <div className={`flex-1 min-h-screen transition-all duration-300 ${sidebarCollapsed ? 'ml-[72px]' : 'ml-60'}`}>
 
       {activeTab === 'home' && (
-        <AdminHome isDark={isDark} onNavigate={(tab, filter) => {
+        <AdminHome isDark={isDark} hideFinancial={!financeiroUnlocked} onNavigate={(tab, filter) => {
+          if (tab === 'financeiro' && !financeiroUnlocked) {
+            setShowFinanceiroModal(true);
+            setFinanceiroPassword('');
+            setFinanceiroPasswordError(false);
+            return;
+          }
           setActiveTab(tab as any);
           if (filter?.status) setStatusFilter(filter.status);
           if (filter?.search) setSearch(filter.search);
         }} />
       )}
-      {activeTab === 'financeiro' && (
+      {activeTab === 'financeiro' && financeiroUnlocked && (
         <AdminFinanceiro isDark={isDark} />
+      )}
+
+      {/* Modal de senha do Financeiro */}
+      {showFinanceiroModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className={`${isDark ? 'bg-gray-900 border-gray-700' : 'bg-white border-slate-200'} border rounded-2xl shadow-2xl w-full max-w-sm p-6`}>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
+                <Lock size={20} className="text-violet-600" />
+              </div>
+              <div>
+                <h2 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Área Restrita</h2>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>Digite a senha para acessar o Financeiro</p>
+              </div>
+            </div>
+            <div className="relative mb-4">
+              <input
+                type={financeiroShowPwd ? 'text' : 'password'}
+                value={financeiroPassword}
+                onChange={e => { setFinanceiroPassword(e.target.value); setFinanceiroPasswordError(false); }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    if (financeiroPassword === FINANCEIRO_PASSWORD) {
+                      setFinanceiroUnlocked(true);
+                      setShowFinanceiroModal(false);
+                      setActiveTab('financeiro');
+                    } else {
+                      setFinanceiroPasswordError(true);
+                    }
+                  }
+                }}
+                placeholder="Senha"
+                autoFocus
+                className={`w-full border rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 ${
+                  financeiroPasswordError
+                    ? 'border-red-400 bg-red-50 text-red-900'
+                    : isDark
+                      ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-500'
+                      : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                }`}
+              />
+              <button
+                type="button"
+                onClick={() => setFinanceiroShowPwd(v => !v)}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 ${isDark ? 'text-gray-400 hover:text-gray-200' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                {financeiroShowPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            {financeiroPasswordError && (
+              <p className="text-xs text-red-500 mb-3 flex items-center gap-1">
+                <AlertTriangle size={12} /> Senha incorreta. Tente novamente.
+              </p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowFinanceiroModal(false)}
+                className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
+                  isDark ? 'border-gray-700 text-gray-300 hover:bg-gray-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (financeiroPassword === FINANCEIRO_PASSWORD) {
+                    setFinanceiroUnlocked(true);
+                    setShowFinanceiroModal(false);
+                    setActiveTab('financeiro');
+                  } else {
+                    setFinanceiroPasswordError(true);
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium bg-violet-600 hover:bg-violet-500 text-white transition-colors"
+              >
+                Entrar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {activeTab === 'conteudo' && (
         <div className="flex flex-col min-h-screen">
@@ -941,7 +1040,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
         )
       )}
       {activeTab === 'colaboradores' && (
-        <AdminColaboradores isDark={isDark} />
+        <AdminColaboradores isDark={isDark} hideFinancial={!financeiroUnlocked} />
       )}
       {activeTab === 'kanban' && (
         <AdminKanban isDark={isDark} />
@@ -952,7 +1051,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
       {activeTab === 'clients' && (
       <main className="w-full overflow-x-auto px-6 py-6 space-y-5">
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div className={`grid grid-cols-2 sm:grid-cols-4 ${financeiroUnlocked ? 'lg:grid-cols-8' : 'lg:grid-cols-7'} gap-3`}>
           {[
             { label: 'Total', value: stats.total || 0, icon: <Users size={14} />, color: isDark ? 'text-slate-300' : 'text-slate-600' },
             { label: 'Ativos', value: stats.active || 0, icon: <CheckCircle size={14} />, color: 'text-emerald-600' },
@@ -961,7 +1060,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
             { label: 'Modelo A', value: stats.model_a || 0, icon: <Star size={14} />, color: 'text-purple-600' },
             { label: 'Modelo B', value: stats.model_b || 0, icon: <Gift size={14} />, color: 'text-teal-600' },
             { label: 'Urgente (B)', value: stats.urgent_b || 0, icon: <AlertTriangle size={14} />, color: 'text-orange-500' },
-            { label: 'MRR Est.', value: `R$ ${(stats.mrr || 0).toFixed(0)}`, icon: <DollarSign size={14} />, color: 'text-amber-600' },
+            ...(financeiroUnlocked ? [{ label: 'MRR Est.', value: `R$ ${(stats.mrr || 0).toFixed(0)}`, icon: <DollarSign size={14} />, color: 'text-amber-600' }] : []),
           ].map((kpi, i) => (
             <div key={i} className={`${t.kpi} border rounded-xl p-4 shadow-sm`}>
               <div className={`flex items-center gap-1.5 text-xs mb-2 ${kpi.color}`}>
