@@ -1,10 +1,18 @@
-'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Plus, Settings, Trash2, X, GripVertical, User, ChevronDown,
   ChevronUp, Pencil, Check, AlertCircle, Loader2, Search,
-  Kanban, SlidersHorizontal, ArrowLeft,
+  Kanban, SlidersHorizontal, ArrowLeft, LayoutDashboard, ChevronRight,
 } from 'lucide-react';
+
+interface Board {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;
+  position: number;
+  is_default: boolean;
+}
 
 interface Stage {
   id: string;
@@ -14,11 +22,13 @@ interface Stage {
   position: number;
   responsible: string;
   description: string;
+  board_id?: string;
 }
 
 interface Card {
   id: string;
   stage_id: string;
+  board_id?: string;
   user_id?: string;
   client_name: string;
   client_email?: string;
@@ -61,16 +71,22 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     thead: isDark ? 'text-gray-400' : 'text-slate-500',
   };
 
+  const [boards, setBoards] = useState<Board[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'board' | 'settings'>('board');
+  const [view, setView] = useState<'board' | 'settings' | 'boards'>('board');
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
 
-  // Drag state
+  // Drag state for cards
   const [draggingCard, setDraggingCard] = useState<Card | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [dragOverCard, setDragOverCard] = useState<string | null>(null);
+
+  // Drag state for stages (reorder)
+  const [draggingStage, setDraggingStage] = useState<Stage | null>(null);
+  const [dragOverStageItem, setDragOverStageItem] = useState<string | null>(null);
 
   // Add card modal
   const [addCardStage, setAddCardStage] = useState<string | null>(null);
@@ -84,6 +100,16 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   const [savingStage, setSavingStage] = useState(false);
   const [showAddStage, setShowAddStage] = useState(false);
 
+  // Delete stage with move
+  const [deletingStage, setDeletingStage] = useState<Stage | null>(null);
+  const [moveCardsTo, setMoveCardsTo] = useState<string>('');
+
+  // Board management
+  const [editingBoard, setEditingBoard] = useState<Board | null>(null);
+  const [boardForm, setBoardForm] = useState({ name: '', description: '', color: '#6366f1' });
+  const [showAddBoard, setShowAddBoard] = useState(false);
+  const [savingBoard, setSavingBoard] = useState(false);
+
   // Client search for add card
   const [clientSearch, setClientSearch] = useState('');
   const [clientSuggestions, setClientSuggestions] = useState<any[]>([]);
@@ -94,13 +120,27 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (boardId?: string) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/kanban?action=all');
+      const url = boardId
+        ? `/api/admin/kanban?action=all&board_id=${boardId}`
+        : '/api/admin/kanban?action=all';
+      const res = await fetch(url);
       const data = await res.json();
+      if (data.boards) setBoards(data.boards);
       setStages(data.stages || []);
       setCards(data.cards || []);
+      // Set active board to first board if not set
+      if (!boardId && data.boards && data.boards.length > 0) {
+        const defaultBoard = data.boards.find((b: Board) => b.is_default) || data.boards[0];
+        setActiveBoardId(defaultBoard.id);
+        // Re-fetch with board_id
+        const res2 = await fetch(`/api/admin/kanban?action=all&board_id=${defaultBoard.id}`);
+        const data2 = await res2.json();
+        setStages(data2.stages || []);
+        setCards(data2.cards || []);
+      }
     } catch {
       showToast('error', 'Erro ao carregar Kanban');
     } finally {
@@ -109,6 +149,21 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const switchBoard = async (boardId: string) => {
+    setActiveBoardId(boardId);
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/kanban?action=all&board_id=${boardId}`);
+      const data = await res.json();
+      setStages(data.stages || []);
+      setCards(data.cards || []);
+    } catch {
+      showToast('error', 'Erro ao carregar fluxo');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Search clients from admin API
   const searchClients = useCallback(async (q: string) => {
@@ -127,7 +182,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     return () => clearTimeout(timer);
   }, [clientSearch, searchClients]);
 
-  // ── DRAG & DROP ──────────────────────────────────────────────────────────────
+  // ── DRAG & DROP CARDS ─────────────────────────────────────────────────────────
   const handleDragStart = (e: React.DragEvent, card: Card) => {
     setDraggingCard(card);
     e.dataTransfer.effectAllowed = 'move';
@@ -154,7 +209,6 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       newPosition = targetIdx >= 0 ? targetIdx : stageCards.length;
     }
 
-    // Optimistic update
     const updatedCards = cards.map(c => {
       if (c.id === draggingCard.id) return { ...c, stage_id: targetStageId, position: newPosition };
       return c;
@@ -162,7 +216,6 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     setCards(updatedCards);
     setDraggingCard(null);
 
-    // Persist
     try {
       await fetch('/api/admin/kanban', {
         method: 'PATCH',
@@ -176,6 +229,61 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     setDraggingCard(null);
     setDragOverStage(null);
     setDragOverCard(null);
+  };
+
+  // ── DRAG & DROP STAGES (reorder) ──────────────────────────────────────────────
+  const handleStageDragStart = (e: React.DragEvent, stage: Stage) => {
+    e.stopPropagation();
+    setDraggingStage(stage);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleStageDragOver = (e: React.DragEvent, stageId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverStageItem(stageId);
+  };
+
+  const handleStageDrop = async (e: React.DragEvent, targetStageId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggingStage || draggingStage.id === targetStageId) {
+      setDraggingStage(null);
+      setDragOverStageItem(null);
+      return;
+    }
+
+    const currentStages = [...stages];
+    const fromIdx = currentStages.findIndex(s => s.id === draggingStage.id);
+    const toIdx = currentStages.findIndex(s => s.id === targetStageId);
+
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    const reordered = [...currentStages];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+
+    const withPositions = reordered.map((s, i) => ({ ...s, position: i }));
+    setStages(withPositions);
+    setDraggingStage(null);
+    setDragOverStageItem(null);
+
+    try {
+      await fetch('/api/admin/kanban', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'reorder_stages',
+          stages: withPositions.map(s => ({ id: s.id, position: s.position })),
+        }),
+      });
+      showToast('success', 'Ordem das etapas salva!');
+    } catch { showToast('error', 'Erro ao reordenar etapas'); fetchData(activeBoardId || undefined); }
+  };
+
+  const handleStageDragEnd = () => {
+    setDraggingStage(null);
+    setDragOverStageItem(null);
   };
 
   // ── CARDS CRUD ───────────────────────────────────────────────────────────────
@@ -216,7 +324,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         const res = await fetch('/api/admin/kanban', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'card', stage_id: addCardStage, ...cardForm }),
+          body: JSON.stringify({ type: 'card', stage_id: addCardStage, board_id: activeBoardId, ...cardForm }),
         });
         const data = await res.json();
         setCards(prev => [...prev, data.data]);
@@ -233,7 +341,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     try {
       await fetch(`/api/admin/kanban?type=card&id=${id}`, { method: 'DELETE' });
       showToast('success', 'Card removido');
-    } catch { showToast('error', 'Erro ao remover card'); fetchData(); }
+    } catch { showToast('error', 'Erro ao remover card'); fetchData(activeBoardId || undefined); }
   };
 
   // ── STAGES CRUD ──────────────────────────────────────────────────────────────
@@ -259,7 +367,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         const res = await fetch('/api/admin/kanban', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'stage', ...stageForm, position: stages.length }),
+          body: JSON.stringify({ type: 'stage', board_id: activeBoardId, ...stageForm, position: stages.length }),
         });
         const data = await res.json();
         setStages(prev => [...prev, data.data]);
@@ -271,17 +379,86 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     finally { setSavingStage(false); }
   };
 
-  const deleteStage = async (id: string) => {
-    if (!confirm('Remover esta etapa? Os cards serão desvinculados.')) return;
-    setStages(prev => prev.filter(s => s.id !== id));
+  const openDeleteStage = (stage: Stage) => {
+    setDeletingStage(stage);
+    const otherStages = stages.filter(s => s.id !== stage.id);
+    setMoveCardsTo(otherStages.length > 0 ? otherStages[0].id : '');
+  };
+
+  const confirmDeleteStage = async () => {
+    if (!deletingStage) return;
+    const stageCardsCount = cards.filter(c => c.stage_id === deletingStage.id).length;
+    const url = stageCardsCount > 0 && moveCardsTo
+      ? `/api/admin/kanban?type=stage&id=${deletingStage.id}&move_to=${moveCardsTo}`
+      : `/api/admin/kanban?type=stage&id=${deletingStage.id}`;
+
+    setStages(prev => prev.filter(s => s.id !== deletingStage.id));
+    if (stageCardsCount > 0 && moveCardsTo) {
+      setCards(prev => prev.map(c => c.stage_id === deletingStage.id ? { ...c, stage_id: moveCardsTo } : c));
+    } else {
+      setCards(prev => prev.filter(c => c.stage_id !== deletingStage.id));
+    }
+    setDeletingStage(null);
+
     try {
-      await fetch(`/api/admin/kanban?type=stage&id=${id}`, { method: 'DELETE' });
+      await fetch(url, { method: 'DELETE' });
       showToast('success', 'Etapa removida');
-    } catch { showToast('error', 'Erro ao remover etapa'); fetchData(); }
+    } catch { showToast('error', 'Erro ao remover etapa'); fetchData(activeBoardId || undefined); }
+  };
+
+  // ── BOARDS CRUD ──────────────────────────────────────────────────────────────
+  const openEditBoard = (board: Board) => {
+    setEditingBoard(board);
+    setBoardForm({ name: board.name, description: board.description || '', color: board.color });
+  };
+
+  const saveBoard = async () => {
+    if (!boardForm.name.trim()) { showToast('error', 'Nome do fluxo é obrigatório'); return; }
+    setSavingBoard(true);
+    try {
+      if (editingBoard) {
+        const res = await fetch('/api/admin/kanban', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'board', id: editingBoard.id, ...boardForm }),
+        });
+        const data = await res.json();
+        setBoards(prev => prev.map(b => b.id === editingBoard.id ? { ...b, ...data.data } : b));
+        showToast('success', 'Fluxo atualizado!');
+      } else {
+        const res = await fetch('/api/admin/kanban', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'board', ...boardForm }),
+        });
+        const data = await res.json();
+        setBoards(prev => [...prev, data.data]);
+        showToast('success', 'Fluxo criado!');
+      }
+      setEditingBoard(null);
+      setShowAddBoard(false);
+    } catch { showToast('error', 'Erro ao salvar fluxo'); }
+    finally { setSavingBoard(false); }
+  };
+
+  const deleteBoard = async (board: Board) => {
+    if (board.is_default) { showToast('error', 'Não é possível excluir o fluxo padrão'); return; }
+    if (!confirm(`Excluir o fluxo "${board.name}"? Todas as etapas e cards serão removidos.`)) return;
+    setBoards(prev => prev.filter(b => b.id !== board.id));
+    if (activeBoardId === board.id) {
+      const remaining = boards.filter(b => b.id !== board.id);
+      if (remaining.length > 0) switchBoard(remaining[0].id);
+    }
+    try {
+      await fetch(`/api/admin/kanban?type=board&id=${board.id}`, { method: 'DELETE' });
+      showToast('success', 'Fluxo removido');
+    } catch { showToast('error', 'Erro ao remover fluxo'); fetchData(); }
   };
 
   const stageCards = (stageId: string) =>
     cards.filter(c => c.stage_id === stageId).sort((a, b) => a.position - b.position);
+
+  const activeBoard = boards.find(b => b.id === activeBoardId);
 
   // ── RENDER ───────────────────────────────────────────────────────────────────
   if (loading) {
@@ -301,7 +478,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow">
             <Kanban size={18} className="text-white" />
@@ -313,20 +490,140 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setView(view === 'board' ? 'settings' : 'board')}
+            onClick={() => setView(view === 'boards' ? 'board' : 'boards')}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${view === 'boards' ? 'bg-indigo-600 text-white border-indigo-600' : `${t.border} ${t.textSub} hover:text-indigo-600`}`}
+          >
+            <LayoutDashboard size={15} />
+            Fluxos ({boards.length})
+          </button>
+          <button
+            onClick={() => setView(view === 'settings' ? 'board' : 'settings')}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${view === 'settings' ? 'bg-violet-600 text-white border-violet-600' : `${t.border} ${t.textSub} hover:text-violet-600`}`}
           >
             <SlidersHorizontal size={15} />
-            {view === 'settings' ? 'Ver Board' : 'Configurar Etapas'}
+            {view === 'settings' ? 'Ver Board' : 'Etapas'}
           </button>
         </div>
       </div>
+
+      {/* Board tabs */}
+      {view === 'board' && boards.length > 1 && (
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+          {boards.map(board => (
+            <button
+              key={board.id}
+              onClick={() => switchBoard(board.id)}
+              className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${activeBoardId === board.id
+                ? 'text-white border-transparent shadow-md'
+                : `${t.border} ${t.textSub} hover:border-violet-400`
+              }`}
+              style={activeBoardId === board.id ? { backgroundColor: board.color } : {}}
+            >
+              {board.name}
+              {board.is_default && <span className="text-xs opacity-70">(padrão)</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── BOARDS MANAGEMENT VIEW ── */}
+      {view === 'boards' && (
+        <div className={`${t.surface} rounded-2xl border ${t.border} p-6`}>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className={`text-base font-bold ${t.text}`}>Fluxos de Kanban</h2>
+            <button
+              onClick={() => { setShowAddBoard(true); setEditingBoard(null); setBoardForm({ name: '', description: '', color: '#6366f1' }); }}
+              className="flex items-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              <Plus size={14} /> Novo Fluxo
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {boards.map(board => (
+              <div key={board.id} className={`flex items-center gap-4 p-4 rounded-xl border ${t.border} ${t.surface}`}>
+                <div className="w-8 h-8 rounded-lg flex-shrink-0" style={{ backgroundColor: board.color }} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`font-semibold text-sm ${t.text}`}>{board.name}</span>
+                    {board.is_default && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">Padrão</span>
+                    )}
+                  </div>
+                  {board.description && <p className={`text-xs ${t.textMuted} mt-0.5 truncate`}>{board.description}</p>}
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => { switchBoard(board.id); setView('board'); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium ${t.surfaceHover} ${t.textSub} hover:text-violet-600 border ${t.border} transition-colors`}
+                  >
+                    Abrir
+                  </button>
+                  <button onClick={() => openEditBoard(board)} className={`p-1.5 rounded-lg ${t.surfaceHover} ${t.textSub} hover:text-violet-600 transition-colors`}>
+                    <Pencil size={14} />
+                  </button>
+                  {!board.is_default && (
+                    <button onClick={() => deleteBoard(board)} className={`p-1.5 rounded-lg ${t.surfaceHover} ${t.textSub} hover:text-red-500 transition-colors`}>
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Board Form Modal */}
+          {(editingBoard || showAddBoard) && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+              <div className={`w-full max-w-md ${t.surface} rounded-2xl border ${t.border} shadow-2xl p-6`}>
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className={`font-bold ${t.text}`}>{editingBoard ? 'Editar Fluxo' : 'Novo Fluxo'}</h3>
+                  <button onClick={() => { setEditingBoard(null); setShowAddBoard(false); }} className={`p-1.5 rounded-lg ${t.surfaceHover} ${t.textSub}`}><X size={16} /></button>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Nome do Fluxo</label>
+                      <input value={boardForm.name} onChange={e => setBoardForm(p => ({ ...p, name: e.target.value }))}
+                        className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                        placeholder="Ex: Funil de Vendas" />
+                    </div>
+                    <div className="w-24">
+                      <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Cor</label>
+                      <input type="color" value={boardForm.color} onChange={e => setBoardForm(p => ({ ...p, color: e.target.value }))}
+                        className="w-full h-10 rounded-lg border cursor-pointer" style={{ borderColor: isDark ? '#374151' : '#e2e8f0' }} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Descrição (opcional)</label>
+                    <input value={boardForm.description} onChange={e => setBoardForm(p => ({ ...p, description: e.target.value }))}
+                      className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                      placeholder="Descreva o objetivo deste fluxo" />
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-5">
+                  <button onClick={() => { setEditingBoard(null); setShowAddBoard(false); }}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium ${t.border} ${t.textSub}`}>Cancelar</button>
+                  <button onClick={saveBoard} disabled={savingBoard}
+                    className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60">
+                    {savingBoard ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    Salvar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── SETTINGS VIEW ── */}
       {view === 'settings' && (
         <div className={`${t.surface} rounded-2xl border ${t.border} p-6`}>
           <div className="flex items-center justify-between mb-5">
-            <h2 className={`text-base font-bold ${t.text}`}>Etapas do Kanban</h2>
+            <div>
+              <h2 className={`text-base font-bold ${t.text}`}>Etapas do Kanban</h2>
+              {activeBoard && <p className={`text-xs ${t.textMuted} mt-0.5`}>Fluxo: {activeBoard.name} · Arraste para reordenar</p>}
+            </div>
             <button
               onClick={() => { setShowAddStage(true); setEditingStage(null); setStageForm({ name: '', color: '#6366f1', emoji: '📋', responsible: 'nos', description: '' }); }}
               className="flex items-center gap-2 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-lg transition-colors"
@@ -335,13 +632,24 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
             </button>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {stages.map((stage, idx) => (
-              <div key={stage.id} className={`flex items-center gap-4 p-4 rounded-xl border ${t.border} ${t.surface}`}>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg" style={{ backgroundColor: stage.color + '22' }}>
+              <div
+                key={stage.id}
+                draggable
+                onDragStart={e => handleStageDragStart(e, stage)}
+                onDragOver={e => handleStageDragOver(e, stage.id)}
+                onDrop={e => handleStageDrop(e, stage.id)}
+                onDragEnd={handleStageDragEnd}
+                className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${draggingStage?.id === stage.id ? 'opacity-40 scale-95' : ''} ${dragOverStageItem === stage.id && draggingStage?.id !== stage.id ? 'border-violet-400 bg-violet-50/10' : `${t.border} ${t.surface}`}`}
+              >
+                <div className={`cursor-grab active:cursor-grabbing ${t.textMuted} flex-shrink-0`}>
+                  <GripVertical size={16} />
+                </div>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg flex-shrink-0" style={{ backgroundColor: stage.color + '22' }}>
                   {stage.emoji}
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={`font-semibold text-sm ${t.text}`}>Etapa {idx + 1} — {stage.name}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${RESPONSIBLE_COLORS[stage.responsible] || 'bg-slate-100 text-slate-600'}`}>
@@ -350,12 +658,12 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                   </div>
                   {stage.description && <p className={`text-xs ${t.textMuted} mt-0.5`}>{stage.description}</p>}
                 </div>
-                <div className="w-4 h-4 rounded-full border-2 border-white shadow" style={{ backgroundColor: stage.color }} />
-                <div className="flex items-center gap-1">
+                <div className="w-4 h-4 rounded-full border-2 border-white shadow flex-shrink-0" style={{ backgroundColor: stage.color }} />
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <button onClick={() => openEditStage(stage)} className={`p-1.5 rounded-lg ${t.surfaceHover} ${t.textSub} hover:text-violet-600 transition-colors`}>
                     <Pencil size={14} />
                   </button>
-                  <button onClick={() => deleteStage(stage.id)} className={`p-1.5 rounded-lg ${t.surfaceHover} ${t.textSub} hover:text-red-500 transition-colors`}>
+                  <button onClick={() => openDeleteStage(stage)} className={`p-1.5 rounded-lg ${t.surfaceHover} ${t.textSub} hover:text-red-500 transition-colors`}>
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -420,12 +728,67 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
               </div>
             </div>
           )}
+
+          {/* Delete Stage Modal */}
+          {deletingStage && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+              <div className={`w-full max-w-md ${t.surface} rounded-2xl border ${t.border} shadow-2xl p-6`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+                    <Trash2 size={18} className="text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className={`font-bold ${t.text}`}>Excluir Etapa</h3>
+                    <p className={`text-xs ${t.textMuted}`}>"{deletingStage.name}"</p>
+                  </div>
+                </div>
+
+                {(() => {
+                  const count = cards.filter(c => c.stage_id === deletingStage.id).length;
+                  const otherStages = stages.filter(s => s.id !== deletingStage.id);
+                  return count > 0 ? (
+                    <div className="space-y-3">
+                      <p className={`text-sm ${t.textSub}`}>
+                        Esta etapa tem <strong>{count} card{count > 1 ? 's' : ''}</strong>. Para onde deseja mover?
+                      </p>
+                      {otherStages.length > 0 ? (
+                        <select
+                          value={moveCardsTo}
+                          onChange={e => setMoveCardsTo(e.target.value)}
+                          className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-red-500`}
+                        >
+                          {otherStages.map(s => (
+                            <option key={s.id} value={s.id}>{s.emoji} {s.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <p className={`text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2`}>
+                          Não há outras etapas. Os cards serão excluídos junto.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className={`text-sm ${t.textSub}`}>Esta etapa está vazia. Confirma a exclusão?</p>
+                  );
+                })()}
+
+                <div className="flex gap-2 mt-5">
+                  <button onClick={() => setDeletingStage(null)}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium ${t.border} ${t.textSub}`}>Cancelar</button>
+                  <button onClick={confirmDeleteStage}
+                    className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium flex items-center justify-center gap-2">
+                    <Trash2 size={14} /> Excluir
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* ── BOARD VIEW ── */}
       {view === 'board' && (
-        <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: 'calc(100vh - 160px)' }}>
+        <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: 'calc(100vh - 200px)' }}>
           {stages.map(stage => {
             const sc = stageCards(stage.id);
             const isOver = dragOverStage === stage.id;
@@ -469,7 +832,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                 <div className="mx-4 h-0.5 rounded-full mb-3" style={{ backgroundColor: stage.color }} />
 
                 {/* Cards */}
-                <div className="flex-1 px-3 pb-3 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 260px)' }}>
+                <div className="flex-1 px-3 pb-3 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
                   {sc.map(card => (
                     <div
                       key={card.id}
@@ -480,7 +843,6 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                       className={`group relative rounded-xl border p-3 cursor-grab active:cursor-grabbing transition-all duration-150 ${t.cardBg} ${t.border} shadow-sm hover:shadow-md ${draggingCard?.id === card.id ? 'opacity-40 scale-95' : ''} ${dragOverCard === card.id ? 'border-t-2' : ''}`}
                       style={{ borderTopColor: dragOverCard === card.id ? stage.color : undefined }}
                     >
-                      {/* Drag handle */}
                       <div className={`absolute left-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-40 transition-opacity ${t.textMuted}`}>
                         <GripVertical size={12} />
                       </div>
@@ -525,7 +887,6 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                     </div>
                   ))}
 
-                  {/* Drop zone when empty */}
                   {sc.length === 0 && (
                     <div className={`rounded-xl border-2 border-dashed p-6 text-center transition-colors ${isOver ? 'border-current opacity-60' : `${isDark ? 'border-gray-800' : 'border-slate-200'} opacity-40`}`}
                       style={{ borderColor: isOver ? stage.color : undefined }}>
@@ -580,27 +941,28 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                       else setCardForm(p => ({ ...p, client_name: v }));
                     }}
                     className={`w-full pl-9 pr-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
-                    placeholder="Buscar ou digitar nome do cliente..."
+                    placeholder="Buscar ou digitar nome..."
                   />
-                  {searchingClients && <Loader2 size={13} className={`absolute right-3 top-1/2 -translate-y-1/2 animate-spin ${t.textMuted}`} />}
                 </div>
-                {clientSuggestions.length > 0 && !editingCard && (
-                  <div className={`absolute z-10 w-full mt-1 rounded-xl border shadow-xl overflow-hidden ${t.surface} ${t.border}`}>
+                {!editingCard && clientSuggestions.length > 0 && (
+                  <div className={`absolute z-10 w-full mt-1 ${t.surface} border ${t.border} rounded-xl shadow-xl overflow-hidden`}>
+                    {searchingClients && <div className={`px-3 py-2 text-xs ${t.textMuted}`}>Buscando...</div>}
                     {clientSuggestions.map((c: any) => (
-                      <button key={c.id} onClick={() => {
-                        setCardForm(p => ({
-                          ...p,
-                          client_name: c.name || c.email,
-                          client_email: c.email || '',
-                          cs_name: c.csName || '',
-                          sdr_name: c.sdrName || '',
-                        }));
-                        setClientSearch('');
-                        setClientSuggestions([]);
-                      }}
-                        className={`w-full text-left px-4 py-2.5 text-sm ${t.surfaceHover} transition-colors`}>
-                        <div className={`font-medium ${t.text}`}>{c.name || c.email}</div>
-                        {c.email && <div className={`text-xs ${t.textMuted}`}>{c.email}</div>}
+                      <button key={c.id} type="button"
+                        onClick={() => {
+                          setCardForm(p => ({ ...p, client_name: c.name || c.company_name || '', client_email: c.email || '' }));
+                          setClientSearch('');
+                          setClientSuggestions([]);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm ${t.surfaceHover} ${t.text} flex items-center gap-2`}
+                      >
+                        <div className="w-6 h-6 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                          {(c.name || c.company_name || '?').charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">{c.name || c.company_name}</div>
+                          {c.email && <div className={`text-xs ${t.textMuted} truncate`}>{c.email}</div>}
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -608,20 +970,20 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
               </div>
 
               <div>
-                <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>E-mail</label>
+                <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Email</label>
                 <input value={cardForm.client_email} onChange={e => setCardForm(p => ({ ...p, client_email: e.target.value }))}
                   className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
                   placeholder="email@cliente.com" />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
+              <div className="flex gap-3">
+                <div className="flex-1">
                   <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>CS Responsável</label>
                   <input value={cardForm.cs_name} onChange={e => setCardForm(p => ({ ...p, cs_name: e.target.value }))}
                     className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
                     placeholder="Nome do CS" />
                 </div>
-                <div>
+                <div className="flex-1">
                   <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>SDR</label>
                   <input value={cardForm.sdr_name} onChange={e => setCardForm(p => ({ ...p, sdr_name: e.target.value }))}
                     className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
@@ -633,8 +995,8 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                 <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Observações</label>
                 <textarea value={cardForm.notes} onChange={e => setCardForm(p => ({ ...p, notes: e.target.value }))}
                   rows={3}
-                  className={`w-full px-3 py-2 rounded-lg border text-sm resize-none ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
-                  placeholder="Notas internas sobre este cliente..." />
+                  className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none`}
+                  placeholder="Notas sobre este cliente..." />
               </div>
             </div>
 
@@ -644,7 +1006,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
               <button onClick={saveCard} disabled={savingCard}
                 className="flex-1 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60">
                 {savingCard ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                {editingCard ? 'Salvar' : 'Adicionar'}
+                {editingCard ? 'Atualizar' : 'Adicionar'}
               </button>
             </div>
           </div>
