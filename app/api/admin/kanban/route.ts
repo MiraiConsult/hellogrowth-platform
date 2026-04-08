@@ -37,6 +37,36 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data });
     }
 
+    if (action === 'contacts') {
+      const cardId = searchParams.get('card_id');
+      if (!cardId) return NextResponse.json({ error: 'card_id required' }, { status: 400 });
+      const { data, error } = await supabase
+        .from('cs_contacts')
+        .select('*')
+        .eq('card_id', cardId)
+        .order('contact_date', { ascending: false });
+      if (error) throw error;
+      return NextResponse.json({ data });
+    }
+
+    if (action === 'alerts') {
+      const today = new Date().toISOString().split('T')[0];
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      // Cards with overdue next_contact_date
+      const { data: overdue } = await supabase
+        .from('kanban_cards')
+        .select('*')
+        .not('next_contact_date', 'is', null)
+        .lte('next_contact_date', today)
+        .order('next_contact_date', { ascending: true });
+      // Cards due today
+      const { data: dueToday } = await supabase
+        .from('kanban_cards')
+        .select('*')
+        .eq('next_contact_date', today);
+      return NextResponse.json({ overdue: overdue || [], dueToday: dueToday || [] });
+    }
+
     // all — boards + stages + cards together
     const [boardsRes, stagesRes, cardsRes] = await Promise.all([
       supabase.from('kanban_boards').select('*').order('position', { ascending: true }),
@@ -107,6 +137,21 @@ export async function POST(req: NextRequest) {
         .select()
         .single();
       if (error) throw error;
+      return NextResponse.json({ data: created });
+    }
+
+    if (type === 'contact') {
+      const { card_id, contact_date, contact_type, responsible, notes, next_contact_date } = data;
+      const { data: created, error } = await supabase
+        .from('cs_contacts')
+        .insert([{ card_id, contact_date, contact_type, responsible, notes, next_contact_date }])
+        .select()
+        .single();
+      if (error) throw error;
+      // Also update card's next_contact_date if provided
+      if (next_contact_date) {
+        await supabase.from('kanban_cards').update({ next_contact_date, updated_at: new Date().toISOString() }).eq('id', card_id);
+      }
       return NextResponse.json({ data: created });
     }
 
@@ -215,6 +260,12 @@ export async function DELETE(req: NextRequest) {
 
     if (type === 'card') {
       const { error } = await supabase.from('kanban_cards').delete().eq('id', id);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (type === 'contact') {
+      const { error } = await supabase.from('cs_contacts').delete().eq('id', id);
       if (error) throw error;
       return NextResponse.json({ ok: true });
     }

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Plus, Settings, Trash2, X, GripVertical, User, ChevronDown,
+  Plus, Trash2, X, GripVertical, ChevronDown,
   ChevronUp, Pencil, Check, AlertCircle, Loader2, Search,
-  Kanban, SlidersHorizontal, ArrowLeft, LayoutDashboard, ChevronRight,
+  Kanban, SlidersHorizontal, LayoutDashboard,
+  Phone, MessageCircle, Video, Mail, Calendar, Clock,
+  ArrowRightCircle, Bell, HeartHandshake, ChevronRight,
 } from 'lucide-react';
 
 interface Board {
@@ -36,8 +38,22 @@ interface Card {
   sdr_name?: string;
   notes?: string;
   position: number;
+  next_contact_date?: string;
+  contact_frequency?: string;
+  health_status?: string;
   created_at: string;
   updated_at: string;
+}
+
+interface CSContact {
+  id: string;
+  card_id: string;
+  contact_date: string;
+  contact_type: string;
+  responsible?: string;
+  notes?: string;
+  next_contact_date?: string;
+  created_at: string;
 }
 
 interface AdminKanbanProps {
@@ -110,6 +126,38 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   const [showAddBoard, setShowAddBoard] = useState(false);
   const [savingBoard, setSavingBoard] = useState(false);
 
+  // CS Acompanhamento
+  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [cardContacts, setCardContacts] = useState<CSContact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [contactForm, setContactForm] = useState({
+    contact_date: new Date().toISOString().split('T')[0],
+    contact_type: 'whatsapp',
+    responsible: '',
+    notes: '',
+    next_contact_date: '',
+  });
+  const [savingContact, setSavingContact] = useState(false);
+  const [cardTab, setCardTab] = useState<'info' | 'cs'>('info');
+
+  // Move to another board
+  const [movingCard, setMovingCard] = useState<Card | null>(null);
+  const [moveTargetBoardId, setMoveTargetBoardId] = useState('');
+  const [moveTargetStageId, setMoveTargetStageId] = useState('');
+  const [moveTargetStages, setMoveTargetStages] = useState<Stage[]>([]);
+  const [loadingMoveStages, setLoadingMoveStages] = useState(false);
+
+  // Alerts
+  const [alerts, setAlerts] = useState<{ overdue: Card[]; dueToday: Card[] }>({ overdue: [], dueToday: [] });
+  const [showAlerts, setShowAlerts] = useState(false);
+
+  // Card Detail / CS Modal (unified)
+  const [detailCard, setDetailCard] = useState<Card | null>(null);
+  const [detailContacts, setDetailContacts] = useState<CSContact[]>([]);
+  const [detailTab, setDetailTab] = useState<'cs' | 'info'>('cs');
+  const [csConfig, setCsConfig] = useState({ next_contact_date: '', contact_frequency: 'weekly' });
+  const [savingCs, setSavingCs] = useState(false);
+
   // Client search for add card
   const [clientSearch, setClientSearch] = useState('');
   const [clientSuggestions, setClientSuggestions] = useState<any[]>([]);
@@ -149,6 +197,23 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Calculate alerts whenever cards change
+  useEffect(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const overdue = cards.filter(c => {
+      if (!c.next_contact_date) return false;
+      const d = new Date(c.next_contact_date + 'T00:00:00');
+      return d < today;
+    });
+    const dueToday = cards.filter(c => {
+      if (!c.next_contact_date) return false;
+      const d = new Date(c.next_contact_date + 'T00:00:00');
+      return d.getTime() === today.getTime();
+    });
+    setAlerts({ overdue, dueToday });
+  }, [cards]);
 
   const switchBoard = async (boardId: string) => {
     setActiveBoardId(boardId);
@@ -344,6 +409,146 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     } catch { showToast('error', 'Erro ao remover card'); fetchData(activeBoardId || undefined); }
   };
 
+  // ── CS ACOMPANHAMENTO ──────────────────────────────────────────────────────
+  const openCardDetail = async (card: Card) => {
+    setDetailCard(card);
+    setDetailTab('cs');
+    setCsConfig({
+      next_contact_date: card.next_contact_date || '',
+      contact_frequency: card.contact_frequency || 'weekly',
+    });
+    setContactForm({
+      contact_date: new Date().toISOString().split('T')[0],
+      contact_type: 'whatsapp',
+      responsible: card.cs_name || '',
+      notes: '',
+      next_contact_date: '',
+    });
+    setLoadingContacts(true);
+    setDetailContacts([]);
+    try {
+      const res = await fetch(`/api/admin/kanban?action=contacts&card_id=${card.id}`);
+      const data = await res.json();
+      setDetailContacts(data.data || []);
+    } catch { setDetailContacts([]); }
+    finally { setLoadingContacts(false); }
+  };
+
+  const saveCsConfig = async () => {
+    if (!detailCard) return;
+    setSavingCs(true);
+    try {
+      const res = await fetch('/api/admin/kanban', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'card',
+          id: detailCard.id,
+          next_contact_date: csConfig.next_contact_date || null,
+          contact_frequency: csConfig.contact_frequency,
+        }),
+      });
+      const data = await res.json();
+      const updated = { ...detailCard, ...data.data };
+      setDetailCard(updated);
+      setCards(prev => prev.map(c => c.id === detailCard.id ? updated : c));
+      showToast('success', 'Configuração de contato salva!');
+    } catch { showToast('error', 'Erro ao salvar configuração'); }
+    finally { setSavingCs(false); }
+  };
+
+  const saveContact = async () => {
+    if (!detailCard) return;
+    setSavingContact(true);
+    try {
+      const res = await fetch('/api/admin/kanban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'contact', card_id: detailCard.id, ...contactForm }),
+      });
+      const data = await res.json();
+      setDetailContacts(prev => [data.data, ...prev]);
+      setContactForm(p => ({ ...p, notes: '' }));
+      showToast('success', 'Contato registrado!');
+    } catch { showToast('error', 'Erro ao registrar contato'); }
+    finally { setSavingContact(false); }
+  };
+
+  const deleteContact = async (contactId: string) => {
+    setDetailContacts(prev => prev.filter(c => c.id !== contactId));
+    try {
+      await fetch(`/api/admin/kanban?type=contact&id=${contactId}`, { method: 'DELETE' });
+    } catch { showToast('error', 'Erro ao remover contato'); }
+  };
+
+  const getHealthStatus = (card: Card): 'green' | 'yellow' | 'red' | 'none' => {
+    if (!card.next_contact_date) return 'none';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const next = new Date(card.next_contact_date + 'T00:00:00');
+    const diffDays = Math.floor((next.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays > 1) return 'green';
+    if (diffDays >= -7) return 'yellow';
+    return 'red';
+  };
+
+  const healthColors = {
+    green: 'bg-emerald-500',
+    yellow: 'bg-amber-400',
+    red: 'bg-red-500',
+    none: 'bg-slate-300',
+  };
+
+  const healthLabels = {
+    green: 'Em dia',
+    yellow: 'Atenção',
+    red: 'Atrasado',
+    none: 'Sem agendamento',
+  };
+
+  // ── MOVE TO ANOTHER BOARD ────────────────────────────────────────────────────
+  const openMoveCard = async (card: Card) => {
+    setMovingCard(card);
+    setMoveTargetBoardId('');
+    setMoveTargetStageId('');
+    setMoveTargetStages([]);
+  };
+
+  const loadMoveTargetStages = async (boardId: string) => {
+    setMoveTargetBoardId(boardId);
+    setMoveTargetStageId('');
+    setLoadingMoveStages(true);
+    try {
+      const res = await fetch(`/api/admin/kanban?action=stages&board_id=${boardId}`);
+      const data = await res.json();
+      setMoveTargetStages(data.data || []);
+    } catch { setMoveTargetStages([]); }
+    finally { setLoadingMoveStages(false); }
+  };
+
+  const confirmMoveCard = async () => {
+    if (!movingCard || !moveTargetBoardId) return;
+    setSavingCard(true);
+    try {
+      // Get first stage of target board
+      const res = await fetch(`/api/admin/kanban?action=stages&board_id=${moveTargetBoardId}`);
+      const data = await res.json();
+      const targetStages: Stage[] = data.data || [];
+      const firstStage = targetStages[0];
+      if (!firstStage) { showToast('error', 'O fluxo de destino não tem etapas'); setSavingCard(false); return; }
+      await fetch('/api/admin/kanban', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'card', id: movingCard.id, stage_id: firstStage.id, board_id: moveTargetBoardId }),
+      });
+      setCards(prev => prev.filter(c => c.id !== movingCard.id));
+      setMovingCard(null);
+      setDetailCard(null);
+      showToast('success', `Cliente movido para "${boards.find(b => b.id === moveTargetBoardId)?.name || 'outro fluxo'}"`!);
+    } catch { showToast('error', 'Erro ao mover cliente'); }
+    finally { setSavingCard(false); }
+  };
+
   // ── STAGES CRUD ──────────────────────────────────────────────────────────────
   const openEditStage = (stage: Stage) => {
     setEditingStage(stage);
@@ -489,6 +694,18 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {(alerts.overdue.length > 0 || alerts.dueToday.length > 0) && (
+            <button
+              onClick={() => setShowAlerts(!showAlerts)}
+              className={`relative flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${showAlerts ? 'bg-amber-500 text-white border-amber-500' : 'border-amber-300 text-amber-600 hover:bg-amber-50'}`}
+            >
+              <Bell size={15} />
+              Alertas
+              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
+                {alerts.overdue.length + alerts.dueToday.length}
+              </span>
+            </button>
+          )}
           <button
             onClick={() => setView(view === 'boards' ? 'board' : 'boards')}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${view === 'boards' ? 'bg-indigo-600 text-white border-indigo-600' : `${t.border} ${t.textSub} hover:text-indigo-600`}`}
@@ -505,6 +722,59 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
           </button>
         </div>
       </div>
+
+      {/* Alerts Panel */}
+      {showAlerts && view === 'board' && (
+        <div className={`mb-4 ${t.surface} rounded-2xl border border-amber-200 p-4`}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className={`text-sm font-bold ${t.text} flex items-center gap-2`}>
+              <Bell size={14} className="text-amber-500" />
+              Alertas de Contato
+            </h3>
+            <button onClick={() => setShowAlerts(false)} className={`p-1 rounded ${t.surfaceHover} ${t.textMuted}`}><X size={14} /></button>
+          </div>
+          {alerts.overdue.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs font-semibold text-red-600 mb-2">🔴 Contato atrasado ({alerts.overdue.length})</p>
+              <div className="space-y-1">
+                {alerts.overdue.map(card => (
+                  <button key={card.id} onClick={() => openCardDetail(card)}
+                    className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${t.surfaceHover} border ${t.border} transition-colors`}>
+                    <div className="w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      {card.client_name.charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className={`font-medium ${t.text} truncate block`}>{card.client_name}</span>
+                      <span className="text-xs text-red-500">Próximo contato: {card.next_contact_date ? new Date(card.next_contact_date + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</span>
+                    </div>
+                    <ChevronRight size={14} className={t.textMuted} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {alerts.dueToday.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-amber-600 mb-2">🟡 Contato hoje ({alerts.dueToday.length})</p>
+              <div className="space-y-1">
+                {alerts.dueToday.map(card => (
+                  <button key={card.id} onClick={() => openCardDetail(card)}
+                    className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${t.surfaceHover} border ${t.border} transition-colors`}>
+                    <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      {card.client_name.charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className={`font-medium ${t.text} truncate block`}>{card.client_name}</span>
+                      <span className="text-xs text-amber-500">Contato agendado para hoje</span>
+                    </div>
+                    <ChevronRight size={14} className={t.textMuted} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Board tabs */}
       {view === 'board' && boards.length > 1 && (
@@ -860,7 +1130,11 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                             </div>
                           </div>
                           <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => openCardDetail(card)} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-emerald-600`} title="Acompanhamento CS"><HeartHandshake size={11} /></button>
                             <button onClick={() => openEditCard(card)} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-violet-600`}><Pencil size={11} /></button>
+                            {stages[stages.length - 1]?.id === stage.id && boards.length > 1 && (
+                              <button onClick={() => openMoveCard(card)} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-indigo-600`} title="Mover para outro fluxo"><ArrowRightCircle size={11} /></button>
+                            )}
                             <button onClick={() => deleteCard(card.id)} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-red-500`}><Trash2 size={11} /></button>
                           </div>
                         </div>
@@ -882,6 +1156,16 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
 
                         {card.notes && (
                           <p className={`text-xs ${t.textMuted} mt-2 line-clamp-2 italic`}>{card.notes}</p>
+                        )}
+
+                        {/* Health indicator */}
+                        {card.next_contact_date && (
+                          <div className="flex items-center gap-1.5 mt-2">
+                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${healthColors[getHealthStatus(card)]}`} />
+                            <span className={`text-xs ${t.textMuted}`}>
+                              {healthLabels[getHealthStatus(card)]} · {new Date(card.next_contact_date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                            </span>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1007,6 +1291,214 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                 className="flex-1 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60">
                 {savingCard ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 {editingCard ? 'Atualizar' : 'Adicionar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── CARD DETAIL / CS MODAL ── */}
+      {detailCard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-2xl ${t.surface} rounded-2xl border ${t.border} shadow-2xl flex flex-col`} style={{ maxHeight: '90vh' }}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b" style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold"
+                  style={{ backgroundColor: stages.find(s => s.id === detailCard.stage_id)?.color || '#6366f1' }}>
+                  {detailCard.client_name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className={`font-bold ${t.text}`}>{detailCard.client_name}</h3>
+                  <p className={`text-xs ${t.textMuted}`}>{detailCard.client_email || 'Sem email'} · {stages.find(s => s.id === detailCard.stage_id)?.name}</p>
+                </div>
+              </div>
+              <button onClick={() => { setDetailCard(null); setDetailContacts([]); }} className={`p-1.5 rounded-lg ${t.surfaceHover} ${t.textSub}`}><X size={16} /></button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b" style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
+              {(['cs', 'info'] as const).map(tab => (
+                <button key={tab} onClick={() => setDetailTab(tab)}
+                  className={`px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                    detailTab === tab ? 'border-emerald-500 text-emerald-600' : `border-transparent ${t.textSub} hover:${t.text}`
+                  }`}>
+                  {tab === 'cs' ? '💚 Acompanhamento CS' : '📋 Informações'}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {detailTab === 'cs' && (
+                <div className="space-y-5">
+                  {/* CS Config */}
+                  <div className={`p-4 rounded-xl border ${t.border} space-y-3`}>
+                    <h4 className={`text-sm font-semibold ${t.text} flex items-center gap-2`}><Calendar size={14} className="text-emerald-500" /> Configuração de Contato</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Próximo Contato</label>
+                        <input type="date" value={csConfig.next_contact_date}
+                          onChange={e => setCsConfig(p => ({ ...p, next_contact_date: e.target.value }))}
+                          className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-emerald-500`} />
+                      </div>
+                      <div>
+                        <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Frequência</label>
+                        <select value={csConfig.contact_frequency}
+                          onChange={e => setCsConfig(p => ({ ...p, contact_frequency: e.target.value }))}
+                          className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-emerald-500`}>
+                          <option value="weekly">Semanal</option>
+                          <option value="biweekly">Quinzenal</option>
+                          <option value="monthly">Mensal</option>
+                        </select>
+                      </div>
+                    </div>
+                    <button onClick={saveCsConfig} disabled={savingCs}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-60">
+                      {savingCs ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                      Salvar Configuração
+                    </button>
+                  </div>
+
+                  {/* New Contact Log */}
+                  <div className={`p-4 rounded-xl border ${t.border} space-y-3`}>
+                    <h4 className={`text-sm font-semibold ${t.text} flex items-center gap-2`}><Phone size={14} className="text-blue-500" /> Registrar Contato</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Data</label>
+                        <input type="date" value={contactForm.contact_date}
+                          onChange={e => setContactForm(p => ({ ...p, contact_date: e.target.value }))}
+                          className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-blue-500`} />
+                      </div>
+                      <div>
+                        <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Tipo</label>
+                        <select value={contactForm.contact_type}
+                          onChange={e => setContactForm(p => ({ ...p, contact_type: e.target.value }))}
+                          className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-blue-500`}>
+                          <option value="call">📞 Ligação</option>
+                          <option value="whatsapp">💬 WhatsApp</option>
+                          <option value="meeting">🎥 Reunião</option>
+                          <option value="email">📧 Email</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Responsável</label>
+                      <input value={contactForm.responsible}
+                        onChange={e => setContactForm(p => ({ ...p, responsible: e.target.value }))}
+                        className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                        placeholder="Nome do responsável" />
+                    </div>
+                    <div>
+                      <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Observações</label>
+                      <textarea value={contactForm.notes}
+                        onChange={e => setContactForm(p => ({ ...p, notes: e.target.value }))}
+                        rows={2}
+                        className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none`}
+                        placeholder="O que foi discutido?" />
+                    </div>
+                    <button onClick={saveContact} disabled={savingContact}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-60">
+                      {savingContact ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                      Registrar Contato
+                    </button>
+                  </div>
+
+                  {/* Contact History */}
+                  <div>
+                    <h4 className={`text-sm font-semibold ${t.text} mb-3 flex items-center gap-2`}><Clock size={14} className="text-slate-400" /> Histórico de Contatos</h4>
+                    {loadingContacts ? (
+                      <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin text-slate-400" /></div>
+                    ) : detailContacts.length === 0 ? (
+                      <div className={`text-center py-8 ${t.textMuted} text-sm`}>Nenhum contato registrado ainda.</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {detailContacts.map(contact => (
+                          <div key={contact.id} className={`flex items-start gap-3 p-3 rounded-xl border ${t.border} ${t.surface}`}>
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#6366f122' }}>
+                              {contact.contact_type === 'call' && <Phone size={14} className="text-indigo-500" />}
+                              {contact.contact_type === 'whatsapp' && <MessageCircle size={14} className="text-emerald-500" />}
+                              {contact.contact_type === 'meeting' && <Video size={14} className="text-blue-500" />}
+                              {contact.contact_type === 'email' && <Mail size={14} className="text-amber-500" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className={`text-sm font-medium ${t.text}`}>
+                                  {contact.contact_type === 'call' ? 'Ligação' : contact.contact_type === 'whatsapp' ? 'WhatsApp' : contact.contact_type === 'meeting' ? 'Reunião' : 'Email'}
+                                  {contact.responsible_name && ` · ${contact.responsible_name}`}
+                                </span>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <span className={`text-xs ${t.textMuted}`}>{new Date(contact.contact_date + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                                  <button onClick={() => deleteContact(contact.id)} className={`p-1 rounded ${t.surfaceHover} ${t.textMuted} hover:text-red-500`}><Trash2 size={11} /></button>
+                                </div>
+                              </div>
+                              {contact.notes && <p className={`text-xs ${t.textMuted} mt-0.5`}>{contact.notes}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {detailTab === 'info' && (
+                <div className="space-y-3">
+                  <div className={`p-4 rounded-xl border ${t.border}`}>
+                    <p className={`text-xs font-medium ${t.textSub} mb-1`}>Email</p>
+                    <p className={`text-sm ${t.text}`}>{detailCard.client_email || '—'}</p>
+                  </div>
+                  <div className={`p-4 rounded-xl border ${t.border}`}>
+                    <p className={`text-xs font-medium ${t.textSub} mb-1`}>CS Responsável</p>
+                    <p className={`text-sm ${t.text}`}>{detailCard.cs_name || '—'}</p>
+                  </div>
+                  <div className={`p-4 rounded-xl border ${t.border}`}>
+                    <p className={`text-xs font-medium ${t.textSub} mb-1`}>SDR</p>
+                    <p className={`text-sm ${t.text}`}>{detailCard.sdr_name || '—'}</p>
+                  </div>
+                  {detailCard.notes && (
+                    <div className={`p-4 rounded-xl border ${t.border}`}>
+                      <p className={`text-xs font-medium ${t.textSub} mb-1`}>Observações</p>
+                      <p className={`text-sm ${t.text}`}>{detailCard.notes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MOVE TO BOARD MODAL ── */}
+      {movingCard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-md ${t.surface} rounded-2xl border ${t.border} shadow-2xl p-6`}>
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className={`font-bold ${t.text}`}>Mover para outro Fluxo</h3>
+                <p className={`text-xs ${t.textMuted} mt-0.5`}>{movingCard.client_name}</p>
+              </div>
+              <button onClick={() => setMovingCard(null)} className={`p-1.5 rounded-lg ${t.surfaceHover} ${t.textSub}`}><X size={16} /></button>
+            </div>
+            <div className="space-y-2 mb-5">
+              {boards.filter(b => b.id !== activeBoardId).map(board => (
+                <button key={board.id} onClick={() => setMoveTargetBoardId(board.id)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors ${
+                    moveTargetBoardId === board.id
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                      : `${t.border} ${t.surfaceHover}`
+                  }`}>
+                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: board.color || '#6366f1' }} />
+                  <span className={`text-sm font-medium ${t.text}`}>{board.name}</span>
+                  {moveTargetBoardId === board.id && <Check size={14} className="ml-auto text-indigo-600" />}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setMovingCard(null)}
+                className={`flex-1 py-2 rounded-lg border text-sm font-medium ${t.border} ${t.textSub}`}>Cancelar</button>
+              <button onClick={confirmMoveCard} disabled={!moveTargetBoardId || savingCard}
+                className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60">
+                {savingCard ? <Loader2 size={14} className="animate-spin" /> : <ArrowRightCircle size={14} />}
+                Mover
               </button>
             </div>
           </div>
