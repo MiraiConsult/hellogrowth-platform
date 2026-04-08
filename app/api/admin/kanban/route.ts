@@ -49,6 +49,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data });
     }
 
+    if (action === 'colaboradores') {
+      const { data, error } = await supabase
+        .from('colaboradores')
+        .select('id, name, role, phone')
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return NextResponse.json({ data });
+    }
+
     if (action === 'alerts') {
       const today = new Date().toISOString().split('T')[0];
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];

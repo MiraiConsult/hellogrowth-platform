@@ -34,6 +34,7 @@ interface Card {
   user_id?: string;
   client_name: string;
   client_email?: string;
+  client_phone?: string;
   cs_name?: string;
   sdr_name?: string;
   notes?: string;
@@ -54,6 +55,13 @@ interface CSContact {
   notes?: string;
   next_contact_date?: string;
   created_at: string;
+}
+
+interface Colaborador {
+  id: string;
+  name: string;
+  role: string;
+  phone?: string;
 }
 
 interface AdminKanbanProps {
@@ -158,6 +166,13 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   const [csConfig, setCsConfig] = useState({ next_contact_date: '', contact_frequency: 'weekly' });
   const [savingCs, setSavingCs] = useState(false);
 
+  // Colaboradores
+  const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
+
+  // Info form (aba Informações do modal CS)
+  const [infoForm, setInfoForm] = useState({ cs_name: '', sdr_name: '', client_phone: '', notes: '' });
+  const [savingInfo, setSavingInfo] = useState(false);
+
   // Client search for add card
   const [clientSearch, setClientSearch] = useState('');
   const [clientSuggestions, setClientSuggestions] = useState<any[]>([]);
@@ -197,6 +212,18 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Fetch colaboradores once on mount
+  useEffect(() => {
+    const fetchColaboradores = async () => {
+      try {
+        const res = await fetch('/api/admin/kanban?action=colaboradores');
+        const data = await res.json();
+        setColaboradores(data.data || []);
+      } catch { /* silent */ }
+    };
+    fetchColaboradores();
+  }, []);
 
   // Calculate alerts whenever cards change
   useEffect(() => {
@@ -410,12 +437,23 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   };
 
   // ── CS ACOMPANHAMENTO ──────────────────────────────────────────────────────
+  // Calculate next contact date based on frequency
+  const calcNextContactDate = (frequency: string): string => {
+    const today = new Date();
+    const days = frequency === 'weekly' ? 7 : frequency === 'biweekly' ? 15 : frequency === 'monthly' ? 30 : frequency === 'quarterly' ? 90 : 7;
+    today.setDate(today.getDate() + days);
+    return today.toISOString().split('T')[0];
+  };
+
   const openCardDetail = async (card: Card) => {
     setDetailCard(card);
     setDetailTab('cs');
+    const freq = card.contact_frequency || 'weekly';
+    // If no next_contact_date set yet, auto-calculate based on frequency
+    const nextDate = card.next_contact_date || calcNextContactDate(freq);
     setCsConfig({
-      next_contact_date: card.next_contact_date || '',
-      contact_frequency: card.contact_frequency || 'weekly',
+      next_contact_date: nextDate,
+      contact_frequency: freq,
     });
     setContactForm({
       contact_date: new Date().toISOString().split('T')[0],
@@ -423,6 +461,12 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       responsible: card.cs_name || '',
       notes: '',
       next_contact_date: '',
+    });
+    setInfoForm({
+      cs_name: card.cs_name || '',
+      sdr_name: card.sdr_name || '',
+      client_phone: card.client_phone || '',
+      notes: card.notes || '',
     });
     setLoadingContacts(true);
     setDetailContacts([]);
@@ -472,6 +516,31 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       showToast('success', 'Contato registrado!');
     } catch { showToast('error', 'Erro ao registrar contato'); }
     finally { setSavingContact(false); }
+  };
+
+  const saveInfoForm = async () => {
+    if (!detailCard) return;
+    setSavingInfo(true);
+    try {
+      const res = await fetch('/api/admin/kanban', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'card',
+          id: detailCard.id,
+          cs_name: infoForm.cs_name || null,
+          sdr_name: infoForm.sdr_name || null,
+          client_phone: infoForm.client_phone || null,
+          notes: infoForm.notes || null,
+        }),
+      });
+      const data = await res.json();
+      const updated = { ...detailCard, ...data.data };
+      setDetailCard(updated);
+      setCards(prev => prev.map(c => c.id === detailCard.id ? updated : c));
+      showToast('success', 'Informações salvas!');
+    } catch { showToast('error', 'Erro ao salvar informações'); }
+    finally { setSavingInfo(false); }
   };
 
   const deleteContact = async (contactId: string) => {
@@ -1343,11 +1412,20 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                       <div>
                         <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Frequência</label>
                         <select value={csConfig.contact_frequency}
-                          onChange={e => setCsConfig(p => ({ ...p, contact_frequency: e.target.value }))}
+                          onChange={e => {
+                            const newFreq = e.target.value;
+                            setCsConfig(p => ({
+                              ...p,
+                              contact_frequency: newFreq,
+                              // Auto-recalculate next date when frequency changes
+                              next_contact_date: calcNextContactDate(newFreq),
+                            }));
+                          }}
                           className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-emerald-500`}>
-                          <option value="weekly">Semanal</option>
-                          <option value="biweekly">Quinzenal</option>
-                          <option value="monthly">Mensal</option>
+                          <option value="weekly">Semanal (7 dias)</option>
+                          <option value="biweekly">Quinzenal (15 dias)</option>
+                          <option value="monthly">Mensal (30 dias)</option>
+                          <option value="quarterly">Trimestral (90 dias)</option>
                         </select>
                       </div>
                     </div>
@@ -1382,10 +1460,14 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                     </div>
                     <div>
                       <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Responsável</label>
-                      <input value={contactForm.responsible}
+                      <select value={contactForm.responsible}
                         onChange={e => setContactForm(p => ({ ...p, responsible: e.target.value }))}
-                        className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                        placeholder="Nome do responsável" />
+                        className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-blue-500`}>
+                        <option value="">Selecionar responsável...</option>
+                        {colaboradores.map(col => (
+                          <option key={col.id} value={col.name}>{col.name} ({col.role === 'cs' ? 'CS' : col.role === 'sdr' ? 'SDR' : col.role})</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Observações</label>
@@ -1441,25 +1523,63 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
               )}
 
               {detailTab === 'info' && (
-                <div className="space-y-3">
+                <div className="space-y-4">
+                  {/* Email (read-only) */}
                   <div className={`p-4 rounded-xl border ${t.border}`}>
                     <p className={`text-xs font-medium ${t.textSub} mb-1`}>Email</p>
                     <p className={`text-sm ${t.text}`}>{detailCard.client_email || '—'}</p>
                   </div>
-                  <div className={`p-4 rounded-xl border ${t.border}`}>
-                    <p className={`text-xs font-medium ${t.textSub} mb-1`}>CS Responsável</p>
-                    <p className={`text-sm ${t.text}`}>{detailCard.cs_name || '—'}</p>
+
+                  {/* Telefone */}
+                  <div>
+                    <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Telefone / WhatsApp</label>
+                    <input value={infoForm.client_phone}
+                      onChange={e => setInfoForm(p => ({ ...p, client_phone: e.target.value }))}
+                      className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                      placeholder="(47) 99999-9999" />
                   </div>
-                  <div className={`p-4 rounded-xl border ${t.border}`}>
-                    <p className={`text-xs font-medium ${t.textSub} mb-1`}>SDR</p>
-                    <p className={`text-sm ${t.text}`}>{detailCard.sdr_name || '—'}</p>
+
+                  {/* CS Responsável */}
+                  <div>
+                    <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>CS Responsável</label>
+                    <select value={infoForm.cs_name}
+                      onChange={e => setInfoForm(p => ({ ...p, cs_name: e.target.value }))}
+                      className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}>
+                      <option value="">Selecionar CS...</option>
+                      {colaboradores.filter(c => c.role === 'cs' || c.role === 'gerente').map(col => (
+                        <option key={col.id} value={col.name}>{col.name}</option>
+                      ))}
+                    </select>
                   </div>
-                  {detailCard.notes && (
-                    <div className={`p-4 rounded-xl border ${t.border}`}>
-                      <p className={`text-xs font-medium ${t.textSub} mb-1`}>Observações</p>
-                      <p className={`text-sm ${t.text}`}>{detailCard.notes}</p>
-                    </div>
-                  )}
+
+                  {/* SDR */}
+                  <div>
+                    <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>SDR</label>
+                    <select value={infoForm.sdr_name}
+                      onChange={e => setInfoForm(p => ({ ...p, sdr_name: e.target.value }))}
+                      className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}>
+                      <option value="">Selecionar SDR...</option>
+                      {colaboradores.filter(c => c.role === 'sdr' || c.role === 'gerente').map(col => (
+                        <option key={col.id} value={col.name}>{col.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Observações */}
+                  <div>
+                    <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Observações</label>
+                    <textarea value={infoForm.notes}
+                      onChange={e => setInfoForm(p => ({ ...p, notes: e.target.value }))}
+                      rows={3}
+                      className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none`}
+                      placeholder="Notas sobre este cliente..." />
+                  </div>
+
+                  <button onClick={saveInfoForm} disabled={savingInfo}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-60">
+                    {savingInfo ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                    Salvar Informações
+                  </button>
                 </div>
               )}
             </div>
