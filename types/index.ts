@@ -56,13 +56,14 @@ export interface Lead {
   name: string;
   email: string;
   phone?: string; // Added phone field
-  status: 'Novo' | 'Em Contato' | 'Negociação' | 'Vendido' | 'Perdido';
+  status: string; // Dynamic - matches stage name in the board
   value: number;
   date: string;
   formSource: string;
   answers?: Record<string, any>; // Stores the form answers
   formId?: string; // Linked to Form ID
   notes?: string; // New field for internal CRM notes
+  board_id?: string; // Linked to a Kanban board
 }
 
 export interface NPSResponse {
