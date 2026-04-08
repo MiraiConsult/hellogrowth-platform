@@ -7,7 +7,7 @@ import {
   ExternalLink, Building2, AlertCircle, Search, ChevronRight, Copy,
   Zap, Star, UserPlus, DollarSign, Check, Moon, Sun, Send, BookOpen, Package, TrendingUp,
   LayoutDashboard, Brain, MessageSquare, ChevronLeft, BarChart3,
-  Activity, Heart, FileText, MessageCircle, UserCheck, UserCog, Kanban, Lock, Eye, EyeOff
+  Activity, Heart, FileText, MessageCircle, UserCheck, UserCog, Kanban, Lock, Eye, EyeOff, LogIn
 } from 'lucide-react';
 import AdminBroadcast from '@/components/AdminBroadcast';
 import AdminIntelligence from '@/components/AdminIntelligence';
@@ -66,6 +66,7 @@ interface Client {
 
 interface AdminUserManagementProps {
   onLogout: () => void;
+  onImpersonate?: (client: any) => void;
 }
 
 // ─── Theme tokens ─────────────────────────────────────────────────────────────
@@ -225,7 +226,7 @@ function PlanBadge({ plan }: { plan: string }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) => {
+const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onImpersonate }) => {
    // ── Theme ──
   const [isDark, setIsDark] = useState(true);
   const t = isDark ? DARK : LIGHT;
@@ -1226,6 +1227,15 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout }) =
                           <button onClick={() => handleResetPassword(client)} className={`p-1.5 ${t.textMuted} hover:text-amber-600 hover:${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg transition-colors`} title="Resetar senha">
                             <Key size={14} />
                           </button>
+                          {onImpersonate && (
+                            <button
+                              onClick={() => onImpersonate(client)}
+                              className={`p-1.5 ${t.textMuted} hover:text-blue-500 hover:${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg transition-colors`}
+                              title="Acessar como este cliente"
+                            >
+                              <LogIn size={14} />
+                            </button>
+                          )}
                           <button onClick={() => handleDeleteClient(client)} className={`p-1.5 ${t.textMuted} hover:text-red-500 hover:${isDark ? 'bg-gray-700' : 'bg-slate-100'} rounded-lg transition-colors`} title="Excluir">
                             <Trash2 size={14} />
                           </button>

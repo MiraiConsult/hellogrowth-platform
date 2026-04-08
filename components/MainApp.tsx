@@ -40,13 +40,15 @@ interface MainAppProps {
   currentUser: User;
   onLogout: () => void;
   onUpdatePlan: (plan: PlanType) => void;
+  onSwitchCompany?: (companyId: string) => void;
+  onImpersonate?: (clientData: any) => void;
   daysLeft?: number;
 }
 
-const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, daysLeft }) => {
+const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, onImpersonate, daysLeft }) => {
   // If Super Admin, show Admin Panel immediately
   if (currentUser.role === 'super_admin') {
-      return <AdminUserManagement onLogout={onLogout} />;
+      return <AdminUserManagement onLogout={onLogout} onImpersonate={onImpersonate} />;
   }
 
   // Views que NÃO devem ser persistidas na URL (públicas ou transitórias)

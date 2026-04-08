@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { LogIn, X } from 'lucide-react';
 import Auth from '@/components/Auth';
 import MainApp from '@/components/MainApp';
 import TrialExpiredScreen from '@/components/TrialExpiredScreen';
@@ -23,6 +24,8 @@ export default function HomePage() {
   const [view, setView] = useState<'auth' | 'app'>('auth');
   const [isLoading, setIsLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
+  // Impersonation: admin acessando conta de cliente
+  const [impersonating, setImpersonating] = useState<{ adminUser: User; clientName: string } | null>(null);
 
   // Check for active session on load
   useEffect(() => {
@@ -75,7 +78,64 @@ export default function HomePage() {
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('hg_current_user');
+    setImpersonating(null);
     setView('auth');
+  };
+
+  // Impersonation: admin entra na conta do cliente sem precisar de senha
+  const handleImpersonate = async (clientData: any) => {
+    if (!supabase || !currentUser) return;
+    try {
+      // Buscar dados completos do usuário cliente no banco
+      const { data: userData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', clientData.id)
+        .single();
+      if (!userData) return;
+
+      // Determinar o tenant_id do cliente
+      const clientTenantId = clientData.tenantId || userData.tenant_id;
+
+      // Montar o objeto User do cliente
+      const clientUser: User = {
+        id: userData.id,
+        name: userData.name,
+        email: userData.email,
+        password: '',
+        plan: userData.plan || 'growth',
+        createdAt: userData.created_at,
+        companyName: userData.company_name || clientData.companyName || '',
+        tenantId: clientTenantId,
+        isOwner: true,
+        role: 'admin',
+        trialEndAt: userData.trial_end_at,
+        trialModel: userData.trial_model,
+        subscriptionStatus: userData.subscription_status,
+      };
+
+      // Salvar admin para poder voltar
+      setImpersonating({ adminUser: currentUser, clientName: clientUser.name || clientUser.companyName || clientData.email });
+      // Limpar active company para forçar o carregamento do tenant do cliente
+      localStorage.removeItem('hg_active_company_id');
+      if (clientTenantId) {
+        localStorage.setItem('hg_active_company_id', clientTenantId);
+      }
+      setCurrentUser(clientUser);
+      setView('app');
+    } catch (err) {
+      console.error('Erro ao impersonar cliente:', err);
+    }
+  };
+
+  // Voltar ao painel admin após impersonation
+  const handleStopImpersonating = () => {
+    if (!impersonating) return;
+    const adminUser = impersonating.adminUser;
+    setImpersonating(null);
+    localStorage.removeItem('hg_active_company_id');
+    setCurrentUser(adminUser);
+    setView('app');
   };
 
   // Handle Company Switch
@@ -215,12 +275,33 @@ export default function HomePage() {
   }
 
   return (
-    <MainApp
-      currentUser={currentUser}
-      onLogout={handleLogout}
-      onUpdatePlan={handleUpdatePlan}
-      onSwitchCompany={handleSwitchCompany}
-      daysLeft={daysLeft}
-    />
+    <div className="relative">
+      {/* Banner de impersonation */}
+      {impersonating && (
+        <div className="fixed top-0 left-0 right-0 z-[9999] bg-blue-600 text-white flex items-center justify-between px-4 py-2 text-sm font-medium shadow-lg">
+          <div className="flex items-center gap-2">
+            <LogIn size={16} />
+            <span>Você está acessando como: <strong>{impersonating.clientName}</strong></span>
+          </div>
+          <button
+            onClick={handleStopImpersonating}
+            className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg transition-colors text-white font-semibold"
+          >
+            <X size={14} />
+            Voltar ao Admin
+          </button>
+        </div>
+      )}
+      {/* Espaço para o banner não sobrepor o conteúdo */}
+      {impersonating && <div className="h-10" />}
+      <MainApp
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        onUpdatePlan={handleUpdatePlan}
+        onSwitchCompany={handleSwitchCompany}
+        onImpersonate={handleImpersonate}
+        daysLeft={daysLeft}
+      />
+    </div>
   );
 }
