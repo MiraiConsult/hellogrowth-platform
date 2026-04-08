@@ -523,15 +523,29 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           
           const { data: campaign } = await supabase.from('campaigns').select('*').eq('id', surveyId).single();
           if (campaign) {
-             const safeCampaign = {
+              // Buscar business_profile ANTES de montar o safeCampaign para garantir que o
+              // google_place_id e google_redirect estejam corretos desde o primeiro render
+              const campaignTenantId = campaign.tenant_id || campaign.user_id;
+              const { data: bizProfile } = await supabase
+                .from('business_profile')
+                .select('company_name, google_place_id, logo_url')
+                .eq('tenant_id', campaignTenantId)
+                .maybeSingle();
+
+              // Place ID final: business_profile tem prioridade (mais atualizado)
+              const finalPlaceId = bizProfile?.google_place_id || campaign.google_place_id || '';
+              // Redirecionamento ativo se: campo google_redirect OU enable_redirection OU há Place ID no business_profile
+              const finalRedirect = !!(campaign.google_redirect || campaign.enable_redirection || bizProfile?.google_place_id);
+
+              const safeCampaign = {
                  ...campaign,
                  npsScore: campaign.nps_score,
-                 enableRedirection: campaign.enable_redirection,
+                 enableRedirection: finalRedirect,
                  questions: Array.isArray(campaign.questions) ? campaign.questions : [],
                  initialFields: campaign.initial_fields || [],
                  initial_fields: campaign.initial_fields || [],
-                 google_redirect: campaign.google_redirect || false,
-                 google_place_id: campaign.google_place_id || '',
+                 google_redirect: finalRedirect,
+                 google_place_id: finalPlaceId,
                  offer_prize: campaign.offer_prize || false,
                  before_google_message: campaign.before_google_message || '',
                  after_game_message: campaign.after_game_message || '',
@@ -539,39 +553,25 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
                  tone: campaign.tone || '',
                  evaluation_points: campaign.evaluation_points || []
              };
-              setPublicCampaign(safeCampaign);
-              
-              // Buscar nome da empresa pelo business_profile do tenant da campanha
-              // Isso garante que cada loja/empresa mostre seu próprio nome
-              const campaignTenantId = campaign.tenant_id || campaign.user_id;
-              const { data: bizProfile } = await supabase
-                .from('business_profile')
-                .select('company_name, google_place_id, logo_url')
-                .eq('tenant_id', campaignTenantId)
-                .maybeSingle();
-              
+
               if (bizProfile?.company_name) {
                 setPublicCompanyName(bizProfile.company_name);
                 setPublicLogoUrl((bizProfile as any).logo_url || '');
-                // Sempre usar o Place ID mais atualizado: business_profile tem prioridade sobre o salvo na campanha
-                // Isso garante que o redirecionamento funcione mesmo que a campanha tenha sido criada antes do Place ID ser cadastrado
-                const currentPlaceId = bizProfile.google_place_id || safeCampaign.google_place_id || '';
-                const ownerSettings = { ...mockSettings, companyName: bizProfile.company_name, placeId: currentPlaceId };
+                const ownerSettings = { ...mockSettings, companyName: bizProfile.company_name, placeId: finalPlaceId };
                 setPublicSettings(ownerSettings);
-                // Se o business_profile tem Place ID mas a campanha não, atualizar o safeCampaign
-                if (bizProfile.google_place_id) {
-                  setPublicCampaign({ ...safeCampaign, google_place_id: bizProfile.google_place_id, google_redirect: safeCampaign.google_redirect || !!bizProfile.google_place_id });
-                }
               } else {
                 // Fallback: buscar pelo user_id se não tiver business_profile
                 const { data: owner } = await supabase.from('users').select('settings, company_name').eq('id', campaign.user_id).single();
                 if (owner) {
                   const realName = owner.company_name || owner.settings?.companyName || 'Sua Empresa';
                   setPublicCompanyName(realName);
-                  const ownerSettings = { ...mockSettings, ...owner.settings, companyName: realName, placeId: owner.settings?.placeId };
+                  const ownerSettings = { ...mockSettings, ...owner.settings, companyName: realName, placeId: owner.settings?.placeId || finalPlaceId };
                   setPublicSettings(ownerSettings);
                 }
               }
+
+              // Definir publicCampaign apenas uma vez, já com todos os dados corretos
+              setPublicCampaign(safeCampaign);
           }
         } else if (formId) {
           setPreviewFormId(formId);
@@ -1364,8 +1364,17 @@ Responda APENAS com JSON válido (sem markdown):
   const handlePreviewSurvey = (id: string) => {
     const campaign = campaigns.find(c => c.id === id);
     if (campaign) {
-      setPublicCampaign(campaign);
-      setPublicSettings(settings);
+      // Mesclar o Place ID do business_profile (mais atualizado) com a campanha
+      const finalPlaceId = (businessProfile as any)?.google_place_id || (campaign as any).google_place_id || settings?.placeId || '';
+      const finalRedirect = !!((campaign as any).google_redirect || (campaign as any).enable_redirection || campaign.enableRedirection || finalPlaceId);
+      const mergedCampaign = {
+        ...campaign,
+        google_place_id: finalPlaceId,
+        google_redirect: finalRedirect,
+        enableRedirection: finalRedirect,
+      };
+      setPublicCampaign(mergedCampaign);
+      setPublicSettings({ ...settings, placeId: finalPlaceId });
       setPublicCompanyName(settings.companyName);
       setPublicLogoUrl(businessProfile?.logo_url || '');
     }
