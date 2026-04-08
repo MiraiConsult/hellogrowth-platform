@@ -298,6 +298,35 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
 
   // ── Form states ──
   const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '' });
+
+  // ── Kanban selection for new client ──
+  const [kanbanBoards, setKanbanBoards] = useState<{ id: string; name: string; color: string }[]>([]);
+  const [kanbanStages, setKanbanStages] = useState<{ id: string; name: string; emoji: string; board_id?: string }[]>([]);
+  const [newClientBoardId, setNewClientBoardId] = useState('');
+  const [newClientStageId, setNewClientStageId] = useState('');
+  const [loadingKanban, setLoadingKanban] = useState(false);
+
+  const fetchKanbanBoardsAndStages = async () => {
+    setLoadingKanban(true);
+    try {
+      const res = await fetch('/api/admin/kanban?action=all');
+      const data = await res.json();
+      const boards = data.boards || [];
+      const stages = data.stages || [];
+      setKanbanBoards(boards);
+      setKanbanStages(stages);
+      if (boards.length > 0) {
+        const defaultBoard = boards.find((b: any) => b.is_default) || boards[0];
+        setNewClientBoardId(defaultBoard.id);
+        const boardStages = stages.filter((s: any) => s.board_id === defaultBoard.id || !s.board_id);
+        if (boardStages.length > 0) setNewClientStageId(boardStages[0].id);
+      }
+    } catch (e) {
+      console.error('Error fetching kanban:', e);
+    } finally {
+      setLoadingKanban(false);
+    }
+  };
   const [companyForm, setCompanyForm] = useState({
     name: '', plan: 'hello_growth', subscriptionStatus: 'trialing',
     trialModel: 'model_b', trialEndAt: '', maxUsers: 1,
@@ -417,6 +446,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
   // ── Create Client ──
   const handleCreateClient = async () => {
     if (!clientForm.email || !clientForm.name) return showToast('error', 'Nome e e-mail são obrigatórios.');
+    if (!newClientStageId) return showToast('error', 'Selecione uma etapa do Kanban.');
     setIsSaving(true);
     try {
       if (clientForm.plan === 'trial' && newClientTrialModel === 'model_b') {
@@ -496,12 +526,34 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             user_id: createdUser.id, company_id: companyId, role: 'owner', is_default: true, status: 'active', accepted_at: new Date().toISOString()
           }]);
           // Nota: a tabela users não tem coluna company_id; o vínculo é feito via user_companies
+          // Criar card no Kanban
+          if (newClientStageId) {
+            try {
+              await fetch('/api/admin/kanban', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'card',
+                  stage_id: newClientStageId,
+                  board_id: newClientBoardId || undefined,
+                  client_name: clientForm.name,
+                  client_email: clientForm.email.toLowerCase().trim(),
+                  notes: `Plano: ${clientForm.plan}`,
+                  position: 9999,
+                }),
+              });
+            } catch (e) {
+              console.error('Erro ao criar card no Kanban:', e);
+            }
+          }
         }
         showToast('success', `Cliente criado! Login: ${clientForm.email} / 12345`);
       }
       setEditModal(null);
       setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '' });
       setNewClientTrialModel('none');
+      setNewClientBoardId('');
+      setNewClientStageId('');
       fetchClients();
     } catch (err: any) {
       showToast('error', err.message || 'Erro ao criar cliente.');
@@ -866,7 +918,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
         <div className={`px-2 py-2 border-t ${isDark ? 'border-gray-800' : 'border-slate-100'} space-y-0.5`}>
           {activeTab === 'clients' && (
             <button
-              onClick={() => { setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '' }); setNewClientTrialModel('none'); setEditModal('new_client'); }}
+              onClick={() => { setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '' }); setNewClientTrialModel('none'); setEditModal('new_client'); fetchKanbanBoardsAndStages(); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors bg-emerald-600 hover:bg-emerald-500 text-white`}
             >
               <span className="shrink-0"><UserPlus size={18} /></span>
@@ -1611,9 +1663,51 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
                 )}
               </>
             )}
+            {/* Kanban Selection */}
+            <div className={`border rounded-xl p-4 space-y-3 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`text-xs font-semibold uppercase tracking-wide flex items-center gap-2 ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>
+                <Kanban size={13} /> Posicionar no Kanban
+              </div>
+              {loadingKanban ? (
+                <div className="flex items-center gap-2 text-sm text-gray-400"><Loader2 size={14} className="animate-spin" /> Carregando fluxos...</div>
+              ) : kanbanBoards.length === 0 ? (
+                <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-slate-400'}`}>Nenhum fluxo Kanban encontrado. Crie um fluxo primeiro na aba Kanban.</p>
+              ) : (
+                <>
+                  {kanbanBoards.length > 1 && (
+                    <FormField label="Fluxo Kanban" t={t}>
+                      <select
+                        value={newClientBoardId}
+                        onChange={e => {
+                          setNewClientBoardId(e.target.value);
+                          const boardStages = kanbanStages.filter(s => s.board_id === e.target.value || !s.board_id);
+                          setNewClientStageId(boardStages.length > 0 ? boardStages[0].id : '');
+                        }}
+                        className={inputCls}
+                      >
+                        {kanbanBoards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                    </FormField>
+                  )}
+                  <FormField label="Etapa *" t={t}>
+                    <select
+                      value={newClientStageId}
+                      onChange={e => setNewClientStageId(e.target.value)}
+                      className={`${inputCls} ${!newClientStageId ? 'border-red-400' : ''}`}
+                    >
+                      <option value="">— Selecione uma etapa —</option>
+                      {kanbanStages
+                        .filter(s => !newClientBoardId || s.board_id === newClientBoardId || !s.board_id)
+                        .map(s => <option key={s.id} value={s.id}>{s.emoji ? `${s.emoji} ` : ''}{s.name}</option>)
+                      }
+                    </select>
+                  </FormField>
+                </>
+              )}
+            </div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setEditModal(null)} className={btnSecondary}>Cancelar</button>
-              <button onClick={handleCreateClient} disabled={isSaving} className={btnPrimary}>
+              <button onClick={handleCreateClient} disabled={isSaving || !newClientStageId} className={btnPrimary}>
                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />} Criar Cliente
               </button>
             </div>
