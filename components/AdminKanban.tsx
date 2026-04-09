@@ -33,6 +33,7 @@ interface Card {
   board_id?: string;
   user_id?: string;
   client_name: string;
+  company_name?: string;
   client_email?: string;
   client_phone?: string;
   cs_name?: string;
@@ -114,7 +115,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
 
   // Add card modal
   const [addCardStage, setAddCardStage] = useState<string | null>(null);
-  const [cardForm, setCardForm] = useState({ client_name: '', client_email: '', cs_name: '', sdr_name: '', notes: '' });
+  const [cardForm, setCardForm] = useState({ client_name: '', company_name: '', client_email: '', cs_name: '', sdr_name: '', notes: '' });
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [savingCard, setSavingCard] = useState(false);
 
@@ -382,7 +383,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   const openAddCard = (stageId: string) => {
     setAddCardStage(stageId);
     setEditingCard(null);
-    setCardForm({ client_name: '', client_email: '', cs_name: '', sdr_name: '', notes: '' });
+    setCardForm({ client_name: '', company_name: '', client_email: '', cs_name: '', sdr_name: '', notes: '' });
     setClientSearch('');
     setClientSuggestions([]);
   };
@@ -838,10 +839,10 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                   <button key={card.id} onClick={() => openCardDetail(card)}
                     className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${t.surfaceHover} border ${t.border} transition-colors`}>
                     <div className="w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {card.client_name.charAt(0)}
+                      {(card.company_name || card.client_name).charAt(0)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className={`font-medium ${t.text} truncate block`}>{card.client_name}</span>
+                      <span className={`font-medium ${t.text} truncate block`}>{card.company_name || card.client_name}</span>
                       <span className="text-xs text-red-500">Próximo contato: {card.next_contact_date ? new Date(card.next_contact_date + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</span>
                     </div>
                     <ChevronRight size={14} className={t.textMuted} />
@@ -858,10 +859,10 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                   <button key={card.id} onClick={() => openCardDetail(card)}
                     className={`w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${t.surfaceHover} border ${t.border} transition-colors`}>
                     <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {card.client_name.charAt(0)}
+                      {(card.company_name || card.client_name).charAt(0)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className={`font-medium ${t.text} truncate block`}>{card.client_name}</span>
+                      <span className={`font-medium ${t.text} truncate block`}>{card.company_name || card.client_name}</span>
                       <span className="text-xs text-amber-500">Contato agendado para hoje</span>
                     </div>
                     <ChevronRight size={14} className={t.textMuted} />
@@ -1219,10 +1220,10 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                           <div className="flex items-center gap-2 min-w-0">
                             <div className="w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-white text-xs font-bold"
                               style={{ backgroundColor: stage.color }}>
-                              {card.client_name.charAt(0).toUpperCase()}
+                              {(card.company_name || card.client_name).charAt(0).toUpperCase()}
                             </div>
                             <div className="min-w-0">
-                              <div className={`text-sm font-semibold ${t.text} truncate`}>{card.client_name}</div>
+                              <div className={`text-sm font-semibold ${t.text} truncate`}>{card.company_name || card.client_name}</div>
                               {card.client_email && <div className={`text-xs ${t.textMuted} truncate`}>{card.client_email}</div>}
                             </div>
                           </div>
@@ -1346,7 +1347,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                     {clientSuggestions.map((c: any) => (
                       <button key={c.id} type="button"
                         onClick={() => {
-                          setCardForm(p => ({ ...p, client_name: c.name || c.company_name || '', client_email: c.email || '' }));
+                          setCardForm(p => ({ ...p, client_name: c.name || c.companyName || '', company_name: c.companyName || c.name || '', client_email: c.email || '' }));
                           setClientSearch('');
                           setClientSuggestions([]);
                         }}
@@ -1417,10 +1418,10 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold"
                   style={{ backgroundColor: stages.find(s => s.id === detailCard.stage_id)?.color || '#6366f1' }}>
-                  {detailCard.client_name.charAt(0).toUpperCase()}
+                  {(detailCard.company_name || detailCard.client_name).charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <h3 className={`font-bold ${t.text}`}>{detailCard.client_name}</h3>
+                  <h3 className={`font-bold ${t.text}`}>{detailCard.company_name || detailCard.client_name}</h3>
                   <p className={`text-xs ${t.textMuted}`}>{detailCard.client_email || 'Sem email'} · {stages.find(s => s.id === detailCard.stage_id)?.name}</p>
                 </div>
               </div>
