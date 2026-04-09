@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('campaigns')
       .select('id, name, description, status, type, questions, response_count, nps_score, created_at, tenant_id, objective, tone')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (tenantId) {

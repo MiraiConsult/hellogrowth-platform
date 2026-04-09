@@ -55,6 +55,7 @@ async function fetchLeadsKPIs(companyId: string, period: 'day' | 'week' | 'month
     .from('leads')
     .select('id, value, stage, created_at')
     .eq('company_id', companyId)
+    .is('deleted_at', null)
     .gte('created_at', startISO);
 
   const totalLeads = leads?.length || 0;
@@ -73,6 +74,7 @@ async function fetchNPSKPIs(companyId: string, period: 'day' | 'week' | 'month')
     .from('nps_responses')
     .select('id, score, created_at')
     .eq('company_id', companyId)
+    .is('deleted_at', null)
     .gte('created_at', startISO);
 
   const npsCount = npsResponses?.length || 0;

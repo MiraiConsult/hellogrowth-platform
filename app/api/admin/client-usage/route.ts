@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
       .from('nps_responses')
       .select('id, created_at, score', { count: 'exact' })
       .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
       .gte('created_at', thirtyDaysAgoStr)
       .order('created_at', { ascending: false })
       .limit(100);
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
       .from('leads')
       .select('id', { count: 'exact' })
       .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
       .gte('created_at', thirtyDaysAgoStr);
 
     // 3. Active campaigns — using 'campaigns' table
@@ -39,6 +41,7 @@ export async function GET(request: NextRequest) {
       .from('campaigns')
       .select('id', { count: 'exact' })
       .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
       .eq('status', 'active');
 
     // 4. Active forms in last 30 days
@@ -46,19 +49,22 @@ export async function GET(request: NextRequest) {
       .from('forms')
       .select('id, name, created_at, active', { count: 'exact' })
       .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
       .eq('active', true);
 
     // 5. Total NPS responses all time
     const { count: totalNpsCount } = await supabase
       .from('nps_responses')
       .select('id', { count: 'exact' })
-      .eq('tenant_id', tenantId);
+      .eq('tenant_id', tenantId)
+      .is('deleted_at', null);
 
     // 6. Total form responses (leads) all time
     const { count: totalFormResponseCount } = await supabase
       .from('leads')
       .select('id', { count: 'exact' })
-      .eq('tenant_id', tenantId);
+      .eq('tenant_id', tenantId)
+      .is('deleted_at', null);
 
     // 7. Last login from users table
     const { data: tenantUsers } = await supabase
@@ -78,6 +84,7 @@ export async function GET(request: NextRequest) {
       .from('nps_responses')
       .select('id', { count: 'exact' })
       .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
       .gte('created_at', sevenDaysAgoStr);
 
     // 9. Form responses (leads) in last 7 days
@@ -85,6 +92,7 @@ export async function GET(request: NextRequest) {
       .from('leads')
       .select('id', { count: 'exact' })
       .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
       .gte('created_at', sevenDaysAgoStr);
 
     // Calculate health score (0-100)
@@ -129,8 +137,8 @@ export async function GET(request: NextRequest) {
       const monthLabel = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
 
       const [{ count: mNps }, { count: mForms }] = await Promise.all([
-        supabase.from('nps_responses').select('id', { count: 'exact' }).eq('tenant_id', tenantId).gte('created_at', start).lte('created_at', end),
-        supabase.from('leads').select('id', { count: 'exact' }).eq('tenant_id', tenantId).gte('created_at', start).lte('created_at', end),
+        supabase.from('nps_responses').select('id', { count: 'exact' }).eq('tenant_id', tenantId).is('deleted_at', null).gte('created_at', start).lte('created_at', end),
+        supabase.from('leads').select('id', { count: 'exact' }).eq('tenant_id', tenantId).is('deleted_at', null).gte('created_at', start).lte('created_at', end),
       ]);
 
       monthlyActivity.push({ month: monthLabel, nps: mNps || 0, forms: mForms || 0 });

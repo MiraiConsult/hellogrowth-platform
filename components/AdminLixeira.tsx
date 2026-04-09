@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Trash2, RotateCcw, Search, Loader2, FileText, BarChart2, Package, Users, Briefcase, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
-type EntityType = 'forms' | 'campaigns' | 'leads' | 'products_services' | 'colaboradores' | 'kanban_cards';
+type EntityType = 'forms' | 'campaigns' | 'leads' | 'products_services' | 'colaboradores';
 
 interface DeletedItem {
   id: string;
@@ -20,7 +20,6 @@ const TYPE_CONFIG: Record<EntityType, { label: string; icon: React.ReactNode; co
   leads:             { label: 'Lead',         icon: <Users size={14} />,     color: 'bg-green-100 text-green-700',  nameField: 'name', extraField: 'email' },
   products_services: { label: 'Produto',      icon: <Package size={14} />,   color: 'bg-orange-100 text-orange-700', nameField: 'name', extraField: 'tenant_id' },
   colaboradores:     { label: 'Colaborador',  icon: <Briefcase size={14} />, color: 'bg-sky-100 text-sky-700',      nameField: 'name', extraField: 'email' },
-  kanban_cards:      { label: 'Card Kanban',  icon: <Trash2 size={14} />,    color: 'bg-violet-100 text-violet-700', nameField: 'title', extraField: 'client_email' },
 };
 
 interface Props {

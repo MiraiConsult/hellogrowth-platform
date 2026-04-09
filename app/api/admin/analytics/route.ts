@@ -33,12 +33,14 @@ async function getOverview() {
   // Buscar todas as NPS responses
   const { data: npsResponses } = await supabase
     .from('nps_responses')
-    .select('score, created_at, tenant_id, comment, answers');
+    .select('score, created_at, tenant_id, comment, answers')
+    .is('deleted_at', null);
 
   // Buscar todos os leads
   const { data: leads } = await supabase
     .from('leads')
-    .select('tenant_id, status, value, created_at, answers');
+    .select('tenant_id, status, value, created_at, answers')
+    .is('deleted_at', null);
 
   // Buscar último diagnóstico MPD por tenant
   const { data: diagnostics } = await supabase
@@ -49,7 +51,8 @@ async function getOverview() {
   // Buscar campanhas NPS
   const { data: campaigns } = await supabase
     .from('campaigns')
-    .select('tenant_id, name, nps_score, response_count, created_at');
+    .select('tenant_id, name, nps_score, response_count, created_at')
+    .is('deleted_at', null);
 
   // Buscar nps_games
   const { data: games } = await supabase
@@ -260,10 +263,10 @@ async function getOverview() {
 // ─── Detalhe de um tenant específico ─────────────────────────────────────────
 async function getTenantDetail(tenantId: string) {
   const [npsRes, leadsRes, diagRes, campsRes] = await Promise.all([
-    supabase.from('nps_responses').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
-    supabase.from('leads').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
+    supabase.from('nps_responses').select('*').eq('tenant_id', tenantId).is('deleted_at', null).order('created_at', { ascending: false }),
+    supabase.from('leads').select('*').eq('tenant_id', tenantId).is('deleted_at', null).order('created_at', { ascending: false }),
     supabase.from('digital_diagnostics').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
-    supabase.from('campaigns').select('*').eq('tenant_id', tenantId),
+    supabase.from('campaigns').select('*').eq('tenant_id', tenantId).is('deleted_at', null),
   ]);
 
   const npsResponses = npsRes.data || [];
@@ -341,6 +344,7 @@ async function getGlobalTrends() {
   const { data: npsResponses } = await supabase
     .from('nps_responses')
     .select('score, created_at, comment, answers, tenant_id')
+    .is('deleted_at', null)
     .order('created_at', { ascending: true });
 
   // Tendência mensal global
@@ -414,6 +418,7 @@ async function getMarketInsights() {
   const { data: npsResponses } = await supabase
     .from('nps_responses')
     .select('score, comment, answers, tenant_id, created_at')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(500);
 

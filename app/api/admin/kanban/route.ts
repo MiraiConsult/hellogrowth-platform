@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === 'cards') {
-      let query = supabase.from('kanban_cards').select('*').order('position', { ascending: true });
+      let query = supabase.from('kanban_cards').select('*').is('deleted_at', null).order('position', { ascending: true });
       if (boardId) query = (query as any).eq('board_id', boardId);
       const { data, error } = await query;
       if (error) throw error;
@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
       const { data, error } = await supabase
         .from('colaboradores')
         .select('id, name, role, phone')
+        .is('deleted_at', null)
         .order('name', { ascending: true });
       if (error) throw error;
       return NextResponse.json({ data });
@@ -65,6 +66,7 @@ export async function GET(req: NextRequest) {
       const { data: overdue } = await supabase
         .from('kanban_cards')
         .select('*')
+        .is('deleted_at', null)
         .not('next_contact_date', 'is', null)
         .lte('next_contact_date', today)
         .order('next_contact_date', { ascending: true });
@@ -72,6 +74,7 @@ export async function GET(req: NextRequest) {
       const { data: dueToday } = await supabase
         .from('kanban_cards')
         .select('*')
+        .is('deleted_at', null)
         .eq('next_contact_date', today);
       return NextResponse.json({ overdue: overdue || [], dueToday: dueToday || [] });
     }
@@ -83,8 +86,8 @@ export async function GET(req: NextRequest) {
         ? supabase.from('kanban_stages').select('*').eq('board_id', boardId).order('position', { ascending: true })
         : supabase.from('kanban_stages').select('*').order('position', { ascending: true }),
       boardId
-        ? supabase.from('kanban_cards').select('*').eq('board_id', boardId).order('position', { ascending: true })
-        : supabase.from('kanban_cards').select('*').order('position', { ascending: true }),
+        ? supabase.from('kanban_cards').select('*').is('deleted_at', null).eq('board_id', boardId).order('position', { ascending: true })
+        : supabase.from('kanban_cards').select('*').is('deleted_at', null).order('position', { ascending: true }),
     ]);
     if (boardsRes.error) throw boardsRes.error;
     if (stagesRes.error) throw stagesRes.error;

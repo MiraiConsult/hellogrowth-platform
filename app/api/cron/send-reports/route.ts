@@ -56,6 +56,7 @@ async function fetchLeadsKPIs(tenantId: string) {
     .from('leads')
     .select('id, value, stage, created_at')
     .eq('company_id', tenantId)
+    .is('deleted_at', null)
     .gte('created_at', startISO)
     .lte('created_at', endISO);
 
@@ -75,6 +76,7 @@ async function fetchNPSKPIs(tenantId: string) {
     .from('nps_responses')
     .select('id, score, created_at')
     .eq('company_id', tenantId)
+    .is('deleted_at', null)
     .gte('created_at', startISO)
     .lte('created_at', endISO);
 
