@@ -414,10 +414,21 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         setCards(prev => prev.map(c => c.id === editingCard.id ? { ...c, ...data.data } : c));
         showToast('success', 'Card atualizado!');
       } else {
+        // Verificar se já existe card com o mesmo company_name ou client_email
+        const companyName = cardForm.company_name || cardForm.client_name;
+        const duplicate = cards.find(c =>
+          (companyName && c.company_name && c.company_name.toLowerCase() === companyName.toLowerCase()) ||
+          (cardForm.client_email && c.client_email && c.client_email.toLowerCase() === cardForm.client_email.toLowerCase())
+        );
+        if (duplicate) {
+          showToast('error', `Já existe um card para "${duplicate.company_name || duplicate.client_name}". Verifique a lixeira ou edite o card existente.`);
+          setSavingCard(false);
+          return;
+        }
         const res = await fetch('/api/admin/kanban', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'card', stage_id: addCardStage, board_id: activeBoardId, ...cardForm }),
+          body: JSON.stringify({ type: 'card', stage_id: addCardStage, board_id: activeBoardId, ...cardForm, company_name: companyName }),
         });
         const data = await res.json();
         setCards(prev => [...prev, data.data]);
