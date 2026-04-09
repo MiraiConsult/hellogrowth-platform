@@ -429,7 +429,7 @@ Retorne APENAS um JSON válido no formato:
     <div className="fixed inset-0 bg-white z-50 flex flex-col">
       {/* Header */}
       <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/20 rounded-lg">
               <Star size={24} />

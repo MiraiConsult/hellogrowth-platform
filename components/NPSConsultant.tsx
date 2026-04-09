@@ -1784,7 +1784,7 @@ Retorne APENAS o JSON:`;
     <div className="fixed inset-0 bg-slate-50 z-50 flex flex-col">
       {/* Header */}
       <div className="bg-white border-b border-slate-200 px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center">
               <Wand2 className="text-white" size={20} />
