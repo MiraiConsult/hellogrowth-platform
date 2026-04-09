@@ -154,6 +154,7 @@ export default function AdminColaboradores({ isDark = false, hideFinancial = fal
       const { data, error } = await supabase
         .from('colaboradores')
         .select('*')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       if (error && error.code === '42P01') {
@@ -287,7 +288,7 @@ export default function AdminColaboradores({ isDark = false, hideFinancial = fal
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Remover este colaborador?')) return;
-    const { error } = await supabase.from('colaboradores').delete().eq('id', id);
+    const { error } = await supabase.from('colaboradores').update({ deleted_at: new Date().toISOString() }).eq('id', id);
     if (error) { showToast('error', 'Erro ao remover.'); return; }
     showToast('success', 'Colaborador removido.');
     if (selectedColaborador?.id === id) setSelectedColaborador(null);

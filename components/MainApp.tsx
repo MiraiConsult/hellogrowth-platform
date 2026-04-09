@@ -361,10 +361,10 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
           // 2. Fetch All Raw Data Parallelly usando tenant_id
           const results = await Promise.all([
-            supabase.from('leads').select('*').eq('tenant_id', tenantId),
-            supabase.from('campaigns').select('*').eq('tenant_id', tenantId),
-            supabase.from('forms').select('*').eq('tenant_id', tenantId),
-            supabase.from('nps_responses').select('*').eq('tenant_id', tenantId),
+            supabase.from('leads').select('*').eq('tenant_id', tenantId).is('deleted_at', null),
+            supabase.from('campaigns').select('*').eq('tenant_id', tenantId).is('deleted_at', null),
+            supabase.from('forms').select('*').eq('tenant_id', tenantId).is('deleted_at', null),
+            supabase.from('nps_responses').select('*').eq('tenant_id', tenantId).is('deleted_at', null),
             supabase.from('business_profile').select('*').eq('tenant_id', tenantId).maybeSingle()
           ]);
 
@@ -833,12 +833,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const handleDeleteForm = async (id: string) => {
     if (!supabase) return;
     
-    // Primeiro: excluir todos os leads (respostas) deste formulário
-    // A tabela leads usa 'form_id'
+    // Soft delete: marcar leads do formulário como deletados
     const { error: leadsError } = await supabase
       .from('leads')
-      .delete()
-      .eq('form_id', id);
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('form_id', id)
+      .is('deleted_at', null);
     
     if (leadsError) {
       console.error('Erro ao excluir leads:', leadsError);
@@ -846,10 +846,10 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       return;
     }
     
-    // Depois: excluir o formulário
+    // Soft delete: marcar formulário como deletado
     const { error: formError } = await supabase
       .from('forms')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
     
     if (formError) {
@@ -861,11 +861,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     // Atualizar estado local
     setForms(prev => prev.filter(f => f.id !== id));
     
-    // Recarregar leads para atualizar o contador
+    // Recarregar leads para atualizar o contador (excluindo soft-deleted)
     const { data: leadsData } = await supabase
       .from('leads')
       .select('*')
       .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
     
     if (leadsData) {
@@ -923,12 +924,11 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     if (!supabase) return;
     
     try {
-      // Deletar registros filhos primeiro (evita erro 409 de FK constraint)
-      await supabase.from('nps_responses').delete().eq('campaign_id', id);
-      await supabase.from('nps_game_participations').delete().eq('campaign_id', id);
+      // Soft delete: marcar respostas e campanha como deletadas
+      await supabase.from('nps_responses').update({ deleted_at: new Date().toISOString() }).eq('campaign_id', id).is('deleted_at', null);
       
-      // Deletar a campanha
-      const { error } = await supabase.from('campaigns').delete().eq('id', id);
+      // Soft delete: marcar a campanha como deletada
+      const { error } = await supabase.from('campaigns').update({ deleted_at: new Date().toISOString() }).eq('id', id);
       
       if (error) {
         console.error('Erro ao deletar campanha:', error);

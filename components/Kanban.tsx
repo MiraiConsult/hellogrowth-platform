@@ -254,11 +254,11 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
     
     setIsDeleting(true);
     try {
-      // Excluir do banco de dados
+      // Soft delete: marcar lead como deletado
       if (supabase) {
         const { error } = await supabase
           .from('leads')
-          .delete()
+          .update({ deleted_at: new Date().toISOString() })
           .eq('id', leadId);
         
         if (error) throw error;

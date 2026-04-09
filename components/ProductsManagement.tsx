@@ -133,7 +133,7 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
       const ids = Array.from(selectedIds);
       const { error } = await supabase
         .from('products_services')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .in('id', ids);
       if (error) throw error;
       setProducts(prev => prev.filter(p => !selectedIds.has(p.id)));
@@ -173,6 +173,7 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
         .from('products_services')
         .select('*')
         .eq('tenant_id', tenantId)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
       if (error) throw error;
       setProducts(data || []);
@@ -507,7 +508,7 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
   const handleDeleteProduct = async (productId: string) => {
     if (!supabase || !confirm("Tem certeza que deseja excluir este produto?")) return;
     try {
-      const { error } = await supabase.from("products_services").delete().eq("id", productId);
+      const { error } = await supabase.from("products_services").update({ deleted_at: new Date().toISOString() }).eq("id", productId);
       if (error) throw error;
       setProducts((prev) => prev.filter((p) => p.id !== productId));
       showNotification("success", "Produto excluído com sucesso!");
