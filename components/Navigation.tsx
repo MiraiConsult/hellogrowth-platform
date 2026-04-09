@@ -341,6 +341,8 @@ const Navigation: React.FC<NavigationProps> = ({
     if (activePlan === 'trial') return true;
     if (activePlan === 'client' && (requiredPlan === 'client' || requiredPlan === 'all')) return true;
     if (activePlan === 'rating' && (requiredPlan === 'rating' || requiredPlan === 'all')) return true;
+    // Itens marcados como 'all' devem aparecer para qualquer plano ativo
+    if (requiredPlan === 'all') return true;
     return false;
   };
 

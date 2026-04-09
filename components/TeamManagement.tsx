@@ -234,7 +234,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ supabase, userId, userR
           </h1>
           <p className="text-slate-600 mt-1">Convide membros e gerencie permissões de acesso</p>
         </div>
-{userRole === 'admin' && (
+{(userRole === 'admin' || userRole === 'owner') && (
         <button
           onClick={() => setShowInviteModal(true)}
           className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
