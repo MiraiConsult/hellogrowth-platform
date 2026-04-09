@@ -534,13 +534,41 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
           notes: infoForm.notes || null,
         }),
       });
-      const data = await res.json();
-      const updated = { ...detailCard, ...data.data };
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error || 'Erro desconhecido');
+      const updated: Card = { ...detailCard, cs_name: infoForm.cs_name || undefined, sdr_name: infoForm.sdr_name || undefined, client_phone: infoForm.client_phone || undefined, notes: infoForm.notes || undefined, ...(json.data || {}) };
       setDetailCard(updated);
       setCards(prev => prev.map(c => c.id === detailCard.id ? updated : c));
       showToast('success', 'Informações salvas!');
-    } catch { showToast('error', 'Erro ao salvar informações'); }
+    } catch (e: any) { showToast('error', e.message || 'Erro ao salvar informações'); }
     finally { setSavingInfo(false); }
+  };
+
+  // Move card directly to Acompanhamento board (first stage)
+  const ACOMPANHAMENTO_BOARD_ID = '39efc567-096b-4f86-8024-bca164714e5b';
+  const ACOMPANHAMENTO_FIRST_STAGE_ID = 'a062fbf9-4cb1-4771-aa47-6054eacf76b4'; // Saudável
+
+  const moveToAcompanhamento = async (targetCard?: Card) => {
+    const cardToMove = targetCard || detailCard;
+    if (!cardToMove) return;
+    setSavingCard(true);
+    try {
+      await fetch('/api/admin/kanban', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'card',
+          id: cardToMove.id,
+          stage_id: ACOMPANHAMENTO_FIRST_STAGE_ID,
+          board_id: ACOMPANHAMENTO_BOARD_ID,
+        }),
+      });
+      setCards(prev => prev.filter(c => c.id !== cardToMove.id));
+      setDetailCard(null);
+      setDetailContacts([]);
+      showToast('success', `${cardToMove.client_name} movido para Acompanhamento CS!`);
+    } catch { showToast('error', 'Erro ao mover cliente'); }
+    finally { setSavingCard(false); }
   };
 
   const deleteContact = async (contactId: string) => {
@@ -1236,6 +1264,21 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                             </span>
                           </div>
                         )}
+
+                        {/* Quick move to Acompanhamento - only in Onboarding board */}
+                        {activeBoardId !== ACOMPANHAMENTO_BOARD_ID && (
+                          <button
+                            onClick={e => { e.stopPropagation(); moveToAcompanhamento(card); }}
+                            className={`mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                              isDark
+                                ? 'bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-400 border border-emerald-800/50'
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
+                            }`}
+                            title="Mover para Acompanhamento CS">
+                            <HeartHandshake size={11} />
+                            Ir para Acompanhamento
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1381,7 +1424,20 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                   <p className={`text-xs ${t.textMuted}`}>{detailCard.client_email || 'Sem email'} · {stages.find(s => s.id === detailCard.stage_id)?.name}</p>
                 </div>
               </div>
-              <button onClick={() => { setDetailCard(null); setDetailContacts([]); }} className={`p-1.5 rounded-lg ${t.surfaceHover} ${t.textSub}`}><X size={16} /></button>
+              <div className="flex items-center gap-2">
+                {/* Only show if we're in Onboarding board */}
+                {activeBoardId !== ACOMPANHAMENTO_BOARD_ID && (
+                  <button
+                    onClick={moveToAcompanhamento}
+                    disabled={savingCard}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-60"
+                    title="Mover para Acompanhamento CS">
+                    {savingCard ? <Loader2 size={12} className="animate-spin" /> : <HeartHandshake size={12} />}
+                    Ir para Acompanhamento
+                  </button>
+                )}
+                <button onClick={() => { setDetailCard(null); setDetailContacts([]); }} className={`p-1.5 rounded-lg ${t.surfaceHover} ${t.textSub}`}><X size={16} /></button>
+              </div>
             </div>
 
             {/* Tabs */}
@@ -1575,14 +1631,20 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                       placeholder="Notas sobre este cliente..." />
                   </div>
 
-                  <button onClick={saveInfoForm} disabled={savingInfo}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-60">
-                    {savingInfo ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                    Salvar Informações
-                  </button>
                 </div>
               )}
             </div>
+
+            {/* Sticky footer: save button for info tab */}
+            {detailTab === 'info' && (
+              <div className="px-6 py-4 border-t" style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
+                <button onClick={saveInfoForm} disabled={savingInfo}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-60">
+                  {savingInfo ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  Salvar Informações
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
