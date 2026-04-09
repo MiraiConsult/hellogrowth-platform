@@ -293,178 +293,52 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
         </p>
       </div>
 
-      {/* Alertas de Pré-venda */}
-      {hasSales && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <TrendingUp size={15} className="text-blue-500" />
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Pré-venda</h3>
-          </div>
-
-          <AlertToggle
-            enabled={settings.alert_new_lead}
-            onChange={v => update('alert_new_lead', v)}
-            icon={<Bell size={16} />}
-            title="Novo Lead"
-            description="Alerta quando um formulário é preenchido e um novo lead entra no sistema"
-            badge="Tempo real"
-            badgeColor="bg-blue-100 text-blue-700"
-          />
-
-          <AlertToggle
-            enabled={settings.alert_high_value_lead}
-            onChange={v => update('alert_high_value_lead', v)}
-            icon={<TrendingUp size={16} />}
-            title="Lead de Alto Valor"
-            description="Alerta quando um lead ultrapassa o valor mínimo configurado"
-            badge="Tempo real"
-            badgeColor="bg-orange-100 text-orange-700"
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-600">Valor mínimo: R$</span>
-              <input
-                type="number"
-                value={settings.high_value_threshold}
-                onChange={e => update('high_value_threshold', Number(e.target.value))}
-                className="w-24 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                min={0}
-                step={100}
-              />
-            </div>
-          </AlertToggle>
-
-          <AlertToggle
-            enabled={settings.alert_lead_won}
-            onChange={v => update('alert_lead_won', v)}
-            icon={<CheckCircle size={16} />}
-            title="Venda Fechada"
-            description="Alerta quando um lead é movido para 'Vendido' no Kanban"
-            badge="Tempo real"
-            badgeColor="bg-emerald-100 text-emerald-700"
-          />
-
-          <AlertToggle
-            enabled={settings.alert_lead_lost}
-            onChange={v => update('alert_lead_lost', v)}
-            icon={<UserX size={16} />}
-            title="Lead Perdido"
-            description="Alerta quando um lead é movido para 'Perdido' no Kanban"
-            badge="Tempo real"
-            badgeColor="bg-red-100 text-red-700"
-          />
-
-          <AlertToggle
-            enabled={settings.alert_stale_lead}
-            onChange={v => update('alert_stale_lead', v)}
-            icon={<Clock size={16} />}
-            title="Lead Parado"
-            description="Alerta diário para leads sem movimentação há X dias"
-            badge="Diário"
-            badgeColor="bg-yellow-100 text-yellow-700"
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-600">Parado há mais de</span>
-              <input
-                type="number"
-                value={settings.stale_lead_days}
-                onChange={e => update('stale_lead_days', Number(e.target.value))}
-                className="w-16 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                min={1}
-                max={90}
-              />
-              <span className="text-xs text-gray-600">dias</span>
-            </div>
-          </AlertToggle>
-        </div>
-      )}
-
-      {/* Alertas de NPS */}
-      {hasNPS && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Star size={15} className="text-yellow-500" />
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Satisfação do Cliente</h3>
-          </div>
-
-          <AlertToggle
-            enabled={settings.alert_detractor}
-            onChange={v => update('alert_detractor', v)}
-            icon={<AlertTriangle size={16} />}
-            title="Detrator (NPS ≤ 6)"
-            description="Alerta imediato quando um cliente dá nota de 0 a 6 — ação urgente recomendada"
-            badge="Urgente · Tempo real"
-            badgeColor="bg-red-100 text-red-700"
-          />
-
-          <AlertToggle
-            enabled={settings.alert_promoter}
-            onChange={v => update('alert_promoter', v)}
-            icon={<Star size={16} />}
-            title="Promotor (NPS ≥ 9)"
-            description="Alerta quando um cliente dá nota 9 ou 10 — oportunidade de pedir indicação"
-            badge="Tempo real"
-            badgeColor="bg-emerald-100 text-emerald-700"
-          />
-
-          <AlertToggle
-            enabled={settings.alert_neutral_with_comment}
-            onChange={v => update('alert_neutral_with_comment', v)}
-            icon={<MessageSquare size={16} />}
-            title="Neutro com Comentário (NPS 7-8)"
-            description="Alerta quando um cliente neutro deixa um comentário — feedback valioso"
-            badge="Tempo real"
-            badgeColor="bg-yellow-100 text-yellow-700"
-          />
-        </div>
-      )}
-
-      {/* Alertas de Presença Digital (Google) */}
+      {/* Alertas */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Star size={15} className="text-blue-500" />
-          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Presença Digital (Google)</h3>
-        </div>
+        <AlertToggle
+          enabled={settings.alert_new_lead}
+          onChange={v => update('alert_new_lead', v)}
+          icon={<Bell size={16} />}
+          title="Novo Lead"
+          description="Alerta quando um formulário é preenchido e um novo lead entra no sistema"
+          badge="Tempo real"
+          badgeColor="bg-blue-100 text-blue-700"
+        />
 
         <AlertToggle
-          enabled={settings.alert_new_google_review}
-          onChange={v => update('alert_new_google_review', v)}
-          icon={<Star size={16} />}
-          title="Nova Avaliação no Google"
-          description="Alerta diário quando novas avaliações forem detectadas no Google Meu Negócio. Inclui o Diário do Dia com o resumo das mudanças."
-          badge="Diário · 8h"
-          badgeColor="bg-blue-100 text-blue-700"
+          enabled={settings.alert_high_value_lead}
+          onChange={v => update('alert_high_value_lead', v)}
+          icon={<TrendingUp size={16} />}
+          title="Lead de Alto Valor"
+          description="Alerta quando um lead ultrapassa o valor mínimo configurado"
+          badge="Tempo real"
+          badgeColor="bg-orange-100 text-orange-700"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-600">Valor mínimo: R$</span>
+            <input
+              type="number"
+              value={settings.high_value_threshold}
+              onChange={e => update('high_value_threshold', Number(e.target.value))}
+              className="w-24 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              min={0}
+              step={100}
+            />
+          </div>
+        </AlertToggle>
+
+        <AlertToggle
+          enabled={settings.alert_detractor}
+          onChange={v => update('alert_detractor', v)}
+          icon={<AlertTriangle size={16} />}
+          title="Novo Detrator (NPS ≤ 6)"
+          description="Alerta imediato quando um cliente dá nota de 0 a 6 — ação urgente recomendada"
+          badge="Urgente · Tempo real"
+          badgeColor="bg-red-100 text-red-700"
         />
       </div>
 
-      {/* Alertas de Trial (apenas Growth ou admin) */}
-      {(activePlan === 'hello_growth' || activePlan === 'lifetime' || activePlan === 'growth' || activePlan === 'growth_lifetime') && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Clock size={15} className="text-purple-500" />
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Gestão de Trials</h3>
-          </div>
 
-          <AlertToggle
-            enabled={settings.alert_trial_expiring}
-            onChange={v => update('alert_trial_expiring', v)}
-            icon={<Clock size={16} />}
-            title="Trial Expirando"
-            description="Alerta 3 dias antes do trial de um cliente expirar — envie o link de pagamento"
-            badge="Diário"
-            badgeColor="bg-purple-100 text-purple-700"
-          />
-        </div>
-      )}
-
-      {/* Aviso para planos sem módulo */}
-      {!hasSales && !hasNPS && (
-        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <Info size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-800">
-            Os alertas disponíveis dependem do seu plano. Faça upgrade para Hello Growth para ter acesso a todos os alertas.
-          </p>
-        </div>
-      )}
 
       {/* Erro */}
       {error && (
