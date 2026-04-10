@@ -35,6 +35,7 @@ import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } fr
 import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
 import { supabase } from '@/lib/supabase';
+import { logActivity, logError } from '@/lib/activityLog';
 
 interface MainAppProps {
   currentUser: User;
@@ -810,15 +811,18 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       const { error: updateError } = await supabase.from('forms').update(formData).eq('id', form.id);
       if (updateError) {
         console.error('Erro ao atualizar formulário:', updateError);
+        logError({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, entity_type: 'form', entity_id: form.id, entity_name: form.name, error_message: updateError.message, details: { action_attempted: 'update_form' } });
         alert('Erro ao salvar formulário: ' + updateError.message);
         return;
       }
       setForms(prev => prev.map(f => f.id === form.id ? { ...f, ...form } : f));
+      logActivity({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, action: 'update', entity_type: 'form', entity_id: form.id, entity_name: form.name });
     } else {
       // INSERT: ID ausente ou temporário (Date.now()) - deixar banco gerar UUID
       const { data, error: insertError } = await supabase.from('forms').insert([formData]).select().single();
       if (insertError) {
         console.error('Erro ao inserir formulário:', insertError);
+        logError({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, entity_type: 'form', entity_name: form.name, error_message: insertError.message, details: { action_attempted: 'create_form' } });
         alert('Erro ao salvar formulário: ' + insertError.message);
         return;
       }
@@ -826,6 +830,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         setForms(prev => [...prev, { ...data, questions: data.questions || [], initialFields: data.initial_fields || [] }]);
         // Sinalizar para o onboarding que um formulário foi criado
         if (showOnboardingWizard || onboardingInProgress) setFormCreatedSignal(prev => prev + 1);
+        logActivity({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, action: 'create', entity_type: 'form', entity_id: data.id, entity_name: form.name });
       }
     }
   };
@@ -859,7 +864,9 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     }
     
     // Atualizar estado local
+    const deletedForm = forms.find(f => f.id === id);
     setForms(prev => prev.filter(f => f.id !== id));
+    logActivity({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, action: 'delete', entity_type: 'form', entity_id: id, entity_name: deletedForm?.name || id });
     
     // Recarregar leads para atualizar o contador (excluindo soft-deleted)
     const { data: leadsData } = await supabase
@@ -901,14 +908,17 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       const { error: updateError } = await supabase.from('campaigns').update(campaignData).eq('id', campaign.id);
       if (updateError) {
         console.error('Erro ao atualizar campanha:', updateError);
+        logError({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, entity_type: 'campaign', entity_id: campaign.id, entity_name: campaign.name, error_message: updateError.message, details: { action_attempted: 'update_campaign' } });
         alert('Erro ao salvar campanha: ' + updateError.message);
         return;
       }
       setCampaigns(prev => prev.map(c => c.id === campaign.id ? { ...c, ...campaign } : c));
+      logActivity({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, action: 'update', entity_type: 'campaign', entity_id: campaign.id, entity_name: campaign.name });
     } else {
       const { data, error: insertError } = await supabase.from('campaigns').insert([campaignData]).select().single();
       if (insertError) {
         console.error('Erro ao inserir campanha:', insertError);
+        logError({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, entity_type: 'campaign', entity_name: campaign.name, error_message: insertError.message, details: { action_attempted: 'create_campaign' } });
         alert('Erro ao salvar campanha: ' + insertError.message);
         return;
       }
@@ -916,6 +926,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         setCampaigns(prev => [...prev, { ...data, npsScore: 0, responses: 0, questions: data.questions || [], initialFields: data.initial_fields || [], enableRedirection: data.enable_redirection, google_redirect: data.google_redirect, google_place_id: data.google_place_id, offer_prize: data.offer_prize, game_id: data.game_id, before_google_message: data.before_google_message, after_game_message: data.after_game_message, objective: data.objective, tone: data.tone, evaluation_points: data.evaluation_points }]);
         // Sinalizar para o onboarding que um NPS foi criado
         if (showOnboardingWizard || onboardingInProgress) setNpsCreatedSignal(prev => prev + 1);
+        logActivity({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, action: 'create', entity_type: 'campaign', entity_id: data.id, entity_name: campaign.name });
       }
     }
   };
@@ -937,9 +948,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }
       
       // Atualizar estado local
+      const deletedCampaign = campaigns.find(c => c.id === id);
       setCampaigns(prev => prev.filter(c => c.id !== id));
-    } catch (err) {
+      logActivity({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, action: 'delete', entity_type: 'campaign', entity_id: id, entity_name: deletedCampaign?.name || id });
+    } catch (err: any) {
       console.error('Erro inesperado ao deletar campanha:', err);
+      logError({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, entity_type: 'campaign', entity_id: id, error_message: err?.message || 'Erro desconhecido', details: { action_attempted: 'delete_campaign' } });
       alert('Erro inesperado ao excluir campanha.');
     }
   };

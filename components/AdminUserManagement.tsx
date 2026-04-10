@@ -18,7 +18,7 @@ import AdminHome from '@/components/AdminHome';
 import AdminColaboradores from '@/components/AdminColaboradores';
 import AdminWhatsApp from '@/components/AdminWhatsApp';
 import AdminKanban from '@/components/AdminKanban';
-import AdminLixeira from '@/components/AdminLixeira';
+import AdminHistorico from '@/components/AdminHistorico';
 import ClientProfile from '@/components/ClientProfile';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -824,7 +824,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
     { id: 'colaboradores',  label: 'Colaboradores',  icon: <UserCog size={18} />,         activeClass: 'bg-sky-600 text-white' },
     { id: 'kanban',         label: 'Kanban CS',      icon: <Kanban size={18} />,          activeClass: 'bg-violet-600 text-white' },
     { id: 'whatsapp',       label: 'WhatsApp',       icon: <MessageSquare size={18} />,   activeClass: 'bg-green-600 text-white' },
-    { id: 'lixeira',        label: 'Lixeira',        icon: <Trash2 size={18} />,          activeClass: 'bg-red-600 text-white' },
+    { id: 'lixeira',        label: 'Histórico',      icon: <Activity size={18} />,        activeClass: 'bg-violet-600 text-white' },
   ];
 
   return (
@@ -1104,7 +1104,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
         <AdminWhatsApp isDark={isDark} />
       )}
       {activeTab === 'lixeira' && (
-        <AdminLixeira isDark={isDark} />
+        <AdminHistorico isDark={isDark} />
       )}
       {activeTab === 'clients' && (
       <main className="w-full overflow-x-auto px-6 py-6 space-y-5">
