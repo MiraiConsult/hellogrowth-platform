@@ -179,6 +179,46 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   const [clientSuggestions, setClientSuggestions] = useState<any[]>([]);
   const [searchingClients, setSearchingClients] = useState(false);
 
+  // ── FILTROS ──────────────────────────────────────────────────────────────────
+  const [filterSearch, setFilterSearch] = useState('');
+  const [filterStage, setFilterStage] = useState('');
+  const [filterCS, setFilterCS] = useState('');
+  const [filterSDR, setFilterSDR] = useState('');
+  const [filterPlan, setFilterPlan] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+
+  const activeFilterCount = [filterStage, filterCS, filterSDR, filterPlan].filter(Boolean).length;
+
+  const filteredCards = (stageId: string) => {
+    return cards
+      .filter(c => c.stage_id === stageId)
+      .filter(c => {
+        if (filterSearch) {
+          const q = filterSearch.toLowerCase();
+          const matchName = (c.company_name || c.client_name || '').toLowerCase().includes(q);
+          const matchEmail = (c.client_email || '').toLowerCase().includes(q);
+          if (!matchName && !matchEmail) return false;
+        }
+        if (filterStage && c.stage_id !== filterStage) return false;
+        if (filterCS && (c.cs_name || '').toLowerCase() !== filterCS.toLowerCase()) return false;
+        if (filterSDR && (c.sdr_name || '').toLowerCase() !== filterSDR.toLowerCase()) return false;
+        return true;
+      })
+      .sort((a, b) => a.position - b.position);
+  };
+
+  const clearFilters = () => {
+    setFilterSearch('');
+    setFilterStage('');
+    setFilterCS('');
+    setFilterSDR('');
+    setFilterPlan('');
+  };
+
+  // Derivar listas únicas de CS e SDR dos cards carregados
+  const uniqueCSNames = Array.from(new Set(cards.map(c => c.cs_name).filter(Boolean))) as string[];
+  const uniqueSDRNames = Array.from(new Set(cards.map(c => c.sdr_name).filter(Boolean))) as string[];
+
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
     setTimeout(() => setToast(null), 3000);
@@ -245,6 +285,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
 
   const switchBoard = async (boardId: string) => {
     setActiveBoardId(boardId);
+    setFilterStage(''); // Limpar filtro de etapa ao trocar de board
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/kanban?action=all&board_id=${boardId}`);
@@ -769,8 +810,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     } catch { showToast('error', 'Erro ao remover fluxo'); fetchData(); }
   };
 
-  const stageCards = (stageId: string) =>
-    cards.filter(c => c.stage_id === stageId).sort((a, b) => a.position - b.position);
+  const stageCards = (stageId: string) => filteredCards(stageId);
 
   const activeBoard = boards.find(b => b.id === activeBoardId);
 
@@ -879,6 +919,124 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                     <ChevronRight size={14} className={t.textMuted} />
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── FILTROS BAR ── */}
+      {view === 'board' && (
+        <div className={`mb-4 ${t.surface} rounded-2xl border ${t.border} p-3`}>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Busca por nome/email */}
+            <div className="relative flex-1 min-w-[180px]">
+              <Search size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
+              <input
+                value={filterSearch}
+                onChange={e => setFilterSearch(e.target.value)}
+                placeholder="Buscar empresa ou email..."
+                className={`w-full pl-8 pr-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
+              />
+              {filterSearch && (
+                <button onClick={() => setFilterSearch('')} className={`absolute right-2 top-1/2 -translate-y-1/2 ${t.textMuted} hover:text-red-500`}>
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Botão de filtros avançados */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors relative ${
+                showFilters || activeFilterCount > 0
+                  ? 'bg-violet-600 text-white border-violet-600'
+                  : `${t.border} ${t.textSub} hover:text-violet-600`
+              }`}
+            >
+              <SlidersHorizontal size={14} />
+              Filtros
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+
+            {/* Limpar filtros */}
+            {(filterSearch || activeFilterCount > 0) && (
+              <button
+                onClick={clearFilters}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium ${t.border} text-red-500 hover:bg-red-50 transition-colors`}
+              >
+                <X size={13} /> Limpar
+              </button>
+            )}
+
+            {/* Contador de resultados */}
+            <span className={`text-xs ${t.textMuted} ml-auto`}>
+              {cards.filter(c => {
+                if (filterSearch) {
+                  const q = filterSearch.toLowerCase();
+                  if (!(c.company_name || c.client_name || '').toLowerCase().includes(q) &&
+                      !(c.client_email || '').toLowerCase().includes(q)) return false;
+                }
+                if (filterStage && c.stage_id !== filterStage) return false;
+                if (filterCS && (c.cs_name || '').toLowerCase() !== filterCS.toLowerCase()) return false;
+                if (filterSDR && (c.sdr_name || '').toLowerCase() !== filterSDR.toLowerCase()) return false;
+                return true;
+              }).length} de {cards.length} clientes
+            </span>
+          </div>
+
+          {/* Filtros avançados expandidos */}
+          {showFilters && (
+            <div className={`mt-3 pt-3 border-t ${t.border} grid grid-cols-2 sm:grid-cols-3 gap-3`}>
+              {/* Etapa */}
+              <div>
+                <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Etapa</label>
+                <select
+                  value={filterStage}
+                  onChange={e => setFilterStage(e.target.value)}
+                  className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
+                >
+                  <option value="">Todas as etapas</option>
+                  {stages.map(s => (
+                    <option key={s.id} value={s.id}>{s.emoji} {s.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* CS Responsável */}
+              <div>
+                <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>CS Responsável</label>
+                <select
+                  value={filterCS}
+                  onChange={e => setFilterCS(e.target.value)}
+                  className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
+                >
+                  <option value="">Todos os CS</option>
+                  {uniqueCSNames.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                  {uniqueCSNames.length === 0 && <option disabled>Nenhum CS cadastrado</option>}
+                </select>
+              </div>
+
+              {/* SDR */}
+              <div>
+                <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>SDR</label>
+                <select
+                  value={filterSDR}
+                  onChange={e => setFilterSDR(e.target.value)}
+                  className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
+                >
+                  <option value="">Todos os SDR</option>
+                  {uniqueSDRNames.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                  {uniqueSDRNames.length === 0 && <option disabled>Nenhum SDR cadastrado</option>}
+                </select>
               </div>
             </div>
           )}
