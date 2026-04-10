@@ -209,10 +209,19 @@ const GameConfig: React.FC<GameConfigProps> = ({ tenantId }) => {
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir esta roleta?')) return;
     try {
-      const response = await fetch(`/api/games/${id}`, { method: 'DELETE' });
-      if (response.ok) await loadGames();
+      const response = await fetch(`/api/games/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-tenant-id': tenantId }
+      });
+      if (response.ok) {
+        await loadGames();
+      } else {
+        const err = await response.json().catch(() => ({}));
+        alert(`Erro ao excluir: ${err.error || response.statusText}`);
+      }
     } catch (error) {
       console.error('Erro ao excluir:', error);
+      alert('Erro ao excluir a roleta. Tente novamente.');
     }
   };
 

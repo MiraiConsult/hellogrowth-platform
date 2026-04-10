@@ -120,7 +120,7 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
       `Olá ${participation.client_name}!\n\n` +
       `Parabéns! Você ganhou: *${participation.prize_won}*\n\n` +
       `Seu código é: *${participation.prize_code}*\n\n` +
-      `Válido até: ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')}\n\n` +
+      `Válido até: ${participation.expires_at ? new Date(participation.expires_at).toLocaleDateString('pt-BR') : 'Sem validade definida'}\n\n` +
       `Apresente este código para resgatar seu prêmio!`
     );
     
@@ -138,7 +138,7 @@ const GameParticipations: React.FC<GameParticipationsProps> = ({ tenantId, campa
       `Olá ${participation.client_name}!\n\n` +
       `Parabéns! Você ganhou: ${participation.prize_won}\n\n` +
       `Seu código é: ${participation.prize_code}\n\n` +
-      `Válido até: ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')}\n\n` +
+      `Válido até: ${participation.expires_at ? new Date(participation.expires_at).toLocaleDateString('pt-BR') : 'Sem validade definida'}\n\n` +
       `Apresente este código para resgatar seu prêmio!`
     );
     
