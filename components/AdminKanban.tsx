@@ -879,11 +879,11 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         </div>
       )}
 
-      {/* ── ZONA FIXA: header + filtros + alertas ── */}
-      <div className="flex-shrink-0 px-4 pt-4 pb-0 space-y-2">
+      {/* ── ZONA FIXA: header + filtros + alertas + board tabs ── */}
+      <div className="flex-shrink-0 pt-4 pb-0 space-y-2">
 
       {/* Header compacto — tudo em uma linha */}
-      <div className={`flex items-center gap-2 ${t.surface} rounded-2xl border ${t.border} px-3 py-2`}>
+      <div className={`flex items-center gap-2 ${t.surface} rounded-2xl border ${t.border} px-3 py-2 mx-4`}>
         {/* Logo + título */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow">
@@ -983,7 +983,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
 
       {/* Alerts Panel */}
       {showAlerts && view === 'board' && (
-        <div className={`mb-4 ${t.surface} rounded-2xl border border-amber-200 p-4`}>
+        <div className={`mb-4 ${t.surface} rounded-2xl border border-amber-200 p-4 mx-4`}>
           <div className="flex items-center justify-between mb-3">
             <h3 className={`text-sm font-bold ${t.text} flex items-center gap-2`}>
               <Bell size={14} className="text-amber-500" />
@@ -1036,7 +1036,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
 
       {/* Painel de filtros avançados — expansível abaixo do header */}
       {view === 'board' && showFilters && (
-        <div className={`${t.surface} rounded-2xl border ${t.border} p-3`}>
+        <div className={`${t.surface} rounded-2xl border ${t.border} p-3 mx-4`}>
           <div className={`grid grid-cols-2 gap-3`}>
             {/* CS Responsável */}
             <div>
@@ -1060,14 +1060,9 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         </div>
       )}
 
-      </div> {/* fim da zona fixa */}
-
-      {/* ── ZONA SCROLLÁVEL: board tabs + board view + outras views ── */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4">
-
-      {/* Board tabs */}
+      {/* Board tabs — dentro da zona fixa */}
       {view === 'board' && boards.length > 1 && (
-        <div className="flex items-center gap-2 py-3 overflow-x-auto">
+        <div className="flex items-center gap-2 px-4 pb-2 overflow-x-auto flex-shrink-0">
           {boards.map(board => (
             <button
               key={board.id}
@@ -1084,6 +1079,11 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
           ))}
         </div>
       )}
+
+      </div> {/* fim da zona fixa */}
+
+      {/* ── ZONA SCROLLÁVEL: board view + outras views ── */}
+      <div className="flex-1 overflow-auto px-4 pb-4">
 
       {/* ── BOARDS MANAGEMENT VIEW ── */}
       {view === 'boards' && (
@@ -1347,7 +1347,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
 
       {/* ── BOARD VIEW ── */}
       {view === 'board' && (
-        <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: '400px' }}>
+        <div className="flex gap-4 pb-4 overflow-x-auto" style={{ minHeight: 0 }}>
           {stages.map(stage => {
             const sc = stageCards(stage.id);
             const isOver = dragOverStage === stage.id;
@@ -1421,7 +1421,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                           </div>
                           <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={e => { e.stopPropagation(); openEditCard(card); }} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-violet-600`} title="Editar card"><Pencil size={11} /></button>
-                            {stages[stages.length - 1]?.id === stage.id && boards.length > 1 && (
+                            {boards.length > 1 && (
                               <button onClick={e => { e.stopPropagation(); openMoveCard(card); }} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-indigo-600`} title="Mover para outro fluxo"><ArrowRightCircle size={11} /></button>
                             )}
                             <button onClick={e => { e.stopPropagation(); deleteCard(card.id); }} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-red-500`} title="Excluir"><Trash2 size={11} /></button>
@@ -1470,20 +1470,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                           </div>
                         )}
 
-                        {/* Quick move to Acompanhamento - only in Onboarding board */}
-                        {activeBoardId !== ACOMPANHAMENTO_BOARD_ID && (
-                          <button
-                            onClick={e => { e.stopPropagation(); e.preventDefault(); moveToAcompanhamento(card); }}
-                            className={`mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                              isDark
-                                ? 'bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-400 border border-emerald-800/50'
-                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
-                            }`}
-                            title="Mover para Acompanhamento CS">
-                            <HeartHandshake size={11} />
-                            Ir para Acompanhamento
-                          </button>
-                        )}
+
                       </div>
                     </div>
                   ))}
@@ -1615,10 +1602,13 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       )}
       </div> {/* fim da zona scrollável */}
 
-      {/* ── CARD DETAIL / CS MODAL ── */}
+      {/* ── CARD DETAIL / CS SIDEBAR ── */}
       {detailCard && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className={`w-full sm:max-w-md ${t.surface} rounded-t-3xl sm:rounded-2xl border ${t.border} shadow-2xl flex flex-col`} style={{ maxHeight: '92vh' }}>
+        <div className="fixed inset-0 z-50 flex">
+          {/* Overlay */}
+          <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={() => { setDetailCard(null); setDetailContacts([]); setClientData(null); }} />
+          {/* Sidebar */}
+          <div className={`w-full max-w-lg ${t.surface} border-l ${t.border} shadow-2xl flex flex-col h-full animate-slide-in-right`}>
 
             {/* Header — estilo colaboradores */}
             <div className="px-5 pt-5 pb-4">
@@ -1657,11 +1647,13 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {activeBoardId !== ACOMPANHAMENTO_BOARD_ID && (
-                    <button onClick={() => moveToAcompanhamento()} disabled={savingCard}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-xl transition-colors disabled:opacity-60">
-                      {savingCard ? <Loader2 size={12} className="animate-spin" /> : <HeartHandshake size={12} />}
-                      Ir para Acompanhamento
+                  {boards.length > 1 && (
+                    <button onClick={() => { openMoveCard(detailCard); }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl transition-colors border ${
+                        isDark ? 'border-indigo-500/50 bg-indigo-900/30 text-indigo-400 hover:bg-indigo-800/50' : 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                      }`}>
+                      <ArrowRightCircle size={12} />
+                      Mover Fluxo
                     </button>
                   )}
                   <button onClick={() => { setDetailCard(null); setDetailContacts([]); setClientData(null); }}
@@ -1684,6 +1676,16 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                   )}
                 </button>
               ))}
+            </div>
+
+            {/* Etapa atual no fluxo */}
+            <div className={`px-5 py-2 flex items-center gap-2 text-xs ${t.textMuted} border-b`} style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
+              <span>Fluxo:</span>
+              <span className={`font-medium ${t.text}`}>{activeBoard?.name || 'Kanban'}</span>
+              <span>→</span>
+              <span className="font-medium" style={{ color: stages.find(s => s.id === detailCard.stage_id)?.color }}>
+                {stages.find(s => s.id === detailCard.stage_id)?.emoji} {stages.find(s => s.id === detailCard.stage_id)?.name || 'Etapa'}
+              </span>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">
@@ -1859,6 +1861,24 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                     </div>
                   </div>
 
+                  {/* Métricas rápidas */}
+                  {clientData && (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className={`rounded-2xl border ${t.border} p-3`}>
+                        <span className={`text-xs ${t.textMuted} block mb-1`}>Health Score</span>
+                        <span className={`text-lg font-bold ${t.text}`}>{clientData.healthScore ?? '—'}</span>
+                      </div>
+                      <div className={`rounded-2xl border ${t.border} p-3`}>
+                        <span className={`text-xs ${t.textMuted} block mb-1`}>Empresas</span>
+                        <span className={`text-lg font-bold ${t.text}`}>{clientData.companyCount ?? 0}</span>
+                      </div>
+                      <div className={`rounded-2xl border ${t.border} p-3`}>
+                        <span className={`text-xs ${t.textMuted} block mb-1`}>Anotações</span>
+                        <span className={`text-lg font-bold ${t.text}`}>{clientData.notesCount ?? 0}</span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Histórico */}
                   <div className={`rounded-2xl border ${t.border} overflow-hidden`}>
                     <div className={`px-4 py-3 flex items-center gap-2 border-b ${t.border} ${isDark ? 'bg-gray-800/50' : 'bg-slate-50'}`}>
@@ -1880,6 +1900,22 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                             : 'Nunca'}
                         </span>
                       </div>
+                      {clientData?.trialEnd && (
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm ${t.textSub}`}>Fim do trial</span>
+                          <span className={`text-sm font-medium ${t.text}`}>
+                            {new Date(clientData.trialEnd).toLocaleDateString('pt-BR')}
+                          </span>
+                        </div>
+                      )}
+                      {clientData?.subscriptionStart && (
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm ${t.textSub}`}>Início assinatura</span>
+                          <span className={`text-sm font-medium ${t.text}`}>
+                            {new Date(clientData.subscriptionStart).toLocaleDateString('pt-BR')}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
