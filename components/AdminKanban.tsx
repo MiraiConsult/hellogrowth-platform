@@ -5,6 +5,7 @@ import {
   Kanban, SlidersHorizontal, LayoutDashboard,
   Phone, MessageCircle, Video, Mail, Calendar, Clock,
   ArrowRightCircle, Bell, HeartHandshake, ChevronRight,
+  Building2, User, Activity, Copy, ExternalLink,
 } from 'lucide-react';
 
 interface Board {
@@ -438,6 +439,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     setAddCardStage(card.stage_id);
     setCardForm({
       client_name: card.client_name,
+      company_name: card.company_name || '',
       client_email: card.client_email || '',
       cs_name: card.cs_name || '',
       sdr_name: card.sdr_name || '',
@@ -524,16 +526,27 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     });
     setLoadingContacts(true);
     setDetailContacts([]);
-    // Buscar dados reais do cliente pelo email
-    if (card.client_email) {
+    // Buscar dados reais do cliente pelo email (ou nome/empresa como fallback)
+    const searchTerm = card.client_email || card.company_name || card.client_name;
+    if (searchTerm) {
       setLoadingClientData(true);
       try {
-        const res = await fetch(`/api/admin/clients?search=${encodeURIComponent(card.client_email)}`);
+        const res = await fetch(`/api/admin/clients?search=${encodeURIComponent(searchTerm)}`);
         const data = await res.json();
-        const found = (data.users || []).find((u: any) => u.email === card.client_email);
+        // Tentar match exato por email primeiro, depois por nome
+        let found = card.client_email
+          ? (data.users || []).find((u: any) => u.email?.toLowerCase() === card.client_email?.toLowerCase())
+          : null;
+        // Fallback: match por nome da empresa ou nome do cliente
+        if (!found && (data.users || []).length > 0) {
+          const companyLower = (card.company_name || card.client_name || '').toLowerCase();
+          found = (data.users || []).find((u: any) =>
+            (u.companyName || '').toLowerCase() === companyLower ||
+            (u.name || '').toLowerCase() === companyLower
+          );
+        }
         if (found) {
           setClientData(found);
-          // Atualizar infoForm com dados reais do cliente
           setInfoForm({
             cs_name: card.cs_name || found.csName || '',
             sdr_name: card.sdr_name || found.sdrName || '',
@@ -845,15 +858,18 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   }
 
   return (
-    <main className={`w-full min-w-0 min-h-screen ${t.bg} px-6 py-6`}>
+    <main className={`w-full min-w-0 flex flex-col h-screen overflow-hidden ${t.bg}`}>
       {toast && (
         <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
           {toast.text}
         </div>
       )}
 
+      {/* ── ZONA FIXA: header + filtros + alertas ── */}
+      <div className="flex-shrink-0 px-4 pt-4 pb-0 space-y-2">
+
       {/* Header compacto — tudo em uma linha */}
-      <div className={`flex items-center gap-2 mb-4 ${t.surface} rounded-2xl border ${t.border} px-3 py-2`}>
+      <div className={`flex items-center gap-2 ${t.surface} rounded-2xl border ${t.border} px-3 py-2`}>
         {/* Logo + título */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow">
@@ -1006,17 +1022,8 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
 
       {/* Painel de filtros avançados — expansível abaixo do header */}
       {view === 'board' && showFilters && (
-        <div className={`mb-3 ${t.surface} rounded-2xl border ${t.border} p-3`}>
-          <div className={`grid grid-cols-2 sm:grid-cols-3 gap-3`}>
-            {/* Etapa */}
-            <div>
-              <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Etapa</label>
-              <select value={filterStage} onChange={e => setFilterStage(e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}>
-                <option value="">Todas as etapas</option>
-                {stages.map(s => <option key={s.id} value={s.id}>{s.emoji} {s.name}</option>)}
-              </select>
-            </div>
+        <div className={`${t.surface} rounded-2xl border ${t.border} p-3`}>
+          <div className={`grid grid-cols-2 gap-3`}>
             {/* CS Responsável */}
             <div>
               <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>CS Responsável</label>
@@ -1039,9 +1046,14 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         </div>
       )}
 
+      </div> {/* fim da zona fixa */}
+
+      {/* ── ZONA SCROLLÁVEL: board tabs + board view + outras views ── */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4">
+
       {/* Board tabs */}
       {view === 'board' && boards.length > 1 && (
-        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+        <div className="flex items-center gap-2 py-3 overflow-x-auto">
           {boards.map(board => (
             <button
               key={board.id}
@@ -1321,7 +1333,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
 
       {/* ── BOARD VIEW ── */}
       {view === 'board' && (
-        <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: 'calc(100vh - 200px)' }}>
+        <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: '400px' }}>
           {stages.map(stage => {
             const sc = stageCards(stage.id);
             const isOver = dragOverStage === stage.id;
@@ -1574,46 +1586,75 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
           </div>
         </div>
       )}
+      </div> {/* fim da zona scrollável */}
+
       {/* ── CARD DETAIL / CS MODAL ── */}
       {detailCard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className={`w-full max-w-2xl ${t.surface} rounded-2xl border ${t.border} shadow-2xl flex flex-col`} style={{ maxHeight: '90vh' }}>
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b" style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold"
-                  style={{ backgroundColor: stages.find(s => s.id === detailCard.stage_id)?.color || '#6366f1' }}>
-                  {(detailCard.company_name || detailCard.client_name).charAt(0).toUpperCase()}
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className={`w-full sm:max-w-md ${t.surface} rounded-t-3xl sm:rounded-2xl border ${t.border} shadow-2xl flex flex-col`} style={{ maxHeight: '92vh' }}>
+
+            {/* Header — estilo colaboradores */}
+            <div className="px-5 pt-5 pb-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-lg font-bold flex-shrink-0"
+                    style={{ backgroundColor: stages.find(s => s.id === detailCard.stage_id)?.color || '#6366f1' }}>
+                    {(detailCard.company_name || detailCard.client_name).charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className={`font-bold text-base ${t.text} truncate`}>{detailCard.company_name || detailCard.client_name}</h3>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {/* Status badge */}
+                      {clientData ? (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          clientData.consolidatedStatus === 'active' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                          clientData.consolidatedStatus === 'trialing' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                          isDark ? 'bg-gray-700 text-gray-400 border border-gray-600' : 'bg-slate-100 text-slate-500 border border-slate-200'
+                        }`}>
+                          {clientData.consolidatedStatus === 'active' ? '✓ Ativo' :
+                           clientData.consolidatedStatus === 'trialing' ? 'Trial' :
+                           clientData.consolidatedStatus || 'Inativo'}
+                        </span>
+                      ) : null}
+                      {/* Plano badge */}
+                      {clientData?.plan && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${
+                          clientData.plan === 'growth' ? 'bg-violet-500/20 text-violet-400 border-violet-500/30' :
+                          clientData.plan === 'rating' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
+                          isDark ? 'bg-gray-700 text-gray-400 border-gray-600' : 'bg-slate-100 text-slate-500 border-slate-200'
+                        }`}>
+                          {clientData.plan.charAt(0).toUpperCase() + clientData.plan.slice(1)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h3 className={`font-bold ${t.text}`}>{detailCard.company_name || detailCard.client_name}</h3>
-                  <p className={`text-xs ${t.textMuted}`}>{detailCard.client_email || 'Sem email'} · {stages.find(s => s.id === detailCard.stage_id)?.name}</p>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {activeBoardId !== ACOMPANHAMENTO_BOARD_ID && (
+                    <button onClick={() => moveToAcompanhamento()} disabled={savingCard}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-xl transition-colors disabled:opacity-60">
+                      {savingCard ? <Loader2 size={12} className="animate-spin" /> : <HeartHandshake size={12} />}
+                      Ir para Acompanhamento
+                    </button>
+                  )}
+                  <button onClick={() => { setDetailCard(null); setDetailContacts([]); setClientData(null); }}
+                    className={`p-1.5 rounded-xl ${t.surfaceHover} ${t.textSub}`}><X size={16} /></button>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* Only show if we're in Onboarding board */}
-                {activeBoardId !== ACOMPANHAMENTO_BOARD_ID && (
-                  <button
-                    onClick={moveToAcompanhamento}
-                    disabled={savingCard}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-60"
-                    title="Mover para Acompanhamento CS">
-                    {savingCard ? <Loader2 size={12} className="animate-spin" /> : <HeartHandshake size={12} />}
-                    Ir para Acompanhamento
-                  </button>
-                )}
-                <button onClick={() => { setDetailCard(null); setDetailContacts([]); }} className={`p-1.5 rounded-lg ${t.surfaceHover} ${t.textSub}`}><X size={16} /></button>
               </div>
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b" style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
-              {(['cs', 'info'] as const).map(tab => (
-                <button key={tab} onClick={() => setDetailTab(tab)}
-                  className={`px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                    detailTab === tab ? 'border-emerald-500 text-emerald-600' : `border-transparent ${t.textSub} hover:${t.text}`
+            <div className="flex border-b px-5" style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
+              {(['info', 'cs'] as const).map(tab => (
+                <button key={tab} onClick={() => setDetailTab(tab as any)}
+                  className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                    detailTab === tab ? 'border-emerald-500 text-emerald-500' : `border-transparent ${t.textSub}`
                   }`}>
-                  {tab === 'cs' ? '💚 Acompanhamento CS' : '📋 Informações'}
+                  {tab === 'info' ? (
+                    <span className="flex items-center gap-1.5"><User size={13} /> Informações</span>
+                  ) : (
+                    <span className="flex items-center gap-1.5"><HeartHandshake size={13} /> Acompanhamento CS</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -1727,7 +1768,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                               <div className="flex items-center justify-between gap-2">
                                 <span className={`text-sm font-medium ${t.text}`}>
                                   {contact.contact_type === 'call' ? 'Ligação' : contact.contact_type === 'whatsapp' ? 'WhatsApp' : contact.contact_type === 'meeting' ? 'Reunião' : 'Email'}
-                                  {contact.responsible_name && ` · ${contact.responsible_name}`}
+                                  {contact.responsible && ` · ${contact.responsible}`}
                                 </span>
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                   <span className={`text-xs ${t.textMuted}`}>{new Date(contact.contact_date + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
@@ -1745,122 +1786,117 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
               )}
 
               {detailTab === 'info' && (
-                <div className="space-y-4">
+                <div className="space-y-3">
 
-                  {/* Dados reais do cliente — card de resumo */}
-                  {loadingClientData ? (
-                    <div className={`p-4 rounded-xl border ${t.border} flex items-center gap-3`}>
-                      <Loader2 size={16} className="animate-spin text-violet-500" />
-                      <span className={`text-sm ${t.textSub}`}>Buscando dados do cliente...</span>
+                  {/* Loading */}
+                  {loadingClientData && (
+                    <div className={`flex items-center gap-2 py-2`}>
+                      <Loader2 size={14} className="animate-spin text-violet-500" />
+                      <span className={`text-xs ${t.textSub}`}>Buscando dados...</span>
                     </div>
-                  ) : clientData ? (
-                    <div className={`p-4 rounded-xl border ${t.border} space-y-3`}>
-                      <h4 className={`text-xs font-semibold ${t.textSub} uppercase tracking-wide`}>Dados do Cliente (sistema)</h4>
-                      <div className="grid grid-cols-2 gap-3">
-                        {/* Nome */}
-                        <div>
-                          <p className={`text-xs ${t.textMuted}`}>Nome</p>
-                          <p className={`text-sm font-medium ${t.text}`}>{clientData.name || '—'}</p>
-                        </div>
-                        {/* Empresa */}
-                        <div>
-                          <p className={`text-xs ${t.textMuted}`}>Empresa</p>
-                          <p className={`text-sm font-medium ${t.text}`}>{clientData.companyName || '—'}</p>
-                        </div>
-                        {/* Plano */}
-                        <div>
-                          <p className={`text-xs ${t.textMuted}`}>Plano</p>
-                          <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${
-                            clientData.plan === 'growth' ? 'bg-emerald-100 text-emerald-700' :
-                            clientData.plan === 'rating' ? 'bg-blue-100 text-blue-700' :
-                            clientData.plan === 'client' ? 'bg-violet-100 text-violet-700' :
-                            clientData.plan === 'trial' ? 'bg-amber-100 text-amber-700' :
-                            'bg-slate-100 text-slate-600'
-                          }`}>{clientData.plan || '—'}</span>
-                        </div>
-                        {/* Status */}
-                        <div>
-                          <p className={`text-xs ${t.textMuted}`}>Status</p>
-                          <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${
-                            clientData.consolidatedStatus === 'active' ? 'bg-emerald-100 text-emerald-700' :
-                            clientData.consolidatedStatus === 'trialing' ? 'bg-amber-100 text-amber-700' :
-                            'bg-slate-100 text-slate-600'
-                          }`}>{clientData.consolidatedStatus || '—'}</span>
-                        </div>
-                        {/* Último login */}
-                        <div>
-                          <p className={`text-xs ${t.textMuted}`}>Último Login</p>
-                          <p className={`text-sm ${t.text}`}>{clientData.lastLogin ? new Date(clientData.lastLogin).toLocaleDateString('pt-BR') : 'Nunca'}</p>
-                        </div>
-                        {/* Cliente desde */}
-                        <div>
-                          <p className={`text-xs ${t.textMuted}`}>Cliente desde</p>
-                          <p className={`text-sm ${t.text}`}>{clientData.createdAt ? new Date(clientData.createdAt).toLocaleDateString('pt-BR') : '—'}</p>
-                        </div>
+                  )}
+
+                  {/* Contato */}
+                  <div className={`rounded-2xl border ${t.border} overflow-hidden`}>
+                    <div className={`px-4 py-3 flex items-center gap-2 border-b ${t.border} ${isDark ? 'bg-gray-800/50' : 'bg-slate-50'}`}>
+                      <User size={14} className="text-emerald-500" />
+                      <span className={`text-xs font-semibold ${t.text}`}>Contato</span>
+                    </div>
+                    <div className="px-4 py-3 space-y-2">
+                      {/* Email */}
+                      <div className="flex items-center gap-2">
+                        <Mail size={13} className={t.textMuted} />
+                        <span className={`text-sm ${t.text} flex-1`}>{detailCard.client_email || '—'}</span>
+                        {detailCard.client_email && (
+                          <button onClick={() => navigator.clipboard.writeText(detailCard.client_email || '')}
+                            className={`p-1 rounded ${t.surfaceHover} ${t.textMuted} hover:text-violet-500`} title="Copiar">
+                            <Copy size={12} />
+                          </button>
+                        )}
                       </div>
-                      {/* Notas internas do cliente */}
-                      {clientData.internalNotes && (
-                        <div className={`mt-2 p-2 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-amber-50'} border ${isDark ? 'border-gray-600' : 'border-amber-200'}`}>
-                          <p className={`text-xs font-medium ${isDark ? 'text-amber-400' : 'text-amber-700'} mb-0.5`}>Notas internas</p>
-                          <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-amber-900'}`}>{clientData.internalNotes}</p>
+                      {/* Empresa */}
+                      {(clientData?.companyName || detailCard.company_name) && (
+                        <div className="flex items-center gap-2">
+                          <Building2 size={13} className={t.textMuted} />
+                          <span className={`text-sm ${t.text}`}>{clientData?.companyName || detailCard.company_name}</span>
                         </div>
                       )}
+                      {/* Telefone editável */}
+                      <div className="flex items-center gap-2">
+                        <Phone size={13} className={t.textMuted} />
+                        <input value={infoForm.client_phone}
+                          onChange={e => setInfoForm(p => ({ ...p, client_phone: e.target.value }))}
+                          className={`flex-1 px-2 py-1 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-1 focus:ring-emerald-500`}
+                          placeholder="(47) 99999-9999" />
+                      </div>
                     </div>
-                  ) : detailCard.client_email ? (
-                    <div className={`p-3 rounded-xl border ${t.border} flex items-center gap-2`}>
-                      <AlertCircle size={14} className="text-amber-500 flex-shrink-0" />
-                      <span className={`text-xs ${t.textSub}`}>Cliente não encontrado no sistema com este email.</span>
-                    </div>
-                  ) : null}
+                  </div>
 
-                  {/* Campos editáveis */}
-                  <div className={`p-4 rounded-xl border ${t.border} space-y-3`}>
-                    <h4 className={`text-xs font-semibold ${t.textSub} uppercase tracking-wide`}>Configurações do Card</h4>
-
-                    {/* Telefone */}
-                    <div>
-                      <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Telefone / WhatsApp</label>
-                      <input value={infoForm.client_phone}
-                        onChange={e => setInfoForm(p => ({ ...p, client_phone: e.target.value }))}
-                        className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                        placeholder="(47) 99999-9999" />
+                  {/* Histórico */}
+                  <div className={`rounded-2xl border ${t.border} overflow-hidden`}>
+                    <div className={`px-4 py-3 flex items-center gap-2 border-b ${t.border} ${isDark ? 'bg-gray-800/50' : 'bg-slate-50'}`}>
+                      <Calendar size={14} className="text-blue-500" />
+                      <span className={`text-xs font-semibold ${t.text}`}>Histórico</span>
                     </div>
-
-                    {/* CS Responsável */}
-                    <div>
-                      <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>CS Responsável</label>
-                      <select value={infoForm.cs_name}
-                        onChange={e => setInfoForm(p => ({ ...p, cs_name: e.target.value }))}
-                        className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}>
-                        <option value="">Selecionar CS...</option>
-                        {colaboradores.filter(c => c.role === 'cs' || c.role === 'gerente').map(col => (
-                          <option key={col.id} value={col.name}>{col.name}</option>
-                        ))}
-                      </select>
+                    <div className="px-4 py-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className={`text-sm ${t.textSub}`}>Cadastro</span>
+                        <span className={`text-sm font-medium ${t.text}`}>
+                          {clientData?.createdAt ? new Date(clientData.createdAt).toLocaleDateString('pt-BR') : '—'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-sm ${t.textSub}`}>Último acesso</span>
+                        <span className={`text-sm font-medium ${t.text}`}>
+                          {clientData?.lastLogin
+                            ? new Date(clientData.lastLogin).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                            : 'Nunca'}
+                        </span>
+                      </div>
                     </div>
+                  </div>
 
-                    {/* SDR */}
-                    <div>
-                      <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>SDR</label>
-                      <select value={infoForm.sdr_name}
-                        onChange={e => setInfoForm(p => ({ ...p, sdr_name: e.target.value }))}
-                        className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}>
-                        <option value="">Selecionar SDR...</option>
-                        {colaboradores.filter(c => c.role === 'sdr' || c.role === 'gerente').map(col => (
-                          <option key={col.id} value={col.name}>{col.name}</option>
-                        ))}
-                      </select>
+                  {/* Equipe Responsável */}
+                  <div className={`rounded-2xl border ${t.border} overflow-hidden`}>
+                    <div className={`px-4 py-3 flex items-center gap-2 border-b ${t.border} ${isDark ? 'bg-gray-800/50' : 'bg-slate-50'}`}>
+                      <Activity size={14} className="text-violet-500" />
+                      <span className={`text-xs font-semibold ${t.text}`}>Equipe Responsável</span>
                     </div>
+                    <div className="px-4 py-3 space-y-3">
+                      {/* SDR */}
+                      <div className="flex items-center justify-between gap-3">
+                        <span className={`text-sm ${t.textSub} flex-shrink-0`}>SDR (Captação)</span>
+                        <select value={infoForm.sdr_name}
+                          onChange={e => setInfoForm(p => ({ ...p, sdr_name: e.target.value }))}
+                          className={`flex-1 px-2 py-1 rounded-lg border text-sm font-medium ${t.input} focus:outline-none focus:ring-1 focus:ring-violet-500 text-right`}>
+                          <option value="">Selecionar...</option>
+                          {colaboradores.filter(c => c.role === 'sdr' || c.role === 'gerente').map(col => (
+                            <option key={col.id} value={col.name}>{col.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* CS */}
+                      <div className="flex items-center justify-between gap-3">
+                        <span className={`text-sm ${t.textSub} flex-shrink-0`}>CS (Sucesso)</span>
+                        <select value={infoForm.cs_name}
+                          onChange={e => setInfoForm(p => ({ ...p, cs_name: e.target.value }))}
+                          className={`flex-1 px-2 py-1 rounded-lg border text-sm font-medium ${t.input} focus:outline-none focus:ring-1 focus:ring-violet-500 text-right`}>
+                          <option value="">Selecionar...</option>
+                          {colaboradores.filter(c => c.role === 'cs' || c.role === 'gerente').map(col => (
+                            <option key={col.id} value={col.name}>{col.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
 
-                    {/* Observações */}
-                    <div>
-                      <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Observações</label>
-                      <textarea value={infoForm.notes}
-                        onChange={e => setInfoForm(p => ({ ...p, notes: e.target.value }))}
-                        rows={3}
-                        className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none`}
-                        placeholder="Notas sobre este cliente..." />
-                    </div>
+                  {/* Observações */}
+                  <div>
+                    <textarea value={infoForm.notes}
+                      onChange={e => setInfoForm(p => ({ ...p, notes: e.target.value }))}
+                      rows={2}
+                      className={`w-full px-3 py-2 rounded-2xl border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none`}
+                      placeholder="Observações sobre este cliente..." />
                   </div>
 
                 </div>
