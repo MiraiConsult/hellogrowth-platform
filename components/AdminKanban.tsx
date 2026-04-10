@@ -70,6 +70,18 @@ interface AdminKanbanProps {
   isDark: boolean;
 }
 
+// ── STATUS DE ENGAJAMENTO ──────────────────────────────────────────────────────────────────────────────────
+const ENGAGEMENT_STATUS = [
+  { value: 'sem_resposta', label: 'Sem resposta', color: 'bg-red-500',    dot: 'bg-red-500',    badge: 'bg-red-500/15 text-red-500 border-red-500/30' },
+  { value: 'lento',        label: 'Lento',        color: 'bg-amber-500',  dot: 'bg-amber-500',  badge: 'bg-amber-500/15 text-amber-500 border-amber-500/30' },
+  { value: 'no_ritmo',     label: 'No ritmo',     color: 'bg-blue-500',   dot: 'bg-blue-500',   badge: 'bg-blue-500/15 text-blue-500 border-blue-500/30' },
+  { value: 'engajado',     label: 'Engajado',     color: 'bg-emerald-500',dot: 'bg-emerald-500',badge: 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' },
+] as const;
+
+type EngagementValue = typeof ENGAGEMENT_STATUS[number]['value'] | '';
+
+const getEngagement = (val?: string) => ENGAGEMENT_STATUS.find(e => e.value === val) ?? null;
+
 const RESPONSIBLE_LABELS: Record<string, string> = {
   nos: 'Nós fazemos',
   cliente: 'Cliente faz',
@@ -172,7 +184,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
 
   // Info form (aba Informações do modal CS)
-  const [infoForm, setInfoForm] = useState({ cs_name: '', sdr_name: '', client_phone: '', notes: '' });
+  const [infoForm, setInfoForm] = useState({ cs_name: '', sdr_name: '', client_phone: '', notes: '', health_status: '' as EngagementValue });
   const [savingInfo, setSavingInfo] = useState(false);
 
   // Client search for add card
@@ -523,6 +535,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       sdr_name: card.sdr_name || '',
       client_phone: card.client_phone || '',
       notes: card.notes || '',
+      health_status: (card.health_status || '') as EngagementValue,
     });
     setLoadingContacts(true);
     setDetailContacts([]);
@@ -547,12 +560,12 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         }
         if (found) {
           setClientData(found);
-          setInfoForm({
+          setInfoForm(prev => ({
+            ...prev,
             cs_name: card.cs_name || found.csName || '',
             sdr_name: card.sdr_name || found.sdrName || '',
             client_phone: card.client_phone || found.phone || '',
-            notes: card.notes || '',
-          });
+          }));
         }
       } catch { /* silent */ }
       finally { setLoadingClientData(false); }
@@ -619,11 +632,12 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
           sdr_name: infoForm.sdr_name || null,
           client_phone: infoForm.client_phone || null,
           notes: infoForm.notes || null,
+          health_status: infoForm.health_status || null,
         }),
       });
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error || 'Erro desconhecido');
-      const updated: Card = { ...detailCard, cs_name: infoForm.cs_name || undefined, sdr_name: infoForm.sdr_name || undefined, client_phone: infoForm.client_phone || undefined, notes: infoForm.notes || undefined, ...(json.data || {}) };
+      const updated: Card = { ...detailCard, cs_name: infoForm.cs_name || undefined, sdr_name: infoForm.sdr_name || undefined, client_phone: infoForm.client_phone || undefined, notes: infoForm.notes || undefined, health_status: infoForm.health_status || undefined, ...(json.data || {}) };
       setDetailCard(updated);
       setCards(prev => prev.map(c => c.id === detailCard.id ? updated : c));
       showToast('success', 'Informações salvas!');
@@ -1433,7 +1447,20 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                           <p className={`text-xs ${t.textMuted} mt-2 line-clamp-2 italic`}>{card.notes}</p>
                         )}
 
-                        {/* Health indicator */}
+                        {/* Engagement status badge */}
+                        {card.health_status && getEngagement(card.health_status) && (() => {
+                          const eng = getEngagement(card.health_status)!;
+                          return (
+                            <div className="mt-2">
+                              <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${eng.badge}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${eng.dot}`} />
+                                {eng.label}
+                              </span>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Health indicator (próximo contato) */}
                         {card.next_contact_date && (
                           <div className="flex items-center gap-1.5 mt-2">
                             <div className={`w-2 h-2 rounded-full flex-shrink-0 ${healthColors[getHealthStatus(card)]}`} />
@@ -1852,6 +1879,44 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                             ? new Date(clientData.lastLogin).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                             : 'Nunca'}
                         </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Status de Engajamento */}
+                  <div className={`rounded-2xl border ${t.border} overflow-hidden`}>
+                    <div className={`px-4 py-3 flex items-center gap-2 border-b ${t.border} ${isDark ? 'bg-gray-800/50' : 'bg-slate-50'}`}>
+                      <Activity size={14} className="text-violet-500" />
+                      <span className={`text-xs font-semibold ${t.text}`}>Status de Engajamento</span>
+                    </div>
+                    <div className="px-4 py-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* Opção: sem status */}
+                        <button
+                          onClick={() => setInfoForm(p => ({ ...p, health_status: '' }))}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                            !infoForm.health_status
+                              ? (isDark ? 'border-gray-500 bg-gray-700 text-white' : 'border-slate-400 bg-slate-100 text-slate-700')
+                              : `${t.border} ${t.textSub} ${t.surfaceHover}`
+                          }`}
+                        >
+                          <span className="w-2 h-2 rounded-full bg-gray-400" />
+                          Sem status
+                        </button>
+                        {ENGAGEMENT_STATUS.map(eng => (
+                          <button
+                            key={eng.value}
+                            onClick={() => setInfoForm(p => ({ ...p, health_status: eng.value as EngagementValue }))}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                              infoForm.health_status === eng.value
+                                ? `${eng.badge} border-current`
+                                : `${t.border} ${t.textSub} ${t.surfaceHover}`
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${eng.dot}`} />
+                            {eng.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>
