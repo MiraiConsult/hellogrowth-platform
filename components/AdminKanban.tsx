@@ -219,6 +219,10 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   const uniqueCSNames = Array.from(new Set(cards.map(c => c.cs_name).filter(Boolean))) as string[];
   const uniqueSDRNames = Array.from(new Set(cards.map(c => c.sdr_name).filter(Boolean))) as string[];
 
+  // Dados reais do cliente (buscados ao abrir o modal)
+  const [clientData, setClientData] = useState<any>(null);
+  const [loadingClientData, setLoadingClientData] = useState(false);
+
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
     setTimeout(() => setToast(null), 3000);
@@ -500,14 +504,11 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
 
   const openCardDetail = async (card: Card) => {
     setDetailCard(card);
-    setDetailTab('cs');
+    setDetailTab('info'); // Abrir direto na aba de informações
+    setClientData(null);
     const freq = card.contact_frequency || 'weekly';
-    // If no next_contact_date set yet, auto-calculate based on frequency
     const nextDate = card.next_contact_date || calcNextContactDate(freq);
-    setCsConfig({
-      next_contact_date: nextDate,
-      contact_frequency: freq,
-    });
+    setCsConfig({ next_contact_date: nextDate, contact_frequency: freq });
     setContactForm({
       contact_date: new Date().toISOString().split('T')[0],
       contact_type: 'whatsapp',
@@ -523,6 +524,26 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     });
     setLoadingContacts(true);
     setDetailContacts([]);
+    // Buscar dados reais do cliente pelo email
+    if (card.client_email) {
+      setLoadingClientData(true);
+      try {
+        const res = await fetch(`/api/admin/clients?search=${encodeURIComponent(card.client_email)}`);
+        const data = await res.json();
+        const found = (data.users || []).find((u: any) => u.email === card.client_email);
+        if (found) {
+          setClientData(found);
+          // Atualizar infoForm com dados reais do cliente
+          setInfoForm({
+            cs_name: card.cs_name || found.csName || '',
+            sdr_name: card.sdr_name || found.sdrName || '',
+            client_phone: card.client_phone || found.phone || '',
+            notes: card.notes || '',
+          });
+        }
+      } catch { /* silent */ }
+      finally { setLoadingClientData(false); }
+    }
     try {
       const res = await fetch(`/api/admin/kanban?action=contacts&card_id=${card.id}`);
       const data = await res.json();
@@ -831,43 +852,101 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow">
-            <Kanban size={18} className="text-white" />
+      {/* Header compacto — tudo em uma linha */}
+      <div className={`flex items-center gap-2 mb-4 ${t.surface} rounded-2xl border ${t.border} px-3 py-2`}>
+        {/* Logo + título */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow">
+            <Kanban size={14} className="text-white" />
           </div>
-          <div>
-            <h1 className={`text-xl font-bold ${t.text}`}>Kanban CS</h1>
-            <p className={`text-xs ${t.textMuted}`}>{stages.length} etapas · {cards.length} clientes</p>
-          </div>
+          <span className={`text-sm font-bold ${t.text} hidden sm:block`}>Kanban CS</span>
+          <span className={`text-xs ${t.textMuted} hidden md:block`}>· {cards.length} clientes</span>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className={`w-px h-5 ${isDark ? 'bg-gray-700' : 'bg-slate-200'} flex-shrink-0`} />
+
+        {/* Busca — flex-1 */}
+        {view === 'board' && (
+          <div className="relative flex-1 min-w-0">
+            <Search size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
+            <input
+              value={filterSearch}
+              onChange={e => setFilterSearch(e.target.value)}
+              placeholder="Buscar empresa ou email..."
+              className={`w-full pl-7 pr-7 py-1.5 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
+            />
+            {filterSearch && (
+              <button onClick={() => setFilterSearch('')} className={`absolute right-2 top-1/2 -translate-y-1/2 ${t.textMuted} hover:text-red-500`}>
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Botões de ação — compactos */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Filtros avançados (só no board view) */}
+          {view === 'board' && (
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              title="Filtros avançados"
+              className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                showFilters || activeFilterCount > 0
+                  ? 'bg-violet-600 text-white border-violet-600'
+                  : `${t.border} ${t.textSub} hover:text-violet-600`
+              }`}
+            >
+              <SlidersHorizontal size={13} />
+              <span className="hidden sm:inline">Filtros</span>
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center leading-none">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Limpar filtros */}
+          {view === 'board' && (filterSearch || activeFilterCount > 0) && (
+            <button onClick={clearFilters} title="Limpar filtros"
+              className={`p-1.5 rounded-lg border text-xs ${t.border} text-red-500 hover:bg-red-50 transition-colors`}>
+              <X size={13} />
+            </button>
+          )}
+
+          {/* Alertas */}
           {(alerts.overdue.length > 0 || alerts.dueToday.length > 0) && (
             <button
               onClick={() => setShowAlerts(!showAlerts)}
-              className={`relative flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${showAlerts ? 'bg-amber-500 text-white border-amber-500' : 'border-amber-300 text-amber-600 hover:bg-amber-50'}`}
+              title="Alertas de contato"
+              className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${showAlerts ? 'bg-amber-500 text-white border-amber-500' : 'border-amber-300 text-amber-600 hover:bg-amber-50'}`}
             >
-              <Bell size={15} />
-              Alertas
-              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
+              <Bell size={13} />
+              <span className="hidden sm:inline">Alertas</span>
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center leading-none">
                 {alerts.overdue.length + alerts.dueToday.length}
               </span>
             </button>
           )}
+
+          {/* Fluxos */}
           <button
             onClick={() => setView(view === 'boards' ? 'board' : 'boards')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${view === 'boards' ? 'bg-indigo-600 text-white border-indigo-600' : `${t.border} ${t.textSub} hover:text-indigo-600`}`}
+            title="Gerenciar Fluxos"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${view === 'boards' ? 'bg-indigo-600 text-white border-indigo-600' : `${t.border} ${t.textSub} hover:text-indigo-600`}`}
           >
-            <LayoutDashboard size={15} />
-            Fluxos ({boards.length})
+            <LayoutDashboard size={13} />
+            <span className="hidden sm:inline">Fluxos</span>
           </button>
+
+          {/* Etapas */}
           <button
             onClick={() => setView(view === 'settings' ? 'board' : 'settings')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${view === 'settings' ? 'bg-violet-600 text-white border-violet-600' : `${t.border} ${t.textSub} hover:text-violet-600`}`}
+            title="Gerenciar Etapas"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${view === 'settings' ? 'bg-violet-600 text-white border-violet-600' : `${t.border} ${t.textSub} hover:text-violet-600`}`}
           >
-            <SlidersHorizontal size={15} />
-            {view === 'settings' ? 'Ver Board' : 'Etapas'}
+            <SlidersHorizontal size={13} />
+            <span className="hidden sm:inline">Etapas</span>
           </button>
         </div>
       </div>
@@ -925,121 +1004,38 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         </div>
       )}
 
-      {/* ── FILTROS BAR ── */}
-      {view === 'board' && (
-        <div className={`mb-4 ${t.surface} rounded-2xl border ${t.border} p-3`}>
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Busca por nome/email */}
-            <div className="relative flex-1 min-w-[180px]">
-              <Search size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
-              <input
-                value={filterSearch}
-                onChange={e => setFilterSearch(e.target.value)}
-                placeholder="Buscar empresa ou email..."
-                className={`w-full pl-8 pr-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
-              />
-              {filterSearch && (
-                <button onClick={() => setFilterSearch('')} className={`absolute right-2 top-1/2 -translate-y-1/2 ${t.textMuted} hover:text-red-500`}>
-                  <X size={13} />
-                </button>
-              )}
+      {/* Painel de filtros avançados — expansível abaixo do header */}
+      {view === 'board' && showFilters && (
+        <div className={`mb-3 ${t.surface} rounded-2xl border ${t.border} p-3`}>
+          <div className={`grid grid-cols-2 sm:grid-cols-3 gap-3`}>
+            {/* Etapa */}
+            <div>
+              <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Etapa</label>
+              <select value={filterStage} onChange={e => setFilterStage(e.target.value)}
+                className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}>
+                <option value="">Todas as etapas</option>
+                {stages.map(s => <option key={s.id} value={s.id}>{s.emoji} {s.name}</option>)}
+              </select>
             </div>
-
-            {/* Botão de filtros avançados */}
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors relative ${
-                showFilters || activeFilterCount > 0
-                  ? 'bg-violet-600 text-white border-violet-600'
-                  : `${t.border} ${t.textSub} hover:text-violet-600`
-              }`}
-            >
-              <SlidersHorizontal size={14} />
-              Filtros
-              {activeFilterCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
-
-            {/* Limpar filtros */}
-            {(filterSearch || activeFilterCount > 0) && (
-              <button
-                onClick={clearFilters}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium ${t.border} text-red-500 hover:bg-red-50 transition-colors`}
-              >
-                <X size={13} /> Limpar
-              </button>
-            )}
-
-            {/* Contador de resultados */}
-            <span className={`text-xs ${t.textMuted} ml-auto`}>
-              {cards.filter(c => {
-                if (filterSearch) {
-                  const q = filterSearch.toLowerCase();
-                  if (!(c.company_name || c.client_name || '').toLowerCase().includes(q) &&
-                      !(c.client_email || '').toLowerCase().includes(q)) return false;
-                }
-                if (filterStage && c.stage_id !== filterStage) return false;
-                if (filterCS && (c.cs_name || '').toLowerCase() !== filterCS.toLowerCase()) return false;
-                if (filterSDR && (c.sdr_name || '').toLowerCase() !== filterSDR.toLowerCase()) return false;
-                return true;
-              }).length} de {cards.length} clientes
-            </span>
+            {/* CS Responsável */}
+            <div>
+              <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>CS Responsável</label>
+              <select value={filterCS} onChange={e => setFilterCS(e.target.value)}
+                className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}>
+                <option value="">Todos os CS</option>
+                {uniqueCSNames.map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </div>
+            {/* SDR */}
+            <div>
+              <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>SDR</label>
+              <select value={filterSDR} onChange={e => setFilterSDR(e.target.value)}
+                className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}>
+                <option value="">Todos os SDR</option>
+                {uniqueSDRNames.map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </div>
           </div>
-
-          {/* Filtros avançados expandidos */}
-          {showFilters && (
-            <div className={`mt-3 pt-3 border-t ${t.border} grid grid-cols-2 sm:grid-cols-3 gap-3`}>
-              {/* Etapa */}
-              <div>
-                <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Etapa</label>
-                <select
-                  value={filterStage}
-                  onChange={e => setFilterStage(e.target.value)}
-                  className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
-                >
-                  <option value="">Todas as etapas</option>
-                  {stages.map(s => (
-                    <option key={s.id} value={s.id}>{s.emoji} {s.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* CS Responsável */}
-              <div>
-                <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>CS Responsável</label>
-                <select
-                  value={filterCS}
-                  onChange={e => setFilterCS(e.target.value)}
-                  className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
-                >
-                  <option value="">Todos os CS</option>
-                  {uniqueCSNames.map(name => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                  {uniqueCSNames.length === 0 && <option disabled>Nenhum CS cadastrado</option>}
-                </select>
-              </div>
-
-              {/* SDR */}
-              <div>
-                <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>SDR</label>
-                <select
-                  value={filterSDR}
-                  onChange={e => setFilterSDR(e.target.value)}
-                  className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-violet-500`}
-                >
-                  <option value="">Todos os SDR</option>
-                  {uniqueSDRNames.map(name => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                  {uniqueSDRNames.length === 0 && <option disabled>Nenhum SDR cadastrado</option>}
-                </select>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1371,15 +1367,16 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                 {/* Cards */}
                 <div className="flex-1 px-3 pb-3 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
                   {sc.map(card => (
-                    <div
-                      key={card.id}
-                      draggable
-                      onDragStart={e => handleDragStart(e, card)}
-                      onDragEnd={handleDragEnd}
-                      onDragOver={e => handleDragOver(e, stage.id, card.id)}
-                      className={`group relative rounded-xl border p-3 cursor-grab active:cursor-grabbing transition-all duration-150 ${t.cardBg} ${t.border} shadow-sm hover:shadow-md ${draggingCard?.id === card.id ? 'opacity-40 scale-95' : ''} ${dragOverCard === card.id ? 'border-t-2' : ''}`}
-                      style={{ borderTopColor: dragOverCard === card.id ? stage.color : undefined }}
-                    >
+                      <div
+                        key={card.id}
+                        draggable
+                        onDragStart={e => handleDragStart(e, card)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={e => handleDragOver(e, stage.id, card.id)}
+                        onClick={() => openCardDetail(card)}
+                        className={`group relative rounded-xl border p-3 cursor-pointer transition-all duration-150 ${t.cardBg} ${t.border} shadow-sm hover:shadow-md ${draggingCard?.id === card.id ? 'opacity-40 scale-95' : ''} ${dragOverCard === card.id ? 'border-t-2' : ''}`}
+                        style={{ borderTopColor: dragOverCard === card.id ? stage.color : undefined }}
+                      >
                       <div className={`absolute left-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-40 transition-opacity ${t.textMuted}`}>
                         <GripVertical size={12} />
                       </div>
@@ -1397,12 +1394,11 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                             </div>
                           </div>
                           <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => openCardDetail(card)} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-emerald-600`} title="Acompanhamento CS"><HeartHandshake size={11} /></button>
-                            <button onClick={() => openEditCard(card)} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-violet-600`}><Pencil size={11} /></button>
+                            <button onClick={e => { e.stopPropagation(); openEditCard(card); }} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-violet-600`} title="Editar card"><Pencil size={11} /></button>
                             {stages[stages.length - 1]?.id === stage.id && boards.length > 1 && (
-                              <button onClick={() => openMoveCard(card)} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-indigo-600`} title="Mover para outro fluxo"><ArrowRightCircle size={11} /></button>
+                              <button onClick={e => { e.stopPropagation(); openMoveCard(card); }} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-indigo-600`} title="Mover para outro fluxo"><ArrowRightCircle size={11} /></button>
                             )}
-                            <button onClick={() => deleteCard(card.id)} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-red-500`}><Trash2 size={11} /></button>
+                            <button onClick={e => { e.stopPropagation(); deleteCard(card.id); }} className={`p-1 rounded ${t.surfaceHover} ${t.textSub} hover:text-red-500`} title="Excluir"><Trash2 size={11} /></button>
                           </div>
                         </div>
 
@@ -1438,7 +1434,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                         {/* Quick move to Acompanhamento - only in Onboarding board */}
                         {activeBoardId !== ACOMPANHAMENTO_BOARD_ID && (
                           <button
-                            onClick={e => { e.stopPropagation(); moveToAcompanhamento(card); }}
+                            onClick={e => { e.stopPropagation(); e.preventDefault(); moveToAcompanhamento(card); }}
                             className={`mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                               isDark
                                 ? 'bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-400 border border-emerald-800/50'
@@ -1750,55 +1746,121 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
 
               {detailTab === 'info' && (
                 <div className="space-y-4">
-                  {/* Email (read-only) */}
-                  <div className={`p-4 rounded-xl border ${t.border}`}>
-                    <p className={`text-xs font-medium ${t.textSub} mb-1`}>Email</p>
-                    <p className={`text-sm ${t.text}`}>{detailCard.client_email || '—'}</p>
-                  </div>
 
-                  {/* Telefone */}
-                  <div>
-                    <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Telefone / WhatsApp</label>
-                    <input value={infoForm.client_phone}
-                      onChange={e => setInfoForm(p => ({ ...p, client_phone: e.target.value }))}
-                      className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
-                      placeholder="(47) 99999-9999" />
-                  </div>
+                  {/* Dados reais do cliente — card de resumo */}
+                  {loadingClientData ? (
+                    <div className={`p-4 rounded-xl border ${t.border} flex items-center gap-3`}>
+                      <Loader2 size={16} className="animate-spin text-violet-500" />
+                      <span className={`text-sm ${t.textSub}`}>Buscando dados do cliente...</span>
+                    </div>
+                  ) : clientData ? (
+                    <div className={`p-4 rounded-xl border ${t.border} space-y-3`}>
+                      <h4 className={`text-xs font-semibold ${t.textSub} uppercase tracking-wide`}>Dados do Cliente (sistema)</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Nome */}
+                        <div>
+                          <p className={`text-xs ${t.textMuted}`}>Nome</p>
+                          <p className={`text-sm font-medium ${t.text}`}>{clientData.name || '—'}</p>
+                        </div>
+                        {/* Empresa */}
+                        <div>
+                          <p className={`text-xs ${t.textMuted}`}>Empresa</p>
+                          <p className={`text-sm font-medium ${t.text}`}>{clientData.companyName || '—'}</p>
+                        </div>
+                        {/* Plano */}
+                        <div>
+                          <p className={`text-xs ${t.textMuted}`}>Plano</p>
+                          <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${
+                            clientData.plan === 'growth' ? 'bg-emerald-100 text-emerald-700' :
+                            clientData.plan === 'rating' ? 'bg-blue-100 text-blue-700' :
+                            clientData.plan === 'client' ? 'bg-violet-100 text-violet-700' :
+                            clientData.plan === 'trial' ? 'bg-amber-100 text-amber-700' :
+                            'bg-slate-100 text-slate-600'
+                          }`}>{clientData.plan || '—'}</span>
+                        </div>
+                        {/* Status */}
+                        <div>
+                          <p className={`text-xs ${t.textMuted}`}>Status</p>
+                          <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${
+                            clientData.consolidatedStatus === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                            clientData.consolidatedStatus === 'trialing' ? 'bg-amber-100 text-amber-700' :
+                            'bg-slate-100 text-slate-600'
+                          }`}>{clientData.consolidatedStatus || '—'}</span>
+                        </div>
+                        {/* Último login */}
+                        <div>
+                          <p className={`text-xs ${t.textMuted}`}>Último Login</p>
+                          <p className={`text-sm ${t.text}`}>{clientData.lastLogin ? new Date(clientData.lastLogin).toLocaleDateString('pt-BR') : 'Nunca'}</p>
+                        </div>
+                        {/* Cliente desde */}
+                        <div>
+                          <p className={`text-xs ${t.textMuted}`}>Cliente desde</p>
+                          <p className={`text-sm ${t.text}`}>{clientData.createdAt ? new Date(clientData.createdAt).toLocaleDateString('pt-BR') : '—'}</p>
+                        </div>
+                      </div>
+                      {/* Notas internas do cliente */}
+                      {clientData.internalNotes && (
+                        <div className={`mt-2 p-2 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-amber-50'} border ${isDark ? 'border-gray-600' : 'border-amber-200'}`}>
+                          <p className={`text-xs font-medium ${isDark ? 'text-amber-400' : 'text-amber-700'} mb-0.5`}>Notas internas</p>
+                          <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-amber-900'}`}>{clientData.internalNotes}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : detailCard.client_email ? (
+                    <div className={`p-3 rounded-xl border ${t.border} flex items-center gap-2`}>
+                      <AlertCircle size={14} className="text-amber-500 flex-shrink-0" />
+                      <span className={`text-xs ${t.textSub}`}>Cliente não encontrado no sistema com este email.</span>
+                    </div>
+                  ) : null}
 
-                  {/* CS Responsável */}
-                  <div>
-                    <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>CS Responsável</label>
-                    <select value={infoForm.cs_name}
-                      onChange={e => setInfoForm(p => ({ ...p, cs_name: e.target.value }))}
-                      className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}>
-                      <option value="">Selecionar CS...</option>
-                      {colaboradores.filter(c => c.role === 'cs' || c.role === 'gerente').map(col => (
-                        <option key={col.id} value={col.name}>{col.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Campos editáveis */}
+                  <div className={`p-4 rounded-xl border ${t.border} space-y-3`}>
+                    <h4 className={`text-xs font-semibold ${t.textSub} uppercase tracking-wide`}>Configurações do Card</h4>
 
-                  {/* SDR */}
-                  <div>
-                    <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>SDR</label>
-                    <select value={infoForm.sdr_name}
-                      onChange={e => setInfoForm(p => ({ ...p, sdr_name: e.target.value }))}
-                      className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}>
-                      <option value="">Selecionar SDR...</option>
-                      {colaboradores.filter(c => c.role === 'sdr' || c.role === 'gerente').map(col => (
-                        <option key={col.id} value={col.name}>{col.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                    {/* Telefone */}
+                    <div>
+                      <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Telefone / WhatsApp</label>
+                      <input value={infoForm.client_phone}
+                        onChange={e => setInfoForm(p => ({ ...p, client_phone: e.target.value }))}
+                        className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                        placeholder="(47) 99999-9999" />
+                    </div>
 
-                  {/* Observações */}
-                  <div>
-                    <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Observações</label>
-                    <textarea value={infoForm.notes}
-                      onChange={e => setInfoForm(p => ({ ...p, notes: e.target.value }))}
-                      rows={3}
-                      className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none`}
-                      placeholder="Notas sobre este cliente..." />
+                    {/* CS Responsável */}
+                    <div>
+                      <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>CS Responsável</label>
+                      <select value={infoForm.cs_name}
+                        onChange={e => setInfoForm(p => ({ ...p, cs_name: e.target.value }))}
+                        className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}>
+                        <option value="">Selecionar CS...</option>
+                        {colaboradores.filter(c => c.role === 'cs' || c.role === 'gerente').map(col => (
+                          <option key={col.id} value={col.name}>{col.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* SDR */}
+                    <div>
+                      <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>SDR</label>
+                      <select value={infoForm.sdr_name}
+                        onChange={e => setInfoForm(p => ({ ...p, sdr_name: e.target.value }))}
+                        className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500`}>
+                        <option value="">Selecionar SDR...</option>
+                        {colaboradores.filter(c => c.role === 'sdr' || c.role === 'gerente').map(col => (
+                          <option key={col.id} value={col.name}>{col.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Observações */}
+                    <div>
+                      <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Observações</label>
+                      <textarea value={infoForm.notes}
+                        onChange={e => setInfoForm(p => ({ ...p, notes: e.target.value }))}
+                        rows={3}
+                        className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none`}
+                        placeholder="Notas sobre este cliente..." />
+                    </div>
                   </div>
 
                 </div>
