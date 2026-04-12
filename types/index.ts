@@ -63,6 +63,8 @@ export interface Lead {
   answers?: Record<string, any>; // Stores the form answers
   formId?: string; // Linked to Form ID
   notes?: string; // New field for internal CRM notes
+  negotiation_notes?: string; // Anotações de negociação com histórico
+  suggested_products?: Array<{ name: string; value: number }>; // Produtos sugeridos editáveis
   board_id?: string; // Linked to a Kanban board
 }
 

@@ -391,7 +391,9 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
                     formId: l.form_id,
                     date: l.created_at,
                     // Robust Notes Loading: Check explicit column first, then fallback to JSON answer field
-                    notes: l.notes || internalNotes || '' 
+                    notes: l.notes || internalNotes || '',
+                    negotiation_notes: l.negotiation_notes || '',
+                    suggested_products: l.suggested_products || null
                  };
              }));
           }

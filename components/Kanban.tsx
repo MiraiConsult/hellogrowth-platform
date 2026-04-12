@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
-import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare } from 'lucide-react';
+import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
@@ -73,8 +73,18 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
   const [isDeleting, setIsDeleting] = useState(false);
   
   // Lead Detail Panel State
-  const [detailSection, setDetailSection] = useState<'suggestions' | 'answers' | 'ai' | null>(null);
+  const [detailSection, setDetailSection] = useState<'suggestions' | 'answers' | 'ai' | 'negotiation' | null>(null);
   const [detailContent, setDetailContent] = useState<{ type: 'whatsapp' | 'email'; message?: any } | null>(null);
+
+  // Negotiation Notes State
+  const [negotiationNoteText, setNegotiationNoteText] = useState('');
+  const [isSavingNegotiationNote, setIsSavingNegotiationNote] = useState(false);
+
+  // Edit Value & Products State
+  const [isEditingValue, setIsEditingValue] = useState(false);
+  const [editValueText, setEditValueText] = useState('');
+  const [editProducts, setEditProducts] = useState<Array<{ name: string; value: number }>>([]);
+  const [isSavingProducts, setIsSavingProducts] = useState(false);
 
   // AI Analysis: uses global state from MainApp via props
 
@@ -205,7 +215,14 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
   const handleOpenDetails = (lead: Lead) => {
     setSelectedLead(lead);
     setNewNoteText('');
-    setAiAdvice(null); 
+    setNegotiationNoteText('');
+    setAiAdvice(null);
+    setIsEditingValue(false);
+    setEditValueText(String(lead.value || 0));
+    // Inicializar produtos: usar suggested_products se existir, senao usar os da IA
+    const aiProducts = lead.answers?._ai_analysis?.recommended_products || [];
+    setEditProducts(lead.suggested_products || aiProducts.map((p: any) => ({ name: p.name, value: p.value || 0 })));
+    setDetailSection(null);
   };
 
   const handleAddNote = async () => {
@@ -242,6 +259,57 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
         alert("Erro ao salvar anotação.");
     } finally {
         setIsSavingNote(false);
+    }
+  };
+
+  // Salvar anotação de negociação
+  const handleAddNegotiationNote = async () => {
+    if (!selectedLead || !negotiationNoteText.trim()) return;
+    setIsSavingNegotiationNote(true);
+    try {
+      const timestamp = new Date().toLocaleString('pt-BR');
+      const noteEntry = `[${timestamp}] ${negotiationNoteText.trim()}`;
+      const updatedNotes = selectedLead.negotiation_notes
+        ? `${selectedLead.negotiation_notes}\n\n${noteEntry}`
+        : noteEntry;
+      if (supabase) {
+        const { error } = await supabase.from('leads').update({ negotiation_notes: updatedNotes }).eq('id', selectedLead.id);
+        if (error) throw error;
+      }
+      setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, negotiation_notes: updatedNotes } : l));
+      setSelectedLead(prev => prev ? { ...prev, negotiation_notes: updatedNotes } : null);
+      setNegotiationNoteText('');
+    } catch (e) {
+      console.error('Erro ao salvar anotação de negociação', e);
+      alert('Erro ao salvar anotação.');
+    } finally {
+      setIsSavingNegotiationNote(false);
+    }
+  };
+
+  // Salvar produtos sugeridos e valor
+  const handleSaveProductsAndValue = async () => {
+    if (!selectedLead) return;
+    setIsSavingProducts(true);
+    try {
+      const newValue = parseFloat(editValueText.replace(',', '.')) || 0;
+      const totalFromProducts = editProducts.reduce((sum, p) => sum + (p.value || 0), 0);
+      const finalValue = editProducts.length > 0 ? totalFromProducts : newValue;
+      if (supabase) {
+        const { error } = await supabase.from('leads').update({
+          value: finalValue,
+          suggested_products: editProducts.length > 0 ? editProducts : null
+        }).eq('id', selectedLead.id);
+        if (error) throw error;
+      }
+      setLeads(prev => prev.map(l => l.id === selectedLead.id ? ({ ...l, value: finalValue, suggested_products: editProducts.length > 0 ? editProducts : undefined }) as Lead : l));
+      setSelectedLead(prev => prev ? ({ ...prev, value: finalValue, suggested_products: editProducts.length > 0 ? editProducts : undefined }) as Lead : null);
+      setIsEditingValue(false);
+    } catch (e) {
+      console.error('Erro ao salvar produtos/valor', e);
+      alert('Erro ao salvar.');
+    } finally {
+      setIsSavingProducts(false);
     }
   };
 
@@ -800,24 +868,101 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
               {/* COLUNA ESQUERDA - Controles (apenas botões seletores) */}
               <div className="w-[380px] flex-shrink-0 border-r border-gray-200 bg-white flex flex-col p-4 gap-3">
                 
-                {/* Valor e Procedimentos */}
+                {/* Valor e Procedimentos — Editável */}
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-amber-700 font-semibold uppercase">Valor Identificado</span>
-                    <span className="text-lg font-bold text-green-700">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedLead.value)}
-                    </span>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-amber-700 font-semibold uppercase">Valor da Negociação</span>
+                    <button
+                      onClick={() => setIsEditingValue(v => !v)}
+                      className="text-amber-600 hover:text-amber-800 p-0.5 rounded"
+                      title="Editar valor e produtos"
+                    >
+                      <Edit2 size={13} />
+                    </button>
                   </div>
-                  {selectedLead.answers?._ai_analysis?.recommended_products && (
-                    <div className="mt-2 pt-2 border-t border-amber-200">
-                      <span className="text-xs text-amber-700 font-semibold">Procedimentos recomendados:</span>
-                      <div className="mt-1 space-y-1">
-                        {selectedLead.answers._ai_analysis.recommended_products.map((p: any, i: number) => (
-                          <div key={i} className="text-xs text-gray-700 flex justify-between">
-                            <span>{p.name}</span>
-                            <span className="font-medium text-green-700">R$ {p.value?.toLocaleString('pt-BR')}</span>
+
+                  {!isEditingValue ? (
+                    <>
+                      <div className="text-lg font-bold text-green-700">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(selectedLead.value)}
+                      </div>
+                      {/* Mostrar produtos: editados ou da IA */}
+                      {(selectedLead.suggested_products || selectedLead.answers?._ai_analysis?.recommended_products) && (
+                        <div className="mt-2 pt-2 border-t border-amber-200">
+                          <span className="text-xs text-amber-700 font-semibold">Procedimentos:</span>
+                          <div className="mt-1 space-y-1">
+                            {(selectedLead.suggested_products || selectedLead.answers?._ai_analysis?.recommended_products || []).map((p: any, i: number) => (                             <div key={i} className="text-xs text-gray-700 flex justify-between">
+                                <span>{p.name}</span>
+                                <span className="font-medium text-green-700">R$ {(p.value || 0).toLocaleString('pt-BR')}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="space-y-2 mt-1">
+                      {/* Lista de produtos editáveis */}
+                      <div className="space-y-1">
+                        {editProducts.map((p, i) => (
+                          <div key={i} className="flex items-center gap-1">
+                            <input
+                              className="flex-1 text-xs border border-amber-300 rounded px-2 py-1 bg-white"
+                              value={p.name}
+                              onChange={e => setEditProducts(prev => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                              placeholder="Nome do produto"
+                            />
+                            <input
+                              className="w-20 text-xs border border-amber-300 rounded px-2 py-1 bg-white text-right"
+                              type="number"
+                              value={p.value}
+                              onChange={e => setEditProducts(prev => prev.map((x, j) => j === i ? { ...x, value: parseFloat(e.target.value) || 0 } : x))}
+                              placeholder="Valor"
+                            />
+                            <button onClick={() => setEditProducts(prev => prev.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600">
+                              <MinusCircle size={14} />
+                            </button>
                           </div>
                         ))}
+                      </div>
+                      <button
+                        onClick={() => setEditProducts(prev => [...prev, { name: '', value: 0 }])}
+                        className="text-xs text-amber-700 flex items-center gap-1 hover:text-amber-900"
+                      >
+                        <PlusCircle size={13} /> Adicionar produto
+                      </button>
+                      {/* Valor manual (quando sem produtos) */}
+                      {editProducts.length === 0 && (
+                        <div>
+                          <span className="text-xs text-amber-700">Valor total (R$):</span>
+                          <input
+                            className="w-full text-sm border border-amber-300 rounded px-2 py-1 bg-white mt-1"
+                            type="number"
+                            value={editValueText}
+                            onChange={e => setEditValueText(e.target.value)}
+                          />
+                        </div>
+                      )}
+                      {editProducts.length > 0 && (
+                        <div className="text-xs text-green-700 font-semibold">
+                          Total: R$ {editProducts.reduce((s, p) => s + (p.value || 0), 0).toLocaleString('pt-BR')}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSaveProductsAndValue}
+                          disabled={isSavingProducts}
+                          className="flex-1 text-xs bg-amber-600 text-white rounded px-2 py-1.5 hover:bg-amber-700 disabled:opacity-50 flex items-center justify-center gap-1"
+                        >
+                          {isSavingProducts ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                          Salvar
+                        </button>
+                        <button
+                          onClick={() => setIsEditingValue(false)}
+                          className="text-xs border border-gray-300 text-gray-600 rounded px-2 py-1.5 hover:bg-gray-50"
+                        >
+                          Cancelar
+                        </button>
                       </div>
                     </div>
                   )}
@@ -877,6 +1022,27 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                     <ArrowRight size={16} className="text-gray-400" />
                   </button>
                 )}
+
+                {/* Anotações de Negociação - Botão seletor */}
+                <button
+                  onClick={() => setDetailSection(prev => prev === 'negotiation' ? null : 'negotiation')}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                    detailSection === 'negotiation'
+                      ? 'border-green-300 bg-green-50 text-green-700'
+                      : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <StickyNote size={16} className={detailSection === 'negotiation' ? 'text-green-600' : 'text-gray-400'} />
+                    <span className="text-xs font-bold uppercase">Anotações da Negociação</span>
+                    {selectedLead.negotiation_notes && (
+                      <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">
+                        {selectedLead.negotiation_notes.split('\n\n').filter(Boolean).length}
+                      </span>
+                    )}
+                  </div>
+                  <ArrowRight size={16} className="text-gray-400" />
+                </button>
 
               </div>
 
@@ -985,6 +1151,64 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                           <p className="text-sm text-gray-700 mt-1 leading-relaxed whitespace-pre-wrap">{selectedLead.answers._ai_analysis.sales_script}</p>
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Conteúdo: Anotações de Negociação */}
+                {detailSection === 'negotiation' && (
+                  <div className="flex flex-col h-full">
+                    <div className="flex items-center gap-2 mb-4">
+                      <StickyNote size={18} className="text-green-600" />
+                      <h3 className="font-bold text-gray-900">Anotações da Negociação</h3>
+                    </div>
+
+                    {/* Histórico de anotações */}
+                    <div className="flex-1 overflow-y-auto space-y-3 mb-4">
+                      {selectedLead.negotiation_notes ? (
+                        selectedLead.negotiation_notes.split('\n\n').filter(Boolean).map((note, i) => {
+                          const match = note.match(/^\[(.+?)\] (.+)$/s);
+                          const timestamp = match ? match[1] : '';
+                          const text = match ? match[2] : note;
+                          return (
+                            <div key={i} className="bg-white rounded-lg border border-gray-200 p-3">
+                              {timestamp && (
+                                <p className="text-[10px] text-gray-400 font-medium mb-1">{timestamp}</p>
+                              )}
+                              <p className="text-sm text-gray-800 whitespace-pre-wrap">{text}</p>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-center text-gray-400 py-8">
+                          <StickyNote size={32} className="mx-auto mb-2 opacity-30" />
+                          <p className="text-sm">Nenhuma anotação ainda</p>
+                          <p className="text-xs mt-1">Registre atualizações da negociação abaixo</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Campo para nova anotação */}
+                    <div className="border-t border-gray-200 pt-3">
+                      <textarea
+                        value={negotiationNoteText}
+                        onChange={e => setNegotiationNoteText(e.target.value)}
+                        placeholder="Ex: Cliente pediu desconto de 10%, retornar na sexta..."
+                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-green-400 bg-white"
+                        rows={3}
+                        onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAddNegotiationNote(); }}
+                      />
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-xs text-gray-400">Ctrl+Enter para salvar</span>
+                        <button
+                          onClick={handleAddNegotiationNote}
+                          disabled={isSavingNegotiationNote || !negotiationNoteText.trim()}
+                          className="px-4 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-1"
+                        >
+                          {isSavingNegotiationNote ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                          Adicionar
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
