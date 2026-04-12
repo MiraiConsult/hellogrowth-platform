@@ -9,10 +9,17 @@ import { supabase } from '@/lib/supabase';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Pie, Cell, PieChart as RechartsPieChart } from 'recharts';
 import MessageSuggestionsPanel from './MessageSuggestionsPanel';
 
+interface CatalogProduct {
+  id: string;
+  name: string;
+  value: number;
+}
+
 interface KanbanProps {
   leads: Lead[];
   setLeads: React.Dispatch<React.SetStateAction<Lead[]>>;
   forms?: Form[];
+  catalogProducts?: CatalogProduct[];
   onLeadCreate?: (lead: Omit<Lead, 'id' | 'date'>) => void;
   onLeadStatusUpdate?: (id: string, status: string) => void;
   onLeadNoteUpdate?: (id: string, note: string) => Promise<void>;
@@ -23,7 +30,7 @@ interface KanbanProps {
   onAnalyzeAllLeads?: () => void;
 }
 
-const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, onLeadStatusUpdate, onLeadNoteUpdate, currentUser, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads }) => {
+const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts = [], onLeadCreate, onLeadStatusUpdate, onLeadNoteUpdate, currentUser, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads }) => {
   const tenantId = useTenantId()
 
   const columns = ['Novo', 'Em Contato', 'Negociação', 'Vendido', 'Perdido'] as const;
@@ -85,6 +92,8 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
   const [editValueText, setEditValueText] = useState('');
   const [editProducts, setEditProducts] = useState<Array<{ name: string; value: number }>>([]);
   const [isSavingProducts, setIsSavingProducts] = useState(false);
+  const [showProductPicker, setShowProductPicker] = useState(false);
+  const [productPickerSearch, setProductPickerSearch] = useState('');
 
   // AI Analysis: uses global state from MainApp via props
 
@@ -925,12 +934,59 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, onLeadCreate, o
                           </div>
                         ))}
                       </div>
-                      <button
-                        onClick={() => setEditProducts(prev => [...prev, { name: '', value: 0 }])}
-                        className="text-xs text-amber-700 flex items-center gap-1 hover:text-amber-900"
-                      >
-                        <PlusCircle size={13} /> Adicionar produto
-                      </button>
+                      {/* Seletor de produtos do catálogo */}
+                      <div className="relative">
+                        <button
+                          onClick={() => { setShowProductPicker(v => !v); setProductPickerSearch(''); }}
+                          className="text-xs text-amber-700 flex items-center gap-1 hover:text-amber-900"
+                        >
+                          <PlusCircle size={13} /> Adicionar produto
+                        </button>
+                        {showProductPicker && (
+                          <div className="absolute left-0 top-6 z-50 w-72 bg-white border border-amber-200 rounded-lg shadow-lg">
+                            <div className="p-2 border-b border-amber-100">
+                              <input
+                                autoFocus
+                                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                                placeholder="Buscar produto..."
+                                value={productPickerSearch}
+                                onChange={e => setProductPickerSearch(e.target.value)}
+                              />
+                            </div>
+                            <div className="max-h-48 overflow-y-auto">
+                              {catalogProducts
+                                .filter(p => p.name.toLowerCase().includes(productPickerSearch.toLowerCase()))
+                                .map(p => (
+                                  <button
+                                    key={p.id}
+                                    onClick={() => {
+                                      setEditProducts(prev => [...prev, { name: p.name, value: p.value }]);
+                                      setShowProductPicker(false);
+                                    }}
+                                    className="w-full text-left px-3 py-2 text-xs hover:bg-amber-50 flex justify-between items-center border-b border-gray-50 last:border-0"
+                                  >
+                                    <span className="font-medium text-gray-800">{p.name}</span>
+                                    <span className="text-green-700 font-semibold ml-2 flex-shrink-0">R$ {p.value.toLocaleString('pt-BR')}</span>
+                                  </button>
+                                ))
+                              }
+                              {catalogProducts.filter(p => p.name.toLowerCase().includes(productPickerSearch.toLowerCase())).length === 0 && (
+                                <div className="px-3 py-3 text-xs text-gray-400 text-center">Nenhum produto encontrado</div>
+                              )}
+                              {/* Opção de adicionar manualmente */}
+                              <button
+                                onClick={() => {
+                                  setEditProducts(prev => [...prev, { name: productPickerSearch || '', value: 0 }]);
+                                  setShowProductPicker(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs text-amber-700 hover:bg-amber-50 flex items-center gap-1 border-t border-amber-100"
+                              >
+                                <PlusCircle size={12} /> Adicionar manualmente
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       {/* Valor manual (quando sem produtos) */}
                       {editProducts.length === 0 && (
                         <div>

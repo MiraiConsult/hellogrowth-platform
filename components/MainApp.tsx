@@ -140,6 +140,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [forms, setForms] = useState<Form[]>([]);
   const [settings, setSettings] = useState<AccountSettings>(mockSettings);
   const [loading, setLoading] = useState(true);
+  const [catalogProducts, setCatalogProducts] = useState<Array<{ id: string; name: string; value: number }>>([]);
 
   // --- MULTI-COMPANY STATE ---
   const [userCompanies, setUserCompanies] = useState<any[]>([]);
@@ -366,7 +367,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
             supabase.from('campaigns').select('*').eq('tenant_id', tenantId).is('deleted_at', null),
             supabase.from('forms').select('*').eq('tenant_id', tenantId).is('deleted_at', null),
             supabase.from('nps_responses').select('*').eq('tenant_id', tenantId).is('deleted_at', null),
-            supabase.from('business_profile').select('*').eq('tenant_id', tenantId).maybeSingle()
+            supabase.from('business_profile').select('*').eq('tenant_id', tenantId).maybeSingle(),
+            supabase.from('products_services').select('id, name, value').eq('tenant_id', tenantId).is('deleted_at', null).order('name')
           ]);
 
           const dbLeads = results[0].data;
@@ -374,6 +376,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           const dbForms = results[2].data;
           const dbNPS = results[3].data;
           const dbBizProfile = results[4].data;
+          const dbProducts = results[5]?.data;
+          if (dbProducts) setCatalogProducts(dbProducts.map((p: any) => ({ id: p.id, name: p.name, value: p.value || 0 })));
           if (dbBizProfile) setBusinessProfile(dbBizProfile);
           const dbUser = ownerSettings;
 
@@ -1527,6 +1531,7 @@ Responda APENAS com JSON válido (sem markdown):
                 leads={leads} 
                 setLeads={setLeads}
                 forms={forms}
+                catalogProducts={catalogProducts}
                 onLeadCreate={handleAddLead}
                 onLeadStatusUpdate={handleUpdateLeadStatus}
                 onLeadNoteUpdate={handleUpdateLeadNotes}
