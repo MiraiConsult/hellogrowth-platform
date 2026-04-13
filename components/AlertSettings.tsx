@@ -20,6 +20,7 @@ interface AlertSettingsData {
   alert_detractor: boolean;
   alert_promoter: boolean;
   alert_neutral_with_comment: boolean;
+  alert_any_nps_response: boolean;
   alert_trial_expiring: boolean;
   alert_stale_lead: boolean;
   stale_lead_days: number;
@@ -43,6 +44,7 @@ const DEFAULT_SETTINGS: Omit<AlertSettingsData, 'company_id'> = {
   alert_detractor: true,
   alert_promoter: false,
   alert_neutral_with_comment: false,
+  alert_any_nps_response: false,
   alert_trial_expiring: true,
   alert_stale_lead: false,
   stale_lead_days: 7,
@@ -335,6 +337,36 @@ const AlertSettings: React.FC<AlertSettingsProps> = ({ companyId, companyName, a
           description="Alerta imediato quando um cliente dá nota de 0 a 6 — ação urgente recomendada"
           badge="Urgente · Tempo real"
           badgeColor="bg-red-100 text-red-700"
+        />
+
+        <AlertToggle
+          enabled={settings.alert_neutral_with_comment}
+          onChange={v => update('alert_neutral_with_comment', v)}
+          icon={<MessageSquare size={16} />}
+          title="Neutro com Comentário (NPS 7-8)"
+          description="Alerta quando um cliente neutro deixa um comentário — feedback valioso para melhoria"
+          badge="Tempo real"
+          badgeColor="bg-yellow-100 text-yellow-700"
+        />
+
+        <AlertToggle
+          enabled={settings.alert_promoter}
+          onChange={v => update('alert_promoter', v)}
+          icon={<Star size={16} />}
+          title="Promotor (NPS ≥ 9)"
+          description="Alerta quando um cliente dá nota 9 ou 10 — oportunidade de pedir indicação"
+          badge="Tempo real"
+          badgeColor="bg-emerald-100 text-emerald-700"
+        />
+
+        <AlertToggle
+          enabled={settings.alert_any_nps_response}
+          onChange={v => update('alert_any_nps_response', v)}
+          icon={<Bell size={16} />}
+          title="Qualquer Resposta NPS"
+          description="Alerta a cada nova resposta recebida na pesquisa NPS, independente da nota"
+          badge="Tempo real"
+          badgeColor="bg-purple-100 text-purple-700"
         />
       </div>
 

@@ -1084,6 +1084,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
             body: JSON.stringify({ type: alertType, companyId: campaignTenantId, data: npsAlertData }),
           }).catch(() => {});
         }
+        // Alerta de qualquer resposta NPS (independente da nota)
+        fetch('/api/send-alert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'any_nps_response', companyId: campaignTenantId, data: npsAlertData }),
+        }).catch(() => {});
       }
     }
 

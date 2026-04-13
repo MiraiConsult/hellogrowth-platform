@@ -21,6 +21,7 @@ export type AlertType =
   | 'detractor'
   | 'promoter'
   | 'neutral_with_comment'
+  | 'any_nps_response'
   | 'trial_expiring'
   | 'stale_lead';
 
@@ -33,6 +34,7 @@ const ALERT_FIELD_MAP: Record<AlertType, string> = {
   detractor: 'alert_detractor',
   promoter: 'alert_promoter',
   neutral_with_comment: 'alert_neutral_with_comment',
+  any_nps_response: 'alert_any_nps_response',
   trial_expiring: 'alert_trial_expiring',
   stale_lead: 'alert_stale_lead',
 };
@@ -106,6 +108,9 @@ function buildMessage(type: AlertType, data: Record<string, any>): string {
 
     case 'neutral_with_comment':
       return `💬 *Feedback Neutro — ${companyName}*\n\n👤 ${data.customerName || 'Cliente'}\n⭐ Nota: *${data.score}/10*\n💬 "${data.comment}"\n\n💡 Oportunidade de melhoria identificada.\n\n_HelloGrowth_`;
+
+    case 'any_nps_response':
+      return `📊 *Nova Resposta NPS — ${companyName}*\n\n👤 ${data.customerName || 'Cliente'}\n⭐ Nota: *${data.score}/10*\n💬 "${data.comment || 'Sem comentário'}"\n\n_HelloGrowth_`;
 
     case 'trial_expiring':
       return `⏰ *Trial Expirando — ${companyName}*\n\n🏢 ${data.clientCompany || '—'}\n📅 Vence em: *${data.daysLeft} dia(s)*\n\n👉 Envie o link de pagamento agora!\n\n_HelloGrowth_`;
