@@ -164,6 +164,16 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
 
     const currentQ = additionalQuestions[currentQuestionIndex];
     const qType = normalizeType(currentQ.type);
+
+    // Validar pergunta obrigatória
+    if (currentQ.required) {
+      const isEmpty = !currentAnswer ||
+        (Array.isArray(currentAnswer) ? currentAnswer.length === 0 : String(currentAnswer).trim() === '');
+      if (isEmpty) {
+        alert('Esta pergunta é obrigatória. Por favor, responda antes de continuar.');
+        return;
+      }
+    }
     
     // Enriquecer a resposta com o texto do "Outro" quando aplicável
     let finalAnswer = currentAnswer;
@@ -365,7 +375,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
                   Pergunta {currentQuestionIndex + 1} de {additionalQuestions.length}
                 </span>
                 <h3 className="text-lg font-bold text-gray-900 mb-6">
-                    {currentQ.text}
+                    {currentQ.text}{currentQ.required && <span className="text-red-500 ml-1">*</span>}
                 </h3>
 
                 {/* TEXT Question */}

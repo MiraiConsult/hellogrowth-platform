@@ -227,6 +227,16 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
 
 
   const handleNext = async () => {
+    // Validar pergunta obrigatória
+    const q = form.questions[currentStep];
+    if (q.required) {
+      const ans = answers[q.id];
+      const isEmpty = !ans || (Array.isArray(ans.value) ? ans.value.length === 0 : !ans.value || String(ans.value).trim() === '');
+      if (isEmpty) {
+        alert('Esta pergunta é obrigatória. Por favor, responda antes de continuar.');
+        return;
+      }
+    }
     if (currentStep < form.questions.length - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
@@ -473,7 +483,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
                   Pergunta {currentStep + 1} de {form.questions.length}
                 </span>
                 <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-8 leading-tight">
-                  {currentQuestion.text}
+                  {currentQuestion.text}{currentQuestion.required && <span className="text-red-500 ml-1">*</span>}
                 </h2>
 
                 <div className="space-y-3">

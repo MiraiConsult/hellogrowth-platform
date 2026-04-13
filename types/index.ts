@@ -98,6 +98,7 @@ export interface CampaignQuestion {
   options?: any[]; // Supports both string[] and {id: string, text: string}[]
   insight?: string;
   conditional?: 'promoter' | 'passive' | 'detractor';
+  required?: boolean;
 }
 
 export interface Campaign {
@@ -138,6 +139,7 @@ export interface FormQuestion {
   text: string;
   type: 'text' | 'single' | 'multiple' | 'single_choice' | 'multiple_choice';
   options?: FormOption[];
+  required?: boolean;
 }
 
 export interface Form {

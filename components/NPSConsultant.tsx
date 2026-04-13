@@ -34,6 +34,7 @@ interface GeneratedQuestion {
   options: QuestionOption[];
   insight: string;
   conditional?: 'promoter' | 'passive' | 'detractor';
+  required?: boolean;
 }
 
 interface NPSConsultantProps {
@@ -211,7 +212,8 @@ export default function NPSConsultant({
           type: q.type || 'text',
           options: processedOptions,
           insight: q.insight || '',
-          conditional: q.conditional
+          conditional: q.conditional,
+          required: q.required || false
         };
       });
       
@@ -1421,11 +1423,34 @@ Retorne APENAS o JSON:`;
                     />
                   </div>
 
+                  {/* Toggle obrigatoriedade */}
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <div>
+                      <span className="text-sm font-medium text-slate-700">Pergunta obrigatória</span>
+                      <p className="text-xs text-slate-500 mt-0.5">O respondente não poderá avançar sem responder</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleEditQuestion(question.id, { required: !question.required })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        question.required ? 'bg-red-500' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        question.required ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
 
                 </div>
               ) : (
                 <>
-                  <p className="text-slate-900 font-medium">{question.text}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-slate-900 font-medium">{question.text}</p>
+                    {question.required && (
+                      <span className="text-[10px] font-semibold text-red-500 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">Obrigatória</span>
+                    )}
+                  </div>
                   
                   {question.options.length > 0 && (
                     <div className="mt-3 space-y-1">

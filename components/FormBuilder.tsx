@@ -1155,6 +1155,24 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                           <option value="multiple">Múltipla Escolha</option>
                         </select>
                       </div>
+                      {/* Toggle obrigatoriedade */}
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div>
+                          <span className="text-sm font-medium text-gray-700">Pergunta obrigatória</span>
+                          <p className="text-xs text-gray-500 mt-0.5">O respondente não poderá avançar sem responder</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => updateQuestion(q.id, 'required', !q.required)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            q.required ? 'bg-red-500' : 'bg-gray-300'
+                          }`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            q.required ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
                    </div>
 
                    {(q.type === 'single' || q.type === 'multiple') && (
