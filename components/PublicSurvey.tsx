@@ -333,7 +333,7 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
           {step === 'score' && (
             <>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Olá, {(respondent.name || '').split(' ')[0]}!</h2>
-              <p className="text-gray-600 mb-6">Em uma escala de 0 a 10, o quanto você recomendaria a {displayCompanyName} para um amigo ou familiar?</p>
+              <p className="text-gray-600 mb-6">{(campaign.questions || []).find((q: any) => q.type === 'nps')?.text || `Em uma escala de 0 a 10, o quanto você recomendaria a ${displayCompanyName} para um amigo ou familiar?`}</p>
               
               <div className="flex flex-wrap justify-center gap-2 mb-8">
                 {Array.from({ length: 11 }).map((_, i) => (
