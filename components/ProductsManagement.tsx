@@ -595,6 +595,27 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
     XLSX.writeFile(wb, "template_produtos.xlsx");
   };
 
+  const exportToExcel = () => {
+    const exportData = filteredProducts.map((p) => ({
+      Nome: p.name,
+      Valor: p.value,
+      'Descrição IA': p.ai_description || '',
+      'Cadastrado em': p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    // Ajustar largura das colunas
+    ws['!cols'] = [
+      { wch: 40 }, // Nome
+      { wch: 15 }, // Valor
+      { wch: 60 }, // Descrição IA
+      { wch: 18 }, // Cadastrado em
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Produtos');
+    const fileName = `produtos_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
   const handleProductClick = (product: Product) => {
     setSelectedProduct(product);
     setShowDetailModal(true);
@@ -629,6 +650,16 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
           Importar Excel
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" />
         </label>
+        {products.length > 0 && (
+          <button
+            onClick={exportToExcel}
+            className="flex items-center gap-2 px-4 py-2 text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-colors"
+            title={`Exportar ${filteredProducts.length} produto(s) para Excel`}
+          >
+            <FileSpreadsheet size={18} />
+            Exportar Excel
+          </button>
+        )}
         <button
           onClick={fetchCatalogForBusiness}
           disabled={catalogLoading}
