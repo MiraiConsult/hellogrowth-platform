@@ -710,12 +710,15 @@ REGRAS:
       const npsQuestion = questions.find(q => q.type === 'nps');
       const otherQuestions = questions.filter(q => q.type !== 'nps');
       const orderedQuestions = npsQuestion ? [npsQuestion, ...otherQuestions] : questions;
-      // Sempre usar o texto padrão fixo para a pergunta NPS, independente do tom
+      // Usar texto customizado se já existir (campanha sendo editada), senão usar o padrão
       const companyName = businessProfile?.company_name || 'nossa empresa';
-      const npsFixedText = `Em uma escala de 0 a 10, o quanto você recomendaria a ${companyName} para amigos ou familiares?`;
+      const existingNpsText = existingCampaign?.questions?.find((q: any) => q.type === 'nps')?.text;
+      const npsDefaultText = `Em uma escala de 0 a 10, o quanto você recomendaria a ${companyName} para amigos ou familiares?`;
       const finalQuestions = orderedQuestions.map(q => {
         if (q.type === 'nps') {
-          return { ...q, text: npsFixedText };
+          // Preservar texto customizado se válido, senão usar o padrão
+          const textToUse = existingNpsText || npsDefaultText;
+          return { ...q, text: textToUse };
         }
         return q;
       });
@@ -965,6 +968,18 @@ Retorne APENAS o JSON:`;
       return;
     }
 
+    // Validar texto da pergunta NPS
+    const npsQuestion = generatedQuestions.find(q => q.type === 'nps');
+    if (npsQuestion) {
+      const hasScale = /0\s*[a-z]*\s*10|0-10|zero.*dez/i.test(npsQuestion.text);
+      const hasRecommend = /recomen|indic/i.test(npsQuestion.text);
+      if (!hasScale || !hasRecommend) {
+        alert('O texto da pergunta NPS precisa conter a escala "0 a 10" e a ideia de recomendar ou indicar. Corrija antes de salvar.');
+        setEditingQuestionId(npsQuestion.id);
+        return;
+      }
+    }
+
     try {
       const campaignData: any = {
         tenant_id: tenantId,
@@ -1180,38 +1195,43 @@ Retorne APENAS o JSON:`;
                   )}
 
                 </div>
-                {question.type !== 'nps' && (
-                  <div className="flex gap-1 items-center">
-                    <button
-                      onClick={() => handleMoveQuestion(index, 'up')}
-                      disabled={index === 0 || (index === 1 && generatedQuestions[0]?.type === 'nps')}
-                      className="p-1 hover:bg-slate-100 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
-                      title="Mover para cima"
-                    >
-                      <ArrowUp className="w-4 h-4 text-slate-500" />
-                    </button>
-                    <button
-                      onClick={() => handleMoveQuestion(index, 'down')}
-                      disabled={index === generatedQuestions.length - 1}
-                      className="p-1 hover:bg-slate-100 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
-                      title="Mover para baixo"
-                    >
-                      <ArrowDown className="w-4 h-4 text-slate-500" />
-                    </button>
+                <div className="flex gap-1 items-center">
+                    {question.type !== 'nps' && (
+                      <>
+                        <button
+                          onClick={() => handleMoveQuestion(index, 'up')}
+                          disabled={index === 0 || (index === 1 && generatedQuestions[0]?.type === 'nps')}
+                          className="p-1 hover:bg-slate-100 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                          title="Mover para cima"
+                        >
+                          <ArrowUp className="w-4 h-4 text-slate-500" />
+                        </button>
+                        <button
+                          onClick={() => handleMoveQuestion(index, 'down')}
+                          disabled={index === generatedQuestions.length - 1}
+                          className="p-1 hover:bg-slate-100 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                          title="Mover para baixo"
+                        >
+                          <ArrowDown className="w-4 h-4 text-slate-500" />
+                        </button>
+                      </>
+                    )}
                     <button
                       onClick={() => setEditingQuestionId(editingQuestionId === question.id ? null : question.id)}
                       className="p-1 hover:bg-slate-100 rounded transition-colors"
+                      title={question.type === 'nps' ? 'Personalizar texto da pergunta NPS' : 'Editar pergunta'}
                     >
                       <Edit3 className="w-4 h-4 text-slate-600" />
                     </button>
-                    <button
-                      onClick={() => handleDeleteQuestion(question.id)}
-                      className="p-1 hover:bg-red-50 rounded transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-600" />
-                    </button>
+                    {question.type !== 'nps' && (
+                      <button
+                        onClick={() => handleDeleteQuestion(question.id)}
+                        className="p-1 hover:bg-red-50 rounded transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </button>
+                    )}
                   </div>
-                )}
               </div>
               
               {editingQuestionId === question.id ? (
@@ -1219,12 +1239,40 @@ Retorne APENAS o JSON:`;
                   {/* Texto da pergunta */}
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Texto da pergunta</label>
+                    {question.type === 'nps' && (
+                      <div className="mb-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                        <strong>⚠️ Atenção:</strong> Esta é a pergunta principal do NPS. Você pode personalizar o texto, mas ele deve conter a escala <strong>"0 a 10"</strong> (ou "0-10") e a ideia de <strong>recomendar ou indicar</strong> — pois é com base nessa resposta que clientes satisfeitos são direcionados ao Google.
+                      </div>
+                    )}
                     <input
                       type="text"
                       value={question.text}
-                      onChange={(e) => handleEditQuestion(question.id, { text: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      onChange={(e) => {
+                        const newText = e.target.value;
+                        if (question.type === 'nps') {
+                          const hasScale = /0\s*[a-z]*\s*10|0-10|zero.*dez/i.test(newText);
+                          const hasRecommend = /recomen|indic|indicar|recomend/i.test(newText);
+                          if (!hasScale || !hasRecommend) {
+                            // Permite digitar mas mostra erro — não bloqueia a digitação
+                          }
+                        }
+                        handleEditQuestion(question.id, { text: newText });
+                      }}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                        question.type === 'nps' && (() => {
+                          const hasScale = /0\s*[a-z]*\s*10|0-10|zero.*dez/i.test(question.text);
+                          const hasRecommend = /recomen|indic/i.test(question.text);
+                          return (!hasScale || !hasRecommend) ? 'border-red-400 bg-red-50' : 'border-slate-300';
+                        })()
+                      }`}
                     />
+                    {question.type === 'nps' && (() => {
+                      const hasScale = /0\s*[a-z]*\s*10|0-10|zero.*dez/i.test(question.text);
+                      const hasRecommend = /recomen|indic/i.test(question.text);
+                      if (!hasScale) return <p className="text-xs text-red-500 mt-1">⚠️ O texto precisa conter a escala "0 a 10" ou "0-10"</p>;
+                      if (!hasRecommend) return <p className="text-xs text-red-500 mt-1">⚠️ O texto precisa conter a ideia de recomendar ou indicar</p>;
+                      return <p className="text-xs text-emerald-600 mt-1">✓ Texto válido</p>;
+                    })()}
                   </div>
 
                   {/* Tipo de resposta (não permitir mudar se for NPS) */}
