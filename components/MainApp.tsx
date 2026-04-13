@@ -1200,7 +1200,15 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }
     }
     
-    // Análise de IA será feita sob demanda pelo admin (botão "Analisar com IA")
+    // Disparar análise de IA em background automaticamente se o formulário tiver e-mail de análise ativado
+    if (insertedLead && formTenantId && (publicForm as any).email_analysis_enabled) {
+      const emailRecipients: string[] = (publicForm as any).email_analysis_recipients || [];
+      if (emailRecipients.length > 0) {
+        // Dispara sem aguardar — não bloqueia o retorno para o usuário
+        processAIAnalysisInBackground(insertedLead.id, { answers: enrichedAnswers, patient: data.patient }, publicForm, formTenantId);
+      }
+    }
+
     return true;
   };
   
@@ -1386,6 +1394,29 @@ Responda APENAS com JSON válido (sem markdown):
           }
         })
         .eq('id', leadId);
+
+      // Disparar e-mail de análise se o formulário tiver esse recurso ativado
+      const emailEnabled = (form as any).email_analysis_enabled;
+      const emailRecipients: string[] = (form as any).email_analysis_recipients || [];
+      if (emailEnabled && emailRecipients.length > 0) {
+        // Montar lista de perguntas com texto legível
+        const questionsForEmail = form.questions.map((q: any) => ({ id: q.id, text: q.text || q.id }));
+        fetch('/api/send-analysis-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipients: emailRecipients,
+            leadName: data.patient?.name || 'Lead',
+            leadEmail: data.patient?.email || '',
+            leadPhone: data.patient?.phone || '',
+            formName: form.name,
+            companyName: publicCompanyName || '',
+            answers: data.answers,
+            questions: questionsForEmail,
+            aiAnalysis,
+          }),
+        }).catch(err => console.error('[email-analysis] Erro ao disparar e-mail:', err));
+      }
     }
   };
 

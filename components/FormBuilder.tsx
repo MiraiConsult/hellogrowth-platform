@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift, Send, BookOpen, Search, Star, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
+import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift, Send, BookOpen, Search, Star, ChevronDown, ChevronUp, HelpCircle, Mail, PlusCircle } from 'lucide-react';
 import FormConsultant from '@/components/FormConsultant';
 import FormMassDispatchModal from '@/components/FormMassDispatchModal';
 import { supabase } from '@/lib/supabase';
@@ -166,6 +166,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [availableProducts, setAvailableProducts] = useState<any[]>([]);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [emailAnalysisEnabled, setEmailAnalysisEnabled] = useState(false);
+  const [emailAnalysisRecipients, setEmailAnalysisRecipients] = useState<string[]>([]);
+  const [emailAnalysisNewRecipient, setEmailAnalysisNewRecipient] = useState('');
   const [isMassFormSendOpen, setIsMassFormSendOpen] = useState(false);
   const [generatingScriptId, setGeneratingScriptId] = useState<string | null>(null); 
 
@@ -238,6 +241,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setCurrentGameEnabled(false);
     setCurrentGameId(null);
     setSelectedProductIds([]);
+    setEmailAnalysisEnabled(false);
+    setEmailAnalysisRecipients([]);
+    setEmailAnalysisNewRecipient('');
     setView('editor');
   };
 
@@ -251,6 +257,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setCurrentGameId(form.game_id || null);
     setCurrentShowLogo((form as any).show_logo || false);
     setSelectedProductIds((form as any).product_ids || []);
+    setEmailAnalysisEnabled((form as any).email_analysis_enabled || false);
+    setEmailAnalysisRecipients((form as any).email_analysis_recipients || []);
+    setEmailAnalysisNewRecipient('');
     setView('editor');
     setMenuOpenId(null);
   };
@@ -526,7 +535,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         game_enabled: currentGameEnabled,
         game_id: currentGameId,
         show_logo: currentShowLogo,
-        product_ids: selectedProductIds.length > 0 ? selectedProductIds : undefined
+        product_ids: selectedProductIds.length > 0 ? selectedProductIds : undefined,
+        email_analysis_enabled: emailAnalysisEnabled,
+        email_analysis_recipients: emailAnalysisRecipients,
     };
 
     // Trigger Parent Handler for DB Save
@@ -973,6 +984,102 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
               )}
             </div>
           )}
+
+          {/* Email Analysis Configuration */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-50 rounded-lg">
+                  <Mail size={18} className="text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700">Enviar Análise por E-mail</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Ao receber uma resposta, a IA analisa e envia um e-mail com produtos sugeridos e script de vendas</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEmailAnalysisEnabled(!emailAnalysisEnabled)}
+                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
+                  emailAnalysisEnabled ? 'bg-blue-500' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    emailAnalysisEnabled ? 'translate-x-9' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {emailAnalysisEnabled && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Destinatários</label>
+                  <p className="text-xs text-gray-500 mb-2">E-mails que receberão a análise automaticamente. Você pode adicionar mais de um.</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={emailAnalysisNewRecipient}
+                      onChange={e => setEmailAnalysisNewRecipient(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const email = emailAnalysisNewRecipient.trim();
+                          if (email && !emailAnalysisRecipients.includes(email)) {
+                            setEmailAnalysisRecipients(prev => [...prev, email]);
+                            setEmailAnalysisNewRecipient('');
+                          }
+                        }
+                      }}
+                      placeholder="email@empresa.com"
+                      className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border bg-white text-gray-900 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const email = emailAnalysisNewRecipient.trim();
+                        if (email && !emailAnalysisRecipients.includes(email)) {
+                          setEmailAnalysisRecipients(prev => [...prev, email]);
+                          setEmailAnalysisNewRecipient('');
+                        }
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                    >
+                      <PlusCircle size={15} />
+                      Adicionar
+                    </button>
+                  </div>
+                </div>
+
+                {emailAnalysisRecipients.length > 0 && (
+                  <div className="space-y-1.5">
+                    {emailAnalysisRecipients.map(email => (
+                      <div key={email} className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <Mail size={13} className="text-blue-500" />
+                          <span className="text-sm text-blue-800">{email}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEmailAnalysisRecipients(prev => prev.filter(e => e !== email))}
+                          className="text-blue-400 hover:text-red-500 transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {emailAnalysisRecipients.length === 0 && (
+                  <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <span className="text-xs text-amber-700">⚠️ Adicione pelo menos um e-mail destinatário para ativar o envio.</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="flex justify-between items-center">
              <h2 className="text-lg font-bold text-gray-800">Perguntas</h2>

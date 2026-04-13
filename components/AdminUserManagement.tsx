@@ -7,7 +7,7 @@ import {
   ExternalLink, Building2, AlertCircle, Search, ChevronRight, Copy,
   Zap, Star, UserPlus, DollarSign, Check, Moon, Sun, Send, BookOpen, Package, TrendingUp,
   LayoutDashboard, Brain, MessageSquare, ChevronLeft, BarChart3,
-  Activity, Heart, FileText, MessageCircle, UserCheck, UserCog, Kanban, Lock, Eye, EyeOff, LogIn
+  Activity, Heart, FileText, MessageCircle, UserCheck, UserCog, Kanban, Lock, Eye, EyeOff, LogIn, Mail
 } from 'lucide-react';
 import AdminBroadcast from '@/components/AdminBroadcast';
 import AdminIntelligence from '@/components/AdminIntelligence';
@@ -17,6 +17,7 @@ import AdminFinanceiro from '@/components/AdminFinanceiro';
 import AdminHome from '@/components/AdminHome';
 import AdminColaboradores from '@/components/AdminColaboradores';
 import AdminWhatsApp from '@/components/AdminWhatsApp';
+import AdminEmail from '@/components/AdminEmail';
 import AdminKanban from '@/components/AdminKanban';
 import AdminHistorico from '@/components/AdminHistorico';
 import ClientProfile from '@/components/ClientProfile';
@@ -232,7 +233,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
   const [isDark, setIsDark] = useState(true);
   const t = isDark ? DARK : LIGHT;
   // ── Active Tab ──
-  const [activeTab, setActiveTab] = useState<'home' | 'clients' | 'broadcast' | 'intelligence' | 'templates' | 'catalogs' | 'financeiro' | 'conteudo' | 'colaboradores' | 'kanban' | 'whatsapp' | 'lixeira'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'clients' | 'broadcast' | 'intelligence' | 'templates' | 'catalogs' | 'financeiro' | 'conteudo' | 'colaboradores' | 'kanban' | 'whatsapp' | 'email' | 'lixeira'>('home');
   const [conteudoSubTab, setConteudoSubTab] = useState<'templates' | 'catalogs' | 'broadcast'>('templates');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // ── Financeiro Password Protection ──
@@ -824,6 +825,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
     { id: 'colaboradores',  label: 'Colaboradores',  icon: <UserCog size={18} />,         activeClass: 'bg-sky-600 text-white' },
     { id: 'kanban',         label: 'Kanban CS',      icon: <Kanban size={18} />,          activeClass: 'bg-violet-600 text-white' },
     { id: 'whatsapp',       label: 'WhatsApp',       icon: <MessageSquare size={18} />,   activeClass: 'bg-green-600 text-white' },
+    { id: 'email',          label: 'E-mail',         icon: <Mail size={18} />,            activeClass: 'bg-blue-600 text-white' },
     { id: 'lixeira',        label: 'Histórico',      icon: <Activity size={18} />,        activeClass: 'bg-violet-600 text-white' },
   ];
 
@@ -1102,6 +1104,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
       )}
       {activeTab === 'whatsapp' && (
         <AdminWhatsApp isDark={isDark} />
+      )}
+      {activeTab === 'email' && (
+        <AdminEmail isDark={isDark} />
       )}
       {activeTab === 'lixeira' && (
         <AdminHistorico isDark={isDark} />
