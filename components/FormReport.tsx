@@ -39,7 +39,15 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   
   // Estados para o layout de duas colunas
-  const [detailSection, setDetailSection] = useState<'products' | 'ai' | 'answers' | null>('products');
+  const [detailSection, setDetailSection] = useState<'products' | 'ai' | 'answers' | 'notes' | null>('products');
+
+  // Estados para anotações de negociação
+  const [negotiationNoteText, setNegotiationNoteText] = useState('');
+  const [isSavingNegotiationNote, setIsSavingNegotiationNote] = useState(false);
+
+  // Estado para edição de valor individual de produto
+  const [editingProductValueId, setEditingProductValueId] = useState<string | null>(null);
+  const [editingProductValueText, setEditingProductValueText] = useState('');
   
   // Estados para o chat com IA
   const [chatMessages, setChatMessages] = useState<{role: 'user' | 'ai'; content: string}[]>([]);
@@ -223,6 +231,38 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
 
   const handleRemoveProduct = (productId: string) => {
     setEditedProducts(editedProducts.filter(p => p.id !== productId));
+  };
+
+  // Salvar anotação de negociação
+  const handleSaveNegotiationNote = async () => {
+    if (!selectedLead || !supabase || !negotiationNoteText.trim()) return;
+    setIsSavingNegotiationNote(true);
+    try {
+      const existing = selectedLead.negotiation_notes || '';
+      const timestamp = new Date().toLocaleString('pt-BR');
+      const newEntry = `[${timestamp}]\n${negotiationNoteText.trim()}`;
+      const updated = existing ? `${existing}\n\n---\n\n${newEntry}` : newEntry;
+      const { error } = await supabase
+        .from('leads')
+        .update({ negotiation_notes: updated })
+        .eq('id', selectedLead.id);
+      if (!error) {
+        setNegotiationNoteText('');
+        const updatedLead = { ...selectedLead, negotiation_notes: updated };
+        setSelectedLead(updatedLead);
+        if (onLeadUpdate) onLeadUpdate(selectedLead.id, { negotiation_notes: updated });
+      }
+    } catch (err) {
+      console.error('Erro ao salvar anotação:', err);
+    } finally {
+      setIsSavingNegotiationNote(false);
+    }
+  };
+
+  // Atualizar valor de produto individualmente
+  const handleUpdateProductValue = (productId: string, newValue: number) => {
+    setEditedProducts(prev => prev.map(p => p.id === productId ? { ...p, value: newValue } : p));
+    setEditingProductValueId(null);
   };
 
   const handleSaveProductEdits = async () => {
@@ -884,6 +924,27 @@ INSTRUÇÕES DE RESPOSTA:
                   <ArrowRight size={16} className="text-gray-400" />
                 </button>
 
+                {/* Botão: Anotações de Negociação */}
+                <button
+                  onClick={() => setDetailSection(prev => prev === 'notes' ? null : 'notes')}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                    detailSection === 'notes'
+                      ? 'border-green-300 bg-green-50 text-green-700'
+                      : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <MessageSquare size={16} className={detailSection === 'notes' ? 'text-green-600' : 'text-gray-400'} />
+                    <span className="text-xs font-bold uppercase">Anotações da Negociação</span>
+                    {selectedLead.negotiation_notes && (
+                      <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-[10px] font-medium rounded-full">
+                        {selectedLead.negotiation_notes.split('---').length}
+                      </span>
+                    )}
+                  </div>
+                  <ArrowRight size={16} className="text-gray-400" />
+                </button>
+
                 {/* Botão: Perguntas e Respostas */}
                 {selectedLead.answers && Object.keys(selectedLead.answers).filter(k => !k.startsWith('_')).length > 0 && (
                   <button
@@ -1090,13 +1151,34 @@ INSTRUÇÕES DE RESPOSTA:
                             <div className="space-y-2">
                               {editedProducts.map((product) => (
                                 <div key={product.id} className="flex items-center justify-between bg-white p-3 rounded-lg border border-purple-200">
-                                  <div>
-                                    <p className="font-medium text-gray-900">{product.name}</p>
-                                    <p className="text-sm text-green-600 font-bold">
-                                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.value)}
-                                    </p>
+                                  <div className="flex-1 min-w-0 mr-2">
+                                    <p className="font-medium text-gray-900 text-sm truncate">{product.name}</p>
+                                    {editingProductValueId === product.id ? (
+                                      <div className="flex items-center gap-1 mt-1">
+                                        <span className="text-xs text-gray-500">R$</span>
+                                        <input
+                                          autoFocus
+                                          type="number"
+                                          defaultValue={product.value}
+                                          onBlur={e => handleUpdateProductValue(product.id, parseFloat(e.target.value) || 0)}
+                                          onKeyDown={e => {
+                                            if (e.key === 'Enter') handleUpdateProductValue(product.id, parseFloat((e.target as HTMLInputElement).value) || 0);
+                                            if (e.key === 'Escape') setEditingProductValueId(null);
+                                          }}
+                                          className="w-24 text-sm border border-purple-300 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => { setEditingProductValueId(product.id); setEditingProductValueText(String(product.value)); }}
+                                        className="text-sm text-green-600 font-bold hover:text-green-800 hover:underline flex items-center gap-1 mt-0.5"
+                                      >
+                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.value)}
+                                        <Edit2 size={10} className="opacity-50" />
+                                      </button>
+                                    )}
                                   </div>
-                                  <button onClick={() => handleRemoveProduct(product.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                  <button onClick={() => handleRemoveProduct(product.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0">
                                     <Trash2 size={16} />
                                   </button>
                                 </div>
@@ -1244,6 +1326,59 @@ INSTRUÇÕES DE RESPOSTA:
                           )}
                         </div>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Conteúdo: Anotações de Negociação */}
+                {detailSection === 'notes' && (
+                  <div className="flex flex-col h-full">
+                    <div className="flex items-center gap-2 mb-4">
+                      <MessageSquare size={18} className="text-green-600" />
+                      <h3 className="font-bold text-gray-900">Anotações da Negociação</h3>
+                    </div>
+
+                    {/* Campo para nova anotação */}
+                    <div className="mb-4">
+                      <textarea
+                        value={negotiationNoteText}
+                        onChange={e => setNegotiationNoteText(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleSaveNegotiationNote(); }}
+                        placeholder="Adicionar anotação... (Ctrl+Enter para salvar)"
+                        rows={3}
+                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
+                      />
+                      <button
+                        onClick={handleSaveNegotiationNote}
+                        disabled={!negotiationNoteText.trim() || isSavingNegotiationNote}
+                        className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isSavingNegotiationNote ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                        Adicionar Anotação
+                      </button>
+                    </div>
+
+                    {/* Histórico de anotações */}
+                    <div className="flex-1 overflow-y-auto space-y-3">
+                      {!selectedLead.negotiation_notes ? (
+                        <div className="text-center py-8 text-gray-400">
+                          <MessageSquare size={40} className="mx-auto mb-2 opacity-30" />
+                          <p className="text-sm">Nenhuma anotação ainda</p>
+                          <p className="text-xs mt-1">As anotações feitas aqui também aparecem no Kanban</p>
+                        </div>
+                      ) : (
+                        selectedLead.negotiation_notes.split('\n\n---\n\n').reverse().map((entry, i) => {
+                          const lines = entry.split('\n');
+                          const header = lines[0];
+                          const body = lines.slice(1).join('\n');
+                          return (
+                            <div key={i} className="bg-white rounded-lg border border-gray-200 p-4">
+                              <p className="text-[10px] text-gray-400 font-medium mb-1">{header.replace(/[\[\]]/g, '')}</p>
+                              <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{body}</p>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
                 )}
