@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Mail, Save, CheckCircle, AlertTriangle, Loader2, Send, Info, Eye, EyeOff
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Save, CheckCircle, AlertTriangle, Loader2, Send, Info } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
 
 interface Props {
   isDark: boolean;
 }
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export default function AdminEmail({ isDark }: Props) {
   const t = {
@@ -19,10 +21,9 @@ export default function AdminEmail({ isDark }: Props) {
       ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-400'
       : 'bg-white border-slate-300 text-slate-800 placeholder-slate-400',
     label: isDark ? 'text-slate-300' : 'text-slate-600',
-    divider: isDark ? 'border-slate-700' : 'border-slate-200',
   };
 
-  const [fromEmail, setFromEmail] = useState('analise@hellogrowth.com.br');
+  const [fromEmail, setFromEmail] = useState('contato@miraiconsult.com');
   const [fromName, setFromName] = useState('HelloGrowth — Análise de Lead');
   const [testEmail, setTestEmail] = useState('');
   const [saving, setSaving] = useState(false);
@@ -31,19 +32,39 @@ export default function AdminEmail({ isDark }: Props) {
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Carregar configurações salvas (via env vars exibidas como readonly)
+  // Carregar configurações salvas do Supabase (tabela global_settings)
   useEffect(() => {
-    // Os valores reais vêm das variáveis de ambiente ANALYSIS_EMAIL_FROM e ANALYSIS_EMAIL_FROM_NAME
-    // Aqui mostramos os defaults para referência
+    const load = async () => {
+      try {
+        const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const { data } = await sb
+          .from('global_settings')
+          .select('value')
+          .eq('key', 'analysis_email_config')
+          .single();
+        if (data?.value) {
+          const cfg = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+          if (cfg.from_email) setFromEmail(cfg.from_email);
+          if (cfg.from_name) setFromName(cfg.from_name);
+        }
+      } catch (_) {
+        // silently ignore — usa defaults
+      }
+    };
+    load();
   }, []);
 
   const handleSave = async () => {
     setSaving(true);
     setError(null);
     try {
-      // As variáveis de ambiente precisam ser configuradas no Vercel
-      // Este botão serve como guia para o administrador
-      await new Promise(r => setTimeout(r, 800));
+      const res = await fetch('/api/admin/save-email-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from_email: fromEmail.trim(), from_name: fromName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao salvar');
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e: any) {
@@ -82,22 +103,13 @@ export default function AdminEmail({ isDark }: Props) {
             { id: 'q3', text: 'Qual seu orçamento disponível?' },
           ],
           aiAnalysis: {
-            reasoning: 'Cliente demonstra interesse claro em implante dentário com orçamento definido e urgência. Alta probabilidade de conversão.',
-            client_insights: [
-              'Interesse específico em implante dentário',
-              'Orçamento de até R$ 5.000 — compatível com implante unitário',
-              'Demonstra urgência — contato imediato recomendado',
-            ],
+            reasoning: 'Cliente demonstra interesse claro em implante dentário com orçamento definido e urgência.',
+            client_insights: ['Interesse em implante dentário', 'Orçamento compatível', 'Urgência no atendimento'],
             recommended_products: [
-              { name: 'Implante Dentário Unitário', reason: 'Atende diretamente à necessidade do cliente dentro do orçamento informado' },
-              { name: 'Consulta de Avaliação', reason: 'Primeiro passo para qualificar e fechar o tratamento' },
+              { name: 'Implante Dentário Unitário', reason: 'Atende à necessidade dentro do orçamento' },
             ],
-            sales_script: 'Olá João! Vi que você tem interesse em implante dentário e orçamento disponível. Temos uma promoção especial este mês para implante unitário que se encaixa perfeitamente no seu orçamento. Podemos agendar uma avaliação gratuita esta semana?',
-            next_steps: [
-              'Ligar em até 2 horas — cliente demonstrou urgência',
-              'Oferecer avaliação gratuita como primeiro passo',
-              'Apresentar opções de parcelamento se necessário',
-            ],
+            sales_script: 'Olá João! Vi que você busca implante dentário. Temos uma avaliação gratuita disponível esta semana!',
+            next_steps: ['Ligar em até 2 horas', 'Oferecer avaliação gratuita'],
             classification: 'opportunity',
             confidence: 0.88,
           },
@@ -150,25 +162,18 @@ export default function AdminEmail({ isDark }: Props) {
 
         <div className="space-y-4">
           <div>
-            <label className={`block text-sm font-medium ${t.label} mb-1.5`}>
-              E-mail Remetente
-            </label>
+            <label className={`block text-sm font-medium ${t.label} mb-1.5`}>E-mail Remetente</label>
             <input
               type="email"
               value={fromEmail}
               onChange={e => setFromEmail(e.target.value)}
-              placeholder="analise@hellogrowth.com.br"
+              placeholder="contato@miraiconsult.com"
               className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${t.input}`}
             />
-            <p className={`text-xs mt-1 ${t.textMuted}`}>
-              Configure a variável <code className="bg-gray-100 text-gray-700 px-1 rounded">ANALYSIS_EMAIL_FROM</code> no Vercel com este valor.
-            </p>
           </div>
 
           <div>
-            <label className={`block text-sm font-medium ${t.label} mb-1.5`}>
-              Nome do Remetente
-            </label>
+            <label className={`block text-sm font-medium ${t.label} mb-1.5`}>Nome do Remetente</label>
             <input
               type="text"
               value={fromName}
@@ -176,23 +181,30 @@ export default function AdminEmail({ isDark }: Props) {
               placeholder="HelloGrowth — Análise de Lead"
               className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${t.input}`}
             />
-            <p className={`text-xs mt-1 ${t.textMuted}`}>
-              Configure a variável <code className="bg-gray-100 text-gray-700 px-1 rounded">ANALYSIS_EMAIL_FROM_NAME</code> no Vercel com este valor.
-            </p>
           </div>
         </div>
 
-        {/* Instruções Vercel */}
-        <div className={`rounded-lg p-4 border ${isDark ? 'bg-slate-700 border-slate-600' : 'bg-gray-50 border-gray-200'}`}>
-          <p className={`text-xs font-semibold ${t.text} mb-2`}>📋 Como configurar no Vercel</p>
-          <ol className={`text-xs ${t.textMuted} space-y-1 list-decimal list-inside`}>
-            <li>Acesse o painel do Vercel → seu projeto → <strong>Settings → Environment Variables</strong></li>
-            <li>Adicione <code className="bg-gray-200 text-gray-700 px-1 rounded">ANALYSIS_EMAIL_FROM</code> com o e-mail remetente</li>
-            <li>Adicione <code className="bg-gray-200 text-gray-700 px-1 rounded">ANALYSIS_EMAIL_FROM_NAME</code> com o nome do remetente</li>
-            <li>Certifique-se que <code className="bg-gray-200 text-gray-700 px-1 rounded">RESEND_API_KEY</code> já está configurada</li>
-            <li>Faça um novo deploy para aplicar as variáveis</li>
-          </ol>
-        </div>
+        {error && (
+          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
+            <AlertTriangle size={15} className="text-red-500 flex-shrink-0" />
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+        >
+          {saving ? (
+            <Loader2 size={15} className="animate-spin" />
+          ) : saved ? (
+            <CheckCircle size={15} />
+          ) : (
+            <Save size={15} />
+          )}
+          {saving ? 'Salvando...' : saved ? 'Salvo!' : 'Salvar Configurações'}
+        </button>
       </div>
 
       {/* Teste de Envio */}
@@ -230,14 +242,6 @@ export default function AdminEmail({ isDark }: Props) {
           </div>
         )}
       </div>
-
-      {/* Erro */}
-      {error && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
-          <AlertTriangle size={16} className="text-red-500 flex-shrink-0" />
-          <p className="text-sm text-red-700">{error}</p>
-        </div>
-      )}
     </main>
   );
 }
