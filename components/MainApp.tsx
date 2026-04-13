@@ -803,8 +803,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       game_enabled: form.game_enabled || false,
       game_id: form.game_id || null,
       show_logo: (form as any).show_logo || false,
-      email_analysis_enabled: (form as any).email_analysis_enabled || false,
-      email_analysis_recipients: (form as any).email_analysis_recipients || ''
+      email_analysis_enabled: form.email_analysis_enabled || false,
+      email_analysis_recipients: form.email_analysis_recipients || ''
       // product_ids: requer migração 004 no Supabase antes de habilitar
       // product_ids: (form as any).product_ids || null
     };

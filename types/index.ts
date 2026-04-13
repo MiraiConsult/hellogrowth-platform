@@ -153,6 +153,8 @@ export interface Form {
   initialFields?: InitialField[]; // Configurable initial fields
   game_enabled?: boolean; // Game (SpinWheel) enabled for this form
   game_id?: string; // ID of the game (nps_games) associated with this form
+  email_analysis_enabled?: boolean;
+  email_analysis_recipients?: string;
 }
 
 export interface ChartData {

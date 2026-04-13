@@ -251,7 +251,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setEditingFormId(form.id);
     setCurrentFormName(form.name);
     setCurrentFormDescription(form.description || '');
-    setCurrentQuestions(form.questions.map(q => ({ ...q, type: normalizeQuestionType(q.type), options: q.options?.map(opt => ({ ...opt, label: typeof opt.label === "object" && opt.label?.text ? opt.label.text : (opt.label || opt.text || ""), ...(opt.followUpLabel !== undefined ? { followUpLabel: opt.followUpLabel } : {}) })) || [] })));
+    setCurrentQuestions(form.questions.map(q => ({ ...q, type: normalizeQuestionType(q.type), options: q.options?.map(opt => ({ ...opt, label: typeof opt.label === "object" && (opt.label as any)?.text ? (opt.label as any).text : (opt.label || (opt as any).text || ""), ...(opt.followUpLabel !== undefined ? { followUpLabel: opt.followUpLabel } : {}) })) || [] })));
     setCurrentInitialFields(form.initialFields || []);
     setCurrentGameEnabled(form.game_enabled || false);
     setCurrentGameId(form.game_id || null);
@@ -1333,6 +1333,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         id: q.id,
         text: q.text,
         type: normalizeQuestionType(q.type || 'single'),
+        required: q.required !== false,
         options: q.options?.map((opt: any, i: number) => ({
           id: opt.id || `opt_${Date.now()}_${i}`,
           // CORREÇÃO: Extrai o texto corretamente de qualquer formato
@@ -1356,7 +1357,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       initialFields: initialFieldsFormatted,
       game_enabled: formData.game_enabled || false,
       game_id: formData.game_id || null,
-      show_logo: formData.show_logo || false
+      show_logo: formData.show_logo || false,
+      email_analysis_enabled: formData.email_analysis_enabled || false,
+      email_analysis_recipients: formData.email_analysis_recipients || ''
     } as any;
     onSaveForm(newForm);
   };
