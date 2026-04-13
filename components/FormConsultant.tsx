@@ -33,7 +33,7 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
-  ArrowUp, ArrowDown} from 'lucide-react';
+  ArrowUp, ArrowDown, Mail} from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 
@@ -57,6 +57,7 @@ interface GeneratedQuestion {
   options: QuestionOption[];
   insight: string;
   linkedProducts?: string[];
+  required?: boolean;
 }
 
 interface IdentificationField {
@@ -155,6 +156,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [gameEnabled, setGameEnabled] = useState(false); // Ativar Game no formulário
   const [showLogo, setShowLogo] = useState(false); // Exibir logo no formulário
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+  const [emailAnalysisEnabled, setEmailAnalysisEnabled] = useState(false);
+  const [emailAnalysisRecipients, setEmailAnalysisRecipients] = useState('');
   const [availableGames, setAvailableGames] = useState<any[]>([]);
   
   // Estados para o Chat de Ajuste na tela de revisão
@@ -214,7 +217,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
           type: mappedType,
           options: processedOptions,
           insight: q.insight || q.ai_insight || 'Pergunta do formulário',
-          linkedProducts: q.linkedProducts || q.linked_products || []
+          linkedProducts: q.linkedProducts || q.linked_products || [],
+          required: q.required !== undefined ? q.required : true
         };
       });
       
@@ -223,6 +227,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       setFormName(stableExistingForm.name || '');
       setGameEnabled(stableExistingForm.game_enabled || false);
       setSelectedGameId(stableExistingForm.game_id || null);
+      setEmailAnalysisEnabled(stableExistingForm.email_analysis_enabled || false);
+      setEmailAnalysisRecipients(stableExistingForm.email_analysis_recipients || '');
       
       // Carregar campos de identificação salvos
       // IMPORTANTE: O banco salva como initial_fields, e o MainApp mapeia para initialFields
@@ -1158,7 +1164,7 @@ Responda APENAS com JSON válido neste formato:
           value: 0,
           ...(opt.followUpLabel !== undefined ? { followUpLabel: opt.followUpLabel } : {})
         })),
-        required: true
+        required: q.required !== false
       })),
       ai_context: {
         products: products,
@@ -1167,6 +1173,8 @@ Responda APENAS com JSON válido neste formato:
       game_enabled: gameEnabled,
       game_id: selectedGameId || null,
       show_logo: showLogo,
+      email_analysis_enabled: emailAnalysisEnabled,
+      email_analysis_recipients: emailAnalysisRecipients,
       status: 'active'
     };
 
@@ -1764,6 +1772,25 @@ Retorne APENAS este JSON (sem markdown, sem texto fora do JSON):
                     </select>
                   </div>
                   
+                  {/* Toggle obrigatoriedade */}
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <div>
+                      <span className="text-sm font-medium text-slate-700">Pergunta obrigatória</span>
+                      <p className="text-xs text-slate-500 mt-0.5">O respondente não poderá avançar sem responder</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleEditQuestion(question.id, 'required', !question.required)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        question.required !== false ? 'bg-red-500' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        question.required !== false ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                  
                   {/* Options (for choice types) */}
                   {(question.type === 'single_choice' || question.type === 'multiple_choice' || question.type === 'single' || question.type === 'multiple') && question.options && question.options.length > 0 && (
                     <div className="space-y-2">
@@ -2098,6 +2125,52 @@ Retorne APENAS este JSON (sem markdown, sem texto fora do JSON):
                   <p className="text-sm text-emerald-800 font-medium">✅ Roleta selecionada: {availableGames.find(g => g.id === selectedGameId)?.name}</p>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* E-mail de Análise */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Mail size={20} className="text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-slate-800">Enviar Análise por E-mail</h3>
+                <p className="text-sm text-slate-500 mt-0.5">Receba a análise da IA por e-mail quando um lead preencher o formulário</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setEmailAnalysisEnabled(!emailAnalysisEnabled)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                emailAnalysisEnabled ? 'bg-blue-500' : 'bg-gray-300'
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                emailAnalysisEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
+          {emailAnalysisEnabled && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-600 mb-1">E-mails destinatários</label>
+                <input
+                  type="text"
+                  value={emailAnalysisRecipients}
+                  onChange={(e) => setEmailAnalysisRecipients(e.target.value)}
+                  placeholder="email1@empresa.com, email2@empresa.com"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-slate-400 mt-1">Separe múltiplos e-mails por vírgula</p>
+              </div>
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-xs text-blue-700">
+                  <strong>O que será enviado:</strong> Respostas do formulário, produtos sugeridos pela IA e script de vendas personalizado.
+                </p>
+              </div>
             </div>
           )}
         </div>
