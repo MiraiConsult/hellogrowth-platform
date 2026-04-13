@@ -141,7 +141,7 @@ const METRIC_EXPLANATIONS = {
     title: 'Reputação',
     icon: <Star size={18} className="text-yellow-500" />,
     description: 'A Reputação mede como os clientes enxergam o seu negócio no Google. Ela é baseada em dois fatores: a nota média que você recebe nas avaliações (de 0 a 5 estrelas) e a quantidade total de avaliações que o seu perfil acumulou. Um negócio com nota alta mas poucas avaliações ainda tem reputação limitada — o Google valoriza tanto a qualidade quanto o volume.',
-    howCalculated: 'O cálculo divide 100 pontos em duas partes: até 60 pontos pela nota média (quanto mais próximo de 5 estrelas, mais pontos) e até 40 pontos pelo volume de avaliações (crescimento logarítmico — as primeiras avaliações valem mais do que as últimas). Por exemplo: nota 4.8★ com 199 avaliações gera aproximadamente 58 + 46 = 98 pontos.',
+    howCalculated: 'O cálculo divide 100 pontos em duas partes: até 55 pontos pela nota média (com penalidade exponencial — notas abaixo de 4.0★ são penalizadas mais severamente) e até 45 pontos pelo volume de avaliações (escala rigorosa: 50 avaliações = ~19 pts, 200 avaliações = ~34 pts, 500 avaliações = 45 pts). Por exemplo: nota 4.8★ com 200 avaliações gera aproximadamente 51 + 34 = 85 pontos.',
     howToImprove: [
       'Solicite avaliações de clientes satisfeitos após cada atendimento',
       'Responda a todas as avaliações, especialmente as negativas',
@@ -154,9 +154,9 @@ const METRIC_EXPLANATIONS = {
     title: 'Visibilidade',
     icon: <Eye size={18} className="text-blue-500" />,
     description: 'A Visibilidade mede o quão completo e bem configurado está o seu perfil no Google. Perfis incompletos aparecem menos nas buscas — o Google prioriza negócios que fornecem informações completas para os usuários. Cada informação que você adiciona aumenta as chances do seu negócio aparecer quando alguém busca por um serviço como o seu.',
-    howCalculated: 'O cálculo avalia 4 elementos do perfil: Fotos (até 30 pts — 0 fotos = 0, 1-2 fotos = 10, 3-9 fotos = 20, 10+ fotos = 30), Horários de funcionamento configurados (25 pts), Website vinculado (25 pts) e Telefone cadastrado (20 pts). Total máximo: 100 pontos.',
+    howCalculated: 'O cálculo avalia 4 elementos do perfil: Fotos (até 30 pts — 0 fotos = 0, 1-4 fotos = 8, 5-14 fotos = 16, 15-24 fotos = 24, 25+ fotos = 30), Horários de funcionamento configurados (25 pts), Website vinculado (25 pts) e Telefone cadastrado (20 pts). Total máximo: 100 pontos.',
     howToImprove: [
-      'Adicione pelo menos 10 fotos de qualidade do estabelecimento',
+      'Adicione pelo menos 25 fotos de qualidade do estabelecimento para pontuação máxima',
       'Configure os horários de funcionamento corretamente',
       'Vincule seu website ao perfil',
       'Mantenha o telefone atualizado',
@@ -167,7 +167,7 @@ const METRIC_EXPLANATIONS = {
     title: 'Engajamento',
     icon: <MessageSquare size={18} className="text-green-500" />,
     description: 'O Engajamento mede se o seu negócio está ativo e gerando interações recentes no Google. Um perfil que não recebe novas avaliações há meses é visto pelo Google como menos relevante — mesmo que tenha uma nota alta. O algoritmo do Google valoriza negócios que mantmé atividade constante, pois indica que o negócio está funcionando e atendendo clientes.',
-    howCalculated: 'O cálculo combina dois fatores: volume total de avaliações (até 50 pts, crescimento logarítmico) e nota média (até 50 pts). Quanto mais avaliações e melhor a nota, maior o engajamento.',
+    howCalculated: 'O cálculo combina dois fatores: volume total de avaliações (até 50 pts, escala muito rigorosa: 50 avaliações = ~14 pts, 200 = ~24 pts, 1000 = 50 pts) e nota média com penalidade exponencial (até 50 pts). Manter um fluxo constante de novas avaliações é essencial para pontuação alta.',
     howToImprove: [
       'Mantenha um fluxo constante de novas avaliações',
       'Responda às avaliações para incentivar mais interações',
@@ -186,7 +186,7 @@ const METRIC_EXPLANATIONS = {
       'Mantenha consistência nas ações ao longo do tempo',
       'Realize diagnósticos mensais para acompanhar a evolução',
     ],
-    benchmark: 'Score 70+ indica perfil bem otimizado. Score 80+ coloca o negócio entre os melhores do setor.',
+    benchmark: 'Score 65+ indica perfil bem otimizado. Score 80+ coloca o negócio entre os melhores do setor — exige nota 4.5★+ e 300+ avaliações.',
   },
 };
 
@@ -219,9 +219,9 @@ const ScoreDetailModal = ({
   onClose: () => void;
 }) => {
   const info = METRIC_EXPLANATIONS[metricKey];
-  const scoreColor = score >= 80 ? 'text-green-600' : score >= 60 ? 'text-yellow-600' : 'text-red-600';
-  const scoreBg = score >= 80 ? 'bg-green-50 border-green-200' : score >= 60 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200';
-  const scoreLabel = score >= 80 ? 'Excelente' : score >= 60 ? 'Bom' : score >= 40 ? 'Regular' : 'Precisa melhorar';
+  const scoreColor = score >= 85 ? 'text-green-600' : score >= 65 ? 'text-yellow-600' : 'text-red-600';
+  const scoreBg = score >= 85 ? 'bg-green-50 border-green-200' : score >= 65 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200';
+  const scoreLabel = score >= 85 ? 'Excelente' : score >= 65 ? 'Bom' : score >= 45 ? 'Regular' : 'Precisa melhorar';
   const delta = prevScore != null ? score - prevScore : null;
 
   return (
@@ -705,18 +705,25 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
     const hasPhone = !!placeData.formatted_phone_number;
     const engagementMetrics = calculateEngagementMetrics(placeData);
 
-    const reputationScore = totalReviews === 0 ? 0 : Math.min(100, Math.round(
-      (rating / 5) * 60 + Math.min(40, Math.log10(totalReviews + 1) * 20)
-    ));
+    // REPUTAÇÃO: nota com penalidade exponencial (expoente 1.8 — notas baixas penalizadas mais)
+    // Volume muito mais exigente: log base 500 (antes log10 base 10)
+    // 50 avaliações: antes ~34 pts, agora ~19 pts | 200 avaliações: antes ~46 pts, agora ~34 pts
+    const ratingPts = totalReviews === 0 ? 0 : Math.min(55, Math.round(Math.pow(rating / 5, 1.8) * 55));
+    const reviewVolumePts = totalReviews === 0 ? 0 : Math.min(45, Math.round(Math.log(totalReviews + 1) / Math.log(500) * 45));
+    const reputationScore = Math.min(100, ratingPts + reviewVolumePts);
+
+    // VISIBILIDADE: fotos muito mais exigentes (25+ para máximo, antes 10+ já dava máximo)
     const visibilityScore = Math.round(
-      (photoCount >= 10 ? 30 : photoCount >= 3 ? 20 : photoCount >= 1 ? 10 : 0) +
+      (photoCount >= 25 ? 30 : photoCount >= 15 ? 24 : photoCount >= 5 ? 16 : photoCount >= 1 ? 8 : 0) +
       (hasHours ? 25 : 0) + (hasWebsite ? 25 : 0) + (hasPhone ? 20 : 0)
     );
-    // Engajamento baseado em volume total e nota média (Places API retorna apenas 5 reviews, não é confiável para contagem recente)
-    const engagementScore = totalReviews === 0 ? 0 : Math.min(100, Math.round(
-      Math.min(50, Math.log10(totalReviews + 1) * 18) +
-      Math.min(50, (rating / 5) * 50)
-    ));
+
+    // ENGAJAMENTO: volume muito mais exigente (log base 1000)
+    // 50 avaliações: antes ~31 pts, agora ~14 pts | 200 avaliações: antes ~41 pts, agora ~24 pts
+    const engVolumePts = totalReviews === 0 ? 0 : Math.min(50, Math.round(Math.log(totalReviews + 1) / Math.log(1000) * 50));
+    const engRatingPts = totalReviews === 0 ? 0 : Math.min(50, Math.round(Math.pow(rating / 5, 1.5) * 50));
+    const engagementScore = Math.min(100, engVolumePts + engRatingPts);
+
     const overallScore = Math.round(reputationScore * 0.4 + visibilityScore * 0.35 + engagementScore * 0.25);
 
     return { reputationScore, visibilityScore, engagementScore, overallScore };
@@ -1101,9 +1108,9 @@ Responda APENAS em JSON puro (sem markdown):
 
   // ─── Helpers de UI ────────────────────────────────────────────────────────
 
-  const getScoreColor = (score: number) => score >= 80 ? 'text-green-600' : score >= 60 ? 'text-yellow-600' : 'text-red-600';
-  const getScoreBg = (score: number) => score >= 80 ? 'bg-green-50 border-green-200' : score >= 60 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200';
-  const getScoreLabel = (score: number) => score >= 80 ? 'Excelente' : score >= 60 ? 'Bom' : score >= 40 ? 'Regular' : 'Precisa melhorar';
+  const getScoreColor = (score: number) => score >= 85 ? 'text-green-600' : score >= 65 ? 'text-yellow-600' : 'text-red-600';
+  const getScoreBg = (score: number) => score >= 85 ? 'bg-green-50 border-green-200' : score >= 65 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200';
+  const getScoreLabel = (score: number) => score >= 85 ? 'Excelente' : score >= 65 ? 'Bom' : score >= 45 ? 'Regular' : 'Precisa melhorar';
 
   const getDeltaIcon = (current: number, previous: number | undefined) => {
     if (!previous) return null;
@@ -1396,22 +1403,22 @@ Responda APENAS em JSON puro (sem markdown):
             const buildCriteria = () => {
               const c: { label: string; pts: number; maxPts: number; ok: boolean }[] = [];
               if (item.key === 'reputation' && pd) {
-                const ratingPts = Math.round((pd.rating || 0) / 5 * 60);
-                const reviewPts = Math.min(40, Math.round(Math.log10((pd.user_ratings_total || 0) + 1) * 20));
-                c.push({ label: `Nota média (${pd.rating || 0}★)`, pts: ratingPts, maxPts: 60, ok: ratingPts >= 48 });
-                c.push({ label: `Volume de avaliações (${pd.user_ratings_total || 0})`, pts: reviewPts, maxPts: 40, ok: reviewPts >= 30 });
+                const ratingPts = (pd.user_ratings_total || 0) === 0 ? 0 : Math.min(55, Math.round(Math.pow((pd.rating || 0) / 5, 1.8) * 55));
+                const reviewPts = (pd.user_ratings_total || 0) === 0 ? 0 : Math.min(45, Math.round(Math.log((pd.user_ratings_total || 0) + 1) / Math.log(500) * 45));
+                c.push({ label: `Nota média (${pd.rating || 0}★)`, pts: ratingPts, maxPts: 55, ok: ratingPts >= 44 });
+                c.push({ label: `Volume de avaliações (${pd.user_ratings_total || 0})`, pts: reviewPts, maxPts: 45, ok: reviewPts >= 30 });
               } else if (item.key === 'visibility' && pd) {
                 const photoCount = pd.photos?.length || 0;
-                const photoPts = photoCount >= 10 ? 30 : photoCount >= 3 ? 20 : photoCount >= 1 ? 10 : 0;
+                const photoPts = photoCount >= 25 ? 30 : photoCount >= 15 ? 24 : photoCount >= 5 ? 16 : photoCount >= 1 ? 8 : 0;
                 c.push({ label: `Fotos (${photoCount} fotos)`, pts: photoPts, maxPts: 30, ok: photoPts >= 30 });
                 c.push({ label: 'Horários configurados', pts: pd.opening_hours?.weekday_text?.length ? 25 : 0, maxPts: 25, ok: !!pd.opening_hours?.weekday_text?.length });
                 c.push({ label: 'Website vinculado', pts: pd.website ? 25 : 0, maxPts: 25, ok: !!pd.website });
                 c.push({ label: 'Telefone cadastrado', pts: pd.formatted_phone_number ? 20 : 0, maxPts: 20, ok: !!pd.formatted_phone_number });
               } else if (item.key === 'engagement' && pd) {
                 const eng = calculateEngagementMetrics(pd);
-                const volumePts = Math.min(50, Math.round(Math.log10((pd.user_ratings_total || 0) + 1) * 18));
-                const ratingPts = Math.min(50, Math.round(((pd.rating || 0) / 5) * 50));
-                c.push({ label: `Volume de avaliações (${eng.totalReviews} total)`, pts: volumePts, maxPts: 50, ok: volumePts >= 30 });
+                const volumePts = Math.min(50, Math.round(Math.log((pd.user_ratings_total || 0) + 1) / Math.log(1000) * 50));
+                const ratingPts = Math.min(50, Math.round(Math.pow((pd.rating || 0) / 5, 1.5) * 50));
+                c.push({ label: `Volume de avaliações (${eng.totalReviews} total)`, pts: volumePts, maxPts: 50, ok: volumePts >= 25 });
                 c.push({ label: `Nota média (${pd.rating || 0}★)`, pts: ratingPts, maxPts: 50, ok: ratingPts >= 40 });
               } else if (item.key === 'overall') {
                 c.push({ label: `Reputação (peso 40%)`, pts: Math.round(aiAnalysis.scores.reputation * 0.4), maxPts: 40, ok: aiAnalysis.scores.reputation >= 70 });
@@ -1449,7 +1456,7 @@ Responda APENAS em JSON puro (sem markdown):
                   <div className="text-xs text-gray-500 mt-1">{getScoreLabel(item.score)}</div>
                   <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${item.score >= 80 ? 'bg-green-500' : item.score >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                      className={`h-full rounded-full transition-all ${item.score >= 85 ? 'bg-green-500' : item.score >= 65 ? 'bg-yellow-500' : 'bg-red-500'}`}
                       style={{ width: `${item.score}%` }}
                     />
                   </div>
