@@ -220,7 +220,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         }
         
         const productsContext = products && products.length > 0 ? products.map(p => 
-          `- **${p.name}** (R$ ${p.value})\n  Descri\u00e7\u00e3o: ${p.ai_description || 'Sem descri\u00e7\u00e3o'}`
+          `- **${p.name}** (R$ ${p.value})\n  Critérios de Indicação: ${p.ai_criteria || p.ai_description || 'Sem critérios definidos'}`
         ).join('\n\n') : 'Nenhum produto cadastrado';
         
         let businessContext = '';
@@ -233,7 +233,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         if (formSelectedProducts.length > 0 && products) {
           const fp = products.filter(p => formSelectedProducts.includes(p.id));
           if (fp.length > 0) {
-            focusedProductsContext = `\n\n\ud83c\udfaf PRODUTOS EM FOCO NESTE FORMUL\u00c1RIO (PRIORIDADE ALTA):\n${fp.map(p => `- **${p.name}** (R$ ${p.value})\n  Descri\u00e7\u00e3o: ${p.ai_description || 'Sem descri\u00e7\u00e3o'}`).join('\n\n')}`;
+            focusedProductsContext = `\n\n\ud83c\udfaf PRODUTOS EM FOCO NESTE FORMUL\u00c1RIO (PRIORIDADE ALTA):\n${fp.map(p => `- **${p.name}** (R$ ${p.value})\n  Crit\u00e9rios de Indica\u00e7\u00e3o: ${p.ai_criteria || p.ai_description || 'Sem crit\u00e9rios definidos'}`).join('\n\n')}`;
           }
         }
         
@@ -1202,12 +1202,29 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }
     }
     
-    // Disparar análise de IA em background automaticamente se o formulário tiver e-mail de análise ativado
-    if (insertedLead && formTenantId && (publicForm as any).email_analysis_enabled) {
-      const emailRecipients: string[] = (publicForm as any).email_analysis_recipients || [];
+    // Disparar e-mail de análise direto (sem depender da IA) se o formulário tiver esse recurso ativado
+    if (insertedLead && formTenantId && publicForm.email_analysis_enabled) {
+      const rawRecipients = publicForm.email_analysis_recipients || '';
+      const emailRecipients = typeof rawRecipients === 'string'
+        ? rawRecipients.split(',').map((e: string) => e.trim()).filter(Boolean)
+        : Array.isArray(rawRecipients) ? rawRecipients : [];
       if (emailRecipients.length > 0) {
-        // Dispara sem aguardar — não bloqueia o retorno para o usuário
-        processAIAnalysisInBackground(insertedLead.id, { answers: enrichedAnswers, patient: data.patient }, publicForm, formTenantId);
+        const questionsForEmail = publicForm.questions.map((q: any) => ({ id: q.id, text: q.text || q.id }));
+        fetch('/api/send-analysis-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipients: emailRecipients,
+            leadName: data.patient?.name || 'Lead',
+            leadEmail: data.patient?.email || '',
+            leadPhone: data.patient?.phone || '',
+            formName: publicForm.name,
+            companyName: publicCompanyName || '',
+            answers: enrichedAnswers,
+            questions: questionsForEmail,
+            aiAnalysis: {},
+          }),
+        }).catch(err => console.error('[email-analysis] Erro ao disparar e-mail:', err));
       }
     }
 
@@ -1266,7 +1283,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
         // Preparar contexto de produtos com descrições
         const productsContext = products.map(p => 
-          `- **${p.name}** (R$ ${p.value})\n  Descrição: ${p.ai_description || 'Sem descrição'}`
+          `- **${p.name}** (R$ ${p.value})\n  Critérios de Indicação: ${p.ai_criteria || p.ai_description || 'Sem critérios definidos'}`
         ).join('\n\n');
 
         // Preparar contexto do negócio
@@ -1281,7 +1298,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         if (formSelectedProducts.length > 0) {
           const focusedProducts = products.filter(p => formSelectedProducts.includes(p.id));
           if (focusedProducts.length > 0) {
-            focusedProductsContext = `\n\n🎯 PRODUTOS EM FOCO NESTE FORMULÁRIO (PRIORIDADE ALTA):\n${focusedProducts.map(p => `- **${p.name}** (R$ ${p.value})\n  Descrição: ${p.ai_description || 'Sem descrição'}`).join('\n\n')}`;
+            focusedProductsContext = `\n\n🎯 PRODUTOS EM FOCO NESTE FORMULÁRIO (PRIORIDADE ALTA):\n${focusedProducts.map(p => `- **${p.name}** (R$ ${p.value})\n  Critérios de Indicação: ${p.ai_criteria || p.ai_description || 'Sem critérios definidos'}`).join('\n\n')}`;
           }
         }
 
@@ -1290,7 +1307,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 RESPOSTAS DO CLIENTE:
 ${answersText}${budgetContext}
 
-PRODUTOS/SERVIÇOS DISPONÍVEIS:
+PRODUTOS/SERVIÇOS DISPONÍVEIS (com critérios técnicos de indicação):
 ${productsContext}${focusedProductsContext}
 
 🎯 INSTRUÇÕES:
@@ -1298,8 +1315,8 @@ ${productsContext}${focusedProductsContext}
 2. ⚠️ **REGRA OBRIGATÓRIA**: Se o cliente informou um orçamento, recomende APENAS produtos dentro dessa faixa de preço (tolerando no máximo 10% acima)
 3. ${focusedProductsContext ? 'PRIORIZE os produtos em foco, mas considere TODOS os produtos disponíveis' : 'Considere TODOS os produtos disponíveis'}
 4. Identifique produtos que o cliente pode precisar E que estejam dentro do orçamento
-5. Use as descrições dos produtos para entender o que cada um resolve
-6. Conecte os problemas/necessidades do cliente com as soluções disponíveis
+5. Use os CRITÉRIOS DE INDICAÇÃO de cada produto para decidir se ele é adequado para este cliente
+6. Sugira apenas produtos cujos critérios se alinhem com o perfil e necessidades do cliente
 7. Se nenhum produto estiver no orçamento, sugira o mais próximo e mencione possibilidade de parcelamento
 8. Gere um script de vendas personalizado e estratégico
 
@@ -1397,28 +1414,6 @@ Responda APENAS com JSON válido (sem markdown):
         })
         .eq('id', leadId);
 
-      // Disparar e-mail de análise se o formulário tiver esse recurso ativado
-      const emailEnabled = (form as any).email_analysis_enabled;
-      const emailRecipients: string[] = (form as any).email_analysis_recipients || [];
-      if (emailEnabled && emailRecipients.length > 0) {
-        // Montar lista de perguntas com texto legível
-        const questionsForEmail = form.questions.map((q: any) => ({ id: q.id, text: q.text || q.id }));
-        fetch('/api/send-analysis-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            recipients: emailRecipients,
-            leadName: data.patient?.name || 'Lead',
-            leadEmail: data.patient?.email || '',
-            leadPhone: data.patient?.phone || '',
-            formName: form.name,
-            companyName: publicCompanyName || '',
-            answers: data.answers,
-            questions: questionsForEmail,
-            aiAnalysis,
-          }),
-        }).catch(err => console.error('[email-analysis] Erro ao disparar e-mail:', err));
-      }
     }
   };
 

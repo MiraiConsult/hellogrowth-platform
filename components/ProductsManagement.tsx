@@ -34,6 +34,7 @@ interface Product {
   name: string;
   value: number;
   ai_description: string | null;
+  ai_criteria: string | null;
   created_at: string;
   tenant_id?: string;
 }
@@ -65,7 +66,7 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
   const [importError, setImportError] = useState<string | null>(null);
   const [generatingAI, setGeneratingAI] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [editingField, setEditingField] = useState<{ productId: string; field: 'description' } | null>(null);
+  const [editingField, setEditingField] = useState<{ productId: string; field: 'description' | 'criteria' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Visão grade ou lista
@@ -383,24 +384,21 @@ Contexto do Negócio:
 - Diferenciais: ${profileData.differentials || 'Não informado'}
 ` : '';
 
-      const prompt = `Você é um especialista em marketing e vendas. Analise este produto/serviço considerando o contexto do negócio e gere uma descrição comercial atraente e 10 palavras-chave relevantes.
-
+      const prompt = `Você é um especialista em marketing e vendas. Analise este produto/serviço considerando o contexto do negócio e gere dois textos distintos:
+1. Uma descrição comercial atraente para o cliente final
+2. Critérios técnicos de indicação para a IA usar ao sugerir este produto para leads
 ${businessContext}
-
 Produto/Serviço: ${productName}
 Valor: R$ ${productValue.toFixed(2)}
-
-IMPORTANTE: Considere o tipo de negócio ao gerar a descrição. Por exemplo:
+IMPORTANTE: Considere o tipo de negócio ao gerar os textos. Por exemplo:
 - Se for uma pet shop, a "Limpeza Dentária" é para animais de estimação
 - Se for uma clínica médica, a "Limpeza Dentária" é para humanos
 - Se for um salão de beleza, "Corte" refere-se a cabelo
-- Etc.
-
 Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
 {
-  "description": "Uma descrição comercial atraente do produto/serviço em 2-3 frases, considerando o contexto do negócio e o público-alvo"
+  "description": "Uma descrição comercial atraente do produto/serviço em 2-3 frases, considerando o contexto do negócio e o público-alvo",
+  "criteria": "Critérios técnicos objetivos para a IA sugerir este produto: quando indicar (perfil do lead, sinais de interesse, respostas que indicam necessidade), quando NÃO indicar, e qual problema/necessidade este produto resolve. Seja específico e objetivo, sem linguagem comercial."
 }`;
-
       const response = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -418,29 +416,25 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
       } catch {
         throw new Error("Resposta da IA inválida");
       }
-
       const { error } = await supabase!
-        .from("products_services")
+        .from('products_services')
         .update({
           ai_description: insights.description,
+          ai_criteria: insights.criteria || null,
         })
-        .eq("id", productId);
-
+        .eq('id', productId);
       if (error) throw error;
-
       const updatedProduct = {
         ai_description: insights.description,
+        ai_criteria: insights.criteria || null,
       };
-
       setProducts((prev) =>
         prev.map((p) => p.id === productId ? { ...p, ...updatedProduct } : p)
       );
-
       if (selectedProduct && selectedProduct.id === productId) {
         setSelectedProduct({ ...selectedProduct, ...updatedProduct });
       }
-
-      showNotification("success", "Descrição gerada com sucesso!");
+      showNotification("success", "Insights gerados com sucesso!");
     } catch (error) {
       console.error("Erro ao gerar insights:", error);
       showNotification("error", "Erro ao gerar insights da IA");
@@ -851,9 +845,14 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
                 <div className="flex items-center justify-between text-sm text-slate-500">
                   <span className="flex items-center gap-2">
                     <Sparkles size={14} className="text-purple-500" />
-                    Insights disponíveis
+                    {product.ai_criteria ? 'Insights + Critérios IA' : 'Insights disponíveis'}
                   </span>
-                  <ChevronRight size={16} className="text-slate-400 group-hover:text-emerald-500 transition-colors" />
+                  <div className="flex items-center gap-2">
+                    {!product.ai_criteria && (
+                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Critérios pendentes</span>
+                    )}
+                    <ChevronRight size={16} className="text-slate-400 group-hover:text-emerald-500 transition-colors" />
+                  </div>
                 </div>
               ) : (
                 <button onClick={(e) => { e.stopPropagation(); generateAIInsights(product.id, product.name, product.value); }} disabled={generatingAI === product.id} className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl hover:from-purple-600 hover:to-pink-600 transition-colors disabled:opacity-50">
@@ -1027,6 +1026,63 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
                     ) : (
                       <p className="text-slate-700 leading-relaxed">{String(selectedProduct.ai_description || '')}</p>
                     )}
+                  </div>
+
+                  {/* Critérios de Indicação (IA) */}
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Target size={18} className="text-blue-600" />
+                        <h3 className="font-semibold text-slate-800">Critérios de Indicação (IA)</h3>
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Uso Interno IA</span>
+                      </div>
+                      {editingField?.productId === selectedProduct.id && editingField?.field === 'criteria' ? (
+                        <button
+                          onClick={async () => {
+                            try {
+                              setSaving(true);
+                              const { error } = await supabase!.from('products_services').update({ ai_criteria: selectedProduct.ai_criteria }).eq('id', selectedProduct.id);
+                              if (error) throw error;
+                              showNotification('success', 'Critérios salvos com sucesso!');
+                              setEditingField(null);
+                              await fetchProducts();
+                            } catch (error) {
+                              console.error('Erro ao salvar critérios:', error);
+                              showNotification('error', 'Erro ao salvar critérios');
+                            } finally {
+                              setSaving(false);
+                            }
+                          }}
+                          disabled={saving}
+                          className="flex items-center gap-1 px-3 py-1 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm disabled:opacity-50"
+                        >
+                          {saving ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                          {saving ? 'Salvando...' : 'Salvar'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setEditingField({ productId: selectedProduct.id, field: 'criteria' })}
+                          className="flex items-center gap-1 px-3 py-1 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors text-sm"
+                        >
+                          <Edit3 size={14} />
+                          Editar
+                        </button>
+                      )}
+                    </div>
+                    {selectedProduct.ai_criteria ? (
+                      editingField?.productId === selectedProduct.id && editingField?.field === 'criteria' ? (
+                        <textarea
+                          value={String(selectedProduct.ai_criteria || '')}
+                          onChange={(e) => setSelectedProduct({ ...selectedProduct, ai_criteria: e.target.value })}
+                          className="w-full text-slate-700 leading-relaxed bg-white border border-blue-200 rounded-lg p-3 min-h-[100px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
+                        <p className="text-slate-700 leading-relaxed text-sm">{String(selectedProduct.ai_criteria || '')}</p>
+                      )
+                    ) : (
+                      <p className="text-slate-400 text-sm italic">Critérios não gerados. Clique em Regenerar Insights para gerar.</p>
+                    )}
+                    <p className="text-xs text-blue-500 mt-2">Este campo é lido pela IA para decidir quando sugerir este produto. Não é exibido ao cliente.</p>
                   </div>
 
                   <button onClick={() => generateAIInsights(selectedProduct.id, selectedProduct.name, selectedProduct.value)} disabled={generatingAI === selectedProduct.id} className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-purple-200 text-purple-600 rounded-xl hover:bg-purple-50 transition-colors disabled:opacity-50">
