@@ -305,17 +305,17 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
 
   // Geração em massa de descrições IA para todos os produtos sem descrição
   const generateBulkDescriptions = async () => {
-    const withoutDesc = products.filter(p => !p.ai_description);
-    if (!withoutDesc.length) {
-      showNotification('success', 'Todos os produtos já têm descrição gerada!');
+    const withoutInsights = products.filter(p => !p.ai_description || !p.ai_criteria);
+    if (!withoutInsights.length) {
+      showNotification('success', 'Todos os produtos já têm insights gerados!');
       return;
     }
     setGeneratingBulk(true);
-    setBulkProgress({ current: 0, total: withoutDesc.length });
+    setBulkProgress({ current: 0, total: withoutInsights.length });
     let successCount = 0;
-    for (let i = 0; i < withoutDesc.length; i++) {
-      const product = withoutDesc[i];
-      setBulkProgress({ current: i + 1, total: withoutDesc.length });
+    for (let i = 0; i < withoutInsights.length; i++) {
+      const product = withoutInsights[i];
+      setBulkProgress({ current: i + 1, total: withoutInsights.length });
       try {
         await generateAIInsights(product.id, product.name, product.value);
         successCount++;
@@ -323,11 +323,11 @@ const ProductsManagement: React.FC<ProductsManagementProps> = ({ supabase, userI
         console.error(`Erro ao gerar para ${product.name}:`, e);
       }
       // Delay para não sobrecarregar a API
-      if (i < withoutDesc.length - 1) await new Promise(r => setTimeout(r, 800));
+      if (i < withoutInsights.length - 1) await new Promise(r => setTimeout(r, 800));
     }
     setGeneratingBulk(false);
     setBulkProgress({ current: 0, total: 0 });
-    showNotification('success', `${successCount} descrições geradas com sucesso!`);
+    showNotification('success', `${successCount} insights gerados com sucesso!`);
   };
 
   const importCatalogProducts = async () => {
@@ -662,7 +662,7 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
           {catalogLoading ? <Loader2 size={18} className="animate-spin" /> : <Package size={18} />}
           Catálogo do Segmento
         </button>
-        {products.filter(p => !p.ai_description).length > 0 && (
+        {products.filter(p => !p.ai_description || !p.ai_criteria).length > 0 && (
           <button
             onClick={generateBulkDescriptions}
             disabled={generatingBulk}
@@ -671,7 +671,7 @@ Responda EXATAMENTE neste formato JSON (sem markdown, apenas JSON puro):
             {generatingBulk ? (
               <><Loader2 size={18} className="animate-spin" />Gerando {bulkProgress.current}/{bulkProgress.total}...</>
             ) : (
-              <><Sparkles size={18} />Gerar Descrições em Massa ({products.filter(p => !p.ai_description).length})</>
+              <><Sparkles size={18} />Gerar Insights em Massa ({products.filter(p => !p.ai_description || !p.ai_criteria).length})</>
             )}
           </button>
         )}
