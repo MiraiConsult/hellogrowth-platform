@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-export const maxDuration = 30; // Timeout de 30 segundos
+export const maxDuration = 60; // Timeout de 60 segundos (análise de leads pode demorar)
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,12 +30,12 @@ export async function POST(request: NextRequest) {
       ...(systemInstruction && { systemInstruction }),
     });
 
-    // Configuração para respostas mais rápidas e consistentes
+    // Configuração com maxOutputTokens aumentado para evitar truncamento de JSON
     const generationConfig = {
       temperature: 0.7,
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 8192,
     };
 
     const result = await model.generateContent({
