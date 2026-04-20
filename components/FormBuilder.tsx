@@ -325,7 +325,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
         const prompt = `Crie uma ÚNICA frase curta (máximo 15 palavras) para um vendedor usar com um cliente que respondeu "${optionLabel}" à pergunta "${questionText}". Retorne APENAS a frase, sem aspas, numeração ou qualquer outro texto.`;
         const result = await model.generateContent(prompt);
         const response = result.response;
@@ -363,7 +363,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
         const prompt = `
           Atue como um especialista em Vendas. Gere 4 perguntas estratégicas para qualificação de leads.
           CONTEXTO: "${currentFormName}". DESCRIÇÃO: "${currentFormDescription}".

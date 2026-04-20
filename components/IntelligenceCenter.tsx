@@ -330,7 +330,7 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
       
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
         
         // Build context from data
         const context = `

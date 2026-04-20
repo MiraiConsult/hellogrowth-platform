@@ -187,7 +187,7 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
         
         const leadsSummary = formLeads
           .map(l => `- ${l.name}: Status "${l.status}", Valor R$${l.value}`)

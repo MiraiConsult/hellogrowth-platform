@@ -111,7 +111,7 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
           6. Retorne APENAS o texto da mensagem.
         `;
         
-        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
         const result = await model.generateContent(prompt);
         const response = { text: result.response.text() };
         setAiAdvice(response.text || "Sem sugestão gerada.");
@@ -183,7 +183,7 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
       
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
         
         // Summarize last 50 leads including Notes
         const leadSummary = leads

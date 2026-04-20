@@ -152,7 +152,7 @@ const CampaignReport: React.FC<CampaignReportProps> = ({ campaignId, campaigns, 
         `;
         
         // FIX: Updated model from deprecated 'gemini-2.5-flash' to 'gemini-3-flash-preview' for basic text task.
-        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
         const result = await model.generateContent(prompt );
         const response = { text: result.response.text() };
         setAiAnalysis(response.text || "Sem análise gerada.");

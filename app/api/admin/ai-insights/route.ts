@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
 async function generateMarketOverview(data: any) {
   const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const { globalNps, totalResponses, topThemes, promoterTexts, detractorTexts, trendData } = data;
 
@@ -112,7 +112,7 @@ async function generateTemplateDescription(body: any) {
   const { templateName, tipoVenda, ramoNegocio, questions, objective } = body;
   const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const tipoLabel = tipoVenda === 'pre_venda' ? 'pré-venda (antes da compra/contratação)' : 'pós-venda (após a compra/atendimento)';
 
@@ -128,7 +128,7 @@ async function generateTemplateDescription(body: any) {
 async function generateTenantAnalysis(tenantId: string, data: any) {
   const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const { companyName, npsScore, totalResponses, comments, leads, lastDiagnostic, monthlyTrend } = data;
 

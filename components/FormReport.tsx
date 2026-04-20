@@ -318,7 +318,7 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       if (!apiKey) return;
       const ai = new GoogleGenerativeAI(apiKey);
-      const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
       const answersText = selectedLead.answers 
         ? Object.entries(selectedLead.answers)
@@ -435,7 +435,7 @@ Retorne APENAS um JSON válido (sem markdown) com:
         return;
       }
       const ai = new GoogleGenerativeAI(apiKey);
-      const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
       const currentAnalysis = selectedLead.answers?._ai_analysis;
       const answersText = selectedLead.answers 
@@ -539,7 +539,7 @@ INSTRUÇÕES DE RESPOSTA:
       const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       if (apiKey) {
         const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
         
         const leadsSummary = formLeads
           .map(l => `- ${l.name}: Status "${l.status}", Valor R$${l.value}`)

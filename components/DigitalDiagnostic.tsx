@@ -845,7 +845,7 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
 
     try {
       const ai = new GoogleGenerativeAI(apiKey);
-      const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
       const engagementMetrics = calculateEngagementMetrics(placeData);
       const hasWebsite = !!placeData.website;
       const hasPhone = !!placeData.formatted_phone_number;

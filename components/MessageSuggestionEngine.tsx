@@ -375,7 +375,7 @@ async function generateMessageWithAI(
   
   try {
     const ai = new GoogleGenerativeAI(apiKey);
-    const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
     
     const firstName = context.name.split(' ')[0];
     const formattedAnswers = formatAnswersForPrompt(context.answers);
