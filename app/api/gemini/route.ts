@@ -1,7 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-export const maxDuration = 60; // Timeout de 60 segundos (análise de leads pode demorar)
+export const maxDuration = 60; // Timeout de 60 segundos
+
+// Retry com backoff exponencial
+async function callGeminiWithRetry(model: any, contents: any, generationConfig: any, maxRetries = 3): Promise<string> {
+  let lastError: any;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const result = await model.generateContent({ contents, generationConfig });
+      const text = result.response.text();
+      
+      // Verificar se a resposta não está vazia
+      if (!text || text.trim().length === 0) {
+        throw new Error('Resposta vazia do Gemini');
+      }
+      
+      return text;
+    } catch (error: any) {
+      lastError = error;
+      const errorMsg = error.message || '';
+      
+      // Erros que valem retry: rate limit, overloaded, timeout, resposta vazia
+      const isRetryable = 
+        errorMsg.includes('429') ||
+        errorMsg.includes('503') ||
+        errorMsg.includes('500') ||
+        errorMsg.includes('overloaded') ||
+        errorMsg.includes('quota') ||
+        errorMsg.includes('RESOURCE_EXHAUSTED') ||
+        errorMsg.includes('UNAVAILABLE') ||
+        errorMsg.includes('INTERNAL') ||
+        errorMsg.includes('Resposta vazia') ||
+        errorMsg.includes('timeout') ||
+        error.name === 'AbortError';
+      
+      if (!isRetryable || attempt === maxRetries - 1) {
+        throw error;
+      }
+      
+      // Backoff exponencial: 2s, 4s, 8s
+      const delay = Math.pow(2, attempt + 1) * 1000;
+      console.log(`Gemini retry ${attempt + 1}/${maxRetries} após ${delay}ms - Erro: ${errorMsg.substring(0, 100)}`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  
+  throw lastError;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +77,6 @@ export async function POST(request: NextRequest) {
       ...(systemInstruction && { systemInstruction }),
     });
 
-    // Configuração com maxOutputTokens aumentado para evitar truncamento de JSON
     const generationConfig = {
       temperature: 0.7,
       topK: 40,
@@ -38,20 +84,17 @@ export async function POST(request: NextRequest) {
       maxOutputTokens: 8192,
     };
 
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig,
-    });
+    const contents = [{ role: 'user', parts: [{ text: prompt }] }];
+    
+    // Chamar com retry automático (até 3 tentativas)
+    const responseText = await callGeminiWithRetry(model, contents, generationConfig, 3);
 
-    const response = result.response.text();
-
-    return NextResponse.json({ response });
+    return NextResponse.json({ response: responseText });
 
   } catch (error: any) {
-    console.error('Erro na API Gemini:', error);
+    console.error('Erro na API Gemini (após retries):', error);
 
-    // Tratamento específico de erros
-    if (error.message?.includes('quota')) {
+    if (error.message?.includes('quota') || error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) {
       return NextResponse.json(
         { error: 'Limite de requisições atingido. Tente novamente em alguns minutos.' },
         { status: 429 }

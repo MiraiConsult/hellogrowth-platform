@@ -239,39 +239,59 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         
         const prompt = `Voc\u00ea \u00e9 um consultor de vendas especializado. Analise as respostas do cliente e forne\u00e7a uma an\u00e1lise completa de oportunidade de venda.${businessContext}\nRESPOSTAS DO CLIENTE:\n${answersText}${budgetContext}\nPRODUTOS/SERVI\u00c7OS DISPON\u00cdVEIS:\n${productsContext}${focusedProductsContext}\n\ud83c\udfaf INSTRU\u00c7\u00d5ES:\n1. Analise profundamente as respostas do cliente\n2. \u26a0\ufe0f **REGRA OBRIGAT\u00d3RIA**: Se o cliente informou um or\u00e7amento, recomende APENAS produtos dentro dessa faixa de pre\u00e7o (tolerando no m\u00e1ximo 10% acima)\n3. ${focusedProductsContext ? 'PRIORIZE os produtos em foco, mas considere TODOS os produtos dispon\u00edveis' : 'Considere TODOS os produtos dispon\u00edveis'}\n4. Identifique produtos que o cliente pode precisar E que estejam dentro do or\u00e7amento\n5. Use as descri\u00e7\u00f5es dos produtos para entender o que cada um resolve\n6. Conecte os problemas/necessidades do cliente com as solu\u00e7\u00f5es dispon\u00edveis\n7. Se nenhum produto estiver no or\u00e7amento, sugira o mais pr\u00f3ximo e mencione possibilidade de parcelamento\n8. Gere um script de vendas personalizado e estrat\u00e9gico\nResponda APENAS com JSON v\u00e1lido (sem markdown):\n{\n  "recommended_products": [{"id": "product_id", "name": "Nome", "value": 0, "reason": "Raz\u00e3o"}],\n  "suggested_product": "Nome do produto principal",\n  "suggested_value": 0,\n  "classification": "opportunity|risk|monitoring",\n  "confidence": 0.85,\n  "reasoning": "Explica\u00e7\u00e3o detalhada",\n  "client_insights": ["Insight 1", "Insight 2"],\n  "sales_script": "Script de abordagem",\n  "next_steps": ["A\u00e7\u00e3o 1", "A\u00e7\u00e3o 2"]\n}`;
         
-        const response = await fetch('/api/gemini', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt })
-        });
-        
-        if (response.ok) {
-          const aiData = await response.json();
-          const cleanResponse = aiData.response.replace(/```json\n?|\n?```/g, '').trim();
-          const aiAnalysis = JSON.parse(cleanResponse);
-          
-          let updatedValue = lead.value;
-          if (aiAnalysis.recommended_products && aiAnalysis.recommended_products.length > 0) {
-            updatedValue = aiAnalysis.recommended_products.reduce((sum: number, p: any) => sum + (p.value || 0), 0);
-          } else if (aiAnalysis.suggested_value > 0) {
-            updatedValue = aiAnalysis.suggested_value;
+        // Retry no lado do cliente: até 3 tentativas com backoff
+        let analyzed = false;
+        for (let attempt = 0; attempt < 3 && !analyzed; attempt++) {
+          try {
+            if (attempt > 0) {
+              const backoff = Math.pow(2, attempt) * 1500; // 3s, 6s
+              await new Promise(r => setTimeout(r, backoff));
+            }
+            
+            const response = await fetch('/api/gemini', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ prompt })
+            });
+            
+            if (response.ok) {
+              const aiData = await response.json();
+              const cleanResponse = aiData.response.replace(/```json\n?|\n?```/g, '').trim();
+              const aiAnalysis = JSON.parse(cleanResponse);
+              
+              let updatedValue = lead.value;
+              if (aiAnalysis.recommended_products && aiAnalysis.recommended_products.length > 0) {
+                updatedValue = aiAnalysis.recommended_products.reduce((sum: number, p: any) => sum + (p.value || 0), 0);
+              } else if (aiAnalysis.suggested_value > 0) {
+                updatedValue = aiAnalysis.suggested_value;
+              }
+              
+              const updatedAnswers = { ...lead.answers, _ai_analysis: aiAnalysis, _analyzing: false };
+              await supabase.from('leads').update({
+                value: updatedValue,
+                answers: updatedAnswers
+              }).eq('id', lead.id);
+              
+              setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, value: updatedValue, answers: updatedAnswers } : l));
+              successCount++;
+              analyzed = true;
+            } else if (attempt === 2) {
+              failCount++;
+            }
+            // Se response não ok e não é última tentativa, o loop continua
+          } catch (retryErr) {
+            if (attempt === 2) {
+              console.error(`Lead ${lead.name}: falhou após 3 tentativas`, retryErr);
+              failCount++;
+            }
           }
-          
-          const updatedAnswers = { ...lead.answers, _ai_analysis: aiAnalysis, _analyzing: false };
-          await supabase.from('leads').update({
-            value: updatedValue,
-            answers: updatedAnswers
-          }).eq('id', lead.id);
-          
-          setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, value: updatedValue, answers: updatedAnswers } : l));
-          successCount++;
-        } else { failCount++; }
+        }
       } catch (error) {
         console.error(`Erro ao analisar lead ${lead.name}:`, error);
         failCount++;
       }
       
-      if (i < pendingLeads.length - 1) await new Promise(r => setTimeout(r, 1000));
+      if (i < pendingLeads.length - 1) await new Promise(r => setTimeout(r, 1500));
     }
     
     setIsAnalyzingAll(false);
