@@ -1461,15 +1461,35 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
                                             aiAnalysis: ai,
                                           }),
                                         });
-                                        const blob = await res.blob();
-                                        const url = URL.createObjectURL(blob);
-                                        const a = document.createElement('a');
-                                        a.href = url;
-                                        a.download = `relatorio-${(tenant.companyName || 'cliente').replace(/\s+/g, '-').toLowerCase()}.html`;
-                                        a.click();
-                                        URL.revokeObjectURL(url);
+                                        const htmlText = await res.text();
+                                        
+                                        // Criar container oculto para renderizar o HTML
+                                        const container = document.createElement('div');
+                                        container.innerHTML = htmlText;
+                                        container.style.position = 'fixed';
+                                        container.style.left = '-9999px';
+                                        container.style.top = '0';
+                                        container.style.width = '800px';
+                                        document.body.appendChild(container);
+                                        
+                                        // Importar html2pdf dinamicamente
+                                        const html2pdf = (await import('html2pdf.js')).default;
+                                        
+                                        const fileName = `relatorio-${(tenant.companyName || 'cliente').replace(/\s+/g, '-').toLowerCase()}.pdf`;
+                                        
+                                        await html2pdf().set({
+                                          margin: 0,
+                                          filename: fileName,
+                                          image: { type: 'jpeg', quality: 0.98 },
+                                          html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+                                          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                                          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+                                        }).from(container.querySelector('.page') || container).save();
+                                        
+                                        document.body.removeChild(container);
                                       } catch (err) {
-                                        console.error('Erro ao gerar relatório:', err);
+                                        console.error('Erro ao gerar relatório PDF:', err);
+                                        alert('Erro ao gerar PDF. Tente novamente.');
                                       }
                                     }}
                                     className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors mt-3"

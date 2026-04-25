@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import {
   Users, DollarSign, AlertTriangle, TrendingUp, Clock, CheckCircle,
   RefreshCw, ArrowRight, Zap, Activity, UserCheck, AlertCircle,
-  BarChart2, CreditCard, Calendar, ExternalLink
+  BarChart2, CreditCard, Calendar, ExternalLink, MessageSquare,
+  Target, Eye, Star, ShoppingBag
 } from 'lucide-react';
 
 interface AdminHomeProps {
@@ -52,7 +53,19 @@ function timeAgo(dateStr: string) {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h atrás`;
   const days = Math.floor(hrs / 24);
-  return `${days}d atrás`;
+  if (days === 1) return 'Ontem';
+  if (days < 7) return `${days}d atrás`;
+  if (days < 30) return `${Math.floor(days / 7)} sem atrás`;
+  return `${Math.floor(days / 30)} mês(es)`;
+}
+
+function getAccessStatus(lastLogin: string | null) {
+  if (!lastLogin) return { label: 'Nunca acessou', color: 'text-red-500', bg: 'bg-red-50', bgDark: 'bg-red-500/10' };
+  const days = Math.floor((Date.now() - new Date(lastLogin).getTime()) / (1000 * 60 * 60 * 24));
+  if (days <= 3) return { label: 'Ativo', color: 'text-emerald-500', bg: 'bg-emerald-50', bgDark: 'bg-emerald-500/10' };
+  if (days <= 7) return { label: 'Recente', color: 'text-blue-500', bg: 'bg-blue-50', bgDark: 'bg-blue-500/10' };
+  if (days <= 14) return { label: 'Moderado', color: 'text-amber-500', bg: 'bg-amber-50', bgDark: 'bg-amber-500/10' };
+  return { label: 'Inativo', color: 'text-red-500', bg: 'bg-red-50', bgDark: 'bg-red-500/10' };
 }
 
 export default function AdminHome({ isDark = false, onNavigate, hideFinancial = false }: AdminHomeProps) {
@@ -60,24 +73,24 @@ export default function AdminHome({ isDark = false, onNavigate, hideFinancial = 
   const [loading, setLoading] = useState(true);
   const [asaasData, setAsaasData] = useState<any>(null);
   const [clientsData, setClientsData] = useState<any>(null);
+  const [usageData, setUsageData] = useState<any>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      if (hideFinancial) {
-        const clientsRes = await fetch('/api/admin/clients');
-        const clients = await clientsRes.json();
-        setClientsData(clients);
-      } else {
-        const [asaasRes, clientsRes] = await Promise.all([
-          fetch('/api/admin/asaas?action=overview'),
-          fetch('/api/admin/clients'),
-        ]);
-        const [asaas, clients] = await Promise.all([asaasRes.json(), clientsRes.json()]);
-        setAsaasData(asaas);
-        setClientsData(clients);
+      const promises: Promise<any>[] = [
+        fetch('/api/admin/clients').then(r => r.json()),
+        fetch('/api/admin/analytics?view=overview').then(r => r.json()),
+      ];
+      if (!hideFinancial) {
+        promises.push(fetch('/api/admin/asaas?action=overview').then(r => r.json()));
       }
+
+      const results = await Promise.all(promises);
+      setClientsData(results[0]);
+      setUsageData(results[1]);
+      if (!hideFinancial && results[2]) setAsaasData(results[2]);
       setLastUpdated(new Date());
     } catch (e) {
       console.error(e);
@@ -101,78 +114,152 @@ export default function AdminHome({ isDark = false, onNavigate, hideFinancial = 
   const stats = clientsData?.stats || {};
   const clients = clientsData?.clients || [];
 
-  // Últimos 5 logins
+  // Dados de uso da plataforma (do analytics)
+  const tenants = usageData?.tenants || [];
+  const totalNpsResponses = tenants.reduce((sum: number, t: any) => sum + (t.nps?.totalResponses || 0), 0);
+  const totalLeads = tenants.reduce((sum: number, t: any) => sum + (t.leads?.total || 0), 0);
+  const totalLeadsVendidos = tenants.reduce((sum: number, t: any) => sum + (t.leads?.vendido || 0), 0);
+  const totalPipeline = tenants.reduce((sum: number, t: any) => sum + (t.leads?.pipelineValue || 0), 0);
+  const avgNps = tenants.length > 0 
+    ? Math.round(tenants.filter((t: any) => t.nps?.totalResponses > 0).reduce((sum: number, t: any) => sum + (t.nps?.score || 0), 0) / Math.max(1, tenants.filter((t: any) => t.nps?.totalResponses > 0).length))
+    : 0;
+
+  // Classificar clientes por acesso
+  const activeIn3Days = clients.filter((c: any) => {
+    if (!c.lastLogin) return false;
+    return (Date.now() - new Date(c.lastLogin).getTime()) <= 3 * 24 * 60 * 60 * 1000;
+  }).length;
+  const activeIn7Days = clients.filter((c: any) => {
+    if (!c.lastLogin) return false;
+    return (Date.now() - new Date(c.lastLogin).getTime()) <= 7 * 24 * 60 * 60 * 1000;
+  }).length;
+  const neverLoggedIn = clients.filter((c: any) => !c.lastLogin).length;
+  const inactiveOver14 = clients.filter((c: any) => {
+    if (!c.lastLogin) return true;
+    return (Date.now() - new Date(c.lastLogin).getTime()) > 14 * 24 * 60 * 60 * 1000;
+  }).length;
+
+  // Últimos acessos
   const recentLogins = [...clients]
     .filter((c: any) => c.lastLogin)
     .sort((a: any, b: any) => new Date(b.lastLogin).getTime() - new Date(a.lastLogin).getTime())
-    .slice(0, 5);
-
-  // Clientes sem login
-  const neverLoggedIn = clients.filter((c: any) => !c.lastLogin).length;
+    .slice(0, 8);
 
   // Clientes com trial expirando em 3 dias
   const urgentTrials = clients.filter((c: any) =>
     c.consolidatedDaysRemaining !== null && c.consolidatedDaysRemaining <= 3 && c.consolidatedDaysRemaining >= 0
   ).length;
 
-  const kpis = [
-    ...(!hideFinancial ? [
-      {
-        label: 'MRR',
-        value: fmt(mrr),
-        sub: `ARR: ${fmt(arr)}`,
-        icon: <DollarSign size={18} />,
-        color: 'text-emerald-500',
-        bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50',
-        onClick: () => onNavigate('financeiro'),
-      },
-      {
-        label: 'Assinantes Ativos',
-        value: activeSubs,
-        sub: `${totalSubs} total`,
-        icon: <CheckCircle size={18} />,
-        color: 'text-blue-500',
-        bg: isDark ? 'bg-blue-500/10' : 'bg-blue-50',
-        onClick: () => onNavigate('financeiro'),
-      },
-      {
-        label: 'Inadimplentes',
-        value: overdueCount,
-        sub: overdueAmount > 0 ? `${fmt(overdueAmount)} em aberto` : 'Nenhum em aberto',
-        icon: <AlertTriangle size={18} />,
-        color: overdueCount > 0 ? 'text-red-500' : 'text-slate-400',
-        bg: overdueCount > 0 ? (isDark ? 'bg-red-500/10' : 'bg-red-50') : (isDark ? 'bg-gray-800' : 'bg-slate-50'),
-        onClick: () => onNavigate('financeiro'),
-      },
-      {
-        label: 'Ticket Médio',
-        value: fmt(ticketMedio),
-        sub: `Churn: ${churnRate.toFixed(1)}%`,
-        icon: <TrendingUp size={18} />,
-        color: 'text-violet-500',
-        bg: isDark ? 'bg-violet-500/10' : 'bg-violet-50',
-        onClick: () => onNavigate('financeiro'),
-      },
-      {
-        label: 'Recebido este mês',
-        value: fmt(receivedAmount),
-        sub: 'Pagamentos confirmados',
-        icon: <CreditCard size={18} />,
-        color: 'text-amber-500',
-        bg: isDark ? 'bg-amber-500/10' : 'bg-amber-50',
-        onClick: () => onNavigate('financeiro'),
-      },
-    ] : []),
+  // Top clientes por uso (NPS + leads)
+  const topClients = [...tenants]
+    .map((t: any) => ({
+      name: t.companyName,
+      nps: t.nps?.totalResponses || 0,
+      leads: t.leads?.total || 0,
+      pipeline: t.leads?.pipelineValue || 0,
+      vendidos: t.leads?.vendido || 0,
+      lastLogin: clients.find((c: any) => c.tenantId === t.tenantId)?.lastLogin || null,
+    }))
+    .sort((a, b) => (b.nps + b.leads) - (a.nps + a.leads))
+    .slice(0, 6);
+
+  // KPIs de uso da plataforma
+  const usageKpis = [
     {
-      label: 'Clientes (plataforma)',
-      value: stats.total || 0,
-      sub: `${stats.active || 0} ativos · ${stats.trialing || 0} em trial`,
-      icon: <Users size={18} />,
-      color: 'text-teal-500',
-      bg: isDark ? 'bg-teal-500/10' : 'bg-teal-50',
+      label: 'Acessaram (3 dias)',
+      value: activeIn3Days,
+      sub: `de ${clients.length} clientes`,
+      icon: <Eye size={18} />,
+      color: 'text-emerald-500',
+      bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50',
       onClick: () => onNavigate('clients'),
     },
+    {
+      label: 'Acessaram (7 dias)',
+      value: activeIn7Days,
+      sub: `${Math.round((activeIn7Days / Math.max(1, clients.length)) * 100)}% dos clientes`,
+      icon: <Activity size={18} />,
+      color: 'text-blue-500',
+      bg: isDark ? 'bg-blue-500/10' : 'bg-blue-50',
+      onClick: () => onNavigate('clients'),
+    },
+    {
+      label: 'Inativos (+14d)',
+      value: inactiveOver14,
+      sub: neverLoggedIn > 0 ? `${neverLoggedIn} nunca acessaram` : 'Todos já acessaram',
+      icon: <AlertTriangle size={18} />,
+      color: inactiveOver14 > 0 ? 'text-red-500' : 'text-slate-400',
+      bg: inactiveOver14 > 0 ? (isDark ? 'bg-red-500/10' : 'bg-red-50') : (isDark ? 'bg-gray-800' : 'bg-slate-50'),
+      onClick: () => onNavigate('intelligence'),
+    },
+    {
+      label: 'Avaliações NPS',
+      value: totalNpsResponses,
+      sub: `NPS médio: ${avgNps}`,
+      icon: <Star size={18} />,
+      color: 'text-amber-500',
+      bg: isDark ? 'bg-amber-500/10' : 'bg-amber-50',
+      onClick: () => onNavigate('intelligence'),
+    },
+    {
+      label: 'Leads Captados',
+      value: totalLeads,
+      sub: `${totalLeadsVendidos} vendidos`,
+      icon: <Target size={18} />,
+      color: 'text-violet-500',
+      bg: isDark ? 'bg-violet-500/10' : 'bg-violet-50',
+      onClick: () => onNavigate('intelligence'),
+    },
+    {
+      label: 'Oportunidades',
+      value: totalPipeline > 0 ? fmt(totalPipeline) : 'R$ 0',
+      sub: `${totalLeads > 0 ? Math.round((totalLeadsVendidos / totalLeads) * 100) : 0}% conversão`,
+      icon: <ShoppingBag size={18} />,
+      color: 'text-teal-500',
+      bg: isDark ? 'bg-teal-500/10' : 'bg-teal-50',
+      onClick: () => onNavigate('intelligence'),
+    },
   ];
+
+  // KPIs financeiros
+  const financialKpis = !hideFinancial ? [
+    {
+      label: 'MRR',
+      value: fmt(mrr),
+      sub: `ARR: ${fmt(arr)}`,
+      icon: <DollarSign size={18} />,
+      color: 'text-emerald-500',
+      bg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50',
+      onClick: () => onNavigate('financeiro'),
+    },
+    {
+      label: 'Assinantes',
+      value: activeSubs,
+      sub: `${totalSubs} total`,
+      icon: <CheckCircle size={18} />,
+      color: 'text-blue-500',
+      bg: isDark ? 'bg-blue-500/10' : 'bg-blue-50',
+      onClick: () => onNavigate('financeiro'),
+    },
+    {
+      label: 'Inadimplentes',
+      value: overdueCount,
+      sub: overdueAmount > 0 ? `${fmt(overdueAmount)} em aberto` : 'Nenhum',
+      icon: <AlertTriangle size={18} />,
+      color: overdueCount > 0 ? 'text-red-500' : 'text-slate-400',
+      bg: overdueCount > 0 ? (isDark ? 'bg-red-500/10' : 'bg-red-50') : (isDark ? 'bg-gray-800' : 'bg-slate-50'),
+      onClick: () => onNavigate('financeiro'),
+    },
+    {
+      label: 'Ticket Médio',
+      value: fmt(ticketMedio),
+      sub: `Churn: ${churnRate.toFixed(1)}%`,
+      icon: <TrendingUp size={18} />,
+      color: 'text-violet-500',
+      bg: isDark ? 'bg-violet-500/10' : 'bg-violet-50',
+      onClick: () => onNavigate('financeiro'),
+    },
+  ] : [];
 
   const alerts = [
     urgentTrials > 0 && {
@@ -195,6 +282,13 @@ export default function AdminHome({ isDark = false, onNavigate, hideFinancial = 
       text: `${neverLoggedIn} cliente${neverLoggedIn > 1 ? 's' : ''} nunca fizeram login na plataforma`,
       action: () => onNavigate('clients', { status: 'never_login' }),
       actionLabel: 'Ver clientes →',
+    },
+    inactiveOver14 > 3 && {
+      type: 'danger',
+      icon: <Eye size={14} />,
+      text: `${inactiveOver14} clientes não acessam há mais de 14 dias — risco de churn`,
+      action: () => onNavigate('intelligence'),
+      actionLabel: 'Ver uso real →',
     },
   ].filter(Boolean) as any[];
 
@@ -261,28 +355,58 @@ export default function AdminHome({ isDark = false, onNavigate, hideFinancial = 
           </div>
         )}
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          {kpis.map((kpi, i) => (
-            <button
-              key={i}
-              onClick={kpi.onClick}
-              className={`${t.card} border rounded-xl p-4 text-left shadow-sm hover:shadow-md transition-all hover:scale-[1.02] group`}
-            >
-              <div className={`w-8 h-8 rounded-lg ${kpi.bg} flex items-center justify-center mb-3 ${kpi.color}`}>
-                {kpi.icon}
-              </div>
-              <p className={`text-xl font-bold ${t.text}`}>{kpi.value}</p>
-              <p className={`text-xs font-medium ${t.textMuted} mt-0.5`}>{kpi.label}</p>
-              <p className={`text-xs ${t.textMuted} opacity-70 mt-1`}>{kpi.sub}</p>
-            </button>
-          ))}
+        {/* Seção: Uso da Plataforma */}
+        <div>
+          <h2 className={`text-sm font-semibold ${t.textSub} uppercase tracking-wider mb-3 flex items-center gap-2`}>
+            <Activity size={14} className="text-emerald-500" /> Uso da Plataforma
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            {usageKpis.map((kpi, i) => (
+              <button
+                key={i}
+                onClick={kpi.onClick}
+                className={`${t.card} border rounded-xl p-4 text-left shadow-sm hover:shadow-md transition-all hover:scale-[1.02] group`}
+              >
+                <div className={`w-8 h-8 rounded-lg ${kpi.bg} flex items-center justify-center mb-3 ${kpi.color}`}>
+                  {kpi.icon}
+                </div>
+                <p className={`text-xl font-bold ${t.text}`}>{kpi.value}</p>
+                <p className={`text-xs font-medium ${t.textMuted} mt-0.5`}>{kpi.label}</p>
+                <p className={`text-xs ${t.textMuted} opacity-70 mt-1`}>{kpi.sub}</p>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Linha: Últimos logins + Acesso rápido */}
+        {/* Seção: Financeiro (se não oculto) */}
+        {!hideFinancial && financialKpis.length > 0 && (
+          <div>
+            <h2 className={`text-sm font-semibold ${t.textSub} uppercase tracking-wider mb-3 flex items-center gap-2`}>
+              <DollarSign size={14} className="text-violet-500" /> Financeiro
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {financialKpis.map((kpi, i) => (
+                <button
+                  key={i}
+                  onClick={kpi.onClick}
+                  className={`${t.card} border rounded-xl p-4 text-left shadow-sm hover:shadow-md transition-all hover:scale-[1.02] group`}
+                >
+                  <div className={`w-8 h-8 rounded-lg ${kpi.bg} flex items-center justify-center mb-3 ${kpi.color}`}>
+                    {kpi.icon}
+                  </div>
+                  <p className={`text-xl font-bold ${t.text}`}>{kpi.value}</p>
+                  <p className={`text-xs font-medium ${t.textMuted} mt-0.5`}>{kpi.label}</p>
+                  <p className={`text-xs ${t.textMuted} opacity-70 mt-1`}>{kpi.sub}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Linha: Últimos acessos + Top clientes por uso */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-          {/* Últimos logins */}
+          {/* Últimos acessos */}
           <div className={`${t.card} border rounded-xl shadow-sm`}>
             <div className={`flex items-center justify-between px-5 py-4 border-b ${t.border}`}>
               <div className="flex items-center gap-2">
@@ -296,49 +420,72 @@ export default function AdminHome({ isDark = false, onNavigate, hideFinancial = 
             <div className={`divide-y ${t.divider}`}>
               {recentLogins.length === 0 ? (
                 <div className={`px-5 py-8 text-center text-sm ${t.textMuted}`}>Nenhum acesso registrado</div>
-              ) : recentLogins.map((client: any, i: number) => (
-                <div key={i} className={`flex items-center justify-between px-5 py-3 ${t.row} transition-colors`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-7 h-7 rounded-full ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-100 text-slate-600'} flex items-center justify-center text-xs font-bold flex-shrink-0`}>
-                      {client.name?.[0]?.toUpperCase() || '?'}
+              ) : recentLogins.map((client: any, i: number) => {
+                const status = getAccessStatus(client.lastLogin);
+                return (
+                  <div key={i} className={`flex items-center justify-between px-5 py-3 ${t.row} transition-colors`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-7 h-7 rounded-full ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-100 text-slate-600'} flex items-center justify-center text-xs font-bold flex-shrink-0`}>
+                        {client.name?.[0]?.toUpperCase() || '?'}
+                      </div>
+                      <div>
+                        <p className={`text-sm font-medium ${t.text}`}>{client.companyName || client.name}</p>
+                        <p className={`text-xs ${t.textMuted}`}>{client.email}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className={`text-sm font-medium ${t.text}`}>{client.name}</p>
-                      <p className={`text-xs ${t.textMuted}`}>{client.email}</p>
+                    <div className="text-right">
+                      <span className={`text-xs font-medium ${status.color}`}>{timeAgo(client.lastLogin)}</span>
                     </div>
                   </div>
-                  <span className={`text-xs ${t.textMuted}`}>{timeAgo(client.lastLogin)}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          {/* Acesso rápido */}
+          {/* Top clientes por uso */}
           <div className={`${t.card} border rounded-xl shadow-sm`}>
-            <div className={`flex items-center gap-2 px-5 py-4 border-b ${t.border}`}>
-              <Activity size={16} className="text-violet-500" />
-              <h2 className={`text-sm font-semibold ${t.text}`}>Acesso Rápido</h2>
+            <div className={`flex items-center justify-between px-5 py-4 border-b ${t.border}`}>
+              <div className="flex items-center gap-2">
+                <TrendingUp size={16} className="text-violet-500" />
+                <h2 className={`text-sm font-semibold ${t.text}`}>Top Clientes por Uso</h2>
+              </div>
+              <button onClick={() => onNavigate('intelligence')} className={`text-xs ${t.textMuted} hover:text-violet-500 flex items-center gap-1 transition-colors`}>
+                Ver detalhes <ArrowRight size={12} />
+              </button>
             </div>
-            <div className="grid grid-cols-2 gap-2 p-4">
-              {quickLinks.map((link, i) => (
-                <button
-                  key={i}
-                  onClick={() => onNavigate(link.tab)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border ${t.cardInner} ${t.row} transition-all hover:scale-[1.02] text-left`}
-                >
-                  <div className={`${link.color} flex-shrink-0`}>{link.icon}</div>
-                  <div>
-                    <p className={`text-xs font-semibold ${t.text}`}>{link.label}</p>
-                    <p className={`text-xs ${t.textMuted} leading-tight`}>{link.desc}</p>
+            <div className={`divide-y ${t.divider}`}>
+              {topClients.length === 0 ? (
+                <div className={`px-5 py-8 text-center text-sm ${t.textMuted}`}>Nenhum dado disponível</div>
+              ) : topClients.map((client: any, i: number) => (
+                <div key={i} className={`flex items-center justify-between px-5 py-3 ${t.row} transition-colors`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                      i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-100 text-slate-600' : i === 2 ? 'bg-orange-100 text-orange-700' : (isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-50 text-slate-500')
+                    }`}>
+                      {i + 1}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-medium ${t.text}`}>{client.name}</p>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className={`text-xs ${t.textMuted}`}><Star size={10} className="inline text-amber-500" /> {client.nps} NPS</span>
+                        <span className={`text-xs ${t.textMuted}`}><Target size={10} className="inline text-violet-500" /> {client.leads} leads</span>
+                      </div>
+                    </div>
                   </div>
-                </button>
+                  <div className="text-right">
+                    <p className={`text-sm font-bold ${client.pipeline > 0 ? 'text-emerald-500' : t.textMuted}`}>
+                      {client.pipeline > 0 ? fmt(client.pipeline) : '-'}
+                    </p>
+                    <p className={`text-xs ${t.textMuted}`}>{client.vendidos} vendidos</p>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Linha: Distribuição de planos + Status financeiro */}
-        <div className={`grid grid-cols-1 ${!hideFinancial ? 'lg:grid-cols-2' : ''} gap-4`}>
+        {/* Linha: Status de clientes + Acesso rápido */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
           {/* Distribuição de planos */}
           <div className={`${t.card} border rounded-xl shadow-sm`}>
@@ -375,36 +522,59 @@ export default function AdminHome({ isDark = false, onNavigate, hideFinancial = 
             </div>
           </div>
 
-          {/* Status financeiro Asaas - apenas quando não está oculto */}
-          {!hideFinancial && (
-            <div className={`${t.card} border rounded-xl shadow-sm`}>
-              <div className={`flex items-center justify-between px-5 py-4 border-b ${t.border}`}>
-                <div className="flex items-center gap-2">
-                  <DollarSign size={16} className="text-emerald-500" />
-                  <h2 className={`text-sm font-semibold ${t.text}`}>Resumo Financeiro</h2>
-                </div>
-                <button onClick={() => onNavigate('financeiro')} className={`text-xs ${t.textMuted} hover:text-emerald-500 flex items-center gap-1 transition-colors`}>
-                  Ver detalhes <ArrowRight size={12} />
-                </button>
-              </div>
-              <div className="p-5 space-y-3">
-                {[
-                  { label: 'MRR (Receita Mensal)', value: fmt(mrr), color: 'text-emerald-500' },
-                  { label: 'ARR (Receita Anual)', value: fmt(arr), color: 'text-emerald-400' },
-                  { label: 'Ticket Médio', value: fmt(ticketMedio), color: 'text-blue-500' },
-                  { label: 'Recebido este mês', value: fmt(receivedAmount), color: 'text-teal-500' },
-                  { label: 'Em aberto (inadimplência)', value: fmt(overdueAmount), color: overdueAmount > 0 ? 'text-red-500' : 'text-slate-400' },
-                  { label: 'Churn Rate', value: `${churnRate.toFixed(1)}%`, color: churnRate > 10 ? 'text-red-500' : 'text-slate-400' },
-                ].map((item, i) => (
-                  <div key={i} className={`flex items-center justify-between py-1.5 border-b ${t.border} last:border-0`}>
-                    <span className={`text-xs ${t.textSub}`}>{item.label}</span>
-                    <span className={`text-sm font-bold ${item.color}`}>{item.value}</span>
-                  </div>
-                ))}
-              </div>
+          {/* Acesso rápido */}
+          <div className={`${t.card} border rounded-xl shadow-sm`}>
+            <div className={`flex items-center gap-2 px-5 py-4 border-b ${t.border}`}>
+              <Activity size={16} className="text-violet-500" />
+              <h2 className={`text-sm font-semibold ${t.text}`}>Acesso Rápido</h2>
             </div>
-          )}
+            <div className="grid grid-cols-2 gap-2 p-4">
+              {quickLinks.map((link, i) => (
+                <button
+                  key={i}
+                  onClick={() => onNavigate(link.tab)}
+                  className={`flex items-center gap-3 p-3 rounded-xl border ${t.cardInner} ${t.row} transition-all hover:scale-[1.02] text-left`}
+                >
+                  <div className={`${link.color} flex-shrink-0`}>{link.icon}</div>
+                  <div>
+                    <p className={`text-xs font-semibold ${t.text}`}>{link.label}</p>
+                    <p className={`text-xs ${t.textMuted} leading-tight`}>{link.desc}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
+
+        {/* Resumo financeiro detalhado (se não oculto) */}
+        {!hideFinancial && (
+          <div className={`${t.card} border rounded-xl shadow-sm`}>
+            <div className={`flex items-center justify-between px-5 py-4 border-b ${t.border}`}>
+              <div className="flex items-center gap-2">
+                <DollarSign size={16} className="text-emerald-500" />
+                <h2 className={`text-sm font-semibold ${t.text}`}>Resumo Financeiro</h2>
+              </div>
+              <button onClick={() => onNavigate('financeiro')} className={`text-xs ${t.textMuted} hover:text-emerald-500 flex items-center gap-1 transition-colors`}>
+                Ver detalhes <ArrowRight size={12} />
+              </button>
+            </div>
+            <div className="p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+              {[
+                { label: 'MRR', value: fmt(mrr), color: 'text-emerald-500' },
+                { label: 'ARR', value: fmt(arr), color: 'text-emerald-400' },
+                { label: 'Ticket Médio', value: fmt(ticketMedio), color: 'text-blue-500' },
+                { label: 'Recebido (mês)', value: fmt(receivedAmount), color: 'text-teal-500' },
+                { label: 'Inadimplência', value: fmt(overdueAmount), color: overdueAmount > 0 ? 'text-red-500' : 'text-slate-400' },
+                { label: 'Churn Rate', value: `${churnRate.toFixed(1)}%`, color: churnRate > 10 ? 'text-red-500' : 'text-slate-400' },
+              ].map((item, i) => (
+                <div key={i} className="text-center">
+                  <p className={`text-lg font-bold ${item.color}`}>{item.value}</p>
+                  <p className={`text-xs ${t.textMuted} mt-0.5`}>{item.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
