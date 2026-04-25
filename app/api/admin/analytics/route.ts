@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+export const maxDuration = 60;
+
 // GET /api/admin/analytics — agrega métricas de NPS, leads, MPD e tendências por tenant
 export async function GET(request: NextRequest) {
   try {
@@ -28,19 +30,31 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Helper: busca paginada para superar o limite de 1000 registros do Supabase
+async function fetchAll(table: string, select: string, extraFilters?: (q: any) => any) {
+  const PAGE_SIZE = 1000;
+  let allData: any[] = [];
+  let from = 0;
+  let hasMore = true;
+  while (hasMore) {
+    let query = supabase.from(table).select(select).is('deleted_at', null).range(from, from + PAGE_SIZE - 1);
+    if (extraFilters) query = extraFilters(query);
+    const { data, error } = await query;
+    if (error) { console.error(`fetchAll ${table} error:`, error); break; }
+    if (!data || data.length === 0) { hasMore = false; break; }
+    allData = allData.concat(data);
+    if (data.length < PAGE_SIZE) { hasMore = false; } else { from += PAGE_SIZE; }
+  }
+  return allData;
+}
+
 // ─── Overview: métricas agregadas por tenant ──────────────────────────────────
 async function getOverview() {
-  // Buscar todas as NPS responses
-  const { data: npsResponses } = await supabase
-    .from('nps_responses')
-    .select('score, created_at, tenant_id, comment, answers')
-    .is('deleted_at', null);
+  // Buscar TODAS as NPS responses (com paginação para superar limite de 1000)
+  const npsResponses = await fetchAll('nps_responses', 'score, created_at, tenant_id, comment, answers');
 
-  // Buscar todos os leads
-  const { data: leads } = await supabase
-    .from('leads')
-    .select('tenant_id, status, value, created_at, answers')
-    .is('deleted_at', null);
+  // Buscar TODOS os leads (com paginação)
+  const leads = await fetchAll('leads', 'tenant_id, status, value, created_at, answers');
 
   // Buscar último diagnóstico MPD por tenant
   const { data: diagnostics } = await supabase
@@ -64,6 +78,11 @@ async function getOverview() {
     .from('companies')
     .select('id, name, plan, subscription_status, created_at');
 
+  // Buscar business_profile para obter nicho/setor de cada tenant
+  const { data: businessProfiles } = await supabase
+    .from('business_profile')
+    .select('tenant_id, business_type, company_name');
+
   // Mapa de tenant_id -> nome da empresa
   const companyNameMap: Record<string, string> = {};
   const companyPlanMap: Record<string, string> = {};
@@ -76,6 +95,36 @@ async function getOverview() {
       companyStatusMap[c.id] = c.subscription_status || '';
       companyCreatedMap[c.id] = c.created_at || '';
     }
+  }
+
+  // Mapa de tenant_id -> business_type (nicho)
+  const businessTypeMap: Record<string, string> = {};
+  for (const bp of businessProfiles || []) {
+    if (bp.tenant_id && bp.business_type) {
+      businessTypeMap[bp.tenant_id] = bp.business_type.trim();
+    }
+  }
+
+  // Normalizar nichos para categorias padrão
+  function normalizeBusinessType(raw: string): string {
+    if (!raw) return 'Não informado';
+    const lower = raw.toLowerCase().trim();
+    if (lower.includes('odonto') || lower.includes('dentist') || lower.includes('consultório odonto')) return 'Odontologia';
+    if (lower.includes('restaurante') || lower.includes('bar') || lower.includes('boteco') || lower.includes('winebar') || lower.includes('delivery')) return 'Alimentação';
+    if (lower.includes('cafeteria') || lower.includes('café')) return 'Alimentação';
+    if (lower.includes('hotel') || lower.includes('pousada')) return 'Hotelaria';
+    if (lower.includes('estética') || lower.includes('estetica') || lower.includes('procedimentos estéticos')) return 'Estética';
+    if (lower.includes('academia') || lower.includes('personal') || lower.includes('studio')) return 'Fitness';
+    if (lower.includes('pet') || lower.includes('veterinár')) return 'Pet/Veterinária';
+    if (lower.includes('farmácia') || lower.includes('farmacia')) return 'Farmácia';
+    if (lower.includes('loja') || lower.includes('roupas') || lower.includes('drones')) return 'Varejo';
+    if (lower.includes('escola') || lower.includes('idioma') || lower.includes('inglês')) return 'Educação';
+    if (lower.includes('software') || lower.includes('saas') || lower.includes('tecnologia') || lower.includes('técnologia')) return 'Tecnologia';
+    if (lower.includes('contabilidade')) return 'Contabilidade';
+    if (lower.includes('clínica') || lower.includes('saúde') || lower.includes('hub de saúde') || lower.includes('psicoterapia') || lower.includes('radiologia')) return 'Saúde';
+    if (lower.includes('barbearia')) return 'Barbearia';
+    if (lower.includes('tiro') || lower.includes('arma')) return 'Outros';
+    return 'Outros';
   }
 
   // Agrupar por tenant
@@ -213,12 +262,18 @@ async function getOverview() {
       ? Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24))
       : null;
 
+    // Nicho/setor
+    const rawBusinessType = businessTypeMap[t.tenantId] || '';
+    const sector = normalizeBusinessType(rawBusinessType);
+
     return {
       tenantId: t.tenantId,
       companyName: companyNameMap[t.tenantId] || t.tenantId.substring(0, 8),
       plan: companyPlanMap[t.tenantId] || '',
       subscriptionStatus: companyStatusMap[t.tenantId] || '',
       daysAsClient,
+      businessType: rawBusinessType,
+      sector,
       nps: {
         score: npsScore,
         avgScore,
@@ -247,6 +302,30 @@ async function getOverview() {
   const globalNps = allScores.length > 0 ? Math.round(((globalPromo - globalDetr) / allScores.length) * 100) : 0;
   const totalPipeline = (leads || []).reduce((sum: number, l: any) => sum + (parseFloat(String(l.value || 0)) || 0), 0);
 
+  // Métricas por setor
+  const sectorMap: Record<string, { tenants: number; npsScores: number[]; leads: number; pipeline: number; responses: number }> = {};
+  for (const ta of tenantAnalytics) {
+    const sec = ta.sector || 'Não informado';
+    if (!sectorMap[sec]) sectorMap[sec] = { tenants: 0, npsScores: [], leads: 0, pipeline: 0, responses: 0 };
+    sectorMap[sec].tenants++;
+    if (ta.nps.score !== null) sectorMap[sec].npsScores.push(ta.nps.score);
+    sectorMap[sec].leads += ta.leads.total;
+    sectorMap[sec].pipeline += ta.leads.pipelineValue;
+    sectorMap[sec].responses += ta.nps.totalResponses;
+  }
+
+  const sectorAnalytics = Object.entries(sectorMap)
+    .map(([sector, data]) => ({
+      sector,
+      tenantCount: data.tenants,
+      avgNps: data.npsScores.length > 0 ? Math.round(data.npsScores.reduce((a, b) => a + b, 0) / data.npsScores.length) : null,
+      totalLeads: data.leads,
+      totalPipeline: data.pipeline,
+      totalResponses: data.responses,
+      avgResponsesPerTenant: data.tenants > 0 ? Math.round(data.responses / data.tenants) : 0,
+    }))
+    .sort((a, b) => b.tenantCount - a.tenantCount);
+
   return NextResponse.json({
     global: {
       npsScore: globalNps,
@@ -257,22 +336,29 @@ async function getOverview() {
       activeTenantsCount: Object.keys(tenantMap).length,
     },
     tenants: tenantAnalytics,
+    sectorAnalytics,
   });
 }
 
 // ─── Detalhe de um tenant específico ─────────────────────────────────────────
 async function getTenantDetail(tenantId: string) {
-  const [npsRes, leadsRes, diagRes, campsRes] = await Promise.all([
-    supabase.from('nps_responses').select('*').eq('tenant_id', tenantId).is('deleted_at', null).order('created_at', { ascending: false }),
-    supabase.from('leads').select('*').eq('tenant_id', tenantId).is('deleted_at', null).order('created_at', { ascending: false }),
-    supabase.from('digital_diagnostics').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
-    supabase.from('campaigns').select('*').eq('tenant_id', tenantId).is('deleted_at', null),
-  ]);
+  // Usar paginação para buscar todas as respostas NPS do tenant
+  const npsResponses = await fetchAll('nps_responses', '*', (q: any) => q.eq('tenant_id', tenantId).order('created_at', { ascending: false }));
+  const leads = await fetchAll('leads', '*', (q: any) => q.eq('tenant_id', tenantId).order('created_at', { ascending: false }));
 
-  const npsResponses = npsRes.data || [];
-  const leads = leadsRes.data || [];
-  const diagnostics = diagRes.data || [];
-  const campaigns = campsRes.data || [];
+  const { data: diagnosticsRaw } = await supabase
+    .from('digital_diagnostics')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: false });
+  const diagnostics = diagnosticsRaw || [];
+
+  const { data: campaignsRaw } = await supabase
+    .from('campaigns')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .is('deleted_at', null);
+  const campaigns = campaignsRaw || [];
 
   // NPS mensal
   const monthly: Record<string, number[]> = {};
@@ -327,6 +413,7 @@ async function getTenantDetail(tenantId: string) {
       responses: npsResponses.slice(0, 50),
       monthly: monthlyNps,
       allTexts: allTexts.filter(t => t.length > 15).slice(0, 100),
+      totalResponses: npsResponses.length,
     },
     leads: {
       items: leads.slice(0, 50),
@@ -341,11 +428,8 @@ async function getTenantDetail(tenantId: string) {
 
 // ─── Tendências globais da base ───────────────────────────────────────────────
 async function getGlobalTrends() {
-  const { data: npsResponses } = await supabase
-    .from('nps_responses')
-    .select('score, created_at, comment, answers, tenant_id')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: true });
+  // Usar paginação para buscar todas as respostas
+  const npsResponses = await fetchAll('nps_responses', 'score, created_at, comment, answers, tenant_id');
 
   // Tendência mensal global
   const monthly: Record<string, { scores: number[]; comments: string[]; choices: Record<string, number> }> = {};
@@ -415,12 +499,7 @@ async function getGlobalTrends() {
 
 // ─── Insights de mercado (agrega comentários para análise) ────────────────────
 async function getMarketInsights() {
-  const { data: npsResponses } = await supabase
-    .from('nps_responses')
-    .select('score, comment, answers, tenant_id, created_at')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(500);
+  const npsResponses = await fetchAll('nps_responses', 'score, comment, answers, tenant_id, created_at');
 
   // Coletar todos os textos ricos
   const richTexts: { text: string; score: number; date: string; tenantId: string }[] = [];

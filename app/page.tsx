@@ -276,24 +276,16 @@ export default function HomePage() {
 
   return (
     <div className="relative">
-      {/* Banner de impersonation */}
+      {/* Botão de retorno ao admin (impersonation) */}
       {impersonating && (
-        <div className="fixed top-0 left-0 right-0 z-[9999] bg-blue-600 text-white flex items-center justify-between px-4 py-2 text-sm font-medium shadow-lg">
-          <div className="flex items-center gap-2">
-            <LogIn size={16} />
-            <span>Você está acessando como: <strong>{impersonating.clientName}</strong></span>
-          </div>
-          <button
-            onClick={handleStopImpersonating}
-            className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg transition-colors text-white font-semibold"
-          >
-            <X size={14} />
-            Voltar ao Admin
-          </button>
-        </div>
+        <button
+          onClick={handleStopImpersonating}
+          title={`Acessando como: ${impersonating.clientName} — Clique para voltar ao Admin`}
+          className="fixed top-3 right-3 z-[9999] w-9 h-9 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110 group"
+        >
+          <X size={18} strokeWidth={2.5} />
+        </button>
       )}
-      {/* Espaço para o banner não sobrepor o conteúdo */}
-      {impersonating && <div className="h-10" />}
       <MainApp
         currentUser={currentUser}
         onLogout={handleLogout}

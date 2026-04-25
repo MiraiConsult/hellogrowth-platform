@@ -5,13 +5,14 @@ import {
   Loader2, RefreshCw, ChevronDown, ChevronUp, Zap, AlertTriangle,
   CheckCircle, Star, Target, Lightbulb, ArrowUp, ArrowDown,
   ThumbsUp, ThumbsDown, Activity, Users, DollarSign, Award, Minus,
-  Calendar, FileText, Package, Search, Eye, Tag, ShoppingBag
+  Calendar, FileText, Package, Search, Eye, Tag, ShoppingBag, Download
 } from 'lucide-react';
 
 interface AdminIntelligenceProps {
   isDark: boolean;
   tenants: any[];
   globalStats: any;
+  sectorAnalytics?: any[];
 }
 
 const DARK = {
@@ -83,10 +84,10 @@ function QuestionTypeBadge({ type }: { type: string }) {
   return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>;
 }
 
-export default function AdminIntelligence({ isDark, tenants, globalStats }: AdminIntelligenceProps) {
+export default function AdminIntelligence({ isDark, tenants, globalStats, sectorAnalytics = [] }: AdminIntelligenceProps) {
   const t = isDark ? DARK : LIGHT;
 
-  const [activeSection, setActiveSection] = useState<'overview' | 'trends' | 'products' | 'clients' | 'surveys'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'usage' | 'sectors' | 'trends' | 'products' | 'clients' | 'surveys'>('overview');
 
   // Filtro de data para Tendências NPS
   const [trendsDatePreset, setTrendsDatePreset] = useState('12m');
@@ -268,8 +269,9 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
         <div className="flex items-center gap-2 flex-wrap">
           {[
             { id: 'overview', label: 'Visão Geral', icon: <BarChart2 size={14} /> },
+            { id: 'usage', label: 'Uso Real', icon: <Activity size={14} /> },
+            { id: 'sectors', label: 'Análise por Setor', icon: <Tag size={14} /> },
             { id: 'trends', label: 'Tendências NPS', icon: <TrendingUp size={14} /> },
-
             { id: 'products', label: 'Produtos & Preços', icon: <Package size={14} /> },
             { id: 'clients', label: 'Análise por Cliente', icon: <Users size={14} /> },
           ].map(sec => (
@@ -398,6 +400,296 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
             </div>
           </div>
         )}
+
+        {/* ── USO REAL DA PLATAFORMA ── */}
+        {activeSection === 'usage' && (() => {
+          // Classificar clientes por nível de uso
+          const now = new Date();
+          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+          const usageClients = tenants.map((ten: any) => {
+            const lastActivity = ten.lastActivity ? new Date(ten.lastActivity) : null;
+            const daysSinceActivity = lastActivity ? Math.floor((now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60 * 24)) : 999;
+            const npsResponses = ten.nps?.totalResponses || 0;
+            const leadsTotal = ten.leads?.total || 0;
+            const leadsVendidos = ten.leads?.vendido || 0;
+            const campaigns = ten.campaignCount || 0;
+            const diagnostics = ten.diagnosticCount || 0;
+
+            // Score de engajamento (0-100)
+            let engagementScore = 0;
+            if (daysSinceActivity <= 7) engagementScore += 30;
+            else if (daysSinceActivity <= 30) engagementScore += 15;
+            if (npsResponses >= 50) engagementScore += 25;
+            else if (npsResponses >= 10) engagementScore += 15;
+            else if (npsResponses > 0) engagementScore += 5;
+            if (leadsTotal >= 10) engagementScore += 20;
+            else if (leadsTotal > 0) engagementScore += 10;
+            if (campaigns > 0) engagementScore += 15;
+            if (diagnostics > 0) engagementScore += 10;
+
+            let usageLevel: 'ativo' | 'moderado' | 'baixo' | 'inativo' = 'inativo';
+            if (engagementScore >= 60) usageLevel = 'ativo';
+            else if (engagementScore >= 30) usageLevel = 'moderado';
+            else if (engagementScore > 0) usageLevel = 'baixo';
+
+            return {
+              ...ten,
+              daysSinceActivity,
+              engagementScore,
+              usageLevel,
+              npsResponses,
+              leadsTotal,
+              leadsVendidos,
+              campaigns,
+              diagnostics,
+            };
+          }).sort((a: any, b: any) => b.engagementScore - a.engagementScore);
+
+          const ativos = usageClients.filter((c: any) => c.usageLevel === 'ativo').length;
+          const moderados = usageClients.filter((c: any) => c.usageLevel === 'moderado').length;
+          const baixos = usageClients.filter((c: any) => c.usageLevel === 'baixo').length;
+          const inativos = usageClients.filter((c: any) => c.usageLevel === 'inativo').length;
+
+          const usageLevelColors: Record<string, { bg: string; text: string; label: string }> = {
+            ativo: { bg: 'bg-emerald-500/15', text: 'text-emerald-500', label: 'Ativo' },
+            moderado: { bg: 'bg-yellow-500/15', text: 'text-yellow-500', label: 'Moderado' },
+            baixo: { bg: 'bg-orange-500/15', text: 'text-orange-500', label: 'Baixo' },
+            inativo: { bg: 'bg-red-500/15', text: 'text-red-400', label: 'Inativo' },
+          };
+
+          return (
+            <div className="space-y-5">
+              <h2 className={`text-base font-semibold ${t.text}`}>Uso Real da Plataforma</h2>
+
+              {/* KPIs de uso */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: 'Ativos', value: ativos, color: 'text-emerald-500', icon: <CheckCircle size={16} className="text-emerald-500" />, sub: 'Engajamento alto' },
+                  { label: 'Moderados', value: moderados, color: 'text-yellow-500', icon: <Activity size={16} className="text-yellow-500" />, sub: 'Uso parcial' },
+                  { label: 'Uso Baixo', value: baixos, color: 'text-orange-500', icon: <AlertTriangle size={16} className="text-orange-500" />, sub: 'Precisam atenção' },
+                  { label: 'Inativos', value: inativos, color: 'text-red-400', icon: <AlertTriangle size={16} className="text-red-400" />, sub: 'Sem atividade' },
+                ].map((kpi, i) => (
+                  <div key={i} className={`${t.kpi} border rounded-xl p-4`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-xs ${t.textMuted} font-medium`}>{kpi.label}</span>
+                      {kpi.icon}
+                    </div>
+                    <div className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</div>
+                    <div className={`text-xs ${t.textMuted}`}>{kpi.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Barra de distribuição */}
+              <div className={cardCls}>
+                <h3 className={`text-sm font-semibold ${t.text} mb-3`}>Distribuição de Engajamento</h3>
+                <div className="flex h-8 rounded-lg overflow-hidden gap-0.5">
+                  {[{ count: ativos, color: 'bg-emerald-500', label: 'Ativos' }, { count: moderados, color: 'bg-yellow-500', label: 'Moderados' }, { count: baixos, color: 'bg-orange-500', label: 'Baixo' }, { count: inativos, color: 'bg-red-500', label: 'Inativos' }].map((seg, i) => {
+                    const pct = usageClients.length > 0 ? Math.round((seg.count / usageClients.length) * 100) : 0;
+                    return pct > 0 ? (
+                      <div key={i} className={`${seg.color} flex items-center justify-center text-white text-xs font-bold`} style={{ width: `${pct}%` }}>
+                        {pct > 10 ? `${pct}%` : ''}
+                      </div>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+
+              {/* Tabela de uso real */}
+              <div className={cardCls}>
+                <h3 className={`text-sm font-semibold ${t.text} mb-4`}>Detalhamento por Cliente</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className={`text-xs ${t.textMuted} border-b ${t.border}`}>
+                        <th className="text-left py-2.5 pr-3">Empresa</th>
+                        <th className="text-center py-2.5 px-2">Status</th>
+                        <th className="text-center py-2.5 px-2">Último Acesso</th>
+                        <th className="text-center py-2.5 px-2">NPS Resp.</th>
+                        <th className="text-center py-2.5 px-2">Leads</th>
+                        <th className="text-center py-2.5 px-2">Vendidos</th>
+                        <th className="text-center py-2.5 px-2">Campanhas</th>
+                        <th className="text-center py-2.5 px-2">MPD</th>
+                        <th className="text-left py-2.5 pl-2">Engajamento</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${t.border}`}>
+                      {usageClients.map((client: any) => {
+                        const lvl = usageLevelColors[client.usageLevel];
+                        const engColor = client.engagementScore >= 60 ? 'bg-emerald-500' : client.engagementScore >= 30 ? 'bg-yellow-500' : client.engagementScore > 0 ? 'bg-orange-500' : 'bg-red-500';
+                        return (
+                          <tr key={client.tenantId} className={`${t.tableRow} transition-colors`}>
+                            <td className={`py-3 pr-3 font-semibold ${t.text}`}>
+                              <div>{client.companyName}</div>
+                              <div className="flex items-center gap-1 mt-0.5"><PlanBadge plan={client.plan} />{client.sector && client.sector !== 'Não informado' && <span className={`text-xs ${t.textMuted}`}>{client.sector}</span>}</div>
+                            </td>
+                            <td className="py-3 px-2 text-center">
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${lvl.bg} ${lvl.text}`}>{lvl.label}</span>
+                            </td>
+                            <td className={`py-3 px-2 text-center text-xs ${client.daysSinceActivity <= 7 ? 'text-emerald-500 font-medium' : client.daysSinceActivity <= 30 ? t.textSub : 'text-red-400 font-medium'}`}>
+                              {client.daysSinceActivity < 999 ? `${client.daysSinceActivity}d atrás` : 'Nunca'}
+                            </td>
+                            <td className={`py-3 px-2 text-center ${client.npsResponses > 0 ? t.textSub : 'text-red-400'}`}>{client.npsResponses}</td>
+                            <td className={`py-3 px-2 text-center ${client.leadsTotal > 0 ? t.textSub : 'text-red-400'}`}>{client.leadsTotal}</td>
+                            <td className={`py-3 px-2 text-center ${client.leadsVendidos > 0 ? 'text-emerald-500 font-medium' : t.textMuted}`}>{client.leadsVendidos}</td>
+                            <td className={`py-3 px-2 text-center ${client.campaigns > 0 ? t.textSub : t.textMuted}`}>{client.campaigns}</td>
+                            <td className={`py-3 px-2 text-center ${client.diagnostics > 0 ? t.textSub : t.textMuted}`}>{client.diagnostics}</td>
+                            <td className="py-3 pl-2 w-32">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 bg-gray-200/30 rounded-full h-1.5">
+                                  <div className={`${engColor} h-1.5 rounded-full`} style={{ width: `${Math.min(100, client.engagementScore)}%` }} />
+                                </div>
+                                <span className={`text-xs font-bold w-6 text-right ${client.engagementScore >= 60 ? 'text-emerald-500' : client.engagementScore >= 30 ? 'text-yellow-500' : 'text-red-400'}`}>{client.engagementScore}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── ANÁLISE POR SETOR ── */}
+        {activeSection === 'sectors' && (() => {
+          // Agrupar tenants por setor
+          const sectorData: Record<string, { tenants: any[]; npsScores: number[]; leads: number; pipeline: number; responses: number; vendidos: number }> = {};
+          for (const ten of tenants) {
+            const sec = ten.sector || 'Não informado';
+            if (!sectorData[sec]) sectorData[sec] = { tenants: [], npsScores: [], leads: 0, pipeline: 0, responses: 0, vendidos: 0 };
+            sectorData[sec].tenants.push(ten);
+            if (ten.nps?.score !== null && ten.nps?.score !== undefined) sectorData[sec].npsScores.push(ten.nps.score);
+            sectorData[sec].leads += ten.leads?.total || 0;
+            sectorData[sec].pipeline += ten.leads?.pipelineValue || 0;
+            sectorData[sec].responses += ten.nps?.totalResponses || 0;
+            sectorData[sec].vendidos += ten.leads?.vendido || 0;
+          }
+
+          const sectors = Object.entries(sectorData)
+            .map(([sector, data]) => ({
+              sector,
+              tenantCount: data.tenants.length,
+              avgNps: data.npsScores.length > 0 ? Math.round(data.npsScores.reduce((a, b) => a + b, 0) / data.npsScores.length) : null,
+              totalLeads: data.leads,
+              totalPipeline: data.pipeline,
+              totalResponses: data.responses,
+              totalVendidos: data.vendidos,
+              conversionRate: data.leads > 0 ? Math.round((data.vendidos / data.leads) * 100) : 0,
+              avgResponsesPerTenant: data.tenants.length > 0 ? Math.round(data.responses / data.tenants.length) : 0,
+              tenants: data.tenants,
+            }))
+            .sort((a, b) => b.tenantCount - a.tenantCount);
+
+          return (
+            <div className="space-y-5">
+              <h2 className={`text-base font-semibold ${t.text}`}>Análise por Setor / Nicho de Mercado</h2>
+
+              {/* KPIs por setor */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {sectors.filter(s => s.sector !== 'Não informado').slice(0, 8).map((sec, i) => (
+                  <div key={i} className={`${t.kpi} border rounded-xl p-4`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-xs ${t.textMuted} font-medium truncate`}>{sec.sector}</span>
+                      <span className={`text-xs font-bold ${t.textSub}`}>{sec.tenantCount} clientes</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <NpsGauge score={sec.avgNps} size="sm" />
+                        <div className={`text-xs ${t.textMuted}`}>NPS médio</div>
+                      </div>
+                      <div className="text-right flex-1">
+                        <div className={`text-sm font-bold ${t.text}`}>{sec.totalResponses}</div>
+                        <div className={`text-xs ${t.textMuted}`}>respostas</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tabela completa por setor */}
+              <div className={cardCls}>
+                <h3 className={`text-sm font-semibold ${t.text} mb-4`}>Comparativo por Setor</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className={`text-xs ${t.textMuted} border-b ${t.border}`}>
+                        <th className="text-left py-2.5 pr-3">Setor</th>
+                        <th className="text-center py-2.5 px-2">Clientes</th>
+                        <th className="text-center py-2.5 px-2">NPS Médio</th>
+                        <th className="text-center py-2.5 px-2">Respostas</th>
+                        <th className="text-center py-2.5 px-2">Resp./Cliente</th>
+                        <th className="text-center py-2.5 px-2">Leads</th>
+                        <th className="text-center py-2.5 px-2">Vendidos</th>
+                        <th className="text-center py-2.5 px-2">Conversão</th>
+                        <th className="text-right py-2.5 pl-2">Pipeline</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${t.border}`}>
+                      {sectors.map((sec, i) => (
+                        <tr key={i} className={`${t.tableRow} transition-colors`}>
+                          <td className={`py-3 pr-3 font-semibold ${t.text}`}>{sec.sector}</td>
+                          <td className={`py-3 px-2 text-center ${t.textSub}`}>{sec.tenantCount}</td>
+                          <td className="py-3 px-2 text-center"><NpsGauge score={sec.avgNps} size="sm" /></td>
+                          <td className={`py-3 px-2 text-center ${t.textSub}`}>{sec.totalResponses}</td>
+                          <td className={`py-3 px-2 text-center ${t.textSub}`}>{sec.avgResponsesPerTenant}</td>
+                          <td className={`py-3 px-2 text-center ${t.textSub}`}>{sec.totalLeads}</td>
+                          <td className={`py-3 px-2 text-center text-emerald-500 font-medium`}>{sec.totalVendidos}</td>
+                          <td className={`py-3 px-2 text-center ${sec.conversionRate >= 30 ? 'text-emerald-500' : sec.conversionRate >= 15 ? 'text-yellow-500' : 'text-red-400'} font-medium`}>{sec.conversionRate}%</td>
+                          <td className="py-3 pl-2 text-right text-purple-500 font-medium">
+                            {sec.totalPipeline > 0 ? `R$ ${(sec.totalPipeline / 1000).toFixed(1)}k` : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Detalhamento: empresas por setor */}
+              <div className={cardCls}>
+                <h3 className={`text-sm font-semibold ${t.text} mb-4`}>Empresas por Setor</h3>
+                <div className="space-y-3">
+                  {sectors.filter(s => s.sector !== 'Não informado').map((sec, i) => (
+                    <details key={i} className={`${t.cardInner} border rounded-lg overflow-hidden`}>
+                      <summary className={`flex items-center justify-between p-3 cursor-pointer ${t.tableRow} transition-colors`}>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-sm font-bold ${t.text}`}>{sec.sector}</span>
+                          <span className={`text-xs ${t.textMuted}`}>{sec.tenantCount} clientes</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <NpsGauge score={sec.avgNps} size="sm" />
+                          <ChevronDown size={14} className={t.textMuted} />
+                        </div>
+                      </summary>
+                      <div className={`border-t ${t.border} p-3`}>
+                        <div className="space-y-1">
+                          {sec.tenants.sort((a: any, b: any) => (b.nps?.totalResponses || 0) - (a.nps?.totalResponses || 0)).map((ten: any, j: number) => (
+                            <div key={j} className={`flex items-center justify-between py-1.5 px-2 rounded ${t.tableRow}`}>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-sm font-medium ${t.text}`}>{ten.companyName}</span>
+                                <PlanBadge plan={ten.plan} />
+                              </div>
+                              <div className="flex items-center gap-4 text-xs">
+                                <span className={t.textSub}>{ten.nps?.totalResponses || 0} resp.</span>
+                                <NpsGauge score={ten.nps?.score} size="sm" />
+                                <span className={t.textSub}>{ten.leads?.total || 0} leads</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── TENDÊNCIAS NPS ── */}
         {activeSection === 'trends' && (
@@ -1081,7 +1373,7 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
                           </div>
                         )}
 
-                        <div>
+                        <div className="flex items-center gap-2 flex-wrap">
                           {!ai ? (
                             <button
                               onClick={() => generateTenantAI(tenant)}
@@ -1154,6 +1446,36 @@ export default function AdminIntelligence({ isDark, tenants, globalStats }: Admi
                                       <p className={`text-xs ${isDark ? 'text-purple-200' : 'text-purple-800'} leading-relaxed italic`}>"{ai.script_abordagem}"</p>
                                     </div>
                                   )}
+
+                                  {/* Botão de baixar relatório PDF */}
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        const res = await fetch('/api/admin/generate-report', {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({
+                                            clientName: tenant.companyName,
+                                            healthScore: tenant.healthScore,
+                                            tenantData: tenant,
+                                            aiAnalysis: ai,
+                                          }),
+                                        });
+                                        const blob = await res.blob();
+                                        const url = URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = `relatorio-${(tenant.companyName || 'cliente').replace(/\s+/g, '-').toLowerCase()}.html`;
+                                        a.click();
+                                        URL.revokeObjectURL(url);
+                                      } catch (err) {
+                                        console.error('Erro ao gerar relatório:', err);
+                                      }
+                                    }}
+                                    className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors mt-3"
+                                  >
+                                    <Download size={12} /> Baixar Relatório PDF
+                                  </button>
                                 </div>
                               )}
                             </div>
