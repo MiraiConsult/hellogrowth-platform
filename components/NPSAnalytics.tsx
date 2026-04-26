@@ -126,23 +126,64 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, o
           .map(r => `- [${r.status}] ${r.comment}`)
           .join('\n');
 
-        const prompt = `
-          Atue como Head de Customer Experience.
-          Analise os feedbacks globais da empresa abaixo e gere um relatório executivo.
-          
-          MÉTRICAS GLOBAIS:
-          - NPS Atual: ${npsScore}
-          - Volume Total: ${npsData.length}
-          
-          AMOSTRA DE COMENTÁRIOS RECENTES:
-          ${comments}
-          
-          TAREFA (Markdown):
-          1. **Diagnóstico Geral**: Qual a saúde da base de clientes?
-          2. **Principais Ofensores**: O que está gerando detratores?
-          3. **Oportunidades de Melhoria**: 3 ações táticas para subir o NPS no próximo trimestre.
-          
-          Seja estratégico e direto.
+        // Calcular metricas detalhadas
+        const promotores = npsData.filter(r => r.score >= 9);
+        const neutros = npsData.filter(r => r.score >= 7 && r.score <= 8);
+        const detratores = npsData.filter(r => r.score <= 6);
+        
+        // Agrupar comentarios por categoria
+        const detractorComments = npsData
+          .filter(r => r.score <= 6 && r.comment && r.comment.length > 3)
+          .slice(0, 20)
+          .map(r => `- Nota ${r.score}: "${r.comment}"`);
+        const promoterComments = npsData
+          .filter(r => r.score >= 9 && r.comment && r.comment.length > 3)
+          .slice(0, 10)
+          .map(r => `- Nota ${r.score}: "${r.comment}"`);
+        const neutralComments = npsData
+          .filter(r => r.score >= 7 && r.score <= 8 && r.comment && r.comment.length > 3)
+          .slice(0, 10)
+          .map(r => `- Nota ${r.score}: "${r.comment}"`);
+
+        const prompt = `Voce e um Head de Customer Experience com 15 anos de experiencia. Analise os dados de NPS desta empresa e gere um relatorio executivo ACIONAVEL.
+
+METRICAS GLOBAIS:
+- NPS Score Atual: ${npsScore}
+- Volume Total de Respostas: ${npsData.length}
+- Promotores (9-10): ${promotores.length} (${npsData.length > 0 ? ((promotores.length / npsData.length) * 100).toFixed(1) : 0}%)
+- Neutros (7-8): ${neutros.length} (${npsData.length > 0 ? ((neutros.length / npsData.length) * 100).toFixed(1) : 0}%)
+- Detratores (0-6): ${detratores.length} (${npsData.length > 0 ? ((detratores.length / npsData.length) * 100).toFixed(1) : 0}%)
+
+COMENTARIOS DE DETRATORES (PRIORIDADE MAXIMA - analise padroes):
+${detractorComments.length > 0 ? detractorComments.join('\n') : 'Nenhum comentario de detrator disponivel'}
+
+COMENTARIOS DE NEUTROS (oportunidade de conversao):
+${neutralComments.length > 0 ? neutralComments.join('\n') : 'Nenhum comentario de neutro disponivel'}
+
+COMENTARIOS DE PROMOTORES (pontos fortes a manter):
+${promoterComments.length > 0 ? promoterComments.join('\n') : 'Nenhum comentario de promotor disponivel'}
+
+TAREFA (responda em Markdown formatado):
+
+## 1. Diagnostico Geral
+Avalie a saude da base de clientes. Compare o NPS com benchmarks do mercado. Identifique se a tendencia e positiva ou negativa.
+
+## 2. Analise de Padroes nos Comentarios
+- O que os DETRATORES reclamam em comum? (identifique os 2-3 temas mais recorrentes)
+- O que os PROMOTORES elogiam? (identifique os pontos fortes)
+- O que falta para os NEUTROS virarem promotores?
+
+## 3. Plano de Acao (3 acoes taticas)
+Para cada acao:
+- O que fazer (especifico)
+- Por que (baseado nos dados)
+- Impacto esperado no NPS
+- Prazo sugerido
+
+## 4. Quick Wins
+Liste 2 acoes que podem ser implementadas ESTA SEMANA para melhorar a experiencia.
+
+Seja ESPECIFICO e baseie TUDO nos dados reais. NAO use frases genericas.
         `;
 
         const text = await callGeminiAPI(prompt);

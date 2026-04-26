@@ -6,9 +6,11 @@ import {
   getAvailableMessageTypes, 
   generateMessageSuggestion,
   MessageSuggestion, 
-  ClientContext 
+  ClientContext,
+  BusinessContext
 } from '@/components/MessageSuggestionEngine';
 import { supabase } from '@/lib/supabase';
+import { useTenantId } from '@/hooks/useTenantId';
 
 interface MessageSuggestionsPanelProps {
   client: {
@@ -46,6 +48,7 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
   onMessageSelect,
   showSendButtons = true 
 }) => {
+  const tenantId = useTenantId();
   const [messageTypes, setMessageTypes] = useState<MessageTypeOption[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
   const [generatedMessage, setGeneratedMessage] = useState<MessageSuggestion | null>(null);
@@ -58,49 +61,78 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
   const [clientContext, setClientContext] = useState<ClientContext | null>(null);
 
   useEffect(() => {
-    // Calcular dias desde último contato
-    const daysSinceLastContact = client.lastInteraction
-      ? Math.floor((Date.now() - new Date(client.lastInteraction).getTime()) / (1000 * 60 * 60 * 24))
-      : 0;
+    async function loadContextAndInit() {
+      // Carregar dados da empresa (business_profile + products)
+      let businessContext: BusinessContext | undefined;
+      if (supabase && tenantId) {
+        try {
+          const [profileRes, productsRes, companyRes] = await Promise.all([
+            supabase.from('business_profile').select('*').eq('tenant_id', tenantId).single(),
+            supabase.from('products').select('name, price, description').eq('tenant_id', tenantId).limit(15),
+            supabase.from('companies').select('name').eq('id', tenantId).single(),
+          ]);
+          
+          businessContext = {
+            companyName: companyRes.data?.name || '',
+            businessType: profileRes.data?.business_type || '',
+            businessDescription: profileRes.data?.business_description || '',
+            targetAudience: profileRes.data?.target_audience || '',
+            brandTone: profileRes.data?.brand_tone || '',
+            differentials: profileRes.data?.differentials || '',
+            mainPainPoints: profileRes.data?.main_pain_points || '',
+            products: productsRes.data?.map((p: any) => ({ name: p.name, price: p.price, description: p.description })) || [],
+          };
+        } catch (e) {
+          console.warn('Erro ao carregar contexto da empresa:', e);
+        }
+      }
 
-    // Montar contexto do cliente
-    const context: ClientContext = {
-      name: client.name,
-      email: client.email,
-      phone: client.phone,
-      type: client.type,
-      score: client.score,
-      status: client.status,
-      comment: client.comment,
-      leadStatus: client.leadStatus,
-      value: client.value,
-      lastInteraction: client.lastInteraction,
-      daysSinceLastContact,
-      answers: client.answers,
-      insightType,
-    };
+      // Calcular dias desde ultimo contato
+      const daysSinceLastContact = client.lastInteraction
+        ? Math.floor((Date.now() - new Date(client.lastInteraction).getTime()) / (1000 * 60 * 60 * 24))
+        : 0;
 
-    setClientContext(context);
+      // Montar contexto do cliente com dados da empresa
+      const context: ClientContext = {
+        name: client.name,
+        email: client.email,
+        phone: client.phone,
+        type: client.type,
+        score: client.score,
+        status: client.status,
+        comment: client.comment,
+        leadStatus: client.leadStatus,
+        value: client.value,
+        lastInteraction: client.lastInteraction,
+        daysSinceLastContact,
+        answers: client.answers,
+        insightType,
+        businessContext,
+      };
 
-    // Obter tipos de mensagem disponíveis
-    const availableTypes = getAvailableMessageTypes(context);
-    setMessageTypes(availableTypes.map(t => ({
-      id: t.id,
-      title: t.title,
-      description: t.description,
-      icon: t.icon,
-      tone: t.tone,
-      priority: t.priority
-    })));
-    
-    // Selecionar primeiro tipo por padrão e gerar mensagem
-    if (availableTypes.length > 0) {
-      setSelectedTypeId(availableTypes[0].id);
-      generateMessage(context, availableTypes[0].id);
+      setClientContext(context);
+
+      // Obter tipos de mensagem disponiveis
+      const availableTypes = getAvailableMessageTypes(context);
+      setMessageTypes(availableTypes.map(t => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        icon: t.icon,
+        tone: t.tone,
+        priority: t.priority
+      })));
+      
+      // Selecionar primeiro tipo por padrao e gerar mensagem
+      if (availableTypes.length > 0) {
+        setSelectedTypeId(availableTypes[0].id);
+        generateMessage(context, availableTypes[0].id);
+      }
     }
 
+    loadContextAndInit();
     checkGmailConnection();
-  }, [client.id, insightType]);
+  }, [client.id, insightType, tenantId]);
 
   const generateMessage = async (context: ClientContext, typeId: string) => {
     setIsGenerating(true);

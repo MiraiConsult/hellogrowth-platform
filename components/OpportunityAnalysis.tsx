@@ -84,28 +84,35 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
             });
         }
 
-        const prompt = `
-          Atue como um Copywriter de Vendas Sênior e Especialista em Pré-Venda.
-          
-          TAREFA:
-          Escreva uma mensagem de abordagem comercial para ser enviada via WhatsApp para este lead.
-          A mensagem deve ser CURTA, DIRETA e HUMANIZADA.
-          
-          DADOS DO LEAD:
-          Nome: ${selectedLead.name}
-          Origem: ${selectedLead.formSource}
-          Valor Estimado: R$ ${selectedLead.value}
-          ${formAnswersContext}
-          ${notesContext}
-          
-          DIRETRIZES RÍGIDAS:
-          1. MÁXIMO de 3 a 4 frases curtas.
-          2. Comece com "Olá ${firstName}, tudo bem?".
-          3. Mencione UM ponto específico das respostas para criar conexão.
-          4. Termine com uma pergunta fácil de responder (Sim/Não ou Horário).
-          5. NADA de textos longos ou formais demais. Pareça uma pessoa real digitando.
-          6. Retorne APENAS o texto da mensagem.
-        `;
+        // AI analysis context
+        const aiAnalysis = selectedLead.answers?._ai_analysis;
+        let aiContext = '';
+        if (aiAnalysis) {
+          aiContext = `\nANALISE PREVIA DA IA:\n- Classificacao: ${aiAnalysis.classification || 'N/A'}\n- Produto recomendado: ${aiAnalysis.suggested_product || 'N/A'}\n- Raciocinio: ${aiAnalysis.reasoning || 'N/A'}`;
+        }
+
+        const prompt = `Voce e um especialista em vendas consultivas e copywriting para WhatsApp. Escreva UMA mensagem de abordagem que gere resposta.
+
+REGRAS:
+1. Parecida com mensagem de HUMANO REAL, nunca de IA
+2. ANALISE as respostas e identifique a NECESSIDADE PRINCIPAL
+3. Mencione algo ESPECIFICO das respostas (mostra que leu)
+4. NAO use emojis
+5. MAXIMO 3-4 frases curtas
+6. Termine com UMA pergunta facil (sim/nao ou horario)
+7. Retorne APENAS o texto da mensagem
+
+DADOS DO LEAD:
+- Nome: ${selectedLead.name} (primeiro nome: ${firstName})
+- Origem: ${selectedLead.formSource || 'Formulario online'}
+- Valor estimado: R$ ${selectedLead.value || 0}
+- Status: ${selectedLead.status || 'Novo'}
+${formAnswersContext}${notesContext}${aiContext}
+
+EXEMPLO BOM (clinica, lead quer clareamento):
+"Ola Camila, tudo bem? Vi que voce tem interesse em clareamento e mencionou sensibilidade nos dentes. A gente tem tecnicas especificas pra quem tem essa questao. Posso te explicar como funciona em uma conversa rapida?"
+
+Agora escreva para ${firstName}:`;
         
         const text = await callGeminiAPI(prompt);
         setAiAdvice(text || "Sem sugestão gerada.");
@@ -178,25 +185,51 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
           })
           .join('\n');
 
-        const prompt = `
-          Atue como Diretor Comercial.
-          Analise o pipeline de vendas global abaixo e gere um relatório de inteligência.
-          
-          MÉTRICAS GLOBAIS:
-          - Total Oportunidades: ${totalLeads}
-          - Volume Financeiro Total: R$ ${totalValue}
-          - Taxa de Conversão: ${conversionRate.toFixed(1)}%
-          - Valor Perdido: R$ ${lostValue}
-          
-          AMOSTRA DE LEADS (Incluindo anotações internas do CRM):
-          ${leadSummary}
-          
-          TAREFA (Markdown):
-          1. **Diagnóstico do Funil**: Onde estão os gargalos?
-          2. **Análise Qualitativa**: Com base nas observações (Obs), quais são as objeções comuns ou padrões de comportamento?
-          3. **Ações Táticas**: 3 recomendações para acelerar vendas e recuperar perdidos.
-          
-          Seja estratégico e direto.
+        // Calcular metricas por status
+        const statusCounts = leads.reduce((acc: Record<string, number>, l) => {
+          acc[l.status || 'Novo'] = (acc[l.status || 'Novo'] || 0) + 1;
+          return acc;
+        }, {});
+        const statusValues = leads.reduce((acc: Record<string, number>, l) => {
+          acc[l.status || 'Novo'] = (acc[l.status || 'Novo'] || 0) + Number(l.value || 0);
+          return acc;
+        }, {});
+
+        const prompt = `Voce e um Diretor Comercial com 20 anos de experiencia em gestao de pipeline. Analise o funil de vendas e gere um relatorio de inteligencia ACIONAVEL.
+
+METRICAS DO FUNIL:
+- Total de Oportunidades: ${totalLeads}
+- Volume Financeiro Total: R$ ${totalValue}
+- Taxa de Conversao: ${conversionRate.toFixed(1)}%
+- Valor Perdido: R$ ${lostValue}
+- Distribuicao por Status: ${Object.entries(statusCounts).map(([s, c]) => `${s}: ${c} (R$ ${(statusValues[s] || 0).toLocaleString('pt-BR')})`).join(', ')}
+
+AMOSTRA DE LEADS (com anotacoes do CRM):
+${leadSummary}
+
+Gere em Markdown:
+
+## 1. Diagnostico do Funil
+- Onde estao os GARGALOS? (em qual etapa os leads ficam parados?)
+- Qual a velocidade do funil?
+- A taxa de conversao ${conversionRate.toFixed(1)}% esta boa ou ruim para o setor?
+
+## 2. Analise de Padroes
+- Quais OBJECOES ou motivos de perda aparecem nas anotacoes?
+- Existe padrao nos leads que CONVERTEM vs os que se PERDEM?
+- Quais fontes de leads geram mais conversao?
+
+## 3. Acoes Taticas (3 recomendacoes)
+Para cada acao:
+- O que fazer (especifico)
+- Por que (baseado nos dados)
+- Impacto esperado em receita
+- Prazo sugerido
+
+## 4. Leads Prioritarios
+Identifique 3-5 leads da amostra que merecem ATENCAO IMEDIATA e explique por que.
+
+Seja ESPECIFICO e baseie TUDO nos dados reais. Cite nomes de leads quando relevante.
         `;
 
         const text = await callGeminiAPI(prompt);

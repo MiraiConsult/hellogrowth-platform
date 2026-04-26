@@ -338,16 +338,54 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
           - NPS Score: ${npsData.length > 0 ? Math.round(((npsData.filter(n => n.score >= 9).length - npsData.filter(n => n.score <= 6).length) / npsData.length) * 100) : 0}
         `;
 
-        const prompt = `
-          Você é um consultor de negócios especializado em pré-venda e pós-venda.
-          
-          ${context}
-          
-          PERGUNTA DO USUÁRIO: ${question.question}
-          
-          Responda de forma direta, prática e acionável em no máximo 3 parágrafos.
-          Use dados específicos da empresa quando possível.
-          Sugira ações concretas que podem ser tomadas imediatamente.
+        // Carregar contexto da empresa
+        let businessInfo = '';
+        if (supabase && tenantId) {
+          try {
+            const [profileRes, companyRes] = await Promise.all([
+              supabase.from('business_profile').select('business_type, business_description, target_audience, differentials').eq('tenant_id', tenantId).single(),
+              supabase.from('companies').select('name').eq('id', tenantId).single(),
+            ]);
+            if (companyRes.data?.name || profileRes.data) {
+              const bp = profileRes.data || {} as any;
+              businessInfo = `\nPERFIL DA EMPRESA:\n- Nome: ${companyRes.data?.name || 'N/A'}\n- Tipo: ${bp.business_type || 'N/A'}\n- Descricao: ${bp.business_description || 'N/A'}\n- Publico-alvo: ${bp.target_audience || 'N/A'}\n- Diferenciais: ${bp.differentials || 'N/A'}`;
+            }
+          } catch (e) { /* continue */ }
+        }
+
+        // Calcular metricas adicionais
+        const vendidos = leads.filter(l => l.status === 'Vendido');
+        const perdidos = leads.filter(l => l.status === 'Perdido');
+        const taxaConversao = leads.length > 0 ? ((vendidos.length / leads.length) * 100).toFixed(1) : '0';
+        const ticketMedio = vendidos.length > 0 ? (vendidos.reduce((acc, l) => acc + Number(l.value || 0), 0) / vendidos.length).toFixed(2) : '0';
+
+        // Comentarios recentes dos detratores
+        const detractorComments = npsData
+          .filter(n => n.score <= 6 && n.comment)
+          .slice(-5)
+          .map(n => `  - Nota ${n.score}: "${n.comment}"`);
+
+        const prompt = `Voce e um consultor de negocios senior especializado em estrategia comercial, experiencia do cliente e crescimento de receita.
+${businessInfo}
+
+METRICAS ATUAIS DA EMPRESA:
+${context}
+- Taxa de Conversao: ${taxaConversao}%
+- Ticket Medio (vendidos): R$ ${ticketMedio}
+- Total Vendido: R$ ${vendidos.reduce((acc, l) => acc + Number(l.value || 0), 0).toLocaleString('pt-BR')}
+- Total Perdido: ${perdidos.length} leads
+${detractorComments.length > 0 ? `\nCOMENTARIOS RECENTES DE DETRATORES:\n${detractorComments.join('\n')}` : ''}
+
+PERGUNTA DO USUARIO: ${question.question}
+
+INSTRUCOES:
+1. Responda de forma DIRETA, PRATICA e ACIONAVEL
+2. Use os DADOS REAIS da empresa para embasar sua resposta (cite numeros)
+3. Identifique PADROES nos dados (tendencias, gargalos, oportunidades)
+4. Sugira 2-3 ACOES CONCRETAS que podem ser tomadas ESTA SEMANA
+5. Se relevante, conecte metricas de pre-venda com pos-venda
+6. Maximo 3 paragrafos, linguagem clara e objetiva
+7. NAO use frases genericas - seja especifico para ESTA empresa
         `;
 
         const text = await callGeminiAPI(prompt);

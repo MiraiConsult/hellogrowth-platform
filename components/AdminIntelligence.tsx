@@ -87,7 +87,12 @@ function QuestionTypeBadge({ type }: { type: string }) {
 export default function AdminIntelligence({ isDark, tenants, globalStats, sectorAnalytics = [] }: AdminIntelligenceProps) {
   const t = isDark ? DARK : LIGHT;
 
-  const [activeSection, setActiveSection] = useState<'overview' | 'usage' | 'sectors' | 'trends' | 'products' | 'clients' | 'surveys'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'usage' | 'sectors' | 'trends' | 'products' | 'clients' | 'surveys' | 'ai_costs'>('overview');
+
+  // Custos de IA
+  const [aiUsageData, setAiUsageData] = useState<any>(null);
+  const [isLoadingAiUsage, setIsLoadingAiUsage] = useState(false);
+  const [aiUsagePeriod, setAiUsagePeriod] = useState('30');
 
   // Filtro de data para Tendências NPS
   const [trendsDatePreset, setTrendsDatePreset] = useState('12m');
@@ -274,6 +279,7 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
             { id: 'trends', label: 'Tendências NPS', icon: <TrendingUp size={14} /> },
             { id: 'products', label: 'Produtos & Preços', icon: <Package size={14} /> },
             { id: 'clients', label: 'Análise por Cliente', icon: <Users size={14} /> },
+            { id: 'ai_costs', label: 'Custos IA', icon: <Zap size={14} /> },
           ].map(sec => (
             <button key={sec.id} onClick={() => setActiveSection(sec.id as any)} className={sectionBtnCls(activeSection === sec.id)}>
               <span className="flex items-center gap-1.5">{sec.icon} {sec.label}</span>
@@ -1512,6 +1518,194 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ── CUSTOS DE IA ── */}
+        {activeSection === 'ai_costs' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className={`text-base font-semibold ${t.text}`}>Monitoramento de Custos de IA</h2>
+              <div className="flex items-center gap-2">
+                <select
+                  value={aiUsagePeriod}
+                  onChange={e => setAiUsagePeriod(e.target.value)}
+                  className={`text-sm rounded-lg px-3 py-1.5 border ${t.input}`}
+                >
+                  <option value="7">Últimos 7 dias</option>
+                  <option value="30">Últimos 30 dias</option>
+                  <option value="90">Últimos 90 dias</option>
+                </select>
+                <button
+                  onClick={async () => {
+                    setIsLoadingAiUsage(true);
+                    try {
+                      const res = await fetch(`/api/admin/ai-usage?period=${aiUsagePeriod}`);
+                      const data = await res.json();
+                      setAiUsageData(data);
+                    } catch (e) { console.error(e); }
+                    setIsLoadingAiUsage(false);
+                  }}
+                  className="text-sm px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5"
+                >
+                  {isLoadingAiUsage ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  Carregar
+                </button>
+              </div>
+            </div>
+
+            {!aiUsageData && !isLoadingAiUsage && (
+              <div className={`text-center py-16 ${t.textMuted}`}>
+                Clique em "Carregar" para visualizar os dados de uso da IA.
+              </div>
+            )}
+
+            {isLoadingAiUsage && (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 size={24} className="animate-spin text-emerald-500" />
+              </div>
+            )}
+
+            {aiUsageData && !isLoadingAiUsage && (
+              <>
+                {/* KPIs */}
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {[
+                    { label: 'Total de Chamadas', value: aiUsageData.summary?.totalCalls?.toLocaleString('pt-BR') || '0', icon: <Zap size={16} className="text-blue-500" />, sub: 'requisições' },
+                    { label: 'Tokens Consumidos', value: aiUsageData.summary?.totalTokens?.toLocaleString('pt-BR') || '0', icon: <Activity size={16} className="text-violet-500" />, sub: 'tokens totais' },
+                    { label: 'Custo Estimado (USD)', value: `$${aiUsageData.summary?.totalCostUSD || '0.00'}`, icon: <DollarSign size={16} className="text-emerald-500" />, sub: 'dólares' },
+                    { label: 'Custo Estimado (BRL)', value: `R$ ${aiUsageData.summary?.totalCostBRL || '0,00'}`, icon: <DollarSign size={16} className="text-green-500" />, sub: 'reais' },
+                    { label: 'Taxa de Sucesso', value: `${aiUsageData.summary?.successRate || '100'}%`, icon: <CheckCircle size={16} className="text-emerald-500" />, sub: `${aiUsageData.summary?.errorCount || 0} erros` },
+                    { label: 'Média por Chamada', value: `${aiUsageData.summary?.avgTokensPerCall?.toLocaleString('pt-BR') || '0'} tokens`, icon: <Brain size={16} className="text-orange-500" />, sub: `$${aiUsageData.summary?.avgCostPerCall || '0'}` },
+                  ].map((kpi, i) => (
+                    <div key={i} className={`rounded-xl border p-4 ${t.kpi}`}>
+                      <div className="flex items-center gap-2 mb-1">{kpi.icon}<span className={`text-xs ${t.label}`}>{kpi.label}</span></div>
+                      <div className={`text-lg font-bold ${t.text}`}>{kpi.value}</div>
+                      <div className={`text-xs ${t.textMuted}`}>{kpi.sub}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Uso por Endpoint */}
+                <div className={`rounded-xl border ${t.card} p-5`}>
+                  <h3 className={`text-sm font-semibold mb-3 ${t.text}`}>Uso por Funcionalidade</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className={`border-b ${t.border}`}>
+                          <th className={`text-left py-2.5 px-3 ${t.label}`}>Endpoint</th>
+                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Chamadas</th>
+                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Tokens</th>
+                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Custo (USD)</th>
+                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Erros</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aiUsageData.endpointBreakdown?.map((ep: any, i: number) => (
+                          <tr key={i} className={`border-b ${t.border} ${t.tableRow}`}>
+                            <td className={`py-2.5 px-3 font-medium ${t.text}`}>{ep.endpoint}</td>
+                            <td className={`text-center py-2.5 px-3 ${t.textSub}`}>{ep.calls}</td>
+                            <td className={`text-center py-2.5 px-3 ${t.textSub}`}>{ep.tokens?.toLocaleString('pt-BR')}</td>
+                            <td className={`text-center py-2.5 px-3 ${t.textSub}`}>${ep.cost?.toFixed(4)}</td>
+                            <td className={`text-center py-2.5 px-3 ${ep.errors > 0 ? 'text-red-400' : t.textSub}`}>{ep.errors}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Uso por Cliente */}
+                <div className={`rounded-xl border ${t.card} p-5`}>
+                  <h3 className={`text-sm font-semibold mb-3 ${t.text}`}>Uso por Cliente</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className={`border-b ${t.border}`}>
+                          <th className={`text-left py-2.5 px-3 ${t.label}`}>Cliente</th>
+                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Chamadas</th>
+                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Tokens</th>
+                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Custo (USD)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aiUsageData.tenantBreakdown?.map((tb: any, i: number) => (
+                          <tr key={i} className={`border-b ${t.border} ${t.tableRow}`}>
+                            <td className={`py-2.5 px-3 font-medium ${t.text}`}>{tb.name || tb.tenantId?.substring(0, 8) || 'Sistema'}</td>
+                            <td className={`text-center py-2.5 px-3 ${t.textSub}`}>{tb.calls}</td>
+                            <td className={`text-center py-2.5 px-3 ${t.textSub}`}>{tb.tokens?.toLocaleString('pt-BR')}</td>
+                            <td className={`text-center py-2.5 px-3 ${t.textSub}`}>${tb.cost?.toFixed(4)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Tendência Diária */}
+                {aiUsageData.dailyTrend?.length > 0 && (
+                  <div className={`rounded-xl border ${t.card} p-5`}>
+                    <h3 className={`text-sm font-semibold mb-3 ${t.text}`}>Tendência Diária</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className={`border-b ${t.border}`}>
+                            <th className={`text-left py-2.5 px-3 ${t.label}`}>Data</th>
+                            <th className={`text-center py-2.5 px-3 ${t.label}`}>Chamadas</th>
+                            <th className={`text-center py-2.5 px-3 ${t.label}`}>Tokens</th>
+                            <th className={`text-center py-2.5 px-3 ${t.label}`}>Custo (USD)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {aiUsageData.dailyTrend.map((day: any, i: number) => (
+                            <tr key={i} className={`border-b ${t.border} ${t.tableRow}`}>
+                              <td className={`py-2.5 px-3 font-medium ${t.text}`}>{new Date(day.date + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                              <td className={`text-center py-2.5 px-3 ${t.textSub}`}>{day.calls}</td>
+                              <td className={`text-center py-2.5 px-3 ${t.textSub}`}>{day.tokens?.toLocaleString('pt-BR')}</td>
+                              <td className={`text-center py-2.5 px-3 ${t.textSub}`}>${day.cost?.toFixed(4)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Logs Recentes */}
+                <div className={`rounded-xl border ${t.card} p-5`}>
+                  <h3 className={`text-sm font-semibold mb-3 ${t.text}`}>Últimas 50 Chamadas</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className={`border-b ${t.border}`}>
+                          <th className={`text-left py-2 px-2 ${t.label}`}>Data/Hora</th>
+                          <th className={`text-left py-2 px-2 ${t.label}`}>Endpoint</th>
+                          <th className={`text-center py-2 px-2 ${t.label}`}>Tokens</th>
+                          <th className={`text-center py-2 px-2 ${t.label}`}>Custo</th>
+                          <th className={`text-center py-2 px-2 ${t.label}`}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {aiUsageData.recentLogs?.map((log: any, i: number) => (
+                          <tr key={i} className={`border-b ${t.border} ${t.tableRow}`}>
+                            <td className={`py-2 px-2 ${t.textSub}`}>{new Date(log.created_at).toLocaleString('pt-BR')}</td>
+                            <td className={`py-2 px-2 ${t.text}`}>{log.endpoint}</td>
+                            <td className={`text-center py-2 px-2 ${t.textSub}`}>{log.total_tokens?.toLocaleString('pt-BR')}</td>
+                            <td className={`text-center py-2 px-2 ${t.textSub}`}>${parseFloat(log.estimated_cost_usd || 0).toFixed(6)}</td>
+                            <td className="text-center py-2 px-2">
+                              {log.status === 'success' 
+                                ? <span className="text-emerald-500 font-medium">OK</span>
+                                : <span className="text-red-400 font-medium" title={log.error_message}>Erro</span>
+                              }
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

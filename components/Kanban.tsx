@@ -388,47 +388,80 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts
       const firstName = (selectedLead.name || '').split(' ')[0];
         
         // Include notes in context
-        const notesContext = selectedLead.notes ? `\n\nOBSERVAÇÕES INTERNAS (Use apenas para contexto): \n${selectedLead.notes}` : '';
+        const notesContext = selectedLead.notes ? `\n\nOBSERVACOES INTERNAS DA EQUIPE (use para contexto, NAO mencione ao cliente):\n${selectedLead.notes}` : '';
         
         // Extract Form Answers
         let formAnswersContext = '';
         if (selectedLead.answers) {
-            formAnswersContext = '\nRESPOSTAS DO FORMULÁRIO DE QUALIFICAÇÃO:\n';
+            formAnswersContext = '\nRESPOSTAS DO FORMULARIO (ANALISE CADA UMA COM ATENCAO - revelam necessidades reais):\n';
             Object.entries(selectedLead.answers).forEach(([qId, data]: [string, any]) => {
+                if (qId.startsWith('_')) return; // Skip internal fields
                 const question = getQuestionText(selectedLead, qId);
-                // Handle different answer structures (simple value or object with metadata)
                 const answer = (typeof data === 'object' && data !== null) 
                     ? (data.value || JSON.stringify(data)) 
                     : data;
-                formAnswersContext += `- Pergunta: "${question}" | Resposta: "${answer}"\n`;
+                formAnswersContext += `- ${question}: ${answer}\n`;
             });
         }
 
-        const prompt = `
-          Atue como um Copywriter de Vendas Sênior e Especialista em Pré-Venda.
-          
-          TAREFA:
-          Escreva uma mensagem de abordagem comercial para ser enviada via WhatsApp para este lead.
-          A mensagem deve ser CURTA, DIRETA e HUMANIZADA.
-          
-          DADOS DO LEAD:
-          Nome: ${selectedLead.name}
-          Origem: ${selectedLead.formSource}
-          Valor Estimado: R$ ${selectedLead.value}
-          ${formAnswersContext}
-          ${notesContext}
-          
-          DIRETRIZES RÍGIDAS:
-          1. MÁXIMO de 3 a 4 frases curtas.
-          2. Comece com "Olá ${firstName}, tudo bem?".
-          3. Mencione UM ponto específico das respostas para criar conexão.
-          4. Termine com uma pergunta fácil de responder (Sim/Não ou Horário).
-          5. NADA de textos longos ou formais demais. Pareça uma pessoa real digitando.
-          6. Retorne APENAS o texto da mensagem.
-        `;
+        // Carregar contexto da empresa
+        let businessContext = '';
+        let productsContext = '';
+        if (supabase && tenantId) {
+          try {
+            const [profileRes, productsRes, companyRes] = await Promise.all([
+              supabase.from('business_profile').select('business_type, business_description, target_audience, differentials, brand_tone').eq('tenant_id', tenantId).single(),
+              supabase.from('products').select('name, price, description').eq('tenant_id', tenantId).limit(10),
+              supabase.from('companies').select('name').eq('id', tenantId).single(),
+            ]);
+            if (companyRes.data?.name || profileRes.data) {
+              const bp = profileRes.data || {} as any;
+              businessContext = `\nSOBRE A EMPRESA QUE ENVIA A MENSAGEM:\n- Nome: ${companyRes.data?.name || 'Nao informado'}\n- Tipo: ${bp.business_type || 'Nao informado'}\n- Descricao: ${bp.business_description || 'Nao informado'}\n- Publico-alvo: ${bp.target_audience || 'Nao informado'}\n- Diferenciais: ${bp.differentials || 'Nao informado'}\n- Tom da marca: ${bp.brand_tone || 'profissional e amigavel'}`;
+            }
+            if (productsRes.data && productsRes.data.length > 0) {
+              productsContext = `\nPRODUTOS/SERVICOS DISPONIVEIS (mencione o mais relevante se fizer sentido):\n${productsRes.data.map((p: any) => `- ${p.name}${p.price ? ` (R$ ${p.price})` : ''}${p.description ? `: ${p.description}` : ''}`).join('\n')}`;
+            }
+          } catch (e) { /* silently continue */ }
+        }
+
+        // AI analysis context
+        const aiAnalysis = selectedLead.answers?._ai_analysis;
+        let aiContext = '';
+        if (aiAnalysis) {
+          aiContext = `\nANALISE PREVIA DA IA SOBRE ESTE LEAD:\n- Classificacao: ${aiAnalysis.classification || 'N/A'}\n- Produto recomendado: ${aiAnalysis.suggested_product || 'N/A'}\n- Raciocinio: ${aiAnalysis.reasoning || 'N/A'}`;
+        }
+
+        const prompt = `Voce e um especialista em vendas consultivas e copywriting para WhatsApp. Sua missao e escrever UMA mensagem de abordagem que gere resposta.
+
+REGRAS FUNDAMENTAIS:
+1. A mensagem DEVE parecer escrita por um HUMANO REAL, nunca por IA
+2. ANALISE as respostas do formulario e identifique a NECESSIDADE PRINCIPAL do lead
+3. Mencione algo ESPECIFICO das respostas (mostra que leu e se importa)
+4. Adapte o tom ao tipo de negocio da empresa
+5. NAO use emojis (problemas de encoding no wa.me)
+6. MAXIMO 3-4 frases curtas
+7. Termine com UMA pergunta facil de responder (sim/nao ou horario)
+8. Retorne APENAS o texto da mensagem, sem aspas, sem explicacoes
+${businessContext}
+${productsContext}
+
+DADOS DO LEAD:
+- Nome: ${selectedLead.name} (primeiro nome: ${firstName})
+- Origem: ${selectedLead.formSource || 'Formulario online'}
+- Valor estimado: R$ ${selectedLead.value || 0}
+- Status no funil: ${selectedLead.status || 'Novo'}
+${formAnswersContext}${notesContext}${aiContext}
+
+EXEMPLO DE MENSAGEM BOA (clinica odontologica, lead quer clareamento):
+"Ola Camila, tudo bem? Vi que voce tem interesse em clareamento e mencionou sensibilidade nos dentes. A gente tem tecnicas especificas pra quem tem essa questao. Posso te explicar como funciona em uma conversa rapida?"
+
+EXEMPLO DE MENSAGEM RUIM:
+"Ola Camila! Obrigado pelo interesse em nossos servicos. Temos diversas opcoes de tratamento. Quando podemos agendar uma consulta?"
+
+Agora escreva a mensagem para ${firstName}:`;
         
         const text = await callGeminiAPI(prompt);
-        setAiAdvice(text || "Sem sugestão gerada.");
+        setAiAdvice(text || "Sem sugestao gerada.");
     } catch (error) {
       setAiAdvice("Erro ao conectar com IA.");
     } finally {

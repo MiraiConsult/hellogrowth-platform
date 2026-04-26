@@ -528,25 +528,50 @@ INSTRUÇÕES DE RESPOSTA:
           .map(l => `- ${l.name}: Status "${l.status}", Valor R$${l.value}`)
           .join('\n');
 
-        const prompt = `
-          Atue como um Gerente de Vendas e Growth.
-          Analise a performance do formulário de captação "${form?.name}".
-          
-          DADOS DOS LEADS GERADOS POR ESTE FORMULÁRIO:
-          Total Leads: ${totalLeads}
-          Valor Total em Pipeline: R$ ${totalValue}
-          Taxa de Conversão (Vendas): ${conversionRate.toFixed(1)}%
-          
-          LISTA DE LEADS RECENTES:
-          ${leadsSummary.substring(0, 1000)}... (amostra)
-          
-          TAREFA:
-          Forneça um relatório estratégico em Markdown com:
-          1. **Qualidade dos Leads**: O formulário está trazendo clientes de alto valor?
-          2. **Gargalos de Funil**: Onde os leads estão travando (ex: muitos em 'Novo' sem contato)?
-          3. **Sugestão de Otimização**: Uma mudança no formulário ou na abordagem de vendas para melhorar a conversão.
-          
-          Seja conciso e focado em ROI.
+        // Calcular metricas detalhadas por status
+        const statusBreakdown = formLeads.reduce((acc: Record<string, {count: number, value: number}>, l) => {
+          const s = l.status || 'Novo';
+          if (!acc[s]) acc[s] = {count: 0, value: 0};
+          acc[s].count++;
+          acc[s].value += Number(l.value || 0);
+          return acc;
+        }, {});
+        const ticketMedio = formLeads.length > 0 ? (totalValue / formLeads.length).toFixed(2) : '0';
+        const vendidos = formLeads.filter(l => l.status === 'Vendido');
+        const ticketMedioVendidos = vendidos.length > 0 ? (vendidos.reduce((s, l) => s + l.value, 0) / vendidos.length).toFixed(2) : '0';
+
+        const prompt = `Voce e um Gerente de Vendas e Growth com expertise em otimizacao de funis de captacao. Analise a performance do formulario "${form?.name}".
+
+METRICAS DO FORMULARIO:
+- Total de Leads: ${totalLeads}
+- Valor Total em Pipeline: R$ ${totalValue}
+- Taxa de Conversao: ${conversionRate.toFixed(1)}%
+- Ticket Medio Geral: R$ ${ticketMedio}
+- Ticket Medio Vendidos: R$ ${ticketMedioVendidos}
+- Distribuicao por Status: ${Object.entries(statusBreakdown).map(([s, d]) => `${s}: ${d.count} leads (R$ ${d.value.toLocaleString('pt-BR')})`).join(', ')}
+
+LISTA DE LEADS:
+${leadsSummary.substring(0, 2000)}
+
+Gere em Markdown:
+
+## 1. Qualidade dos Leads
+- O formulario esta trazendo leads de ALTO VALOR?
+- Qual o perfil predominante dos leads captados?
+- Existe padrao nos leads que convertem vs os que nao convertem?
+
+## 2. Gargalos do Funil
+- Em qual etapa os leads ficam PARADOS? (cite numeros)
+- Qual a taxa de abandono entre cada etapa?
+- Existe um "buraco" no funil onde se perde mais valor?
+
+## 3. Otimizacoes Recomendadas
+Para cada sugestao:
+- O que mudar (no formulario ou na abordagem)
+- Por que (baseado nos dados)
+- Impacto esperado em conversao e receita
+
+Seja ESPECIFICO e baseie TUDO nos dados reais.
         `;
 
         const text = await callGeminiAPI(prompt);

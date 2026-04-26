@@ -1,10 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { createClient } from '@supabase/supabase-js';
 
-export const maxDuration = 60; // Timeout de 60 segundos
+export const maxDuration = 60;
+
+// Preço do Gemini 2.5 Flash (estimativa por 1M tokens)
+const PRICING = {
+  promptPerMillion: 0.15,    // $0.15 per 1M input tokens
+  completionPerMillion: 0.60, // $0.60 per 1M output tokens
+};
+
+// Supabase client para logging
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
+}
+
+// Estimar tokens a partir do texto (aproximação: 1 token ≈ 4 chars em português)
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+// Logar uso de IA no banco
+async function logAIUsage(params: {
+  tenantId?: string;
+  endpoint: string;
+  promptTokens: number;
+  completionTokens: number;
+  status: 'success' | 'error';
+  errorMessage?: string;
+  metadata?: any;
+}) {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    const totalTokens = params.promptTokens + params.completionTokens;
+    const estimatedCost = 
+      (params.promptTokens / 1_000_000) * PRICING.promptPerMillion +
+      (params.completionTokens / 1_000_000) * PRICING.completionPerMillion;
+
+    await supabase.from('ai_usage_logs').insert({
+      tenant_id: params.tenantId || null,
+      endpoint: params.endpoint,
+      model: 'gemini-2.5-flash',
+      prompt_tokens: params.promptTokens,
+      completion_tokens: params.completionTokens,
+      total_tokens: totalTokens,
+      estimated_cost_usd: estimatedCost,
+      status: params.status,
+      error_message: params.errorMessage || null,
+      metadata: params.metadata || {},
+    });
+  } catch (e) {
+    // Não falhar a request por erro de logging
+    console.warn('Failed to log AI usage:', e);
+  }
+}
 
 // Retry com backoff exponencial
-async function callGeminiWithRetry(model: any, contents: any, generationConfig: any, maxRetries = 3): Promise<string> {
+async function callGeminiWithRetry(model: any, contents: any, generationConfig: any, maxRetries = 3): Promise<{ text: string; usageMetadata?: any }> {
   let lastError: any;
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -12,17 +69,18 @@ async function callGeminiWithRetry(model: any, contents: any, generationConfig: 
       const result = await model.generateContent({ contents, generationConfig });
       const text = result.response.text();
       
-      // Verificar se a resposta não está vazia
       if (!text || text.trim().length === 0) {
         throw new Error('Resposta vazia do Gemini');
       }
       
-      return text;
+      // Extrair metadata de uso se disponível
+      const usageMetadata = result.response.usageMetadata || null;
+      
+      return { text, usageMetadata };
     } catch (error: any) {
       lastError = error;
       const errorMsg = error.message || '';
       
-      // Erros que valem retry: rate limit, overloaded, timeout, resposta vazia
       const isRetryable = 
         errorMsg.includes('429') ||
         errorMsg.includes('503') ||
@@ -40,7 +98,6 @@ async function callGeminiWithRetry(model: any, contents: any, generationConfig: 
         throw error;
       }
       
-      // Backoff exponencial: 2s, 4s, 8s
       const delay = Math.pow(2, attempt + 1) * 1000;
       console.log(`Gemini retry ${attempt + 1}/${maxRetries} após ${delay}ms - Erro: ${errorMsg.substring(0, 100)}`);
       await new Promise(r => setTimeout(r, delay));
@@ -51,11 +108,17 @@ async function callGeminiWithRetry(model: any, contents: any, generationConfig: 
 }
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  let promptText = '';
+  let tenantId: string | undefined;
+  let endpoint = '/api/gemini';
+  
   try {
     const body = await request.json();
     const { prompt, systemInstruction, contents: rawContents, temperature } = body;
+    tenantId = body.tenantId;
+    endpoint = body.endpoint || '/api/gemini';
 
-    // Suporta tanto prompt simples quanto multi-turn (contents array)
     if (!prompt && (!rawContents || rawContents.length === 0)) {
       return NextResponse.json(
         { error: 'Prompt ou contents é obrigatório' },
@@ -63,7 +126,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+    const apiKey = process.env.GEMINI_API_KEY || '';
 
     if (!apiKey) {
       console.error('Gemini API key not found');
@@ -86,16 +149,46 @@ export async function POST(request: NextRequest) {
       maxOutputTokens: 8192,
     };
 
-    // Se recebeu contents (multi-turn), usa diretamente; senão, cria a partir do prompt
     const contents = rawContents || [{ role: 'user', parts: [{ text: prompt }] }];
     
-    // Chamar com retry automático (até 3 tentativas)
-    const responseText = await callGeminiWithRetry(model, contents, generationConfig, 3);
+    // Calcular tokens do prompt para logging
+    promptText = contents.map((c: any) => c.parts?.map((p: any) => p.text || '').join('') || '').join('');
+    if (systemInstruction) promptText = systemInstruction + '\n' + promptText;
+    
+    const { text: responseText, usageMetadata } = await callGeminiWithRetry(model, contents, generationConfig, 3);
+
+    // Logar uso com sucesso
+    const promptTokens = usageMetadata?.promptTokenCount || estimateTokens(promptText);
+    const completionTokens = usageMetadata?.candidatesTokenCount || estimateTokens(responseText);
+    
+    logAIUsage({
+      tenantId,
+      endpoint,
+      promptTokens,
+      completionTokens,
+      status: 'success',
+      metadata: {
+        duration_ms: Date.now() - startTime,
+        has_system_instruction: !!systemInstruction,
+        is_multi_turn: !!rawContents,
+      },
+    });
 
     return NextResponse.json({ response: responseText });
 
   } catch (error: any) {
     console.error('Erro na API Gemini (após retries):', error);
+
+    // Logar erro
+    logAIUsage({
+      tenantId,
+      endpoint,
+      promptTokens: estimateTokens(promptText),
+      completionTokens: 0,
+      status: 'error',
+      errorMessage: error.message?.substring(0, 500),
+      metadata: { duration_ms: Date.now() - startTime },
+    });
 
     if (error.message?.includes('quota') || error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) {
       return NextResponse.json(

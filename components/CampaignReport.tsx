@@ -132,20 +132,51 @@ const CampaignReport: React.FC<CampaignReportProps> = ({ campaignId, campaigns, 
             .map(r => `Nota ${r.score}: ${r.comment || 'Sem comentário'}`)
             .join('\n');
             
-        const prompt = `
-          Atue como Especialista em CX (Customer Experience).
-          Analise os feedbacks desta campanha específica: "${campaign?.name}".
-          
-          DADOS:
-          - NPS: ${npsScore}
-          - Total: ${totalResponses}
-          
-          FEEDBACKS RECENTES:
-          ${detailedFeedback}
-          
-          Gere um resumo curto em Markdown com:
-          1. **Sentimento Geral**: O que os clientes mais elogiam ou criticam?
-          2. **Ação Imediata**: Uma sugestão para melhorar a nota.
+        // Separar feedbacks por categoria para analise mais profunda
+        const detractorFeedback = campaignResponses
+          .filter(r => r.score <= 6 && r.comment && r.comment.length > 3)
+          .slice(0, 15)
+          .map(r => `- Nota ${r.score}: "${r.comment}"`);
+        const promoterFeedback = campaignResponses
+          .filter(r => r.score >= 9 && r.comment && r.comment.length > 3)
+          .slice(0, 10)
+          .map(r => `- Nota ${r.score}: "${r.comment}"`);
+        const neutralFeedback = campaignResponses
+          .filter(r => r.score >= 7 && r.score <= 8 && r.comment && r.comment.length > 3)
+          .slice(0, 10)
+          .map(r => `- Nota ${r.score}: "${r.comment}"`);
+
+        const prompt = `Voce e um Especialista Senior em Customer Experience. Analise os feedbacks da campanha "${campaign?.name}" e gere um relatorio executivo.
+
+METRICAS DA CAMPANHA:
+- NPS Score: ${npsScore}
+- Total de Respostas: ${totalResponses}
+- Promotores (9-10): ${promoters} (${totalResponses > 0 ? ((promoters / totalResponses) * 100).toFixed(1) : 0}%)
+- Neutros (7-8): ${passives} (${totalResponses > 0 ? ((passives / totalResponses) * 100).toFixed(1) : 0}%)
+- Detratores (0-6): ${detractors} (${totalResponses > 0 ? ((detractors / totalResponses) * 100).toFixed(1) : 0}%)
+
+COMENTARIOS DE DETRATORES (analise padroes):
+${detractorFeedback.length > 0 ? detractorFeedback.join('\n') : 'Nenhum comentario'}
+
+COMENTARIOS DE NEUTROS:
+${neutralFeedback.length > 0 ? neutralFeedback.join('\n') : 'Nenhum comentario'}
+
+COMENTARIOS DE PROMOTORES:
+${promoterFeedback.length > 0 ? promoterFeedback.join('\n') : 'Nenhum comentario'}
+
+Gere em Markdown:
+## Sentimento Geral
+Resuma o sentimento predominante. Identifique os 2-3 temas mais citados (positivos e negativos).
+
+## Padroes Identificados
+- O que gera insatisfacao? (temas recorrentes nos detratores)
+- O que encanta? (temas recorrentes nos promotores)
+- O que falta para neutros virarem promotores?
+
+## Acoes Recomendadas
+2-3 acoes CONCRETAS e ESPECIFICAS baseadas nos comentarios reais. Para cada acao, explique o impacto esperado.
+
+Seja ESPECIFICO - cite trechos dos comentarios como evidencia.
         `;
         
         const text = await callGeminiAPI(prompt);
