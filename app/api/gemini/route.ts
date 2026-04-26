@@ -52,11 +52,13 @@ async function callGeminiWithRetry(model: any, contents: any, generationConfig: 
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, systemInstruction } = await request.json();
+    const body = await request.json();
+    const { prompt, systemInstruction, contents: rawContents, temperature } = body;
 
-    if (!prompt) {
+    // Suporta tanto prompt simples quanto multi-turn (contents array)
+    if (!prompt && (!rawContents || rawContents.length === 0)) {
       return NextResponse.json(
-        { error: 'Prompt é obrigatório' },
+        { error: 'Prompt ou contents é obrigatório' },
         { status: 400 }
       );
     }
@@ -78,13 +80,14 @@ export async function POST(request: NextRequest) {
     });
 
     const generationConfig = {
-      temperature: 0.7,
+      temperature: temperature ?? 0.7,
       topK: 40,
       topP: 0.95,
       maxOutputTokens: 8192,
     };
 
-    const contents = [{ role: 'user', parts: [{ text: prompt }] }];
+    // Se recebeu contents (multi-turn), usa diretamente; senão, cria a partir do prompt
+    const contents = rawContents || [{ role: 'user', parts: [{ text: prompt }] }];
     
     // Chamar com retry automático (até 3 tentativas)
     const responseText = await callGeminiWithRetry(model, contents, generationConfig, 3);

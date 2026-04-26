@@ -4,7 +4,7 @@ import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
 import { BarChart3, Sparkles, Loader2, X, PieChart, TrendingUp, DollarSign, Calendar, Mail, FileText, Phone, History, Plus, ArrowRight } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Pie, Cell } from 'recharts';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { callGeminiAPI } from '@/lib/gemini-client';
 import { MessageSuggestionsPanel } from '@/components/MessageSuggestionsPanel';
 
 interface OpportunityAnalysisProps {
@@ -68,11 +68,7 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
     if (!selectedLead) return;
     setIsGeneratingAdvice(true);
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       const firstName = (selectedLead.name || '').split(' ')[0];
-      
-      if (apiKey) {
-        const ai = new GoogleGenerativeAI(apiKey);
         
         const notesContext = selectedLead.notes ? `\n\nOBSERVAÇÕES INTERNAS (Use apenas para contexto): \n${selectedLead.notes}` : '';
         
@@ -111,14 +107,8 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
           6. Retorne APENAS o texto da mensagem.
         `;
         
-        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        const result = await model.generateContent(prompt);
-        const response = { text: result.response.text() };
-        setAiAdvice(response.text || "Sem sugestão gerada.");
-      } else {
-        await new Promise(r => setTimeout(r, 1500));
-        setAiAdvice(`Olá ${firstName}, tudo bem?\nVi seu interesse em ${selectedLead.formSource}. Podemos conversar rapidinho sobre o que você precisa?`);
-      }
+        const text = await callGeminiAPI(prompt);
+        setAiAdvice(text || "Sem sugestão gerada.");
     } catch (error) {
       setAiAdvice("Erro ao conectar com IA.");
     } finally {
@@ -179,13 +169,7 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
     setIsModalOpen(true);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      
-      if (apiKey) {
-        const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        
-        // Summarize last 50 leads including Notes
+      // Summarize last 50 leads including Notes
         const leadSummary = leads
           .slice(0, 50)
           .map(l => {
@@ -215,14 +199,8 @@ const OpportunityAnalysis: React.FC<OpportunityAnalysisProps> = ({ leads, forms 
           Seja estratégico e direto.
         `;
 
-        const result = await model.generateContent(prompt);
-
-        setAiReport(result.response.text() || "Análise concluída, mas sem texto retornado.");
-      } else {
-        // Mock Fallback
-        await new Promise(r => setTimeout(r, 2000));
-        setAiReport(`**Relatório Simulado (Sem API Key)**\n\nSua taxa de conversão é de **${conversionRate.toFixed(1)}%**. Há um volume considerável de leads na fase inicial que precisam de abordagem urgente.`);
-      }
+        const text = await callGeminiAPI(prompt);
+        setAiReport(text || "Análise concluída, mas sem texto retornado.");
     } catch (error) {
       console.error(error);
       setAiReport("Erro ao gerar análise. Tente novamente.");

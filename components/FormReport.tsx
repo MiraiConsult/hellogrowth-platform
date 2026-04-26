@@ -4,7 +4,7 @@ import { Form, Lead } from '@/types';
 import { ArrowLeft, ArrowRight, Users, DollarSign, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, Target, Filter, X, Mail, Phone, FileText, Edit2, Plus, Trash2, Check, AlertCircle, Zap, Send, RefreshCw, Gift, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { callGeminiAPI, parseGeminiJSON } from '@/lib/gemini-client';
 import Markdown from 'react-markdown';
 
 interface Product {
@@ -315,10 +315,7 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
     if (!selectedLead || !supabase) return;
     setIsReanalyzing(true);
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      if (!apiKey) return;
-      const ai = new GoogleGenerativeAI(apiKey);
-      const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      // Chamada via proxy server-side com retry
 
       const answersText = selectedLead.answers 
         ? Object.entries(selectedLead.answers)
@@ -348,10 +345,8 @@ Retorne APENAS um JSON válido (sem markdown) com:
   "sales_script": "script de abordagem personalizado"
 }`;
 
-      const result = await model.generateContent(prompt);
-      let text = result.response.text();
-      text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const analysis = JSON.parse(text);
+      const aiText = await callGeminiAPI(prompt);
+      const analysis = parseGeminiJSON(aiText);
 
       const updatedAnalysis = {
         ...selectedLead.answers?._ai_analysis,
@@ -429,13 +424,7 @@ Retorne APENAS um JSON válido (sem markdown) com:
     setIsChatLoading(true);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      if (!apiKey) {
-        setChatMessages(prev => [...prev, { role: 'ai', content: 'API Key não configurada.' }]);
-        return;
-      }
-      const ai = new GoogleGenerativeAI(apiKey);
-      const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      // Chamada via proxy server-side com retry
 
       const currentAnalysis = selectedLead.answers?._ai_analysis;
       const answersText = selectedLead.answers 
@@ -490,8 +479,7 @@ INSTRUÇÕES DE RESPOSTA:
   
   IMPORTANTE: Inclua APENAS os produtos que devem ficar. Se o usuário pediu para remover um, NÃO inclua ele.`;
 
-      const result = await model.generateContent(prompt);
-      let responseText = result.response.text().trim();
+      let responseText = (await callGeminiAPI(prompt)).trim();
 
       // Verificar se a IA retornou uma ação de atualização
       if (responseText.startsWith('ACAO|')) {
@@ -536,10 +524,7 @@ INSTRUÇÕES DE RESPOSTA:
     
     setIsAnalyzing(true);
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      if (apiKey) {
-        const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      {
         
         const leadsSummary = formLeads
           .map(l => `- ${l.name}: Status "${l.status}", Valor R$${l.value}`)
@@ -566,14 +551,8 @@ INSTRUÇÕES DE RESPOSTA:
           Seja conciso e focado em ROI.
         `;
 
-        const result = await model.generateContent(prompt);
-
-        setAiAnalysis(result.response.text() || "Não foi possível gerar a análise.");
-      } else {
-        // Mock fallback
-        await new Promise(r => setTimeout(r, 2000));
-        setAiAnalysis(`**Análise Simulada (Sem API Key):**\n\nO formulário "${form?.name}" gerou **R$ ${totalValue.toLocaleString()}** em oportunidades. A taxa de conversão de **${conversionRate.toFixed(1)}%** indica que os leads são qualificados, mas há muitos parados na fase inicial.`);
-      }
+        const text = await callGeminiAPI(prompt);
+        setAiAnalysis(text || "Não foi possível gerar a análise.");
     } catch (error) {
       console.error(error);
       setAiAnalysis("Erro ao processar análise com IA.");

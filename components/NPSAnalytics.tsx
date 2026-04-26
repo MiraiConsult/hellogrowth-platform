@@ -4,7 +4,7 @@ import { useTenantId } from '@/hooks/useTenantId';
 import { NPSResponse, Campaign } from '@/types';
 import { BarChart3, Sparkles, Loader2, X, Mail, Phone, History, Plus, MessageSquare, User, Calendar, Layout, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, Filter } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { callGeminiAPI } from '@/lib/gemini-client';
 import ReactMarkdown from 'react-markdown';
 
 interface NPSAnalyticsProps {
@@ -120,14 +120,7 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, o
     setIsModalOpen(true); // Open modal to show loading/result
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      
-      if (apiKey) {
-        const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        
-        // Summarize last 50 comments to avoid token limits
-        const comments = npsData
+      const comments = npsData
           .slice(0, 50)
           .filter(r => r.comment && r.comment.length > 3)
           .map(r => `- [${r.status}] ${r.comment}`)
@@ -152,14 +145,8 @@ const NPSAnalytics: React.FC<NPSAnalyticsProps> = ({ npsData, onUpdateNPSNote, o
           Seja estratégico e direto.
         `;
 
-        const result = await model.generateContent(prompt);
-
-        setAiReport(result.response.text() || "Análise concluída, mas sem texto retornado.");
-      } else {
-        // Mock Fallback
-        await new Promise(r => setTimeout(r, 2000));
-        setAiReport(`**Relatório Simulado (Sem API Key)**\n\nO NPS de **${npsScore}** mostra estabilidade. A análise dos ${npsData.length} feedbacks indica que o produto é bem aceito, mas o suporte precisa ser mais ágil.`);
-      }
+        const text = await callGeminiAPI(prompt);
+        setAiReport(text || "Análise concluída, mas sem texto retornado.");
     } catch (error) {
       console.error(error);
       setAiReport("Erro ao gerar análise. Tente novamente.");

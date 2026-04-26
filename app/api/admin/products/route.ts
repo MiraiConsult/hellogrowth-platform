@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+import { generateContent } from '@/lib/gemini';
 
 // GET /api/admin/products — lista todos os produtos/serviços dos clientes
 export async function GET(request: NextRequest) {
@@ -120,8 +118,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nenhum produto fornecido' }, { status: 400 });
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
     const productList = products
       .slice(0, 80)
       .map((p: any) => `- ${p.name} (${p.tenant}): R$ ${p.value}${p.description ? ` — ${p.description.substring(0, 80)}` : ''}`)
@@ -163,13 +159,13 @@ Retorne APENAS um JSON válido (sem markdown, sem explicações) com esta estrut
   "benchmark_mercado": "análise geral comparando os preços praticados com o mercado brasileiro"
 }`;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
+    const text = await generateContent(prompt, undefined, { maxOutputTokens: 4096 });
 
     let analysis;
     try {
-      const clean = text.replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '').trim();
-      analysis = JSON.parse(clean);
+      const clean = text.replace(/^```json\n?/i, '').replace(/^```\n?/, '').replace(/\n?```$/i, '').trim();
+      const jsonMatch = clean.match(/\{[\s\S]*\}/);
+      analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(clean);
     } catch {
       analysis = { error: true, raw: text };
     }

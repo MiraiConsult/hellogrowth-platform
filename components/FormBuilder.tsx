@@ -5,7 +5,7 @@ import FormMassDispatchModal from '@/components/FormMassDispatchModal';
 import { supabase } from '@/lib/supabase';
 import { Form, FormQuestion, FormOption, Lead, InitialField } from '@/types';
 import { getFormLink } from '@/lib/utils/getBaseUrl';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { callGeminiAPI, parseGeminiJSON } from '@/lib/gemini-client';
 import InitialFieldsConfig from '@/components/InitialFieldsConfig';
 import { useTenantId } from '@/hooks/useTenantId';
 
@@ -321,23 +321,13 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setGeneratingScriptId(optionId);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      
-      if (apiKey) {
-        const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        const prompt = `Crie uma ÚNICA frase curta (máximo 15 palavras) para um vendedor usar com um cliente que respondeu "${optionLabel}" à pergunta "${questionText}". Retorne APENAS a frase, sem aspas, numeração ou qualquer outro texto.`;
-        const result = await model.generateContent(prompt);
-        const response = result.response;
+      const prompt = `Crie uma ÚNICA frase curta (máximo 15 palavras) para um vendedor usar com um cliente que respondeu "${optionLabel}" à pergunta "${questionText}". Retorne APENAS a frase, sem aspas, numeração ou qualquer outro texto.`;
+        const text = await callGeminiAPI(prompt);
         
-        let script = result.response.text()?.trim() || '';
-        // Remove potential markdown, quotes, and numbering
+        let script = text?.trim() || '';
         script = script.replace(/\*|"/g, '').replace(/^\d+\.\s*/, '').trim();
 
         if (script) updateOption(questionId, optionId, 'script', script);
-      } else {
-        throw new Error("No API Key");
-      }
     } catch (error) {
       setTimeout(() => {
           const fallbackScripts = [
@@ -359,12 +349,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setIsGenerating(true);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      
-      if (apiKey) {
-        const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        const prompt = `
+      const prompt = `
           Atue como um especialista em Vendas. Gere 4 perguntas estratégicas para qualificação de leads.
           CONTEXTO: "${currentFormName}". DESCRIÇÃO: "${currentFormDescription}".
           
@@ -376,10 +361,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
           Retorne APENAS um JSON válido com esta estrutura: 
           [{ "text": "...", "type": "single|multiple", "options": [{"label": "...", "value": 100, "script": "..."}] }]
         `;
-        const result = await model.generateContent(prompt);
+        const text = await callGeminiAPI(prompt);
 
-        if (result.response.text()) {
-          const generated = JSON.parse(result.response.text());
+        if (text) {
+          const generated = parseGeminiJSON(text);
           const mapped = generated.map((q: any) => ({
             id: Date.now().toString() + Math.random(),
             text: q.text,

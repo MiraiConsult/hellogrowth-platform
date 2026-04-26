@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles, Loader2, RefreshCw } from 'lucide-react';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { callGeminiChat } from '@/lib/gemini-client';
 import ReactMarkdown from 'react-markdown';
 import { Lead, NPSResponse, PlanType } from '@/types';
 
@@ -29,9 +29,6 @@ const AIChat: React.FC<AIChatProps> = ({ leads, npsData, activePlan }) => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // Use environment variable as per specific instructions
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''; 
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -58,9 +55,7 @@ const AIChat: React.FC<AIChatProps> = ({ leads, npsData, activePlan }) => {
         `- [NPS] ${n.customerName} | Nota: ${n.score} (${n.status}) | Comentário: "${n.comment || 'N/A'}"${n.answers ? ` | Detalhes: ${JSON.stringify(n.answers)}` : ''}`
       ).join('\n');
 
-      if (apiKey) {
-        const ai = new GoogleGenerativeAI(apiKey);
-        
+      {
         const systemInstruction = `
           ATUE COMO: Um Consultor Sênior de Customer Experience (CX) e Estratégia Comercial da plataforma HelloGrowth.
           
@@ -94,70 +89,15 @@ const AIChat: React.FC<AIChatProps> = ({ leads, npsData, activePlan }) => {
         const currentContent = { role: 'user' as const, parts: [{ text: input }] };
         const fullContents = [...historyPayload, currentContent];
 
-        const model = ai.getGenerativeModel({ 
-          model: 'gemini-2.5-flash',
-          systemInstruction: systemInstruction,
+        const text = await callGeminiChat(fullContents, { 
+          systemInstruction, 
+          temperature: 0.4 
         });
-
-        const result = await model.generateContent({
-          contents: fullContents,
-          generationConfig: {
-            temperature: 0.4,
-          },
-        });
-
-        const text = result.response.text();
         
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
           role: 'model',
           content: text || 'Desculpe, não consegui processar a análise. Tente reformular.',
-        }]);
-
-      } else {
-        // --- MOCK FALLBACK (Smarter Logic for Suggestions) ---
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        let mockResponse = '';
-        const lowerInput = input.toLowerCase();
-
-        // Check context from previous messages (Simple heuristic for Mock)
-        const lastBotMessage = messages[messages.length - 1]?.content.toLowerCase() || '';
-        const contextIsDetractors = lastBotMessage.includes('detratores') || lastBotMessage.includes('insatisfeitos');
-
-        if ((lowerInput.includes('fazer') || lowerInput.includes('sugere') || lowerInput.includes('ação')) && (lowerInput.includes('detrator') || contextIsDetractors)) {
-            mockResponse = `### 🚨 Plano de Recuperação de Detratores\n\nBaseado nas melhores práticas de CX, aqui está o que sugiro para os clientes insatisfeitos listados:\n\n1.  **Fechamento do Loop (Close the Loop):** Entre em contato em até 24h. A agilidade demonstra preocupação real.\n2.  **Escuta Ativa:** Não justifique o erro imediatamente. Deixe o cliente desabafar sobre o motivo da nota baixa.\n3.  **Compensação:** Se houve falha no serviço, ofereça um desconto na próxima compra ou um serviço cortesia para reconquistar a confiança.\n4.  **Ação Interna:** Registre o motivo da insatisfação nas notas do cliente para evitar reincidência.`;
-        } else if (lowerInput.includes('detrator') || lowerInput.includes('insatisfeito')) {
-           const detractors = npsData.filter(n => n.score <= 6);
-           if (detractors.length > 0) {
-             mockResponse = `Identifiquei **${detractors.length} clientes detratores** que precisam de atenção urgente:\n\n` + 
-                            detractors.map(d => `- **${d.customerName}** (Nota ${d.score}): ${d.comment ? `_"${d.comment}"_` : 'Sem comentário'}`).join('\n') +
-                            `\n\n💡 *Dica: Gostaria de sugestões sobre como abordar esses casos?*`;
-           } else {
-             mockResponse = "Ótima notícia! Analisei sua base e **não encontrei detratores** (notas 0 a 6) no momento. Seus clientes parecem satisfeitos.";
-           }
-        } else if (lowerInput.includes('promotor') || lowerInput.includes('elogio')) {
-           const promoters = npsData.filter(n => n.score >= 9);
-           mockResponse = `Você tem **${promoters.length} promotores** fiéis à marca:\n\n` + 
-                          promoters.map(p => `- **${p.customerName}** (Nota ${p.score})`).join('\n') +
-                          `\n\n🚀 *Sugestão: Que tal pedir para esses clientes avaliarem sua empresa no Google?*`;
-        } else if (lowerInput.includes('venda') || lowerInput.includes('oportunidade') || lowerInput.includes('lead')) {
-           const total = leads.reduce((sum, lead) => sum + lead.value, 0);
-           const hotLeads = leads.filter(l => l.status === 'Negociação' || l.status === 'Novo').slice(0, 5);
-           
-           mockResponse = `### Análise de Vendas\n\n` +
-                          `💰 **Pipeline Total:** R$ ${total.toLocaleString('pt-BR')}\n` +
-                          `📊 **Oportunidades Ativas:** ${leads.length}\n\n` +
-                          `**Leads Quentes para Priorizar:**\n` +
-                          hotLeads.map(l => `- **${l.name}**: R$ ${l.value} (${l.status})`).join('\n');
-        } else {
-          mockResponse = "Entendi. Como seu consultor, posso analisar seus dados. Tente perguntar: 'Quem são os clientes insatisfeitos?' ou 'Qual minha taxa de conversão de vendas?'.";
-        }
-
-        setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          role: 'model',
-          content: mockResponse,
         }]);
       }
     } catch (error) {

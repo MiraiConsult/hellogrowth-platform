@@ -9,7 +9,7 @@ import {
   Phone, Mail, ArrowUpRight, RefreshCw, Filter, Zap, Brain, HelpCircle
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { callGeminiAPI } from '@/lib/gemini-client';
 import { supabase } from '@/lib/supabase';
 import ReactMarkdown from 'react-markdown';
 
@@ -326,14 +326,7 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
     setAiResponse(null);
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      
-      if (apiKey) {
-        const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        
-        // Build context from data
-        const context = `
+      const context = `
           DADOS DA EMPRESA:
           - Total de Leads: ${leads.length}
           - Leads por Status: Novos (${leads.filter(l => l.status === 'Novo').length}), Em Contato (${leads.filter(l => l.status === 'Em Contato').length}), Negociação (${leads.filter(l => l.status === 'Negociação').length}), Vendidos (${leads.filter(l => l.status === 'Vendido').length}), Perdidos (${leads.filter(l => l.status === 'Perdido').length})
@@ -357,14 +350,8 @@ const IntelligenceCenter: React.FC<IntelligenceCenterProps> = ({
           Sugira ações concretas que podem ser tomadas imediatamente.
         `;
 
-        const result = await model.generateContent(prompt);
-
-        setAiResponse(result.response.text() || "Não foi possível gerar uma resposta.");
-      } else {
-        // Mock response
-        await new Promise(r => setTimeout(r, 1500));
-        setAiResponse(`**Análise baseada nos seus dados:**\n\nCom base nos ${leads.length} leads e ${npsData.length} respostas de NPS, identifiquei algumas oportunidades importantes.\n\n**Recomendação:** Foque primeiro nos leads em negociação de alto valor e nos detratores que precisam de atenção imediata. Isso pode aumentar sua conversão em até 25% e melhorar seu NPS significativamente.`);
-      }
+        const text = await callGeminiAPI(prompt);
+        setAiResponse(text || "Não foi possível gerar uma resposta.");
     } catch (e) {
       console.error(e);
       setAiResponse("Erro ao processar sua pergunta. Tente novamente.");

@@ -105,32 +105,20 @@ Contexto geral do HelloGrowth:
 - Planos: rating (só NPS), client (NPS + formulários), growth (tudo + WhatsApp)
 - Produtos: catálogo usado pela IA para calcular pipeline e sugerir produtos para leads`;
 
-    // Tentar Gemini primeiro
-    const geminiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+    // Tentar Gemini primeiro (com retry via lib/gemini)
+    try {
+      const { generateChatContent } = await import('@/lib/gemini');
+      
+      const contents = messages.map((m: { role: string; content: string }) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      }));
 
-    if (geminiKey) {
-      try {
-        const { GoogleGenerativeAI } = await import('@google/generative-ai');
-        const genAI = new GoogleGenerativeAI(geminiKey);
-        const model = genAI.getGenerativeModel({
-          model: 'gemini-2.5-flash',
-          systemInstruction: systemPrompt,
-        });
+      const text = await generateChatContent(contents, systemPrompt, 0.7, 2048);
 
-        const history = messages.slice(0, -1).map((m: { role: string; content: string }) => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }],
-        }));
-
-        const lastMessage = messages[messages.length - 1];
-        const chat = model.startChat({ history });
-        const result = await chat.sendMessage(lastMessage.content);
-        const text = result.response.text();
-
-        return NextResponse.json({ message: text });
-      } catch (geminiError) {
-        console.error('Erro no Gemini, tentando OpenAI:', geminiError);
-      }
+      if (text) return NextResponse.json({ message: text });
+    } catch (geminiError) {
+      console.error('Erro no Gemini, tentando OpenAI:', geminiError);
     }
 
     // Fallback: OpenAI

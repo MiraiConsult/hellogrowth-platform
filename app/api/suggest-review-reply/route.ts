@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generateContent } from '@/lib/gemini';
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,11 +9,6 @@ export async function POST(request: NextRequest) {
 
     if (!businessName || !reviewerName || rating == null) {
       return NextResponse.json({ error: 'Dados insuficientes' }, { status: 400 });
-    }
-
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
-    if (!apiKey) {
-      return NextResponse.json({ error: 'API key não configurada' }, { status: 500 });
     }
 
     const isNegative = rating <= 2;
@@ -53,16 +48,9 @@ Regras:
 
 Responda apenas com o texto da resposta, sem explicações adicionais.`;
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      generationConfig: { temperature: 0.7, maxOutputTokens: 400 },
-    } as any);
+    const reply = await generateContent(prompt, undefined, { maxOutputTokens: 1024, temperature: 0.7 });
 
-    const result = await model.generateContent(prompt);
-    const reply = result.response.text().trim();
-
-    return NextResponse.json({ reply });
+    return NextResponse.json({ reply: reply.trim() });
   } catch (e: any) {
     console.error('Error generating review reply:', e);
     return NextResponse.json({ error: e.message }, { status: 500 });

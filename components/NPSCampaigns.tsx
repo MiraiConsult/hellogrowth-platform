@@ -3,7 +3,7 @@ import { useTenantId } from '@/hooks/useTenantId';
 import { Campaign, CampaignQuestion, User, InitialField } from '@/types';
 import { getSurveyLink } from '@/lib/utils/getBaseUrl';
 import { Plus, X, Share2, MoreVertical, Star, Link as LinkIcon, ExternalLink, Sparkles, Trash2, Check, Pause, Play, Edit, Eye, Loader2, MapPin, Send, Upload, FileSpreadsheet, QrCode, Download, FileText, AlertCircle, GripVertical, ArrowUp, ArrowDown, ArrowLeft, Gift, BookOpen, Search, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+
 import { supabase } from '@/lib/supabase';
 import InitialFieldsConfig from '@/components/InitialFieldsConfig';
 import NPSConsultant from '@/components/NPSConsultant';

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-// API key configurada dinamicamente por função
+import { generateContent } from '@/lib/gemini';
 
 // POST /api/admin/ai-insights — gera análise de IA sobre os dados da base
 export async function POST(request: NextRequest) {
@@ -33,12 +31,18 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Helper para parsear JSON do Gemini
+function parseAIJSON(text: string): any {
+  const clean = text.replace(/^```json\n?/i, '').replace(/\n?```$/i, '').trim();
+  const jsonMatch = clean.match(/\{[\s\S]*\}/);
+  if (jsonMatch) return JSON.parse(jsonMatch[0]);
+  const arrayMatch = clean.match(/\[[\s\S]*\]/);
+  if (arrayMatch) return JSON.parse(arrayMatch[0]);
+  return JSON.parse(clean);
+}
+
 // ─── Visão geral de mercado ───────────────────────────────────────────────────
 async function generateMarketOverview(data: any) {
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
   const { globalNps, totalResponses, topThemes, promoterTexts, detractorTexts, trendData } = data;
 
   const prompt = `Você é um analista de inteligência de mercado especializado em experiência do cliente para pequenas e médias empresas brasileiras.
@@ -93,13 +97,11 @@ Gere uma análise estratégica em JSON com a seguinte estrutura:
 
 Responda APENAS com o JSON, sem markdown.`;
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
+  const text = await generateContent(prompt, undefined, { maxOutputTokens: 4096 });
 
   let analysis;
   try {
-    const clean = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
-    analysis = JSON.parse(clean);
+    analysis = parseAIJSON(text);
   } catch {
     analysis = { raw: text, error: 'parse_failed' };
   }
@@ -110,26 +112,18 @@ Responda APENAS com o JSON, sem markdown.`;
 // ─── Gerar descrição de template ─────────────────────────────────────────────
 async function generateTemplateDescription(body: any) {
   const { templateName, tipoVenda, ramoNegocio, questions, objective } = body;
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const tipoLabel = tipoVenda === 'pre_venda' ? 'pré-venda (antes da compra/contratação)' : 'pós-venda (após a compra/atendimento)';
 
   const prompt = `Você é especialista em pesquisas de satisfação e NPS para pequenas e médias empresas brasileiras.\n\nCrie uma descrição concisa e persuasiva (máximo 2 frases) para um template de pesquisa:\n- Nome: ${templateName}\n- Tipo: ${tipoLabel}\n- Ramo: ${ramoNegocio || 'não especificado'}\n- Perguntas: ${questions || 'não especificadas'}\n\nExplique QUANDO usar e QUAL benefício traz. Português brasileiro, tom profissional. Responda APENAS com a descrição.`;
 
-  const result = await model.generateContent(prompt);
-  const description = result.response.text().trim();
+  const description = await generateContent(prompt, undefined, { maxOutputTokens: 512 });
 
-  return NextResponse.json({ description });
+  return NextResponse.json({ description: description.trim() });
 }
 
 // ─── Análise de um tenant específico ─────────────────────────────────────────
 async function generateTenantAnalysis(tenantId: string, data: any) {
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
   const { companyName, npsScore, totalResponses, comments, leads, lastDiagnostic, monthlyTrend } = data;
 
   const prompt = `Você é um consultor de negócios especializado em experiência do cliente.
@@ -173,16 +167,49 @@ Gere uma análise em JSON:
 
 Responda APENAS com o JSON, sem markdown.`;
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
+  const text = await generateContent(prompt, undefined, { maxOutputTokens: 4096 });
 
   let analysis;
   try {
-    const clean = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
-    analysis = JSON.parse(clean);
+    analysis = parseAIJSON(text);
   } catch {
     analysis = { raw: text, error: 'parse_failed' };
   }
 
   return NextResponse.json({ analysis, generatedAt: new Date().toISOString() });
+}
+
+// ─── Análise de temas de comentários ────────────────────────────────────────
+async function analyzeCommentThemes(data: any) {
+  const { comments } = data;
+  if (!comments || comments.length === 0) {
+    return NextResponse.json({ themes: [] });
+  }
+
+  const prompt = `Analise os seguintes comentários de clientes e identifique os temas principais:
+
+${comments.slice(0, 50).map((c: string, i: number) => `${i + 1}. "${c}"`).join('\n')}
+
+Retorne um JSON com os temas encontrados:
+[
+  {
+    "tema": "Nome do tema",
+    "frequencia": número de menções,
+    "sentimento": "positivo | negativo | neutro",
+    "exemplos": ["exemplo 1", "exemplo 2"]
+  }
+]
+
+Responda APENAS com o JSON.`;
+
+  const text = await generateContent(prompt, undefined, { maxOutputTokens: 2048 });
+
+  let themes;
+  try {
+    themes = parseAIJSON(text);
+  } catch {
+    themes = [];
+  }
+
+  return NextResponse.json({ themes });
 }

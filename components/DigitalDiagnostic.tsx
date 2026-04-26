@@ -17,7 +17,7 @@ import {
   BarChart as RechartsBarChart, Bar, ReferenceLine, AreaChart, Area
 } from 'recharts';
 import { supabase } from '@/lib/supabase';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { callGeminiAPI, parseGeminiJSON } from '@/lib/gemini-client';
 
 const GOOGLE_PLACES_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY || '';
 
@@ -835,17 +835,10 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   };
 
   const generateAIAnalysis = async (placeData: GooglePlaceData, previousAnalysis?: AIAnalysis | null, todoItems?: TodoItem[]): Promise<AIAnalysis> => {
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     const scores = calculateScores(placeData);
     const { reputationScore, visibilityScore, engagementScore, overallScore } = scores;
 
-    if (!apiKey || apiKey === 'PLACEHOLDER_API_KEY') {
-      return generateBasicAnalysis(placeData, previousAnalysis, todoItems);
-    }
-
     try {
-      const ai = new GoogleGenerativeAI(apiKey);
-      const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
       const engagementMetrics = calculateEngagementMetrics(placeData);
       const hasWebsite = !!placeData.website;
       const hasPhone = !!placeData.formatted_phone_number;
@@ -905,16 +898,11 @@ Responda APENAS em JSON puro (sem markdown):
 }
 `;
 
-      const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        parsed.scores = { reputation: reputationScore, visibility: visibilityScore, engagement: engagementScore, overall: overallScore };
-        parsed.todoItems = todoItems || [];
-        return parsed;
-      }
-      return generateBasicAnalysis(placeData, previousAnalysis, todoItems);
+      const responseText = await callGeminiAPI(prompt);
+      const parsed = parseGeminiJSON(responseText);
+      parsed.scores = { reputation: reputationScore, visibility: visibilityScore, engagement: engagementScore, overall: overallScore };
+      parsed.todoItems = todoItems || [];
+      return parsed;
     } catch (error) {
       console.error('Error generating AI analysis:', error);
       return generateBasicAnalysis(placeData, previousAnalysis, todoItems);

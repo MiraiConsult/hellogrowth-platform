@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generateContent } from '@/lib/gemini';
 
 export const maxDuration = 60;
 
@@ -267,11 +267,6 @@ export async function POST(request: NextRequest) {
 // Gerar insights de IA para o relatório
 async function generateAIInsights(tenantData: any, clientName: string) {
   try {
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
-    if (!apiKey) return null;
-
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `Você é um consultor de negócios especializado em experiência do cliente.
 
@@ -297,13 +292,10 @@ Gere JSON:
 
 Responda APENAS com o JSON, sem markdown.`;
 
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 4096 },
-    });
-    const text = result.response.text().trim();
-    const clean = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
-    return JSON.parse(clean);
+    const text = await generateContent(prompt, undefined, { maxOutputTokens: 4096 });
+    const clean = text.trim().replace(/^```json\n?/i, '').replace(/\n?```$/i, '').trim();
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    return jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(clean);
   } catch (err) {
     console.error('AI insights error:', err);
     return null;

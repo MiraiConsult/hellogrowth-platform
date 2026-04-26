@@ -3,7 +3,7 @@ import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
 import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle } from 'lucide-react';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { callGeminiAPI } from '@/lib/gemini-client';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Pie, Cell, PieChart as RechartsPieChart } from 'recharts';
@@ -385,11 +385,7 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts
     if (!selectedLead) return;
     setIsGeneratingAdvice(true);
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
       const firstName = (selectedLead.name || '').split(' ')[0];
-      
-      if (apiKey) {
-        const ai = new GoogleGenerativeAI(apiKey);
         
         // Include notes in context
         const notesContext = selectedLead.notes ? `\n\nOBSERVAÇÕES INTERNAS (Use apenas para contexto): \n${selectedLead.notes}` : '';
@@ -431,15 +427,8 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts
           6. Retorne APENAS o texto da mensagem.
         `;
         
-        // FIX: Updated model from deprecated 'gemini-2.5-flash' to 'gemini-3-flash-preview' for basic text task.
-        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        const result = await model.generateContent(prompt );
-        const response = { text: result.response.text() };
-        setAiAdvice(response.text || "Sem sugestão gerada.");
-      } else {
-        await new Promise(r => setTimeout(r, 1500));
-        setAiAdvice(`Olá ${firstName}, tudo bem?\nVi seu interesse em ${selectedLead.formSource}. Podemos conversar rapidinho sobre o que você precisa?`);
-      }
+        const text = await callGeminiAPI(prompt);
+        setAiAdvice(text || "Sem sugestão gerada.");
     } catch (error) {
       setAiAdvice("Erro ao conectar com IA.");
     } finally {

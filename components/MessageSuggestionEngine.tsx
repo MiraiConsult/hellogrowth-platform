@@ -4,7 +4,7 @@
 // USANDO GEMINI IA - Mensagens personalizadas como Coach de Vendas
 // ============================================
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { callGeminiAPI } from '@/lib/gemini-client';
 
 export interface MessageSuggestion {
   id: string;
@@ -366,16 +366,7 @@ async function generateMessageWithAI(
   context: ClientContext,
   messageType: MessageType
 ): Promise<{ whatsapp: string; emailSubject: string; emailBody: string }> {
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-  
-  if (!apiKey) {
-    // Fallback para mensagem básica se não tiver API key
-    return generateFallbackMessage(context, messageType);
-  }
-  
   try {
-    const ai = new GoogleGenerativeAI(apiKey);
-    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
     
     const firstName = context.name.split(' ')[0];
     const formattedAnswers = formatAnswersForPrompt(context.answers);
@@ -421,8 +412,7 @@ FORMATO DE RESPOSTA (responda EXATAMENTE neste formato):
 Lembre-se: O cliente ${firstName} deve sentir que está recebendo uma mensagem de uma pessoa real que se importa, não de um sistema automatizado.
 `;
 
-    const result = await model.generateContent(prompt);
-    const response = result.response.text();
+    const response = await callGeminiAPI(prompt);
     
     // Parse da resposta
     const whatsappMatch = response.match(/---WHATSAPP---\s*([\s\S]*?)(?=---EMAIL_ASSUNTO---|$)/);

@@ -3,7 +3,7 @@ import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { Campaign, NPSResponse } from '@/types';
 import { ArrowLeft, Users, Star, TrendingUp, MessageSquare, Sparkles, Loader2, Download, Calendar, X, Mail, Phone, Trash2, ArrowRight, History, Plus, User, Info, FileText, Layout, Search, Filter, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { callGeminiAPI } from '@/lib/gemini-client';
 import ReactMarkdown from 'react-markdown';
 
 interface CampaignReportProps {
@@ -127,11 +127,8 @@ const CampaignReport: React.FC<CampaignReportProps> = ({ campaignId, campaigns, 
     if (campaignResponses.length === 0) return;
     setIsAnalyzing(true);
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      if (apiKey) {
-        const ai = new GoogleGenerativeAI(apiKey);
-        const detailedFeedback = campaignResponses
-            .slice(0, 50) // Limit context
+      const detailedFeedback = campaignResponses
+            .slice(0, 50)
             .map(r => `Nota ${r.score}: ${r.comment || 'Sem comentário'}`)
             .join('\n');
             
@@ -151,15 +148,8 @@ const CampaignReport: React.FC<CampaignReportProps> = ({ campaignId, campaigns, 
           2. **Ação Imediata**: Uma sugestão para melhorar a nota.
         `;
         
-        // FIX: Updated model from deprecated 'gemini-2.5-flash' to 'gemini-3-flash-preview' for basic text task.
-        const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        const result = await model.generateContent(prompt );
-        const response = { text: result.response.text() };
-        setAiAnalysis(response.text || "Sem análise gerada.");
-      } else {
-        await new Promise(r => setTimeout(r, 2000));
-        setAiAnalysis(`**Análise Simulada:**\n\nO NPS de **${npsScore}** indica um desempenho estável. A maioria dos feedbacks positivos destaca o atendimento, enquanto as críticas focam no tempo de espera.`);
-      }
+        const text = await callGeminiAPI(prompt);
+        setAiAnalysis(text || "Sem análise gerada.");
     } catch (error) { 
         setAiAnalysis("Erro na análise. Verifique sua conexão."); 
     } finally { 

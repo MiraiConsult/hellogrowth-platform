@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generateContent } from '@/lib/gemini';
 
 export const maxDuration = 60;
 
@@ -29,8 +29,7 @@ const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://miraisaleshg
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY!;
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'Mirai Sales HG';
 const CRON_SECRET = process.env.CRON_SECRET || 'hellogrowth-cron-2025';
-const GEMINI_API_KEY =
-  process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -138,14 +137,6 @@ async function generateDailyDigest(
   const deltaStr =
     scoreDelta > 0 ? `+${scoreDelta}` : scoreDelta < 0 ? `${scoreDelta}` : '0';
 
-  if (!GEMINI_API_KEY) {
-    return `Score geral: ${newScores.overallScore}/100 (${deltaStr} vs ontem). ${
-      newReviewsCount > 0
-        ? `${newReviewsCount} nova(s) avaliação(ões) detectada(s).`
-        : 'Sem novas avaliações hoje.'
-    }`;
-  }
-
   try {
     const prompt = `Você é um assistente de marketing digital. Gere um resumo diário CURTO e MOTIVADOR para o negócio "${businessName}".
 
@@ -171,14 +162,8 @@ ${
 Escreva um resumo em 2-3 frases curtas. Seja específico, use os dados reais. Se houve melhora, comemore. Se piorou, motive a ação. Se há novas avaliações, destaque.
 Responda apenas com o texto do resumo, sem títulos ou formatação.`;
 
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      generationConfig: { temperature: 0.7, maxOutputTokens: 200 },
-    } as any);
-
-    const result = await model.generateContent(prompt);
-    return result.response.text().trim();
+    const text = await generateContent(prompt, undefined, { maxOutputTokens: 512, temperature: 0.7 });
+    return text.trim();
   } catch {
     return `Score geral: ${newScores.overallScore}/100 (${deltaStr} vs ontem). ${
       newReviewsCount > 0
