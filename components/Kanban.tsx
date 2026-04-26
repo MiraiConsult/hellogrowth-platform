@@ -2,12 +2,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
-import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle } from 'lucide-react';
+import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle, Settings, GripVertical, AlertTriangle } from 'lucide-react';
 import { callGeminiAPI } from '@/lib/gemini-client';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Pie, Cell, PieChart as RechartsPieChart } from 'recharts';
 import MessageSuggestionsPanel from './MessageSuggestionsPanel';
+
+interface KanbanStage {
+  id: string;
+  name: string;
+  color: string;
+  emoji: string;
+  position: number;
+  board_id: string;
+}
 
 interface CatalogProduct {
   id: string;
@@ -33,16 +42,37 @@ interface KanbanProps {
 const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts = [], onLeadCreate, onLeadStatusUpdate, onLeadNoteUpdate, currentUser, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads }) => {
   const tenantId = useTenantId()
 
-  const columns = ['Novo', 'Em Contato', 'Negociação', 'Vendido', 'Perdido'] as const;
-  
-  // Define column colors
-  const columnColors: Record<string, string> = {
-    'Novo': 'bg-gray-200 text-gray-700',
-    'Em Contato': 'bg-blue-100 text-blue-800',
-    'Negociação': 'bg-purple-100 text-purple-800',
-    'Vendido': 'bg-green-100 text-green-800',
-    'Perdido': 'bg-red-100 text-red-800'
-  };
+  // ---- Etapas dinâmicas ----
+  const DEFAULT_STAGES: KanbanStage[] = [
+    { id: 'default-0', name: 'Novo', color: '#9CA3AF', emoji: '🆕', position: 0, board_id: '' },
+    { id: 'default-1', name: 'Em Contato', color: '#3B82F6', emoji: '📞', position: 1, board_id: '' },
+    { id: 'default-2', name: 'Negociação', color: '#A855F7', emoji: '🤝', position: 2, board_id: '' },
+    { id: 'default-3', name: 'Vendido', color: '#22C55E', emoji: '✅', position: 3, board_id: '' },
+    { id: 'default-4', name: 'Perdido', color: '#EF4444', emoji: '❌', position: 4, board_id: '' },
+  ];
+  const [stages, setStages] = useState<KanbanStage[]>(DEFAULT_STAGES);
+  const [boardId, setBoardId] = useState<string | null>(null);
+  const [isLoadingStages, setIsLoadingStages] = useState(true);
+  // Modal de gerenciamento de etapas
+  const [showStagesModal, setShowStagesModal] = useState(false);
+  const [editingStageId, setEditingStageId] = useState<string | null>(null);
+  const [editingStageName, setEditingStageName] = useState('');
+  const [newStageName, setNewStageName] = useState('');
+  const [isSavingStage, setIsSavingStage] = useState(false);
+  const [stageError, setStageError] = useState<string | null>(null);
+  const [deletingStageId, setDeletingStageId] = useState<string | null>(null);
+  const [draggedStageId, setDraggedStageId] = useState<string | null>(null);
+  const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
+
+  // Cor de coluna baseada na cor hex da etapa
+  const getColumnStyle = (color: string) => ({
+    backgroundColor: color + '22',
+    color: color,
+    borderColor: color + '44',
+  });
+
+  // Compatibilidade: columns como array de nomes para o restante do código
+  const columns = stages.map(s => s.name);
 
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   
@@ -103,6 +133,137 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts
         notesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [selectedLead?.notes, selectedLead]);
+
+  // ---- Carregar etapas do banco ----
+  useEffect(() => {
+    if (!tenantId) return;
+    setIsLoadingStages(true);
+    fetch(`/api/kanban-boards?tenant_id=${tenantId}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.boards && data.boards.length > 0) {
+          const board = data.boards[0];
+          setBoardId(board.id);
+          if (board.stages && board.stages.length > 0) {
+            setStages(board.stages.sort((a: KanbanStage, b: KanbanStage) => a.position - b.position));
+          }
+        }
+      })
+      .catch(err => console.error('Erro ao carregar etapas:', err))
+      .finally(() => setIsLoadingStages(false));
+  }, [tenantId]);
+
+  // ---- Funções de gerenciamento de etapas ----
+  const handleRenameStage = async (stageId: string, newName: string) => {
+    if (!newName.trim()) return;
+    setIsSavingStage(true);
+    setStageError(null);
+    try {
+      const res = await fetch('/api/kanban-boards', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'stage', id: stageId, name: newName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao renomear');
+      const oldName = stages.find(s => s.id === stageId)?.name || '';
+      setStages(prev => prev.map(s => s.id === stageId ? { ...s, name: newName.trim() } : s));
+      // Atualizar leads com o status antigo para o novo nome
+      setLeads(prev => prev.map(l => l.status === oldName ? { ...l, status: newName.trim() as any } : l));
+      setEditingStageId(null);
+    } catch (err: any) {
+      setStageError(err.message);
+    } finally {
+      setIsSavingStage(false);
+    }
+  };
+
+  const handleCreateStage = async () => {
+    if (!newStageName.trim() || !boardId) return;
+    setIsSavingStage(true);
+    setStageError(null);
+    const colors = ['#F59E0B', '#06B6D4', '#EC4899', '#84CC16', '#F97316', '#8B5CF6'];
+    const randomColor = colors[stages.length % colors.length];
+    try {
+      const res = await fetch('/api/kanban-boards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'stage', board_id: boardId, tenant_id: tenantId, name: newStageName.trim(), color: randomColor, emoji: '📌' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao criar etapa');
+      setStages(prev => [...prev, data.stage].sort((a, b) => a.position - b.position));
+      setNewStageName('');
+    } catch (err: any) {
+      setStageError(err.message);
+    } finally {
+      setIsSavingStage(false);
+    }
+  };
+
+  const handleDeleteStage = async (stageId: string) => {
+    if (stages.length <= 1) { setStageError('Não é possível excluir a única etapa.'); return; }
+    setDeletingStageId(stageId);
+    setStageError(null);
+    // Move leads para a primeira etapa diferente
+    const otherStage = stages.find(s => s.id !== stageId);
+    const moveToId = otherStage?.id;
+    try {
+      const res = await fetch(`/api/kanban-boards?type=stage&id=${stageId}${moveToId ? `&move_to=${moveToId}` : ''}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao excluir');
+      const deletedStage = stages.find(s => s.id === stageId);
+      setStages(prev => prev.filter(s => s.id !== stageId));
+      // Atualizar leads
+      if (deletedStage && otherStage) {
+        setLeads(prev => prev.map(l => l.status === deletedStage.name ? { ...l, status: otherStage.name as any } : l));
+      }
+    } catch (err: any) {
+      setStageError(err.message);
+    } finally {
+      setDeletingStageId(null);
+    }
+  };
+
+  const handleStageDragStart = (e: React.DragEvent, stageId: string) => {
+    setDraggedStageId(stageId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleStageDragOver = (e: React.DragEvent, stageId: string) => {
+    e.preventDefault();
+    setDragOverStageId(stageId);
+  };
+
+  const handleStageDrop = async (e: React.DragEvent, targetStageId: string) => {
+    e.preventDefault();
+    if (!draggedStageId || draggedStageId === targetStageId) {
+      setDraggedStageId(null);
+      setDragOverStageId(null);
+      return;
+    }
+    const draggedIdx = stages.findIndex(s => s.id === draggedStageId);
+    const targetIdx = stages.findIndex(s => s.id === targetStageId);
+    const newStages = [...stages];
+    const [removed] = newStages.splice(draggedIdx, 1);
+    newStages.splice(targetIdx, 0, removed);
+    const reordered = newStages.map((s, i) => ({ ...s, position: i }));
+    setStages(reordered);
+    setDraggedStageId(null);
+    setDragOverStageId(null);
+    // Persistir nova ordem
+    try {
+      await fetch('/api/kanban-boards', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'reorder_stages', stages: reordered.map(s => ({ id: s.id, position: s.position })) }),
+      });
+    } catch (err) {
+      console.error('Erro ao reordenar etapas:', err);
+    }
+  };
 
   // Supabase Realtime: Listen for lead updates (AI analysis completion)
   useEffect(() => {
@@ -557,6 +718,14 @@ Agora escreva a mensagem para ${firstName}:`;
             </div>
           )}
 
+          {/* Botão Gerenciar Etapas */}
+          <button
+            onClick={() => { setShowStagesModal(true); setStageError(null); }}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Settings size={18} /> Etapas
+          </button>
+
           {/* Botão Analisar com IA */}
           <button 
             onClick={onAnalyzeAllLeads}
@@ -591,6 +760,113 @@ Agora escreva a mensagem para ${firstName}:`;
         </div>
         <p className="text-gray-500 mt-1">Gerencie seu funil de vendas (HelloClient)</p>
       </div>
+
+      {/* Modal de Gerenciamento de Etapas */}
+      {showStagesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Settings size={20} className="text-primary-500" /> Gerenciar Etapas</h3>
+              <button onClick={() => { setShowStagesModal(false); setEditingStageId(null); setStageError(null); }} className="text-gray-400 hover:text-gray-600"><X size={22} /></button>
+            </div>
+            <div className="p-6">
+              {stageError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
+                  <AlertTriangle size={16} /> {stageError}
+                </div>
+              )}
+              <p className="text-xs text-gray-500 mb-4 flex items-center gap-1"><GripVertical size={14} /> Arraste para reordenar</p>
+              <div className="space-y-2 mb-6">
+                {stages.map((stage) => (
+                  <div
+                    key={stage.id}
+                    draggable
+                    onDragStart={(e) => handleStageDragStart(e, stage.id)}
+                    onDragOver={(e) => handleStageDragOver(e, stage.id)}
+                    onDrop={(e) => handleStageDrop(e, stage.id)}
+                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                      dragOverStageId === stage.id && draggedStageId !== stage.id
+                        ? 'border-primary-400 bg-primary-50'
+                        : 'border-gray-200 bg-gray-50 hover:bg-white'
+                    }`}
+                  >
+                    <GripVertical size={16} className="text-gray-400 cursor-grab flex-shrink-0" />
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }} />
+                    {editingStageId === stage.id ? (
+                      <div className="flex-1 flex items-center gap-2">
+                        <input
+                          autoFocus
+                          type="text"
+                          value={editingStageName}
+                          onChange={(e) => setEditingStageName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameStage(stage.id, editingStageName);
+                            if (e.key === 'Escape') setEditingStageId(null);
+                          }}
+                          className="flex-1 text-sm border border-primary-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                        />
+                        <button
+                          onClick={() => handleRenameStage(stage.id, editingStageName)}
+                          disabled={isSavingStage}
+                          className="text-green-600 hover:text-green-700 p-1"
+                        >
+                          {isSavingStage ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                        </button>
+                        <button onClick={() => setEditingStageId(null)} className="text-gray-400 hover:text-gray-600 p-1"><X size={16} /></button>
+                      </div>
+                    ) : (
+                      <span className="flex-1 text-sm font-medium text-gray-800">{stage.name}</span>
+                    )}
+                    {editingStageId !== stage.id && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => { setEditingStageId(stage.id); setEditingStageName(stage.name); setStageError(null); }}
+                          className="text-gray-400 hover:text-blue-600 p-1 rounded transition-colors"
+                          title="Renomear"
+                        >
+                          <Edit2 size={15} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteStage(stage.id)}
+                          disabled={deletingStageId === stage.id || stages.length <= 1}
+                          className="text-gray-400 hover:text-red-600 p-1 rounded transition-colors disabled:opacity-30"
+                          title="Excluir"
+                        >
+                          {deletingStageId === stage.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* Criar nova etapa */}
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold text-gray-500 mb-2">Nova Etapa</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newStageName}
+                    onChange={(e) => setNewStageName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateStage()}
+                    placeholder="Nome da etapa..."
+                    className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={handleCreateStage}
+                    disabled={isSavingStage || !newStageName.trim() || !boardId}
+                    className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 flex items-center gap-1 text-sm font-medium"
+                  >
+                    {isSavingStage ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Criar
+                  </button>
+                </div>
+                {!boardId && (
+                  <p className="text-xs text-amber-600 mt-2 flex items-center gap-1"><AlertTriangle size={12} /> Carregando configurações do quadro...</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dashboard View */}
       {showDashboard ? (
@@ -706,22 +982,28 @@ Agora escreva a mensagem para ${firstName}:`;
         /* Kanban View */
         <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
           <div className="flex gap-6 h-full min-w-max">
-            {columns.map((col) => {
+            {stages.map((stage) => {
+            const col = stage.name;
             const columnLeads = filteredLeads.filter((l) => l.status === col);
             const columnTotal = columnLeads.reduce((acc, l) => acc + l.value, 0);
+            const colStyle = getColumnStyle(stage.color);
             
             return (
               <div 
-                key={col} 
+                key={stage.id} 
                 className="w-80 flex flex-col"
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, col)}
               >
                 <div className="mb-4">
-                  <div className={`flex justify-between items-center px-3 py-2 rounded-lg mb-1 ${columnColors[col]}`}>
+                  <div
+                    className="flex justify-between items-center px-3 py-2 rounded-lg mb-1 border"
+                    style={colStyle}
+                  >
                       <h3 className="font-bold text-sm flex items-center gap-2">
+                        <span>{stage.emoji}</span>
                         {col} 
-                        <span className="bg-white/50 text-xs px-2 py-0.5 rounded-full">{columnLeads.length}</span>
+                        <span className="bg-white/40 text-xs px-2 py-0.5 rounded-full">{columnLeads.length}</span>
                       </h3>
                   </div>
                   <p className="text-xs font-medium text-gray-500 px-2 text-right">
