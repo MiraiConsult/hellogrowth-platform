@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
-import { Copy, Check, Sparkles, MessageSquare, Mail, Phone, Send, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Copy, Check, Sparkles, MessageSquare, Mail, Phone, Send, Loader2, AlertCircle, RefreshCw, Pencil, X } from 'lucide-react';
 import { 
   getMessageSuggestions, 
   getAvailableMessageTypes, 
@@ -59,6 +59,12 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendSuccess, setSendSuccess] = useState(false);
   const [clientContext, setClientContext] = useState<ClientContext | null>(null);
+  // Estados de edição inline
+  const [isEditingWhatsapp, setIsEditingWhatsapp] = useState(false);
+  const [isEditingEmail, setIsEditingEmail] = useState(false);
+  const [editedWhatsapp, setEditedWhatsapp] = useState('');
+  const [editedEmailSubject, setEditedEmailSubject] = useState('');
+  const [editedEmailBody, setEditedEmailBody] = useState('');
 
   useEffect(() => {
     async function loadContextAndInit() {
@@ -141,6 +147,7 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
     try {
       const message = await generateMessageSuggestion(context, typeId);
       setGeneratedMessage(message);
+      resetEdits();
       onMessageSelect?.(message);
     } catch (error) {
       console.error('Erro ao gerar mensagem:', error);
@@ -159,6 +166,15 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
     if (clientContext) {
       await generateMessage(clientContext, typeId);
     }
+  };
+
+  // Ao gerar nova mensagem, resetar edições
+  const resetEdits = () => {
+    setIsEditingWhatsapp(false);
+    setIsEditingEmail(false);
+    setEditedWhatsapp('');
+    setEditedEmailSubject('');
+    setEditedEmailBody('');
   };
 
   const handleRegenerate = async () => {
@@ -182,6 +198,52 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
     } catch (err) {
       console.error('Error checking Gmail connection:', err);
     }
+  };
+
+  // Retorna o texto atual (editado ou original)
+  const getWhatsappText = () => isEditingWhatsapp ? editedWhatsapp : (editedWhatsapp || generatedMessage?.whatsappMessage || '');
+  const getEmailSubject = () => isEditingEmail ? editedEmailSubject : (editedEmailSubject || generatedMessage?.emailSubject || '');
+  const getEmailBody = () => isEditingEmail ? editedEmailBody : (editedEmailBody || generatedMessage?.emailBody || '');
+
+  const handleStartEditWhatsapp = () => {
+    setEditedWhatsapp(generatedMessage?.whatsappMessage || '');
+    setIsEditingWhatsapp(true);
+  };
+
+  const handleSaveWhatsapp = () => {
+    setIsEditingWhatsapp(false);
+    // Atualiza o generatedMessage com o texto editado
+    if (generatedMessage) {
+      const updated = { ...generatedMessage, whatsappMessage: editedWhatsapp };
+      setGeneratedMessage(updated);
+      onMessageSelect?.(updated);
+    }
+  };
+
+  const handleCancelWhatsapp = () => {
+    setIsEditingWhatsapp(false);
+    setEditedWhatsapp('');
+  };
+
+  const handleStartEditEmail = () => {
+    setEditedEmailSubject(generatedMessage?.emailSubject || '');
+    setEditedEmailBody(generatedMessage?.emailBody || '');
+    setIsEditingEmail(true);
+  };
+
+  const handleSaveEmail = () => {
+    setIsEditingEmail(false);
+    if (generatedMessage) {
+      const updated = { ...generatedMessage, emailSubject: editedEmailSubject, emailBody: editedEmailBody };
+      setGeneratedMessage(updated);
+      onMessageSelect?.(updated);
+    }
+  };
+
+  const handleCancelEmail = () => {
+    setIsEditingEmail(false);
+    setEditedEmailSubject('');
+    setEditedEmailBody('');
   };
 
   const handleCopy = async (text: string, field: string) => {
@@ -384,26 +446,66 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
                 <MessageSquare className="w-4 h-4 text-green-700" />
                 <span className="font-medium text-green-900">Mensagem WhatsApp</span>
               </div>
-              <button
-                onClick={() => handleCopy(generatedMessage.whatsappMessage, 'whatsapp')}
-                className="flex items-center gap-1 px-2 py-1 text-xs text-green-700 hover:bg-green-100 rounded transition-colors"
-              >
-                {copiedField === 'whatsapp' ? (
+              <div className="flex items-center gap-1">
+                {isEditingWhatsapp ? (
                   <>
-                    <Check className="w-3 h-3" />
-                    Copiado!
+                    <button
+                      onClick={handleSaveWhatsapp}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-white bg-green-600 hover:bg-green-700 rounded transition-colors font-medium"
+                    >
+                      <Check className="w-3 h-3" />
+                      Salvar
+                    </button>
+                    <button
+                      onClick={handleCancelWhatsapp}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                      Cancelar
+                    </button>
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3 h-3" />
-                    Copiar
+                    <button
+                      onClick={handleStartEditWhatsapp}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-green-700 hover:bg-green-100 rounded transition-colors"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => handleCopy(generatedMessage.whatsappMessage, 'whatsapp')}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-green-700 hover:bg-green-100 rounded transition-colors"
+                    >
+                      {copiedField === 'whatsapp' ? (
+                        <>
+                          <Check className="w-3 h-3" />
+                          Copiado!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          Copiar
+                        </>
+                      )}
+                    </button>
                   </>
                 )}
-              </button>
+              </div>
             </div>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-              {generatedMessage.whatsappMessage}
-            </p>
+            {isEditingWhatsapp ? (
+              <textarea
+                value={editedWhatsapp}
+                onChange={(e) => setEditedWhatsapp(e.target.value)}
+                className="w-full text-sm text-gray-700 bg-white border border-green-300 rounded-lg p-3 leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-green-400"
+                rows={Math.max(4, editedWhatsapp.split('\n').length + 1)}
+                autoFocus
+              />
+            ) : (
+              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                {generatedMessage.whatsappMessage}
+              </p>
+            )}
           </div>
 
           {/* Email */}
@@ -413,35 +515,89 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
                 <Mail className="w-4 h-4 text-blue-700" />
                 <span className="font-medium text-blue-900">Email</span>
               </div>
-              <button
-                onClick={() => handleCopy(`Assunto: ${generatedMessage.emailSubject}\n\n${generatedMessage.emailBody}`, 'email')}
-                className="flex items-center gap-1 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100 rounded transition-colors"
-              >
-                {copiedField === 'email' ? (
+              <div className="flex items-center gap-1">
+                {isEditingEmail ? (
                   <>
-                    <Check className="w-3 h-3" />
-                    Copiado!
+                    <button
+                      onClick={handleSaveEmail}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors font-medium"
+                    >
+                      <Check className="w-3 h-3" />
+                      Salvar
+                    </button>
+                    <button
+                      onClick={handleCancelEmail}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                      Cancelar
+                    </button>
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3 h-3" />
-                    Copiar
+                    <button
+                      onClick={handleStartEditEmail}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100 rounded transition-colors"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => handleCopy(`Assunto: ${generatedMessage.emailSubject}\n\n${generatedMessage.emailBody}`, 'email')}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100 rounded transition-colors"
+                    >
+                      {copiedField === 'email' ? (
+                        <>
+                          <Check className="w-3 h-3" />
+                          Copiado!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          Copiar
+                        </>
+                      )}
+                    </button>
                   </>
                 )}
-              </button>
-            </div>
-            <div className="space-y-2">
-              <div>
-                <span className="text-xs text-blue-600 font-medium">Assunto:</span>
-                <p className="text-sm text-gray-900 font-medium">{generatedMessage.emailSubject}</p>
-              </div>
-              <div>
-                <span className="text-xs text-blue-600 font-medium">Corpo:</span>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mt-1">
-                  {generatedMessage.emailBody}
-                </p>
               </div>
             </div>
+            {isEditingEmail ? (
+              <div className="space-y-2">
+                <div>
+                  <span className="text-xs text-blue-600 font-medium">Assunto:</span>
+                  <input
+                    type="text"
+                    value={editedEmailSubject}
+                    onChange={(e) => setEditedEmailSubject(e.target.value)}
+                    className="w-full text-sm text-gray-900 bg-white border border-blue-300 rounded-lg px-3 py-2 mt-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <span className="text-xs text-blue-600 font-medium">Corpo:</span>
+                  <textarea
+                    value={editedEmailBody}
+                    onChange={(e) => setEditedEmailBody(e.target.value)}
+                    className="w-full text-sm text-gray-700 bg-white border border-blue-300 rounded-lg p-3 leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 mt-1"
+                    rows={Math.max(6, editedEmailBody.split('\n').length + 2)}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div>
+                  <span className="text-xs text-blue-600 font-medium">Assunto:</span>
+                  <p className="text-sm text-gray-900 font-medium">{generatedMessage.emailSubject}</p>
+                </div>
+                <div>
+                  <span className="text-xs text-blue-600 font-medium">Corpo:</span>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mt-1">
+                    {generatedMessage.emailBody}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       ) : null}
