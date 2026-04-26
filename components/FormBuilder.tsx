@@ -385,7 +385,6 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
           });
           return;
         }
-      }
       throw new Error("AI Failed");
 
     } catch (error) {

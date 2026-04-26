@@ -524,8 +524,6 @@ INSTRUÇÕES DE RESPOSTA:
     
     setIsAnalyzing(true);
     try {
-      {
-        
         const leadsSummary = formLeads
           .map(l => `- ${l.name}: Status "${l.status}", Valor R$${l.value}`)
           .join('\n');
