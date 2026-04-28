@@ -19,7 +19,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { callGeminiAPI, parseGeminiJSON } from '@/lib/gemini-client';
 
-const GOOGLE_PLACES_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY || '';
+// Google Places API chamada via rota server-side /api/api/google-places (usa GOOGLE_PLACES_API_KEY no servidor)
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -648,39 +648,15 @@ const DigitalDiagnosticComponent: React.FC<DigitalDiagnosticProps> = ({
   // Fetch Google Place data
   const fetchGooglePlaceData = async (placeId: string): Promise<GooglePlaceData | null> => {
     try {
-      const url = `https://places.googleapis.com/v1/places/${placeId}`;
-      const headers = {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
-        'X-Goog-FieldMask': 'id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,rating,userRatingCount,reviews,regularOpeningHours,photos,types,businessStatus,googleMapsUri'
-      };
-      const response = await fetch(url, { method: 'GET', headers });
+      // Usar rota server-side para proteger a chave de API e evitar problemas de CORS
+      const response = await fetch(`/api/api/google-places?placeId=${encodeURIComponent(placeId)}`);
       if (!response.ok) throw new Error('Failed to fetch place data');
-      const data = await response.json();
-      return {
-        name: data.displayName?.text || '',
-        formatted_address: data.formattedAddress || '',
-        formatted_phone_number: data.nationalPhoneNumber || '',
-        website: data.websiteUri || '',
-        rating: data.rating || 0,
-        user_ratings_total: data.userRatingCount || 0,
-        reviews: data.reviews?.map((r: any) => ({
-          author_name: r.authorAttribution?.displayName || 'Anônimo',
-          rating: r.rating || 0,
-          text: r.text?.text || '',
-          time: r.publishTime ? new Date(r.publishTime).getTime() / 1000 : 0,
-          relative_time_description: r.relativePublishTimeDescription || ''
-        })) || [],
-        opening_hours: data.regularOpeningHours ? {
-          open_now: data.regularOpeningHours.openNow || false,
-          weekday_text: data.regularOpeningHours.weekdayDescriptions || []
-        } : undefined,
-        photos: data.photos?.map((p: any) => ({ photo_reference: p.name || '' })) || [],
-        types: data.types || [],
-        business_status: data.businessStatus || 'OPERATIONAL',
-        url: data.googleMapsUri || '',
-        price_level: 0
-      };
+      const json = await response.json();
+      if (json.status !== 'OK' || !json.result) {
+        console.warn('Google Places API:', json.message || json.status);
+        return null;
+      }
+      return json.result as GooglePlaceData;
     } catch (error) {
       console.error('Error fetching Google Place data:', error);
       return null;
