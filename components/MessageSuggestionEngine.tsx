@@ -84,9 +84,9 @@ function formatBusinessContext(bc?: BusinessContext): string {
   
   const parts: string[] = [];
   if (bc.companyName) parts.push(`Nome da empresa: ${bc.companyName}`);
-  if (bc.businessType) parts.push(`Tipo de negocio: ${bc.businessType}`);
-  if (bc.businessDescription) parts.push(`Descricao: ${bc.businessDescription}`);
-  if (bc.targetAudience) parts.push(`Publico-alvo: ${bc.targetAudience}`);
+  if (bc.businessType) parts.push(`Tipo de negócio: ${bc.businessType}`);
+  if (bc.businessDescription) parts.push(`Descrição: ${bc.businessDescription}`);
+  if (bc.targetAudience) parts.push(`Público-alvo: ${bc.targetAudience}`);
   if (bc.brandTone) parts.push(`Tom da marca: ${bc.brandTone}`);
   if (bc.differentials) parts.push(`Diferenciais: ${bc.differentials}`);
   if (bc.mainPainPoints) parts.push(`Principais dores dos clientes: ${bc.mainPainPoints}`);
@@ -129,86 +129,86 @@ const MESSAGE_TYPES: MessageType[] = [
     applicableTo: ['nps'],
     npsRange: { min: 9, max: 10 },
     promptInstructions: `
-      Crie uma mensagem de agradecimento genuino e caloroso.
-      - Agradeca pela nota alta de forma natural e especifica
-      - Se houver comentario, CITE uma parte dele mostrando que leu com atencao
+      Crie uma mensagem de agradecimento genuíno e caloroso.
+      - Agradeça pela nota alta de forma natural e específica
+      - Se houver comentário, CITE uma parte dele mostrando que leu com atenção
       - Demonstre que o feedback impactou a equipe emocionalmente
       - Conecte o elogio a algo concreto que a empresa faz (use os diferenciais)
       - Termine reafirmando o compromisso de manter a qualidade
-      - NAO use frases genericas como "sua opiniao e muito importante"
+      - NÃO use frases genéricas como "sua opinião é muito importante"
     `,
     fewShotExample: `
-      EXEMPLO BOM (clinica odontologica, nota 10, comentario "atendimento excelente"):
-      WhatsApp: "Oi Maria! Li sua avaliacao agora e confesso que fiquei emocionada. Quando voce disse que o atendimento foi excelente, mostrei pra toda equipe e todo mundo ficou radiante. A gente se dedica muito pra que cada paciente se sinta acolhido, e saber que voce percebeu isso faz tudo valer a pena. Pode ter certeza que vamos continuar cuidando de voce com o mesmo carinho. Obrigada de coracao!"
+      EXEMPLO BOM (clínica odontológica, nota 10, comentário "atendimento excelente"):
+      WhatsApp: "Oi Maria! Li sua avaliação agora e confesso que fiquei emocionada. Quando você disse que o atendimento foi excelente, mostrei pra toda equipe e todo mundo ficou radiante. A gente se dedica muito pra que cada paciente se sinta acolhido, e saber que você percebeu isso faz tudo valer a pena. Pode ter certeza que vamos continuar cuidando de você com o mesmo carinho. Obrigada de coração!"
       
-      EXEMPLO RUIM: "Oi Maria! Obrigado pela sua avaliacao! Sua opiniao e muito importante para nos. Esperamos continuar atendendo suas expectativas."
+      EXEMPLO RUIM: "Oi Maria! Obrigado pela sua avaliação! Sua opinião é muito importante para nós. Esperamos continuar atendendo suas expectativas."
     `
   },
   {
     id: 'referral',
-    title: 'Pedido de Indicacao',
-    description: 'Solicite indicacoes de forma natural',
+    title: 'Pedido de Indicação',
+    description: 'Solicite indicações de forma natural',
     icon: '👥',
     tone: 'friendly',
     priority: 4,
     applicableTo: ['nps'],
     npsRange: { min: 9, max: 10 },
     promptInstructions: `
-      Crie uma mensagem pedindo indicacao de forma sutil e natural.
-      - Comece referenciando algo especifico do feedback positivo
-      - Faca a transicao para o pedido de indicacao de forma organica
-      - Explique POR QUE a indicacao e valiosa (ex: "pessoas como voce costumam ter amigos com necessidades parecidas")
-      - Ofereca algo concreto: "vou cuidar da pessoa como cuido de voce"
-      - Se a empresa tiver produtos/servicos especificos, mencione qual seria ideal para indicados
-      - NAO pareca desesperado por clientes
+      Crie uma mensagem pedindo indicação de forma sutil e natural.
+      - Comece referenciando algo específico do feedback positivo
+      - Faça a transição para o pedido de indicação de forma orgânica
+      - Explique POR QUE a indicação é valiosa (ex: "pessoas como você costumam ter amigos com necessidades parecidas")
+      - Ofereça algo concreto: "vou cuidar da pessoa como cuido de você"
+      - Se a empresa tiver produtos/serviços específicos, mencione qual seria ideal para indicados
+      - NÃO pareça desesperado por clientes
     `,
     fewShotExample: `
       EXEMPLO BOM (restaurante, nota 10):
-      WhatsApp: "Oi Carlos! Que bom que voce curtiu a experiencia no Boteco. Sabe o que eu percebo? Clientes que amam nosso chopp artesanal geralmente tem amigos que tambem curtem uma boa gastronomia. Se voce tiver alguem que ia gostar de conhecer, me manda o contato que eu cuido pessoalmente da reserva e garanto uma experiencia especial. Pode confiar!"
+      WhatsApp: "Oi Carlos! Que bom que você curtiu a experiência no Boteco. Sabe o que eu percebo? Clientes que amam nosso chopp artesanal geralmente têm amigos que também curtem uma boa gastronomia. Se você tiver alguém que ia gostar de conhecer, me manda o contato que eu cuido pessoalmente da reserva e garanto uma experiência especial. Pode confiar!"
     `
   },
   {
     id: 'google_review',
-    title: 'Solicitar Avaliacao Google',
-    description: 'Peca avaliacao publica',
+    title: 'Solicitar Avaliação Google',
+    description: 'Peça avaliação pública',
     icon: '⭐',
     tone: 'friendly',
     priority: 4,
     applicableTo: ['nps'],
     npsRange: { min: 9, max: 10 },
     promptInstructions: `
-      Crie uma mensagem pedindo avaliacao no Google de forma natural.
-      - Agradeca pelo feedback positivo de forma especifica
-      - Explique que avaliacoes no Google ajudam OUTRAS PESSOAS a encontrar o servico
-      - Faca o cliente sentir que esta ajudando outros, nao a empresa
+      Crie uma mensagem pedindo avaliação no Google de forma natural.
+      - Agradeça pelo feedback positivo de forma específica
+      - Explique que avaliações no Google ajudam OUTRAS PESSOAS a encontrar o serviço
+      - Faça o cliente sentir que está ajudando outros, não a empresa
       - Mencione que leva menos de 1 minuto
-      - NAO seja insistente ou use "por favor" demais
+      - NÃO seja insistente ou use "por favor" demais
     `,
     fewShotExample: `
-      EXEMPLO BOM (clinica estetica, nota 9):
-      WhatsApp: "Oi Ana! Fiquei feliz com sua avaliacao. Sabia que muitas pacientes novas nos encontram pelo Google? Se voce puder deixar uma avaliacaozinha la, vai ajudar outras mulheres que estao procurando um lugar de confianca pra cuidar da pele. E rapido, menos de 1 minuto. Obrigada!"
+      EXEMPLO BOM (clínica estética, nota 9):
+      WhatsApp: "Oi Ana! Fiquei feliz com sua avaliação. Sabia que muitas pacientes novas nos encontram pelo Google? Se você puder deixar uma avaliacaozinha lá, vai ajudar outras mulheres que estão procurando um lugar de confiança pra cuidar da pele. É rápido, menos de 1 minuto. Obrigada!"
     `
   },
   {
     id: 'loyalty',
     title: 'Programa de Fidelidade',
-    description: 'Ofereca beneficios exclusivos',
+    description: 'Ofereça benefícios exclusivos',
     icon: '💎',
     tone: 'professional',
     priority: 3,
     applicableTo: ['nps'],
     npsRange: { min: 9, max: 10 },
     promptInstructions: `
-      Crie uma mensagem oferecendo beneficios de fidelidade.
-      - Faca o cliente se sentir parte de um grupo seleto
-      - Ofereca um beneficio CONCRETO e ESPECIFICO (nao generico)
-      - Se a empresa tem produtos, sugira um desconto ou upgrade em algo especifico
-      - Crie exclusividade: "preparei algo especial so pra voce"
+      Crie uma mensagem oferecendo benefícios de fidelidade.
+      - Faça o cliente se sentir parte de um grupo seleto
+      - Ofereça um benefício CONCRETO e ESPECÍFICO (não genérico)
+      - Se a empresa tem produtos, sugira um desconto ou upgrade em algo específico
+      - Crie exclusividade: "preparei algo especial só pra você"
       - Mantenha tom profissional mas caloroso
     `,
     fewShotExample: `
-      EXEMPLO BOM (salao de beleza, nota 10):
-      WhatsApp: "Oi Fernanda! Como agradecimento pela sua confianca, preparei algo especial: na sua proxima visita, voce ganha uma hidratacao profunda cortesia da casa. E o nosso jeito de dizer obrigada por ser uma cliente tao especial. Quer agendar?"
+      EXEMPLO BOM (salão de beleza, nota 10):
+      WhatsApp: "Oi Fernanda! Como agradecimento pela sua confiança, preparei algo especial: na sua próxima visita, você ganha uma hidratação profunda cortesia da casa. É o nosso jeito de dizer obrigada por ser uma cliente tão especial. Quer agendar?"
     `
   },
   
@@ -224,16 +224,16 @@ const MESSAGE_TYPES: MessageType[] = [
     npsRange: { min: 7, max: 8 },
     promptInstructions: `
       Crie uma mensagem para entender o que faltou para ser nota 10.
-      - Agradeca pela avaliacao de forma genuina (nota 7-8 e boa, nao ruim)
+      - Agradeça pela avaliação de forma genuína (nota 7-8 é boa, não ruim)
       - Demonstre curiosidade REAL em saber o que poderia ser melhor
-      - Se houver comentario, use-o como ponto de partida
-      - Faca UMA pergunta especifica e aberta (nao varias)
-      - Mostre vulnerabilidade: "a gente quer muito acertar com voce"
-      - NAO seja defensivo ou justifique nada
+      - Se houver comentário, use-o como ponto de partida
+      - Faça UMA pergunta específica e aberta (não várias)
+      - Mostre vulnerabilidade: "a gente quer muito acertar com você"
+      - NÃO seja defensivo ou justifique nada
     `,
     fewShotExample: `
-      EXEMPLO BOM (hotel, nota 7, comentario "quarto bom mas cafe da manha fraco"):
-      WhatsApp: "Oi Roberto! Obrigado pela avaliacao. Li que o quarto agradou mas o cafe da manha nao foi aquilo tudo. Concordo que a gente pode melhorar nesse ponto. Me conta: o que voce esperava encontrar no cafe e nao encontrou? Quero muito acertar na sua proxima estadia."
+      EXEMPLO BOM (hotel, nota 7, comentário "quarto bom mas café da manhã fraco"):
+      WhatsApp: "Oi Roberto! Obrigado pela avaliação. Li que o quarto agradou mas o café da manhã não foi aquilo tudo. Concordo que a gente pode melhorar nesse ponto. Me conta: o que você esperava encontrar no café e não encontrou? Quero muito acertar na sua próxima estadia."
     `
   },
   {
@@ -247,15 +247,15 @@ const MESSAGE_TYPES: MessageType[] = [
     npsRange: { min: 7, max: 8 },
     promptInstructions: `
       Crie uma mensagem para reconquistar o cliente neutro.
-      - Reconheca que a experiencia foi boa mas nao excelente
+      - Reconheça que a experiência foi boa mas não excelente
       - Demonstre compromisso em SUPERAR expectativas
-      - Ofereca algo CONCRETO e ESPECIFICO na proxima interacao
-      - Se a empresa tem produtos/servicos, sugira algo que o cliente ainda nao experimentou
-      - Convide para dar outra chance com entusiasmo genuino
+      - Ofereça algo CONCRETO e ESPECÍFICO na próxima interação
+      - Se a empresa tem produtos/serviços, sugira algo que o cliente ainda não experimentou
+      - Convide para dar outra chance com entusiasmo genuíno
     `,
     fewShotExample: `
       EXEMPLO BOM (academia, nota 8):
-      WhatsApp: "Oi Lucas! Vi que sua experiencia foi boa, mas sei que a gente pode fazer melhor. Que tal experimentar uma aula de funcional com o professor Marcos? Muitos alunos que estavam no mesmo ponto que voce se surpreenderam. Posso agendar uma aula cortesia pra voce essa semana?"
+      WhatsApp: "Oi Lucas! Vi que sua experiência foi boa, mas sei que a gente pode fazer melhor. Que tal experimentar uma aula de funcional com o professor Marcos? Muitos alunos que estavam no mesmo ponto que você se surpreenderam. Posso agendar uma aula cortesia pra você essa semana?"
     `
   },
   
@@ -263,27 +263,27 @@ const MESSAGE_TYPES: MessageType[] = [
   {
     id: 'apology',
     title: 'Pedido de Desculpas',
-    description: 'Demonstre empatia genuina',
+    description: 'Demonstre empatia genuína',
     icon: '🙏',
     tone: 'empathetic',
     priority: 5,
     applicableTo: ['nps'],
     npsRange: { min: 0, max: 6 },
     promptInstructions: `
-      Crie uma mensagem de desculpas genuina e empatica.
-      - Reconheca ESPECIFICAMENTE o que deu errado (use o comentario do cliente)
-      - Peca desculpas de forma HUMANA, nao corporativa
+      Crie uma mensagem de desculpas genuína e empática.
+      - Reconheça ESPECIFICAMENTE o que deu errado (use o comentário do cliente)
+      - Peça desculpas de forma HUMANA, não corporativa
       - Demonstre que entende o impacto emocional no cliente
-      - NAO justifique, NAO de desculpas, NAO culpe ninguem
-      - Ofereca conversar pessoalmente (ligacao ou presencial)
-      - Use tom de alguem que realmente se importa, como um amigo
-      - Se a nota for muito baixa (0-3), demonstre urgencia e preocupacao extra
+      - NÃO justifique, NÃO dê desculpas genéricas, NÃO culpe ninguém
+      - Ofereça conversar pessoalmente (ligação ou presencial)
+      - Use tom de alguém que realmente se importa, como um amigo
+      - Se a nota for muito baixa (0-3), demonstre urgência e preocupação extra
     `,
     fewShotExample: `
-      EXEMPLO BOM (clinica, nota 2, comentario "esperei 2 horas"):
-      WhatsApp: "Oi Patricia, li sua avaliacao e confesso que fiquei mal. Esperar 2 horas e inaceitavel, e eu entendo perfeitamente sua frustracao. Voce merecia muito mais. Quero pessoalmente entender o que aconteceu e garantir que isso nunca mais se repita. Posso te ligar amanha de manha? Preciso ouvir voce."
+      EXEMPLO BOM (clínica, nota 2, comentário "esperei 2 horas"):
+      WhatsApp: "Oi Patrícia, li sua avaliação e confesso que fiquei mal. Esperar 2 horas é inaceitável, e eu entendo perfeitamente sua frustração. Você merecia muito mais. Quero pessoalmente entender o que aconteceu e garantir que isso nunca mais se repita. Posso te ligar amanhã de manhã? Preciso ouvir você."
       
-      EXEMPLO RUIM: "Oi Patricia, lamentamos o ocorrido. Estamos trabalhando para melhorar nossos processos. Agradecemos seu feedback."
+      EXEMPLO RUIM: "Oi Patrícia, lamentamos o ocorrido. Estamos trabalhando para melhorar nossos processos. Agradecemos seu feedback."
     `
   },
   {
@@ -297,21 +297,21 @@ const MESSAGE_TYPES: MessageType[] = [
     npsRange: { min: 0, max: 6 },
     promptInstructions: `
       Crie uma mensagem para entender o problema do cliente.
-      - Demonstre interesse GENUINO em saber o que aconteceu
-      - Se houver comentario, aprofunde nele com perguntas especificas
-      - Se NAO houver comentario, pergunte de forma aberta e acolhedora
-      - Mostre que o feedback vai gerar ACAO CONCRETA
-      - NAO seja defensivo, seja curioso e humilde
-      - Ofereca ouvir sem julgamento
+      - Demonstre interesse GENUÍNO em saber o que aconteceu
+      - Se houver comentário, aprofunde nele com perguntas específicas
+      - Se NÃO houver comentário, pergunte de forma aberta e acolhedora
+      - Mostre que o feedback vai gerar AÇÃO CONCRETA
+      - NÃO seja defensivo, seja curioso e humilde
+      - Ofereça ouvir sem julgamento
     `,
     fewShotExample: `
-      EXEMPLO BOM (restaurante, nota 4, sem comentario):
-      WhatsApp: "Oi Marcos, vi que sua experiencia no restaurante nao foi boa e isso me preocupou. Queria muito entender o que aconteceu pra poder corrigir. Foi algo no atendimento? Na comida? No ambiente? Qualquer detalhe me ajuda a melhorar de verdade. Pode falar abertamente."
+      EXEMPLO BOM (restaurante, nota 4, sem comentário):
+      WhatsApp: "Oi Marcos, vi que sua experiência no restaurante não foi boa e isso me preocupou. Queria muito entender o que aconteceu pra poder corrigir. Foi algo no atendimento? Na comida? No ambiente? Qualquer detalhe me ajuda a melhorar de verdade. Pode falar abertamente."
     `
   },
   {
     id: 'offer_solution',
-    title: 'Oferecer Solucao',
+    title: 'Oferecer Solução',
     description: 'Proponha resolver o problema',
     icon: '✅',
     tone: 'professional',
@@ -319,17 +319,17 @@ const MESSAGE_TYPES: MessageType[] = [
     applicableTo: ['nps'],
     npsRange: { min: 0, max: 6 },
     promptInstructions: `
-      Crie uma mensagem oferecendo solucao CONCRETA para o problema.
-      - Reconheca o problema mencionado de forma especifica
-      - Proponha uma solucao TANGIVEL (nao promessas vagas)
-      - Demonstre disposicao para ir alem do esperado
-      - Se possivel, ofereca algo de cortesia como gesto de boa vontade
-      - Pergunte se a solucao proposta seria justa
+      Crie uma mensagem oferecendo solução CONCRETA para o problema.
+      - Reconheça o problema mencionado de forma específica
+      - Proponha uma solução TANGÍVEL (não promessas vagas)
+      - Demonstre disposição para ir além do esperado
+      - Se possível, ofereça algo de cortesia como gesto de boa vontade
+      - Pergunte se a solução proposta seria justa
       - Mostre compromisso PESSOAL em resolver
     `,
     fewShotExample: `
-      EXEMPLO BOM (loja, nota 3, comentario "produto veio com defeito"):
-      WhatsApp: "Oi Julia, entendo sua frustracao com o produto defeituoso. Ja separei um novo pra voce, sem nenhum custo adicional. Posso enviar amanha ou, se preferir, voce pode trocar na loja e eu mesmo vou conferir antes de entregar. Alem disso, quero te dar um desconto de 20% na proxima compra como pedido de desculpas. O que acha?"
+      EXEMPLO BOM (loja, nota 3, comentário "produto veio com defeito"):
+      WhatsApp: "Oi Júlia, entendo sua frustração com o produto defeituoso. Já separei um novo pra você, sem nenhum custo adicional. Posso enviar amanhã ou, se preferir, você pode trocar na loja e eu mesmo vou conferir antes de entregar. Além disso, quero te dar um desconto de 20% na próxima compra como pedido de desculpas. O que acha?"
     `
   },
   
@@ -345,19 +345,19 @@ const MESSAGE_TYPES: MessageType[] = [
     promptInstructions: `
       Crie uma mensagem de primeiro contato para um lead.
       - Cumprimente de forma calorosa e PESSOAL (use o nome)
-      - ANALISE as respostas do formulario e identifique a NECESSIDADE PRINCIPAL do lead
-      - Mencione algo ESPECIFICO das respostas mostrando que leu com atencao
-      - Conecte a necessidade do lead com um produto/servico da empresa
-      - Proponha um proximo passo SIMPLES e de baixo comprometimento
+      - ANALISE as respostas do formulário e identifique a NECESSIDADE PRINCIPAL do lead
+      - Mencione algo ESPECÍFICO das respostas mostrando que leu com atenção
+      - Conecte a necessidade do lead com um produto/serviço da empresa
+      - Proponha um próximo passo SIMPLES e de baixo comprometimento
       - Seja breve (3-4 frases no WhatsApp)
-      - NAO liste todos os servicos, foque no que o lead precisa
-      - Se o lead mencionou urgencia ou dor especifica, demonstre empatia
+      - NÃO liste todos os serviços, foque no que o lead precisa
+      - Se o lead mencionou urgência ou dor específica, demonstre empatia
     `,
     fewShotExample: `
-      EXEMPLO BOM (clinica odontologica, lead respondeu que quer clareamento e tem sensibilidade):
-      WhatsApp: "Oi Camila! Vi que voce tem interesse em clareamento e mencionou sensibilidade nos dentes. Isso e super comum e a gente tem tecnicas especificas pra quem tem essa questao. Que tal agendar uma avaliacao gratuita? Assim consigo te mostrar as opcoes que funcionam melhor pro seu caso. Pode ser essa semana?"
+      EXEMPLO BOM (clínica odontológica, lead respondeu que quer clareamento e tem sensibilidade):
+      WhatsApp: "Oi Camila! Vi que você tem interesse em clareamento e mencionou sensibilidade nos dentes. Isso é super comum e a gente tem técnicas específicas pra quem tem essa questão. Que tal agendar uma avaliação gratuita? Assim consigo te mostrar as opções que funcionam melhor pro seu caso. Pode ser essa semana?"
       
-      EXEMPLO RUIM: "Oi Camila! Obrigado pelo interesse! Temos diversos servicos de odontologia. Quando podemos agendar uma consulta?"
+      EXEMPLO RUIM: "Oi Camila! Obrigado pelo interesse! Temos diversos serviços de odontologia. Quando podemos agendar uma consulta?"
     `
   },
   {
@@ -370,40 +370,40 @@ const MESSAGE_TYPES: MessageType[] = [
     applicableTo: ['lead'],
     promptInstructions: `
       Crie uma mensagem apresentando proposta comercial personalizada.
-      - ANALISE as respostas do formulario para entender EXATAMENTE o que o lead precisa
-      - Mencione o produto/servico mais adequado pelo nome e preco (se disponivel)
-      - Explique POR QUE essa opcao e ideal para o caso especifico do lead
+      - ANALISE as respostas do formulário para entender EXATAMENTE o que o lead precisa
+      - Mencione o produto/serviço mais adequado pelo nome e preço (se disponível)
+      - Explique POR QUE essa opção é ideal para o caso específico do lead
       - Se houver diferenciais da empresa, use-os como argumento
-      - Crie senso de oportunidade sem ser agressivo (ex: "essa semana consigo uma condicao especial")
-      - Proponha apresentar a proposta em uma conversa rapida
+      - Crie senso de oportunidade sem ser agressivo (ex: "essa semana consigo uma condição especial")
+      - Proponha apresentar a proposta em uma conversa rápida
       - Se o lead tem valor estimado, calibre a proposta de acordo
     `,
     fewShotExample: `
       EXEMPLO BOM (academia, lead quer emagrecer, valor R$ 200):
-      WhatsApp: "Oi Pedro! Analisei o que voce me contou e acho que o plano Fit Premium seria perfeito pro seu objetivo de emagrecimento. Ele inclui acompanhamento nutricional e treino personalizado, que sao os dois pilares pra resultado rapido. Essa semana consigo uma condicao especial de R$ 179/mes (normalmente R$ 220). Quer que eu te explique os detalhes?"
+      WhatsApp: "Oi Pedro! Analisei o que você me contou e acho que o plano Fit Premium seria perfeito pro seu objetivo de emagrecimento. Ele inclui acompanhamento nutricional e treino personalizado, que são os dois pilares pra resultado rápido. Essa semana consigo uma condição especial de R$ 179/mês (normalmente R$ 220). Quer que eu te explique os detalhes?"
     `
   },
   {
     id: 'objection_handling',
-    title: 'Resolucao de Objecoes',
-    description: 'Antecipe e resolva duvidas',
+    title: 'Resolução de Objeções',
+    description: 'Antecipe e resolva dúvidas',
     icon: '💡',
     tone: 'professional',
     priority: 4,
     applicableTo: ['lead'],
     promptInstructions: `
-      Crie uma mensagem para resolver objecoes comuns.
-      - ANALISE as respostas do formulario para IDENTIFICAR possiveis objecoes
-      - Se o lead mencionou preco, aborde valor vs custo
+      Crie uma mensagem para resolver objeções comuns.
+      - ANALISE as respostas do formulário para IDENTIFICAR possíveis objeções
+      - Se o lead mencionou preço, aborde valor vs custo
       - Se mencionou tempo, aborde praticidade
-      - Se mencionou medo/inseguranca, aborde garantias e casos de sucesso
+      - Se mencionou medo/insegurança, aborde garantias e casos de sucesso
       - Use os diferenciais da empresa como argumentos
-      - Seja consultivo: "entendo sua preocupacao, e por isso..."
-      - NAO seja vendedor agressivo, seja um consultor que ajuda
+      - Seja consultivo: "entendo sua preocupação, e por isso..."
+      - NÃO seja vendedor agressivo, seja um consultor que ajuda
     `,
     fewShotExample: `
-      EXEMPLO BOM (escola de idiomas, lead mencionou que nao tem tempo):
-      WhatsApp: "Oi Rafael! Entendo que tempo e um desafio. Por isso nosso metodo e focado em aulas de 30 minutos, 3x por semana, com horarios flexiveis. Varios alunos que trabalham em horario comercial como voce conseguem encaixar no almoco ou antes do trabalho. Quer experimentar uma aula gratuita pra ver como funciona na pratica?"
+      EXEMPLO BOM (escola de idiomas, lead mencionou que não tem tempo):
+      WhatsApp: "Oi Rafael! Entendo que tempo é um desafio. Por isso nosso método é focado em aulas de 30 minutos, 3x por semana, com horários flexíveis. Vários alunos que trabalham em horário comercial como você conseguem encaixar no almoço ou antes do trabalho. Quer experimentar uma aula gratuita pra ver como funciona na prática?"
     `
   },
   {
@@ -416,17 +416,17 @@ const MESSAGE_TYPES: MessageType[] = [
     applicableTo: ['lead'],
     promptInstructions: `
       Crie uma mensagem de follow-up para retomar contato.
-      - Mencione o contato anterior de forma natural e especifica
-      - Referencie algo das respostas do formulario para mostrar que lembra
+      - Mencione o contato anterior de forma natural e específica
+      - Referencie algo das respostas do formulário para mostrar que lembra
       - Pergunte se a necessidade ainda existe
-      - Ofereca uma informacao NOVA ou um beneficio que nao foi mencionado antes
-      - Se passaram muitos dias, reconheca o tempo ("faz um tempinho que conversamos")
-      - NAO seja insistente ou cobrando resposta
+      - Ofereça uma informação NOVA ou um benefício que não foi mencionado antes
+      - Se passaram muitos dias, reconheça o tempo ("faz um tempinho que conversamos")
+      - NÃO seja insistente ou cobrando resposta
       - Deixe a porta aberta
     `,
     fewShotExample: `
-      EXEMPLO BOM (consultoria, lead nao respondeu ha 5 dias):
-      WhatsApp: "Oi Mariana! Faz uns dias que conversamos sobre a consultoria de marketing digital. Lembrei de voce porque acabamos de publicar um case de um cliente do mesmo segmento que o seu que triplicou as vendas online em 3 meses. Se ainda fizer sentido pra voce, posso te mostrar como fizemos. Sem compromisso!"
+      EXEMPLO BOM (consultoria, lead não respondeu há 5 dias):
+      WhatsApp: "Oi Mariana! Faz uns dias que conversamos sobre a consultoria de marketing digital. Lembrei de você porque acabamos de publicar um case de um cliente do mesmo segmento que o seu que triplicou as vendas online em 3 meses. Se ainda fizer sentido pra você, posso te mostrar como fizemos. Sem compromisso!"
     `
   },
   {
@@ -441,19 +441,19 @@ const MESSAGE_TYPES: MessageType[] = [
       Crie uma mensagem convidando o lead para uma visita/consulta.
       - Mencione o interesse demonstrado nas respostas
       - Explique O QUE o lead vai ver/experimentar na visita
-      - Ofereca flexibilidade de horarios com opcoes concretas
-      - Destaque que e sem compromisso
-      - Se a empresa tem diferenciais visiveis, mencione-os
+      - Ofereça flexibilidade de horários com opções concretas
+      - Destaque que é sem compromisso
+      - Se a empresa tem diferenciais visíveis, mencione-os
     `,
     fewShotExample: `
-      EXEMPLO BOM (clinica estetica, lead interessada em botox):
-      WhatsApp: "Oi Renata! Que tal conhecer a clinica pessoalmente? Na avaliacao, a Dra. Ana vai analisar seu caso e te mostrar simulacoes do resultado. E gratuito e sem compromisso. Tenho horarios quinta de manha ou sexta a tarde. Qual fica melhor pra voce?"
+      EXEMPLO BOM (clínica estética, lead interessada em botox):
+      WhatsApp: "Oi Renata! Que tal conhecer a clínica pessoalmente? Na avaliação, a Dra. Ana vai analisar seu caso e te mostrar simulações do resultado. É gratuito e sem compromisso. Tenho horários quinta de manhã ou sexta à tarde. Qual fica melhor pra você?"
     `
   },
   {
     id: 'special_offer',
     title: 'Oferta Especial',
-    description: 'Apresente condicao exclusiva',
+    description: 'Apresente condição exclusiva',
     icon: '🎁',
     tone: 'enthusiastic',
     priority: 3,
@@ -461,14 +461,14 @@ const MESSAGE_TYPES: MessageType[] = [
     promptInstructions: `
       Crie uma mensagem com oferta especial personalizada.
       - Baseie a oferta nas NECESSIDADES identificadas nas respostas
-      - Se a empresa tem produtos com preco, mencione o produto especifico com desconto
-      - Crie urgencia SUTIL (prazo limitado, vagas limitadas)
-      - Destaque o VALOR/BENEFICIO, nao so o desconto
-      - Faca o lead sentir que a oferta foi preparada ESPECIALMENTE pra ele
+      - Se a empresa tem produtos com preço, mencione o produto específico com desconto
+      - Crie urgência SUTIL (prazo limitado, vagas limitadas)
+      - Destaque o VALOR/BENEFÍCIO, não só o desconto
+      - Faça o lead sentir que a oferta foi preparada ESPECIALMENTE pra ele
     `,
     fewShotExample: `
-      EXEMPLO BOM (escola de musica, lead quer aprender violao):
-      WhatsApp: "Oi Thiago! Preparei algo especial pra voce: essa semana estou com 3 vagas pra aula experimental de violao com o professor Ricardo, que e especialista em ensinar iniciantes. A primeira aula e por nossa conta. Se gostar, o pacote mensal sai com 15% de desconto. Quer reservar sua vaga?"
+      EXEMPLO BOM (escola de música, lead quer aprender violão):
+      WhatsApp: "Oi Thiago! Preparei algo especial pra você: essa semana estou com 3 vagas pra aula experimental de violão com o professor Ricardo, que é especialista em ensinar iniciantes. A primeira aula é por nossa conta. Se gostar, o pacote mensal sai com 15% de desconto. Quer reservar sua vaga?"
     `
   }
 ];
@@ -568,29 +568,29 @@ function generateFallbackMessage(
   
   const templates: Record<string, { whatsapp: string; emailSubject: string; emailBody: string }> = {
     gratitude: {
-      whatsapp: `Oi ${firstName}! Vi sua avaliacao e fiquei muito feliz! Obrigado de coracao pelo feedback positivo. A gente se esforca muito e e muito bom saber que faz diferenca.`,
+      whatsapp: `Oi ${firstName}! Vi sua avaliação e fiquei muito feliz! Obrigado de coração pelo feedback positivo. A gente se esforça muito e é muito bom saber que faz diferença.`,
       emailSubject: `${firstName}, muito obrigado!`,
-      emailBody: `Oi ${firstName},\n\nVi sua avaliacao e queria te agradecer pessoalmente. Feedback assim faz o nosso dia!\n\nObrigado por confiar na ${companyName}.\n\nAbraco!`
+      emailBody: `Oi ${firstName},\n\nVi sua avaliação e queria te agradecer pessoalmente. Feedback assim faz o nosso dia!\n\nObrigado por confiar na ${companyName}.\n\nAbraço!`
     },
     referral: {
-      whatsapp: `Oi ${firstName}! Que bom que voce gostou do nosso trabalho! Se voce conhecer alguem que tambem poderia gostar, pode indicar. Vou cuidar bem, prometo!`,
+      whatsapp: `Oi ${firstName}! Que bom que você gostou do nosso trabalho! Se você conhecer alguém que também poderia gostar, pode indicar. Vou cuidar bem, prometo!`,
       emailSubject: `${firstName}, uma perguntinha`,
-      emailBody: `Oi ${firstName},\n\nFiquei feliz com seu feedback! Se voce conhecer alguem que tambem poderia se beneficiar, ficariamos muito gratos pela indicacao.\n\nAbraco!`
+      emailBody: `Oi ${firstName},\n\nFiquei feliz com seu feedback! Se você conhecer alguém que também poderia se beneficiar, ficaríamos muito gratos pela indicação.\n\nAbraço!`
     },
     apology: {
-      whatsapp: `Oi ${firstName}, vi sua avaliacao e fiquei preocupado. Nao era pra ter sido assim. Queria muito entender o que aconteceu pra gente poder melhorar. Posso te ligar?`,
-      emailSubject: `${firstName}, preciso falar com voce`,
-      emailBody: `Oi ${firstName},\n\nVi sua avaliacao e confesso que fiquei chateado. A gente se esforca muito e quando nao da certo, doi.\n\nQueria entender o que aconteceu. Pode me contar?\n\nAbraco`
+      whatsapp: `Oi ${firstName}, vi sua avaliação e fiquei preocupado. Não era pra ter sido assim. Queria muito entender o que aconteceu pra gente poder melhorar. Posso te ligar?`,
+      emailSubject: `${firstName}, preciso falar com você`,
+      emailBody: `Oi ${firstName},\n\nVi sua avaliação e confesso que fiquei chateado. A gente se esforça muito e quando não dá certo, dói.\n\nQueria entender o que aconteceu. Pode me contar?\n\nAbraço`
     },
     proposal: {
-      whatsapp: `Oi ${firstName}! Preparei uma proposta pensando no seu caso. Quando voce tiver um tempinho, posso te apresentar?`,
-      emailSubject: `${firstName}, preparei algo pra voce`,
-      emailBody: `Oi ${firstName},\n\nBaseado no que voce me contou, preparei uma proposta especial.\n\nQuando podemos conversar?\n\nAbraco!`
+      whatsapp: `Oi ${firstName}! Preparei uma proposta pensando no seu caso. Quando você tiver um tempinho, posso te apresentar?`,
+      emailSubject: `${firstName}, preparei algo pra você`,
+      emailBody: `Oi ${firstName},\n\nBaseado no que você me contou, preparei uma proposta especial.\n\nQuando podemos conversar?\n\nAbraço!`
     },
     first_contact: {
-      whatsapp: `Oi ${firstName}! Vi que voce demonstrou interesse e queria me apresentar. Posso te ajudar com mais informacoes?`,
+      whatsapp: `Oi ${firstName}! Vi que você demonstrou interesse e queria me apresentar. Posso te ajudar com mais informações?`,
       emailSubject: `Oi ${firstName}!`,
-      emailBody: `Oi ${firstName},\n\nVi que voce demonstrou interesse e queria me colocar a disposicao.\n\nPosso te ajudar com alguma duvida?\n\nAbraco!`
+      emailBody: `Oi ${firstName},\n\nVi que você demonstrou interesse e queria me colocar à disposição.\n\nPosso te ajudar com alguma dúvida?\n\nAbraço!`
     }
   };
   
