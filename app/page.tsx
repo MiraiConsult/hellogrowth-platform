@@ -293,14 +293,15 @@ export default function HomePage() {
 
   return (
     <div className="relative">
-      {/* Botão de retorno ao admin (impersonation) */}
+      {/* Banner de retorno ao admin (impersonation) - posicionado no canto inferior esquerdo para não conflitar com botões X de paineis */}
       {impersonating && (
         <button
           onClick={handleStopImpersonating}
-          title={`Acessando como: ${impersonating.clientName} — Clique para voltar ao Admin`}
-          className="fixed top-3 right-3 z-[9999] w-9 h-9 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110 group"
+          title={`Clique para voltar ao Admin`}
+          className="fixed bottom-6 left-4 z-[9999] flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-full shadow-lg transition-all hover:scale-105 max-w-[220px]"
         >
-          <X size={18} strokeWidth={2.5} />
+          <LogIn size={14} strokeWidth={2.5} className="flex-shrink-0 rotate-180" />
+          <span className="truncate">Admin: {impersonating.clientName}</span>
         </button>
       )}
       <MainApp
