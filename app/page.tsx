@@ -25,7 +25,16 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
   // Impersonation: admin acessando conta de cliente
-  const [impersonating, setImpersonating] = useState<{ adminUser: User; clientName: string } | null>(null);
+  const [impersonating, setImpersonating] = useState<{ adminUser: User; clientName: string } | null>(() => {
+    // Restaurar estado de impersonation após reload (ex: troca de empresa)
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('hg_impersonating');
+      if (saved) {
+        try { return JSON.parse(saved); } catch { return null; }
+      }
+    }
+    return null;
+  });
 
   // Check for active session on load
   useEffect(() => {
@@ -78,6 +87,7 @@ export default function HomePage() {
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('hg_current_user');
+    localStorage.removeItem('hg_impersonating');
     setImpersonating(null);
     setView('auth');
   };
@@ -114,8 +124,10 @@ export default function HomePage() {
         subscriptionStatus: userData.subscription_status,
       };
 
-      // Salvar admin para poder voltar
-      setImpersonating({ adminUser: currentUser, clientName: clientUser.name || clientUser.companyName || clientData.email });
+      // Salvar admin para poder voltar (persistir no localStorage para sobreviver a reloads)
+      const impersonatingData = { adminUser: currentUser, clientName: clientUser.name || clientUser.companyName || clientData.email };
+      localStorage.setItem('hg_impersonating', JSON.stringify(impersonatingData));
+      setImpersonating(impersonatingData);
       // Limpar active company para forçar o carregamento do tenant do cliente
       localStorage.removeItem('hg_active_company_id');
       if (clientTenantId) {
@@ -133,8 +145,10 @@ export default function HomePage() {
     if (!impersonating) return;
     const adminUser = impersonating.adminUser;
     setImpersonating(null);
+    localStorage.removeItem('hg_impersonating');
     localStorage.removeItem('hg_active_company_id');
     setCurrentUser(adminUser);
+    localStorage.setItem('hg_current_user', JSON.stringify(adminUser));
     setView('app');
   };
 
