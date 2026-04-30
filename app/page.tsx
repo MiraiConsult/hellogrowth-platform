@@ -128,6 +128,8 @@ export default function HomePage() {
       const impersonatingData = { adminUser: currentUser, clientName: clientUser.name || clientUser.companyName || clientData.email };
       localStorage.setItem('hg_impersonating', JSON.stringify(impersonatingData));
       setImpersonating(impersonatingData);
+      // Salvar o usuário cliente no hg_current_user para que o reload restaure o cliente, não o admin
+      localStorage.setItem('hg_current_user', JSON.stringify(clientUser));
       // Limpar active company para forçar o carregamento do tenant do cliente
       localStorage.removeItem('hg_active_company_id');
       if (clientTenantId) {
@@ -147,8 +149,9 @@ export default function HomePage() {
     setImpersonating(null);
     localStorage.removeItem('hg_impersonating');
     localStorage.removeItem('hg_active_company_id');
-    setCurrentUser(adminUser);
+    // Restaurar o usuário admin no hg_current_user
     localStorage.setItem('hg_current_user', JSON.stringify(adminUser));
+    setCurrentUser(adminUser);
     setView('app');
   };
 
