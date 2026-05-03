@@ -34,6 +34,7 @@ import AlertSettings from '@/components/AlertSettings';
 import ActionInbox from '@/components/ActionInbox';
 import WhatsAppSetup from '@/components/WhatsAppSetup';
 import CSVImport from '@/components/CSVImport';
+import PromptManager from '@/components/PromptManager';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
@@ -1808,6 +1809,13 @@ Responda APENAS com JSON válido (sem markdown):
               <CSVImport tenantId={getActiveTenant() || ''} />
             </div>
           </div>
+        )}
+
+        {currentView === 'prompt-manager' && (
+          <PromptManager
+            isDark={isDark}
+            tenantId={getActiveTenant() || ''}
+          />
         )}
 
         {/* Banner flutuante de onboarding em andamento — aparece quando o usuário navega para módulos durante o onboarding */}

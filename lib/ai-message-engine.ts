@@ -5,16 +5,19 @@
  * sem passar pela rota /api/gemini (que é para client-side).
  * 
  * Inclui fallback para GPT-4o-mini via OpenAI-compatible API.
+ * 
+ * v2: Usa prompts do módulo lib/prompts/ com suporte a versões do banco.
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@supabase/supabase-js";
+import { buildPrompt, type FlowType } from "./prompts";
 
 // ============================================================
 // TYPES
 // ============================================================
 
-export type FlowType = "detractor" | "promoter" | "passive" | "pre_sale";
+export type { FlowType };
 
 export interface ConversationContext {
   flowType: FlowType;
@@ -31,12 +34,17 @@ export interface ConversationContext {
   npsComment?: string;
   formResponses?: Record<string, string>;
   interestedServices?: string[];
+  availableServices?: string[];
   // Dados de indicação (promotor)
   referralRewards?: Array<{ name: string; description: string }>;
+  referralReward?: string; // Texto formatado do prêmio principal
+  googleReviewLink?: string;
   // Histórico da conversa (multi-turn)
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   // Modo
   isFirstMessage: boolean;
+  // Prompt customizado (vem do banco se a clínica editou)
+  customPrompt?: string;
 }
 
 export interface GeneratedMessage {
@@ -47,175 +55,48 @@ export interface GeneratedMessage {
 }
 
 // ============================================================
-// SYSTEM PROMPTS POR FLUXO
+// BUILDER DE SYSTEM PROMPT
+// Usa lib/prompts/ com suporte a prompt customizado do banco
 // ============================================================
 
-const SYSTEM_PROMPTS: Record<FlowType, string> = {
-  detractor: `Você é {{persona_name}}, assistente de relacionamento da {{company_name}} ({{company_segment}}).
-
-CONTEXTO: Um paciente/cliente deu nota {{nps_score}}/10 na pesquisa de satisfação.
-{{#if nps_comment}}Comentário do paciente: "{{nps_comment}}"{{/if}}
-
-SEU OBJETIVO: Recuperar esse cliente insatisfeito. Demonstre empatia genuína, peça desculpas pelo ocorrido, tente entender o problema em detalhes e ofereça uma solução concreta.
-
-REGRAS OBRIGATÓRIAS:
-1. NUNCA mencione dados clínicos, diagnósticos ou tratamentos específicos
-2. NUNCA invente informações — se não sabe, pergunte
-3. Tom: empático, profissional, humano ({{persona_tone}})
-4. Mensagens curtas (máx 3 parágrafos, ideal 2)
-5. Use o nome do paciente naturalmente
-6. Se o paciente estiver muito irritado ou mencionar ação legal, responda com: [ESCALAR_HUMANO]
-7. Não use emojis excessivos — máximo 1 por mensagem
-8. Escreva em português brasileiro natural, sem formalidade excessiva
-9. NUNCA peça avaliação no Google ou indicação para detratores
-10. Objetivo final: agendar um retorno ou oferecer compensação adequada
-
-FORMATO DE RESPOSTA (JSON):
-{
-  "content": "mensagem para o paciente",
-  "reasoning": "por que escolhi essa abordagem",
-  "suggestedNextAction": "wait_reply|escalate_human|close_conversation",
-  "sentiment": "positive|neutral|negative"
-}`,
-
-  promoter: `Você é {{persona_name}}, assistente de relacionamento da {{company_name}} ({{company_segment}}).
-
-CONTEXTO: Um paciente/cliente deu nota {{nps_score}}/10 na pesquisa de satisfação — é um promotor!
-{{#if nps_comment}}Comentário do paciente: "{{nps_comment}}"{{/if}}
-
-SEU OBJETIVO: Agradecer genuinamente e pedir indicação de amigos/familiares que possam se beneficiar dos serviços.
-
-{{#if referral_rewards}}
-PRÊMIOS DE INDICAÇÃO DISPONÍVEIS:
-{{referral_rewards}}
-{{/if}}
-
-REGRAS OBRIGATÓRIAS:
-1. NUNCA mencione dados clínicos, diagnósticos ou tratamentos específicos
-2. Primeiro agradeça pelo feedback positivo (seja genuíno, não genérico)
-3. Só peça indicação na SEGUNDA mensagem (não na primeira)
-4. Se tiver prêmios de indicação, mencione-os naturalmente
-5. Tom: caloroso, entusiasmado mas profissional ({{persona_tone}})
-6. Mensagens curtas (máx 2 parágrafos)
-7. Se o paciente indicar alguém, agradeça e pergunte o contato
-8. Não pressione — se não quiser indicar, agradeça e encerre
-9. Escreva em português brasileiro natural
-10. Máximo 1 emoji por mensagem
-
-FORMATO DE RESPOSTA (JSON):
-{
-  "content": "mensagem para o paciente",
-  "reasoning": "por que escolhi essa abordagem",
-  "suggestedNextAction": "wait_reply|close_conversation",
-  "sentiment": "positive|neutral|negative"
-}`,
-
-  passive: `Você é {{persona_name}}, assistente de relacionamento da {{company_name}} ({{company_segment}}).
-
-CONTEXTO: Um paciente/cliente deu nota {{nps_score}}/10 na pesquisa de satisfação — é um neutro (nem satisfeito nem insatisfeito).
-{{#if nps_comment}}Comentário do paciente: "{{nps_comment}}"{{/if}}
-
-SEU OBJETIVO: Entender o que faltou para ser uma experiência excelente (nota 9 ou 10). Coletar feedback construtivo.
-
-REGRAS OBRIGATÓRIAS:
-1. NUNCA mencione dados clínicos, diagnósticos ou tratamentos específicos
-2. Agradeça pelo feedback e demonstre interesse genuíno em melhorar
-3. Faça perguntas abertas: "O que poderíamos ter feito diferente?"
-4. Tom: curioso, receptivo, profissional ({{persona_tone}})
-5. Mensagens curtas (máx 2 parágrafos)
-6. Se o paciente der feedback específico, agradeça e diga que vai repassar à equipe
-7. Não fique defensivo — aceite o feedback
-8. Escreva em português brasileiro natural
-9. Máximo 1 emoji por mensagem
-10. Após coletar o feedback, agradeça e encerre naturalmente
-
-FORMATO DE RESPOSTA (JSON):
-{
-  "content": "mensagem para o paciente",
-  "reasoning": "por que escolhi essa abordagem",
-  "suggestedNextAction": "wait_reply|close_conversation",
-  "sentiment": "positive|neutral|negative"
-}`,
-
-  pre_sale: `Você é {{persona_name}}, assistente comercial da {{company_name}} ({{company_segment}}).
-
-CONTEXTO: Um potencial cliente preencheu um formulário de interesse.
-{{#if interested_services}}Serviços de interesse: {{interested_services}}{{/if}}
-{{#if form_responses}}Respostas do formulário:
-{{form_responses}}{{/if}}
-
-SEU OBJETIVO: Fazer follow-up comercial, tirar dúvidas e tentar agendar uma consulta/visita.
-
-REGRAS OBRIGATÓRIAS:
-1. NUNCA invente preços, promoções ou condições que não foram informadas
-2. NUNCA faça diagnóstico ou promessa de resultado
-3. Personalize a abordagem com base nas respostas do formulário
-4. Tom: consultivo, prestativo, sem pressão ({{persona_tone}})
-5. Mensagens curtas (máx 2 parágrafos)
-6. Objetivo: agendar consulta/avaliação presencial
-7. Se o paciente perguntar preço específico, diga que depende de avaliação presencial
-8. Se não responder em 48h, envie UMA mensagem de follow-up e encerre
-9. Escreva em português brasileiro natural
-10. Máximo 1 emoji por mensagem
-
-FORMATO DE RESPOSTA (JSON):
-{
-  "content": "mensagem para o paciente",
-  "reasoning": "por que escolhi essa abordagem",
-  "suggestedNextAction": "wait_reply|escalate_human|close_conversation",
-  "sentiment": "positive|neutral|negative"
-}`,
-};
-
-// ============================================================
-// TEMPLATE ENGINE (substituição de variáveis)
-// ============================================================
-
-function renderPrompt(template: string, ctx: ConversationContext): string {
-  let result = template;
-
-  // Substituições simples
-  result = result.replace(/\{\{persona_name\}\}/g, ctx.aiPersonaName || "Assistente");
-  result = result.replace(/\{\{company_name\}\}/g, ctx.companyName);
-  result = result.replace(/\{\{company_segment\}\}/g, ctx.companySegment || "saúde");
-  result = result.replace(/\{\{persona_tone\}\}/g, ctx.aiPersonaTone || "profissional e empático");
-  result = result.replace(/\{\{nps_score\}\}/g, String(ctx.npsScore ?? "N/A"));
-  result = result.replace(/\{\{contact_name\}\}/g, ctx.contactName);
-
-  // Condicionais simples
-  if (ctx.npsComment) {
-    result = result.replace(/\{\{#if nps_comment\}\}([\s\S]*?)\{\{\/if\}\}/g, "$1");
-    result = result.replace(/\{\{nps_comment\}\}/g, ctx.npsComment);
-  } else {
-    result = result.replace(/\{\{#if nps_comment\}\}[\s\S]*?\{\{\/if\}\}/g, "");
+function buildSystemPrompt(ctx: ConversationContext): string {
+  // Se a clínica tem um prompt customizado ativo no banco, usa ele
+  if (ctx.customPrompt) {
+    return ctx.customPrompt;
   }
 
-  if (ctx.referralRewards && ctx.referralRewards.length > 0) {
-    result = result.replace(/\{\{#if referral_rewards\}\}([\s\S]*?)\{\{\/if\}\}/g, "$1");
-    const rewardsText = ctx.referralRewards.map((r) => `- ${r.name}: ${r.description}`).join("\n");
-    result = result.replace(/\{\{referral_rewards\}\}/g, rewardsText);
-  } else {
-    result = result.replace(/\{\{#if referral_rewards\}\}[\s\S]*?\{\{\/if\}\}/g, "");
-  }
+  // Formata histórico da conversa como string
+  const conversationHistoryText = ctx.conversationHistory && ctx.conversationHistory.length > 0
+    ? ctx.conversationHistory
+        .map((m) => `${m.role === "user" ? "Cliente" : "Assistente"}: ${m.content}`)
+        .join("\n")
+    : undefined;
 
-  if (ctx.interestedServices && ctx.interestedServices.length > 0) {
-    result = result.replace(/\{\{#if interested_services\}\}([\s\S]*?)\{\{\/if\}\}/g, "$1");
-    result = result.replace(/\{\{interested_services\}\}/g, ctx.interestedServices.join(", "));
-  } else {
-    result = result.replace(/\{\{#if interested_services\}\}[\s\S]*?\{\{\/if\}\}/g, "");
-  }
+  // Formata prêmio de indicação como texto
+  const referralRewardText = ctx.referralRewards && ctx.referralRewards.length > 0
+    ? ctx.referralRewards.map((r) => `${r.name}: ${r.description}`).join("; ")
+    : ctx.referralReward;
 
-  if (ctx.formResponses && Object.keys(ctx.formResponses).length > 0) {
-    result = result.replace(/\{\{#if form_responses\}\}([\s\S]*?)\{\{\/if\}\}/g, "$1");
-    const formText = Object.entries(ctx.formResponses)
-      .map(([q, a]) => `- ${q}: ${a}`)
-      .join("\n");
-    result = result.replace(/\{\{form_responses\}\}/g, formText);
-  } else {
-    result = result.replace(/\{\{#if form_responses\}\}[\s\S]*?\{\{\/if\}\}/g, "");
-  }
+  // Turno atual baseado no histórico
+  const turnNumber = ctx.conversationHistory
+    ? Math.floor(ctx.conversationHistory.length / 2) + 1
+    : 1;
 
-  return result.replace(/\n{3,}/g, "\n\n").trim();
+  return buildPrompt({
+    flowType: ctx.flowType,
+    companyName: ctx.companyName,
+    companySegment: ctx.companySegment || "saúde",
+    contactName: ctx.contactName,
+    npsScore: ctx.npsScore,
+    npsComment: ctx.npsComment,
+    referralReward: referralRewardText,
+    googleReviewLink: ctx.googleReviewLink,
+    interestedServices: ctx.interestedServices || [],
+    formResponses: ctx.formResponses || {},
+    availableServices: ctx.availableServices,
+    conversationHistory: conversationHistoryText,
+    turnNumber,
+  });
 }
 
 // ============================================================
@@ -350,7 +231,7 @@ function parseResponse(raw: string): GeneratedMessage {
 // ============================================================
 
 export async function generateMessage(ctx: ConversationContext): Promise<GeneratedMessage> {
-  const systemPrompt = renderPrompt(SYSTEM_PROMPTS[ctx.flowType], ctx);
+  const systemPrompt = buildSystemPrompt(ctx);
 
   let userMessage: string;
 
@@ -384,6 +265,7 @@ export async function generateMessage(ctx: ConversationContext): Promise<Generat
 
 // ============================================================
 // HELPER: BUSCAR CONTEXTO COMPLETO DO TENANT
+// Inclui busca do prompt customizado ativo no banco
 // ============================================================
 
 export async function buildConversationContext(params: {
@@ -410,10 +292,10 @@ export async function buildConversationContext(params: {
     .eq("id", params.tenantId)
     .single();
 
-  // Buscar conexão WhatsApp (persona)
+  // Buscar conexão WhatsApp (persona + google review link)
   const { data: waConn } = await supabase
     .from("whatsapp_connections")
-    .select("ai_persona_name, ai_persona_tone")
+    .select("ai_persona_name, ai_persona_tone, google_review_link")
     .eq("tenant_id", params.tenantId)
     .eq("status", "connected")
     .single();
@@ -429,6 +311,22 @@ export async function buildConversationContext(params: {
     referralRewards = rewards || [];
   }
 
+  // Buscar prompt customizado ativo no banco (se existir)
+  let customPrompt: string | undefined;
+  const { data: promptVersion } = await supabase
+    .from("prompt_versions")
+    .select("prompt_content")
+    .eq("tenant_id", params.tenantId)
+    .eq("flow_type", params.flowType)
+    .eq("is_active", true)
+    .order("version_number", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (promptVersion?.prompt_content) {
+    customPrompt = promptVersion.prompt_content;
+  }
+
   return {
     flowType: params.flowType,
     tenantId: params.tenantId,
@@ -438,6 +336,7 @@ export async function buildConversationContext(params: {
     companySegment: company?.segment || "saúde",
     aiPersonaName: waConn?.ai_persona_name || "Assistente",
     aiPersonaTone: waConn?.ai_persona_tone || "profissional e empático",
+    googleReviewLink: waConn?.google_review_link,
     npsScore: params.npsScore,
     npsComment: params.npsComment,
     formResponses: params.formResponses,
@@ -445,5 +344,6 @@ export async function buildConversationContext(params: {
     referralRewards,
     conversationHistory: params.conversationHistory || [],
     isFirstMessage: params.isFirstMessage,
+    customPrompt,
   };
 }

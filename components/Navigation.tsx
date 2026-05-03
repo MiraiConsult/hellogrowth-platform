@@ -319,6 +319,7 @@ const Navigation: React.FC<NavigationProps> = ({
       children: [
         { id: 'action-inbox', label: 'Fila de Ações', icon: Zap, requiredPlan: 'all' },
         { id: 'whatsapp-setup', label: 'WhatsApp IA', icon: Smartphone, requiredPlan: 'all' },
+        { id: 'prompt-manager', label: 'Gerenciar Prompts', icon: Bot, requiredPlan: 'all', isNew: true },
       ],
     },
     {

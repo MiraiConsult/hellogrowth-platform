@@ -6,6 +6,7 @@ import {
   preSaleActionFlow,
   processInboundReply,
   preSaleAutoTrigger,
+  dispatchCron,
 } from "@/inngest/functions";
 
 export const { GET, POST, PUT } = serve({
@@ -16,5 +17,6 @@ export const { GET, POST, PUT } = serve({
     preSaleActionFlow,
     processInboundReply,
     preSaleAutoTrigger,
+    dispatchCron,
   ],
 });

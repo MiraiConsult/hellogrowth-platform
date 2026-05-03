@@ -1,0 +1,79 @@
+export { buildDetractorPrompt } from './detractor-prompt';
+export { buildPromoterPrompt } from './promoter-prompt';
+export { buildPassivePrompt } from './passive-prompt';
+export { buildPreSalePrompt } from './presale-prompt';
+
+export type FlowType = 'detractor' | 'promoter' | 'passive' | 'pre_sale';
+
+export interface PromptContext {
+  companyName: string;
+  companySegment: string;
+  contactName: string;
+  flowType: FlowType;
+  turnNumber: number;
+  conversationHistory?: string;
+  // NPS flows
+  npsScore?: number;
+  npsComment?: string;
+  // Promoter specific
+  referralReward?: string;
+  googleReviewLink?: string;
+  // Pre-sale specific
+  interestedServices?: string[];
+  formResponses?: Record<string, string>;
+  availableServices?: string[];
+}
+
+export function buildPrompt(ctx: PromptContext): string {
+  switch (ctx.flowType) {
+    case 'detractor':
+      return require('./detractor-prompt').buildDetractorPrompt({
+        companyName: ctx.companyName,
+        companySegment: ctx.companySegment,
+        contactName: ctx.contactName,
+        npsScore: ctx.npsScore!,
+        npsComment: ctx.npsComment,
+        conversationHistory: ctx.conversationHistory,
+        turnNumber: ctx.turnNumber,
+      });
+
+    case 'promoter':
+      return require('./promoter-prompt').buildPromoterPrompt({
+        companyName: ctx.companyName,
+        companySegment: ctx.companySegment,
+        contactName: ctx.contactName,
+        npsScore: ctx.npsScore!,
+        npsComment: ctx.npsComment,
+        referralReward: ctx.referralReward,
+        googleReviewLink: ctx.googleReviewLink,
+        conversationHistory: ctx.conversationHistory,
+        turnNumber: ctx.turnNumber,
+      });
+
+    case 'passive':
+      return require('./passive-prompt').buildPassivePrompt({
+        companyName: ctx.companyName,
+        companySegment: ctx.companySegment,
+        contactName: ctx.contactName,
+        npsScore: ctx.npsScore!,
+        npsComment: ctx.npsComment,
+        conversationHistory: ctx.conversationHistory,
+        turnNumber: ctx.turnNumber,
+      });
+
+    case 'pre_sale':
+      return require('./presale-prompt').buildPreSalePrompt({
+        companyName: ctx.companyName,
+        companySegment: ctx.companySegment,
+        contactName: ctx.contactName,
+        interestedServices: ctx.interestedServices || [],
+        formResponses: ctx.formResponses || {},
+        availableServices: ctx.availableServices,
+        conversationHistory: ctx.conversationHistory,
+        turnNumber: ctx.turnNumber,
+      });
+
+    default:
+      throw new Error(`Tipo de fluxo desconhecido: ${ctx.flowType}`);
+  }
+}
