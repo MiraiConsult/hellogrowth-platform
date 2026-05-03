@@ -318,8 +318,10 @@ const Navigation: React.FC<NavigationProps> = ({
       requiredPlan: 'all',
       children: [
         { id: 'action-inbox', label: 'Fila de Ações', icon: Zap, requiredPlan: 'all' },
+        { id: 'action-metrics', label: 'Métricas IA', icon: BarChart3, requiredPlan: 'all', isNew: true },
+        { id: 'referral-rewards', label: 'Prêmios de Indicação', icon: Gift, requiredPlan: 'all', isNew: true },
         { id: 'whatsapp-setup', label: 'WhatsApp IA', icon: Smartphone, requiredPlan: 'all' },
-        { id: 'prompt-manager', label: 'Gerenciar Prompts', icon: Bot, requiredPlan: 'all', isNew: true },
+        { id: 'prompt-manager', label: 'Gerenciar Prompts', icon: Bot, requiredPlan: 'all' },
       ],
     },
     {

@@ -10,13 +10,17 @@ export async function GET(req: NextRequest) {
   const tenantId = req.nextUrl.searchParams.get("tenantId");
   const filter = req.nextUrl.searchParams.get("filter") || "all";
   const typeFilter = req.nextUrl.searchParams.get("type") || "all";
+  const search = req.nextUrl.searchParams.get("search") || "";
+  const page = parseInt(req.nextUrl.searchParams.get("page") || "1");
+  const pageSize = parseInt(req.nextUrl.searchParams.get("pageSize") || "20");
 
   if (!tenantId) {
     return NextResponse.json({ error: "tenantId é obrigatório" }, { status: 400 });
   }
 
   try {
-    // Buscar conversas com informações do contato
+    const offset = (page - 1) * pageSize;
+
     let query = supabase
       .from("ai_conversations")
       .select(`
@@ -36,12 +40,11 @@ export async function GET(req: NextRequest) {
           status,
           sent_at
         )
-      `)
+      `, { count: "exact" })
       .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false })
-      .limit(100);
+      .range(offset, offset + pageSize - 1);
 
-    // Filtros de status
     if (filter === "pending") {
       query = query.in("status", ["pending", "draft"]);
     } else if (filter === "active") {
@@ -52,30 +55,33 @@ export async function GET(req: NextRequest) {
       query = query.not("status", "eq", "dismissed");
     }
 
-    // Filtro de tipo
     if (typeFilter !== "all") {
       query = query.eq("flow_type", typeFilter);
     }
 
-    const { data: conversations, error } = await query;
+    if (search) {
+      query = query.or(`contact_name.ilike.%${search}%,contact_phone.ilike.%${search}%`);
+    }
+
+    const { data: conversations, error, count } = await query;
 
     if (error) {
       console.error("[ActionInbox] Error:", error);
       return NextResponse.json({ error: "Erro ao buscar ações" }, { status: 500 });
     }
 
-    // Transformar em ActionItems
     const actions = (conversations || []).map((conv) => {
-      const lastOutboundDraft = conv.ai_conversation_messages
-        ?.filter((m: { direction: string; status: string }) => m.direction === "outbound" && m.status === "draft")
+      const messages = conv.ai_conversation_messages || [];
+
+      const lastOutboundDraft = messages
+        .filter((m: { direction: string; status: string }) => m.direction === "outbound" && m.status === "draft")
         .sort((a: { sent_at: string }, b: { sent_at: string }) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime())[0];
 
       const triggerData = conv.trigger_data as Record<string, unknown> | null;
 
-      // Gerar resumo do gatilho
       let triggerSummary = "";
       if (conv.flow_type === "detractor") {
-        triggerSummary = `Deu nota ${conv.nps_score} no NPS. ${triggerData?.main_complaint ? `Principal reclamação: "${triggerData.main_complaint}"` : "Precisa de atenção urgente."}`;
+        triggerSummary = `Deu nota ${conv.nps_score} no NPS.${triggerData?.main_complaint ? ` Reclamação: "${triggerData.main_complaint}"` : " Precisa de atenção urgente."}`;
       } else if (conv.flow_type === "promoter") {
         triggerSummary = `Deu nota ${conv.nps_score} no NPS. Momento ideal para pedir indicação.`;
       } else if (conv.flow_type === "passive") {
@@ -85,9 +91,8 @@ export async function GET(req: NextRequest) {
         triggerSummary = `Preencheu formulário de pré-venda.${services?.length ? ` Interesse em: ${services.join(", ")}.` : ""}`;
       }
 
-      // Determinar prioridade
       let priority: "high" | "medium" | "low" = "medium";
-      if (conv.flow_type === "detractor" && conv.nps_score !== null && conv.nps_score <= 3) {
+      if (conv.flow_type === "detractor") {
         priority = "high";
       } else if (conv.flow_type === "pre_sale") {
         priority = "high";
@@ -96,6 +101,10 @@ export async function GET(req: NextRequest) {
       } else {
         priority = "low";
       }
+
+      const sentMessages = messages.filter((m: { direction: string; status: string }) =>
+        m.direction === "outbound" && m.status !== "draft"
+      );
 
       return {
         id: conv.id,
@@ -107,30 +116,48 @@ export async function GET(req: NextRequest) {
         ai_recommendation: lastOutboundDraft?.content || "",
         status: conv.status,
         created_at: conv.created_at,
+        last_message_at: conv.last_message_at,
         conversation_id: conv.id,
         nps_score: conv.nps_score,
         lead_services: (triggerData?.interested_services as string[]) || [],
+        message_count: sentMessages.length,
       };
     });
 
-    // Calcular stats
-    const allConvs = await supabase
+    // Stats globais
+    const { data: allConvs } = await supabase
       .from("ai_conversations")
-      .select("status", { count: "exact" })
+      .select("status, flow_type")
       .eq("tenant_id", tenantId)
       .not("status", "eq", "dismissed");
 
-    const pending = (conversations || []).filter((c) => ["pending", "draft"].includes(c.status)).length;
-    const active = (conversations || []).filter((c) => ["active", "waiting_reply"].includes(c.status)).length;
-    const completed = (conversations || []).filter((c) => c.status === "completed").length;
+    const all = allConvs || [];
+    const pending = all.filter((c) => ["pending", "draft"].includes(c.status)).length;
+    const active = all.filter((c) => ["active", "waiting_reply"].includes(c.status)).length;
+    const completed = all.filter((c) => c.status === "completed").length;
+    const total = all.length;
+
+    const byType = {
+      detractor: all.filter((c) => c.flow_type === "detractor").length,
+      promoter: all.filter((c) => c.flow_type === "promoter").length,
+      passive: all.filter((c) => c.flow_type === "passive").length,
+      pre_sale: all.filter((c) => c.flow_type === "pre_sale").length,
+    };
+
+    const withReply = all.filter((c) => ["active", "waiting_reply", "completed"].includes(c.status)).length;
+    const responseRate = total > 0 ? Math.round((withReply / total) * 100) : 0;
 
     return NextResponse.json({
       actions,
+      total: count || 0,
       stats: {
         pending,
         active,
         completed,
-        total: (allConvs.count || 0),
+        total,
+        by_type: byType,
+        response_rate: responseRate,
+        avg_messages: 0,
       },
     });
   } catch (error) {

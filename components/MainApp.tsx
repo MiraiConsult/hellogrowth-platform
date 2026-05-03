@@ -32,6 +32,8 @@ import GameParticipations from '@/components/GameParticipations';
 import ReportSettings from '@/components/ReportSettings';
 import AlertSettings from '@/components/AlertSettings';
 import ActionInbox from '@/components/ActionInbox';
+import ActionMetrics from '@/components/ActionMetrics';
+import ReferralRewards from '@/components/ReferralRewards';
 import WhatsAppSetup from '@/components/WhatsAppSetup';
 import CSVImport from '@/components/CSVImport';
 import PromptManager from '@/components/PromptManager';
@@ -1809,6 +1811,20 @@ Responda APENAS com JSON válido (sem markdown):
               <CSVImport tenantId={getActiveTenant() || ''} />
             </div>
           </div>
+        )}
+
+        {currentView === 'action-metrics' && (
+          <ActionMetrics
+            isDark={isDark}
+            tenantId={getActiveTenant() || ''}
+          />
+        )}
+
+        {currentView === 'referral-rewards' && (
+          <ReferralRewards
+            isDark={isDark}
+            tenantId={getActiveTenant() || ''}
+          />
         )}
 
         {currentView === 'prompt-manager' && (
