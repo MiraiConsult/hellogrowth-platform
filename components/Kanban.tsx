@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
-import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle, Settings, GripVertical, AlertTriangle } from 'lucide-react';
+import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle, Settings, GripVertical, AlertTriangle, Bot } from 'lucide-react';
 import { callGeminiAPI } from '@/lib/gemini-client';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
@@ -1162,6 +1162,34 @@ Agora escreva a mensagem para ${firstName}:`;
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    if (!selectedLead?.phone) {
+                      alert('Lead não tem telefone cadastrado');
+                      return;
+                    }
+                    try {
+                      const res = await fetch('/api/triggers/presale-action', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tenantId, leadId: selectedLead.id }),
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        alert('IA Comercial acionada! Acompanhe na Fila de Ações.');
+                      } else {
+                        alert(data.error || 'Erro ao acionar IA');
+                      }
+                    } catch (e) {
+                      alert('Erro de conexão');
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 flex items-center gap-1"
+                  title="Iniciar IA Comercial para este lead"
+                >
+                  <Bot size={14} />
+                  IA Comercial
+                </button>
                 <button 
                   onClick={() => handleDeleteLead(selectedLead.id)}
                   disabled={isDeleting}

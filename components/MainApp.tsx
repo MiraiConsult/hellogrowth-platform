@@ -33,6 +33,7 @@ import ReportSettings from '@/components/ReportSettings';
 import AlertSettings from '@/components/AlertSettings';
 import ActionInbox from '@/components/ActionInbox';
 import WhatsAppSetup from '@/components/WhatsAppSetup';
+import CSVImport from '@/components/CSVImport';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
@@ -1797,12 +1798,15 @@ Responda APENAS com JSON válido (sem markdown):
         )}
 
         {currentView === 'whatsapp-setup' && (
-          <div className="p-6">
+          <div className="p-6 space-y-8">
             <WhatsAppSetup
               isDark={isDark}
               tenantId={getActiveTenant() || ''}
               companyName={settings.companyName || 'Minha Empresa'}
             />
+            <div className="border-t border-gray-200 pt-8">
+              <CSVImport tenantId={getActiveTenant() || ''} />
+            </div>
           </div>
         )}
 
