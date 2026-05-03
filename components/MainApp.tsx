@@ -42,6 +42,9 @@ import PilotReport from '@/components/PilotReport';
 import OptOutManager from '@/components/OptOutManager';
 import GoLiveGuide from '@/components/GoLiveGuide';
 import NotificationSettings from '@/components/NotificationSettings';
+import ReportHistory from '@/components/ReportHistory';
+import SystemHealth from '@/components/SystemHealth';
+import ConversationExport from '@/components/ConversationExport';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
@@ -1853,6 +1856,15 @@ Responda APENAS com JSON válido (sem markdown):
         )}
         {currentView === 'notification-settings' && (
           <NotificationSettings isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'report-history' && (
+          <ReportHistory isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'system-health' && (
+          <SystemHealth isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'conversation-export' && (
+          <ConversationExport isDark={false} tenantId={getActiveTenant() || ''} />
         )}
         {/* Banner flutuante de onboarding em andamento — aparece quando o usuário navega para módulos durante o onboarding */}
         {!showOnboardingWizard && onboardingInProgress && ['nps','forms','products'].includes(currentView) && (
