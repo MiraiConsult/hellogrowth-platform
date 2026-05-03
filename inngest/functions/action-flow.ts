@@ -166,9 +166,9 @@ export const npsActionFlow = inngest.createFunction(
     id: "nps-action-flow",
     name: "NPS Action Flow",
     retries: 2,
+    triggers: [{ event: "hellogrowth/nps.action.trigger" }],
     concurrency: [{ limit: 10, key: "event.data.tenantId" }],
   },
-  { event: "hellogrowth/nps.action.trigger" },
   async ({ event, step }) => {
     const { tenantId, contactName, contactPhone, npsScore, npsComment, flowType, npsResponseId } = event.data;
 
@@ -379,9 +379,9 @@ export const preSaleActionFlow = inngest.createFunction(
     id: "presale-action-flow",
     name: "Pre-Sale Action Flow",
     retries: 2,
+    triggers: [{ event: "hellogrowth/presale.action.trigger" }],
     concurrency: [{ limit: 10, key: "event.data.tenantId" }],
   },
-  { event: "hellogrowth/presale.action.trigger" },
   async ({ event, step }) => {
     const { tenantId, leadId, contactName, contactPhone, interestedServices, formResponses } = event.data;
 
@@ -468,9 +468,9 @@ export const processInboundReply = inngest.createFunction(
     id: "process-inbound-reply",
     name: "Process Inbound WhatsApp Reply",
     retries: 2,
+    triggers: [{ event: "hellogrowth/whatsapp.reply.process" }],
     concurrency: [{ limit: 20, key: "event.data.tenantId" }],
   },
-  { event: "hellogrowth/whatsapp.reply.process" },
   async ({ event, step }) => {
     const { tenantId, conversationId, messageContent, waMessageId } = event.data;
 
@@ -608,9 +608,9 @@ export const preSaleAutoTrigger = inngest.createFunction(
   {
     id: "presale-auto-trigger",
     name: "Pre-Sale Auto Trigger (48h delay)",
+    triggers: [{ event: "hellogrowth/presale.auto.scheduled" }],
     retries: 1,
   },
-  { event: "hellogrowth/presale.auto.scheduled" },
   async ({ event, step }) => {
     const { tenantId, leadId, contactName, contactPhone, interestedServices, formResponses } = event.data;
 

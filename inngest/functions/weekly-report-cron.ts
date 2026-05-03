@@ -291,10 +291,10 @@ export const weeklyReportCron = inngest.createFunction(
   {
     id: "weekly-report-cron",
     name: "Weekly Report Cron",
+    triggers: [{ cron: "0 11 * * 1" }],
     retries: 2,
   },
   // Toda segunda-feira às 11:00 UTC (08:00 BRT)
-  { cron: "0 11 * * 1" },
   async ({ step }) => {
     const supabase = getSupabase();
 
