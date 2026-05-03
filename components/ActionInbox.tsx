@@ -23,7 +23,7 @@ interface ActionItem {
   contact_phone: string;
   trigger_summary: string;
   ai_recommendation: string;
-  status: 'pending' | 'draft' | 'active' | 'waiting_reply' | 'completed' | 'dismissed';
+  status: 'pending' | 'draft' | 'active' | 'waiting_reply' | 'completed' | 'dismissed' | 'escalated';
   created_at: string;
   last_message_at?: string;
   conversation_id?: string;
@@ -114,11 +114,12 @@ const FLOW_CONFIG = {
   },
 };
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
   pending: { label: 'Pendente', color: 'text-amber-500', dot: 'bg-amber-500' },
   draft: { label: 'Rascunho', color: 'text-blue-500', dot: 'bg-blue-500' },
   active: { label: 'Ativo', color: 'text-green-500', dot: 'bg-green-500' },
   waiting_reply: { label: 'Aguardando', color: 'text-purple-500', dot: 'bg-purple-500' },
+  escalated: { label: '⚠ Escalado', color: 'text-red-600', dot: 'bg-red-500' },
   completed: { label: 'Concluído', color: 'text-slate-400', dot: 'bg-slate-400' },
   dismissed: { label: 'Ignorado', color: 'text-slate-300', dot: 'bg-slate-300' },
 };
@@ -510,6 +511,12 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
                       {/* Indicador de não lido */}
                       {(action.status === 'pending' || action.status === 'draft') && (
                         <span className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0 mt-1.5" />
+                      )}
+                      {/* Badge de escalada */}
+                      {action.status === 'escalated' && (
+                        <span className="flex-shrink-0 mt-1" title="Escalado para humano">
+                          <AlertTriangle size={14} className="text-red-500" />
+                        </span>
                       )}
                     </div>
                   </button>

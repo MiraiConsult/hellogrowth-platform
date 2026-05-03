@@ -37,6 +37,7 @@ import ReferralRewards from '@/components/ReferralRewards';
 import WhatsAppSetup from '@/components/WhatsAppSetup';
 import CSVImport from '@/components/CSVImport';
 import PromptManager from '@/components/PromptManager';
+import PilotChecklist from '@/components/PilotChecklist';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
@@ -1834,6 +1835,9 @@ Responda APENAS com JSON válido (sem markdown):
           />
         )}
 
+        {currentView === 'pilot-checklist' && (
+          <PilotChecklist />
+        )}
         {/* Banner flutuante de onboarding em andamento — aparece quando o usuário navega para módulos durante o onboarding */}
         {!showOnboardingWizard && onboardingInProgress && ['nps','forms','products'].includes(currentView) && (
           <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl border border-emerald-500">

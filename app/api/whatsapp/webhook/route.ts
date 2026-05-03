@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { verifyWebhookSignature } from "@/lib/whatsapp-client";
 import { inngest } from "@/lib/inngest-client";
+import { detectIntent, isOptOut } from "@/lib/intent-detector";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,14 +15,12 @@ export async function GET(req: NextRequest) {
   const mode = searchParams.get("hub.mode");
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
-
   const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
   if (mode === "subscribe" && token === verifyToken) {
     console.log("[WhatsApp Webhook] Verification successful");
     return new NextResponse(challenge, { status: 200 });
   }
-
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }
 
@@ -32,7 +31,6 @@ export async function POST(req: NextRequest) {
     const signature = req.headers.get("x-hub-signature-256") ?? "";
     const signingSecret = process.env.WHATSAPP_WEBHOOK_SIGNING_SECRET ?? "";
 
-    // HMAC Verification (Ajuste 3 do Claude)
     if (signingSecret && !verifyWebhookSignature(rawBody, signature, signingSecret)) {
       console.error("[WhatsApp Webhook] Invalid signature");
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
@@ -40,19 +38,19 @@ export async function POST(req: NextRequest) {
 
     const body = JSON.parse(rawBody);
 
-    // Processar cada entrada do webhook
     for (const entry of body.entry ?? []) {
       for (const change of entry.changes ?? []) {
         const value = change.value;
-
         if (!value) continue;
 
-        // Processar mensagens recebidas
         for (const message of value.messages ?? []) {
-          await handleIncomingMessage(value.metadata?.phone_number_id, message, value.contacts?.[0]);
+          await handleIncomingMessage(
+            value.metadata?.phone_number_id,
+            message,
+            value.contacts?.[0]
+          );
         }
 
-        // Processar status updates (delivered, read, failed)
         for (const status of value.statuses ?? []) {
           await handleStatusUpdate(status);
         }
@@ -79,12 +77,40 @@ async function handleIncomingMessage(
 ) {
   if (!phoneNumberId || !message.id) return;
 
+  const content = message.type === "text" ? message.text?.body ?? "" : `[${message.type}]`;
+
+  // --------------------------------------------------------
+  // Detecção de opt-out ANTES de buscar conversa (LGPD)
+  // --------------------------------------------------------
+  if (message.type === "text" && isOptOut(content)) {
+    console.log(`[WhatsApp Webhook] Opt-out detectado de ${message.from}`);
+
+    // Registrar opt-out na tabela de contatos bloqueados
+    await supabase.from("whatsapp_optouts").upsert({
+      phone: message.from,
+      opted_out_at: new Date().toISOString(),
+      reason: content.substring(0, 100),
+    }, { onConflict: "phone" });
+
+    // Marcar todas as conversas ativas como canceladas
+    await supabase
+      .from("ai_conversations")
+      .update({ status: "dismissed" })
+      .eq("contact_phone", message.from)
+      .in("status", ["active", "waiting_reply", "draft", "pending"]);
+
+    console.log(`[WhatsApp Webhook] Opt-out processado para ${message.from}`);
+    return;
+  }
+
+  // --------------------------------------------------------
   // Encontrar a conversa ativa para este número
+  // --------------------------------------------------------
   const { data: conversation } = await supabase
     .from("ai_conversations")
-    .select("id, tenant_id, status, inngest_run_id")
+    .select("id, tenant_id, status, flow_type")
     .eq("contact_phone", message.from)
-    .in("status", ["active", "waiting_reply"])
+    .in("status", ["active", "waiting_reply", "draft"])
     .order("created_at", { ascending: false })
     .limit(1)
     .single();
@@ -94,9 +120,16 @@ async function handleIncomingMessage(
     return;
   }
 
-  const content = message.type === "text" ? message.text?.body ?? "" : `[${message.type}]`;
+  // --------------------------------------------------------
+  // Detectar intent da mensagem
+  // --------------------------------------------------------
+  const intentResult = message.type === "text" ? detectIntent(content) : { intent: "continue" as const, confidence: "low" as const, reason: "Non-text message" };
 
+  console.log(`[WhatsApp Webhook] Intent: ${intentResult.intent} (${intentResult.confidence}) — "${content.substring(0, 50)}"`);
+
+  // --------------------------------------------------------
   // Salvar mensagem recebida no banco
+  // --------------------------------------------------------
   await supabase.from("ai_conversation_messages").insert({
     conversation_id: conversation.id,
     direction: "inbound",
@@ -104,27 +137,49 @@ async function handleIncomingMessage(
     status: "received",
     wa_message_id: message.id,
     sent_at: new Date(parseInt(message.timestamp) * 1000).toISOString(),
+    ai_reasoning: `Intent: ${intentResult.intent} (${intentResult.confidence})`,
   });
 
-  // Atualizar last_message_at e status da conversa
+  // --------------------------------------------------------
+  // Processar com base no intent
+  // --------------------------------------------------------
+  if (intentResult.intent === "escalate_human" && intentResult.confidence !== "low") {
+    // Escalar diretamente para humano sem passar pela IA
+    await supabase
+      .from("ai_conversations")
+      .update({
+        status: "escalated",
+        last_message_at: new Date().toISOString(),
+      })
+      .eq("id", conversation.id);
+
+    console.log(`[WhatsApp Webhook] Conversa ${conversation.id} escalada para humano automaticamente`);
+    return;
+  }
+
+  // Atualizar status da conversa
   await supabase
     .from("ai_conversations")
     .update({
       last_message_at: new Date().toISOString(),
       status: "active",
-      message_count: supabase.rpc ? undefined : undefined, // incrementado via trigger
     })
     .eq("id", conversation.id);
 
+  // --------------------------------------------------------
   // Disparar evento Inngest para processar a resposta da IA
+  // --------------------------------------------------------
   await inngest.send({
-    name: "whatsapp/message.received",
+    name: "hellogrowth/whatsapp.reply.process",
     data: {
       conversationId: conversation.id,
       tenantId: conversation.tenant_id,
       messageContent: content,
+      waMessageId: message.id,
       contactPhone: message.from,
       contactName: contact?.profile?.name,
+      detectedIntent: intentResult.intent,
+      intentConfidence: intentResult.confidence,
     },
   });
 }

@@ -321,6 +321,7 @@ const Navigation: React.FC<NavigationProps> = ({
         { id: 'action-metrics', label: 'Métricas IA', icon: BarChart3, requiredPlan: 'all', isNew: true },
         { id: 'referral-rewards', label: 'Prêmios de Indicação', icon: Gift, requiredPlan: 'all', isNew: true },
         { id: 'whatsapp-setup', label: 'WhatsApp IA', icon: Smartphone, requiredPlan: 'all' },
+        { id: 'pilot-checklist', label: 'Checklist Piloto', icon: CheckSquare, requiredPlan: 'all', isNew: true },
         { id: 'prompt-manager', label: 'Gerenciar Prompts', icon: Bot, requiredPlan: 'all' },
       ],
     },
