@@ -7,6 +7,7 @@ import {
   processInboundReply,
   preSaleAutoTrigger,
   dispatchCron,
+  weeklyReportCron,
 } from "@/inngest/functions";
 
 export const { GET, POST, PUT } = serve({
@@ -18,5 +19,6 @@ export const { GET, POST, PUT } = serve({
     processInboundReply,
     preSaleAutoTrigger,
     dispatchCron,
+    weeklyReportCron,
   ],
 });

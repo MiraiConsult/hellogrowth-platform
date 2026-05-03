@@ -652,8 +652,19 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
                             {new Date(msg.sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                           {msg.direction === 'outbound' && (
-                            <span className="text-xs opacity-60">
-                              {msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}
+                            <span
+                              className="flex items-center text-xs"
+                              title={msg.status === 'read' ? 'Lida' : msg.status === 'delivered' ? 'Entregue' : msg.status === 'failed' ? 'Falha no envio' : 'Enviada'}
+                            >
+                              {msg.status === 'read' ? (
+                                <span className="font-bold text-blue-300">✓✓</span>
+                              ) : msg.status === 'delivered' ? (
+                                <span className="font-bold opacity-70">✓✓</span>
+                              ) : msg.status === 'failed' ? (
+                                <span className="font-bold text-red-300">!</span>
+                              ) : (
+                                <span className="opacity-40">✓</span>
+                              )}
                             </span>
                           )}
                           {msg.approved_by && (

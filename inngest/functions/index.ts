@@ -6,3 +6,4 @@ export {
   preSaleAutoTrigger,
 } from "./action-flow";
 export { dispatchCron } from "./dispatch-cron";
+export { weeklyReportCron } from "./weekly-report-cron";

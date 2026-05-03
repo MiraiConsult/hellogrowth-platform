@@ -327,6 +327,7 @@ const Navigation: React.FC<NavigationProps> = ({
         { id: 'pilot-checklist', label: 'Checklist Piloto', icon: CheckSquare, requiredPlan: 'all', isNew: true },
         { id: 'pilot-report', label: 'Relatório de Piloto', icon: FileText, requiredPlan: 'all', isNew: true },
         { id: 'opt-out-manager', label: 'Opt-Out / LGPD', icon: BellOff, requiredPlan: 'all', isNew: true },
+        { id: 'notification-settings', label: 'Notificações', icon: Bell, requiredPlan: 'all', isNew: true },
         { id: 'go-live-guide', label: 'Guia de Go-Live', icon: Rocket, requiredPlan: 'all', isNew: true },
         { id: 'prompt-manager', label: 'Gerenciar Prompts', icon: Bot, requiredPlan: 'all' },
       ],

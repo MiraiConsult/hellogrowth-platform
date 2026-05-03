@@ -41,6 +41,7 @@ import PilotChecklist from '@/components/PilotChecklist';
 import PilotReport from '@/components/PilotReport';
 import OptOutManager from '@/components/OptOutManager';
 import GoLiveGuide from '@/components/GoLiveGuide';
+import NotificationSettings from '@/components/NotificationSettings';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
@@ -1849,6 +1850,9 @@ Responda APENAS com JSON válido (sem markdown):
         )}
         {currentView === 'go-live-guide' && (
           <GoLiveGuide isDark={false} />
+        )}
+        {currentView === 'notification-settings' && (
+          <NotificationSettings isDark={false} tenantId={getActiveTenant() || ''} />
         )}
         {/* Banner flutuante de onboarding em andamento — aparece quando o usuário navega para módulos durante o onboarding */}
         {!showOnboardingWizard && onboardingInProgress && ['nps','forms','products'].includes(currentView) && (
