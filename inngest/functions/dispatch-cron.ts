@@ -10,7 +10,6 @@
  */
 
 import { inngest } from "@/lib/inngest-client";
-import { cron } from "inngest";
 import { createClient } from "@supabase/supabase-js";
 import { sendTextMessage } from "@/lib/whatsapp-client";
 
@@ -45,11 +44,11 @@ export const dispatchCron = inngest.createFunction(
   {
     id: "dispatch-cron",
     name: "Cron: Processar Disparos Agendados",
-    triggers: [cron("0 * * * *")],
     concurrency: {
       limit: 1,
     },
   },
+  { cron: "0 * * * *" },
   async ({ step }) => {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
