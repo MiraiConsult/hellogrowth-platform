@@ -108,7 +108,7 @@ async function handleIncomingMessage(
   // --------------------------------------------------------
   const { data: conversation } = await supabase
     .from("ai_conversations")
-    .select("id, tenant_id, status, flow_type")
+    .select("id, tenant_id, status, flow_type, contact_name, contact_phone")
     .eq("contact_phone", message.from)
     .in("status", ["active", "waiting_reply", "draft"])
     .order("created_at", { ascending: false })
@@ -154,6 +154,23 @@ async function handleIncomingMessage(
       .eq("id", conversation.id);
 
     console.log(`[WhatsApp Webhook] Conversa ${conversation.id} escalada para humano automaticamente`);
+    // Disparar notificação de escalada para o responsável
+    try {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      fetch(`${appUrl}/api/escalation-notify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId: conversation.tenant_id,
+          conversationId: conversation.id,
+          contactName: (conversation as any).contact_name || contact?.profile?.name || "Contato",
+          contactPhone: message.from,
+          flowType: conversation.flow_type,
+          lastMessage: content,
+          reason: intentResult.reason || "Solicitação do cliente",
+        }),
+      }).catch((e) => console.error("[Escalation notify]", e));
+    } catch (_) {}
     return;
   }
 

@@ -38,6 +38,9 @@ import WhatsAppSetup from '@/components/WhatsAppSetup';
 import CSVImport from '@/components/CSVImport';
 import PromptManager from '@/components/PromptManager';
 import PilotChecklist from '@/components/PilotChecklist';
+import PilotReport from '@/components/PilotReport';
+import OptOutManager from '@/components/OptOutManager';
+import GoLiveGuide from '@/components/GoLiveGuide';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
@@ -1837,6 +1840,15 @@ Responda APENAS com JSON válido (sem markdown):
 
         {currentView === 'pilot-checklist' && (
           <PilotChecklist />
+        )}
+        {currentView === 'pilot-report' && (
+          <PilotReport isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'opt-out-manager' && (
+          <OptOutManager isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'go-live-guide' && (
+          <GoLiveGuide isDark={false} />
         )}
         {/* Banner flutuante de onboarding em andamento — aparece quando o usuário navega para módulos durante o onboarding */}
         {!showOnboardingWizard && onboardingInProgress && ['nps','forms','products'].includes(currentView) && (
