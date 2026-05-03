@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { verifyWebhookSignature } from "@/lib/whatsapp-client";
-import { inngest } from "@/lib/inngest-client";
+import { verifyWebhookSignature, sendTextMessage } from "@/lib/whatsapp-client";
 import { detectIntent, isOptOut } from "@/lib/intent-detector";
+import { generateMessage, type ConversationContext } from "@/lib/ai-message-engine";
+import { inngest } from "@/lib/inngest-client";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -184,21 +185,120 @@ async function handleIncomingMessage(
     .eq("id", conversation.id);
 
   // --------------------------------------------------------
-  // Disparar evento Inngest para processar a resposta da IA
+  // Processar resposta: via Inngest (se configurado) ou direto
   // --------------------------------------------------------
-  await inngest.send({
-    name: "hellogrowth/whatsapp.reply.process",
-    data: {
-      conversationId: conversation.id,
-      tenantId: conversation.tenant_id,
-      messageContent: content,
-      waMessageId: message.id,
-      contactPhone: message.from,
-      contactName: contact?.profile?.name,
-      detectedIntent: intentResult.intent,
-      intentConfidence: intentResult.confidence,
-    },
+  if (process.env.INNGEST_EVENT_KEY) {
+    try {
+      await inngest.send({
+        name: "hellogrowth/whatsapp.reply.process",
+        data: {
+          conversationId: conversation.id,
+          tenantId: conversation.tenant_id,
+          messageContent: content,
+          waMessageId: message.id,
+          contactPhone: message.from,
+          contactName: contact?.profile?.name,
+          detectedIntent: intentResult.intent,
+          intentConfidence: intentResult.confidence,
+        },
+      });
+      return;
+    } catch (e) {
+      console.error("[WhatsApp Webhook] Inngest send failed, falling back to direct:", e);
+    }
+  }
+
+  // Fallback: processar diretamente sem Inngest
+  await processReplyDirect({
+    conversationId: conversation.id,
+    tenantId: conversation.tenant_id,
+    messageContent: content,
+    contactPhone: message.from,
+    contactName: contact?.profile?.name || "",
+    flowType: conversation.flow_type,
   });
+}
+
+// ============================================================
+// Processamento direto (fallback sem Inngest)
+// ============================================================
+async function processReplyDirect(params: {
+  conversationId: string;
+  tenantId: string;
+  messageContent: string;
+  contactPhone: string;
+  contactName: string;
+  flowType: string;
+}) {
+  try {
+    // Buscar histórico da conversa
+    const { data: messages } = await supabase
+      .from("ai_conversation_messages")
+      .select("direction, content, sent_at")
+      .eq("conversation_id", params.conversationId)
+      .order("sent_at", { ascending: true })
+      .limit(10);
+
+    // Buscar dados da empresa
+    const { data: company } = await supabase
+      .from("companies")
+      .select("name, segment")
+      .eq("id", params.tenantId)
+      .single();
+
+    // Montar histórico no formato esperado
+    const conversationHistory = (messages || []).map((m: any) => ({
+      role: m.direction === "inbound" ? "user" as const : "assistant" as const,
+      content: m.content,
+    }));
+
+    // Gerar resposta com IA
+    const ctx: ConversationContext = {
+      tenantId: params.tenantId,
+      flowType: (params.flowType || "nps_detractor") as any,
+      contactName: params.contactName,
+      contactPhone: params.contactPhone,
+      companyName: company?.name || "Clínica",
+      companySegment: company?.segment,
+      conversationHistory,
+      isFirstMessage: conversationHistory.length <= 1,
+    };
+
+    const result = await generateMessage(ctx);
+
+    if (!result || !result.content) {
+      console.log("[WhatsApp Webhook] AI returned empty response");
+      return;
+    }
+
+    const aiResponse = result.content;
+
+    // Enviar mensagem via WhatsApp
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || "";
+    const accessToken = process.env.WHATSAPP_API_KEY || process.env.WHATSAPP_BUSINESS_TOKEN || "";
+
+    const waMessageId = await sendTextMessage({
+      phoneNumberId,
+      accessToken,
+      to: params.contactPhone,
+      text: aiResponse,
+    });
+
+    // Salvar mensagem enviada no banco
+    await supabase.from("ai_conversation_messages").insert({
+      conversation_id: params.conversationId,
+      direction: "outbound",
+      content: aiResponse,
+      status: "sent",
+      wa_message_id: waMessageId,
+      sent_at: new Date().toISOString(),
+      ai_reasoning: "Direct processing (no Inngest)",
+    });
+
+    console.log(`[WhatsApp Webhook] Direct reply sent to ${params.contactPhone}: ${waMessageId}`);
+  } catch (error) {
+    console.error("[WhatsApp Webhook] Direct processing error:", error);
+  }
 }
 
 async function handleStatusUpdate(status: {

@@ -96,45 +96,72 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
   const handleEmbeddedSignup = () => {
     setConnectingStep('loading');
 
-    const fbAppId = process.env.NEXT_PUBLIC_META_APP_ID;
-    const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID;
+    const partnerId = process.env.NEXT_PUBLIC_DIALOG360_PARTNER_ID;
 
-    if (!fbAppId || !configId) {
-      alert('Configuração da Meta não encontrada. Entre em contato com o suporte.');
+    if (!partnerId) {
+      alert('Configuração do 360dialog não encontrada. Entre em contato com o suporte.');
       setConnectingStep('error');
       return;
     }
 
-    // Abrir popup do Embedded Signup
+    // Abrir popup do 360dialog Embedded Signup (Meta Cloud API via BSP)
     const width = 600;
     const height = 700;
     const left = (window.screen.width - width) / 2;
     const top = (window.screen.height - height) / 2;
 
+    const redirectUrl = encodeURIComponent(`${window.location.origin}/api/whatsapp-connection/callback`);
+
     const popup = window.open(
-      `https://www.facebook.com/dialog/oauth?client_id=${fbAppId}&redirect_uri=${encodeURIComponent(window.location.origin + '/api/whatsapp/embedded-signup/callback')}&scope=whatsapp_business_management,whatsapp_business_messaging&response_type=code&config_id=${configId}&state=${tenantId}`,
-      'WhatsApp Business',
-      `width=${width},height=${height},left=${left},top=${top}`
+      `https://hub.360dialog.com/dashboard/app/${partnerId}/permissions?redirect_url=${redirectUrl}`,
+      '360dialog-connect',
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
     );
 
-    // Escutar mensagem do popup após autorização
+    // Escutar mensagem do popup após autorização (callback via postMessage)
     const messageHandler = async (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === 'whatsapp_signup_success') {
+      if (event.data?.type === '360dialog-connect') {
         window.removeEventListener('message', messageHandler);
         popup?.close();
-        setConnectingStep('success');
-        await fetchConnection();
-        // Submeter templates automaticamente (Ajuste 1 do Claude)
-        await handleSubmitTemplates();
-      } else if (event.data?.type === 'whatsapp_signup_error') {
-        window.removeEventListener('message', messageHandler);
-        popup?.close();
-        setConnectingStep('error');
+
+        const { client, channels } = event.data;
+        if (channels && channels.length > 0) {
+          try {
+            // Processar onboarding no backend
+            const res = await fetch('/api/whatsapp-connection/onboarding', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tenantId, clientId: client, channelId: channels[0] }),
+            });
+
+            if (res.ok) {
+              setConnectingStep('success');
+              await fetchConnection();
+              // Submeter templates automaticamente
+              await handleSubmitTemplates();
+            } else {
+              setConnectingStep('error');
+            }
+          } catch {
+            setConnectingStep('error');
+          }
+        } else {
+          setConnectingStep('error');
+        }
       }
     };
 
     window.addEventListener('message', messageHandler);
+
+    // Monitorar fechamento do popup (caso o usuário feche sem completar)
+    const checkPopup = setInterval(() => {
+      if (popup?.closed) {
+        clearInterval(checkPopup);
+        if (connectingStep === 'loading') {
+          setConnectingStep('idle');
+        }
+      }
+    }, 1000);
   };
 
   const handleSubmitTemplates = async () => {
