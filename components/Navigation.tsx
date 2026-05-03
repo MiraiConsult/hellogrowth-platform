@@ -27,7 +27,10 @@ import {
   DollarSign,
   Heart,
   Target,
-  Bell
+  Bell,
+  Zap,
+  Bot,
+  Smartphone
 } from 'lucide-react';
 import { PlanType, Company, UserCompany } from '@/types';
 import CompanySwitcher from '@/components/CompanySwitcher';
@@ -307,6 +310,16 @@ const Navigation: React.FC<NavigationProps> = ({
         { id: 'digital-diagnostic', label: 'Minha Presença Digital', icon: Activity, requiredPlan: 'all' },
         { id: 'business-profile', label: 'Perfil do Negócio', icon: Brain, requiredPlan: 'all' },
       ]
+    },
+    {
+      id: 'action-group',
+      label: 'Ações',
+      icon: Zap,
+      requiredPlan: 'all',
+      children: [
+        { id: 'action-inbox', label: 'Fila de Ações', icon: Zap, requiredPlan: 'all' },
+        { id: 'whatsapp-setup', label: 'WhatsApp IA', icon: Smartphone, requiredPlan: 'all' },
+      ],
     },
     {
       id: 'game-group',

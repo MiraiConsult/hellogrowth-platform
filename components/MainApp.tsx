@@ -31,6 +31,8 @@ import GameConfig from '@/components/GameConfig';
 import GameParticipations from '@/components/GameParticipations';
 import ReportSettings from '@/components/ReportSettings';
 import AlertSettings from '@/components/AlertSettings';
+import ActionInbox from '@/components/ActionInbox';
+import WhatsAppSetup from '@/components/WhatsAppSetup';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
@@ -1785,6 +1787,23 @@ Responda APENAS com JSON válido (sem markdown):
                 activePlan={currentUser.plan || 'hello_growth'}
               />
             </div>
+        )}
+
+        {currentView === 'action-inbox' && (
+          <ActionInbox
+            isDark={isDark}
+            tenantId={getActiveTenant() || ''}
+          />
+        )}
+
+        {currentView === 'whatsapp-setup' && (
+          <div className="p-6">
+            <WhatsAppSetup
+              isDark={isDark}
+              tenantId={getActiveTenant() || ''}
+              companyName={settings.companyName || 'Minha Empresa'}
+            />
+          </div>
         )}
 
         {/* Banner flutuante de onboarding em andamento — aparece quando o usuário navega para módulos durante o onboarding */}
