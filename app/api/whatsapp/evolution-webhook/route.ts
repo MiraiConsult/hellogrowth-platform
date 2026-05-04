@@ -27,40 +27,58 @@ export async function POST(req: NextRequest) {
 
     // Evolution API envia diferentes formatos dependendo do evento
     const event = body.event;
+    
+    console.log(`[Evolution Webhook] Evento recebido: ${event}`);
+    console.log(`[Evolution Webhook] Data type: ${Array.isArray(body.data) ? 'array' : typeof body.data}`);
 
     // Processar apenas mensagens recebidas (não enviadas pelo bot)
-    if (event === "messages.upsert" || event === "message") {
-      const message = body.data?.message || body.data;
-      if (!message) return NextResponse.json({ ok: true });
+    if (event === "messages.upsert" || event === "message" || event === "MESSAGES_UPSERT") {
+      // Evolution API v2 pode enviar data como array ou objeto
+      // Formato v2: body.data é um array de mensagens
+      // Formato alternativo: body.data.message é o objeto da mensagem
+      const rawData = body.data;
+      const messages = Array.isArray(rawData) ? rawData : [rawData?.message || rawData];
 
-      // Ignorar mensagens enviadas pelo próprio número (fromMe)
-      if (message.key?.fromMe === true) {
-        return NextResponse.json({ ok: true });
+      for (const message of messages) {
+        if (!message) continue;
+
+        // Ignorar mensagens enviadas pelo próprio número (fromMe)
+        if (message.key?.fromMe === true) {
+          console.log(`[Evolution Webhook] Ignorando mensagem fromMe`);
+          continue;
+        }
+
+        const from = message.key?.remoteJid?.replace("@s.whatsapp.net", "").replace("@c.us", "").replace("@g.us", "");
+        if (!from) continue;
+        
+        // Ignorar grupos (contêm '-' no número)
+        if (from.includes("-")) continue;
+
+        // Extrair conteúdo da mensagem
+        const content =
+          message.message?.conversation ||
+          message.message?.extendedTextMessage?.text ||
+          message.message?.imageMessage?.caption ||
+          message.message?.videoMessage?.caption ||
+          message.text ||
+          `[${Object.keys(message.message || {})[0] || "media"}]`;
+
+        const contactName = message.pushName || message.notifyName || from;
+        const waMessageId = message.key?.id || `evo_${Date.now()}`;
+        const timestamp = message.messageTimestamp
+          ? new Date(Number(message.messageTimestamp) * 1000).toISOString()
+          : new Date().toISOString();
+
+        console.log(`[Evolution Webhook] Mensagem de ${from}: "${content.substring(0, 80)}"`);
+
+        await handleIncomingMessage({
+          from,
+          content,
+          contactName,
+          waMessageId,
+          timestamp,
+        });
       }
-
-      const from = message.key?.remoteJid?.replace("@s.whatsapp.net", "").replace("@c.us", "");
-      if (!from) return NextResponse.json({ ok: true });
-
-      // Extrair conteúdo da mensagem
-      const content =
-        message.message?.conversation ||
-        message.message?.extendedTextMessage?.text ||
-        message.message?.imageMessage?.caption ||
-        `[${Object.keys(message.message || {})[0] || "media"}]`;
-
-      const contactName = message.pushName || from;
-      const waMessageId = message.key?.id || `evo_${Date.now()}`;
-      const timestamp = message.messageTimestamp
-        ? new Date(Number(message.messageTimestamp) * 1000).toISOString()
-        : new Date().toISOString();
-
-      await handleIncomingMessage({
-        from,
-        content,
-        contactName,
-        waMessageId,
-        timestamp,
-      });
     }
 
     return NextResponse.json({ ok: true });
