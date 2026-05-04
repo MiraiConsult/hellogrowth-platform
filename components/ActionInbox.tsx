@@ -589,7 +589,7 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
       </div>
 
       {/* ============================================================
-          COLUNA DIREITA: Detalhe da ação
+          COLUNA DIREITA: Detalhe da ação (estilo WhatsApp Web)
       ============================================================ */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {!selectedAction ? (
@@ -619,31 +619,28 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
           </div>
         ) : (
           <>
-            {/* ---- Header do detalhe ---- */}
-            <div className={`p-4 border-b ${t.divider} flex items-center justify-between`}>
+            {/* ---- Header estilo WhatsApp (verde/roxo com info do contato) ---- */}
+            <div className={`px-4 py-3 flex items-center justify-between ${isDark ? 'bg-slate-800 border-b border-slate-700' : 'bg-[#f0f2f5] border-b border-slate-200'}`}>
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDark ? FLOW_CONFIG[selectedAction.type].darkBg : FLOW_CONFIG[selectedAction.type].bg}`}>
-                  {React.createElement(FLOW_CONFIG[selectedAction.type].icon, {
-                    size: 18,
-                    className: FLOW_CONFIG[selectedAction.type].color,
-                  })}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-purple-700 text-white font-bold text-sm`}>
+                  {selectedAction.contact_name?.charAt(0)?.toUpperCase() || '?'}
                 </div>
                 <div>
-                  <p className={`font-semibold ${t.text}`}>{selectedAction.contact_name}</p>
+                  <p className={`font-semibold text-[15px] ${t.text}`}>{selectedAction.contact_name}</p>
                   <div className="flex items-center gap-2">
-                    <p className={`text-sm ${t.textMuted}`}>{selectedAction.contact_phone}</p>
+                    <p className={`text-xs ${t.textMuted}`}>{selectedAction.contact_phone}</p>
                     <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isDark ? FLOW_CONFIG[selectedAction.type].darkBg : FLOW_CONFIG[selectedAction.type].badgeBg} ${FLOW_CONFIG[selectedAction.type].badgeText}`}>
                       {FLOW_CONFIG[selectedAction.type].label}
-                      {selectedAction.nps_score !== undefined && ` • NPS ${selectedAction.nps_score}`}
+                      {selectedAction.nps_score !== undefined && selectedAction.nps_score !== null && ` • NPS ${selectedAction.nps_score}`}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
                 {/* Toggle modo IA */}
                 {selectedAction.conversation_id && (
-                  <div className={`flex items-center gap-1 rounded-lg p-0.5 border ${t.divider} ${isDark ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                  <div className={`flex items-center gap-0.5 rounded-lg p-0.5 border ${t.divider} ${isDark ? 'bg-slate-700' : 'bg-white'}`}>
                     <button
                       onClick={() => handleSetMode('approval_required')}
                       disabled={settingMode}
@@ -668,7 +665,7 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
                       }`}
                     >
                       <Bot size={10} />
-                      <span>Automático</span>
+                      <span>Auto</span>
                     </button>
                   </div>
                 )}
@@ -679,7 +676,7 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
                   className={`p-2 rounded-lg ${t.hover} text-green-500`}
                   title="Abrir no WhatsApp"
                 >
-                  <Phone size={15} />
+                  <ExternalLink size={15} />
                 </a>
                 <button
                   onClick={() => handleDismiss(selectedAction.id)}
@@ -691,170 +688,187 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
               </div>
             </div>
 
-            {/* ---- Contexto do gatilho ---- */}
-            <div className={`px-4 pt-3 pb-2 border-b ${t.divider}`}>
-              <div className={`rounded-xl p-3 ${isDark ? 'bg-amber-900/20 border border-amber-800/30' : 'bg-amber-50 border border-amber-200'}`}>
-                <div className="flex items-start gap-2">
-                  <Bell size={13} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className={`text-xs font-semibold ${isDark ? 'text-amber-400' : 'text-amber-700'} mb-0.5`}>
-                      Por que agir agora
-                    </p>
-                    <p className={`text-sm ${isDark ? 'text-amber-200' : 'text-amber-800'} leading-relaxed`}>
+            {/* ---- Área de chat estilo WhatsApp (fundo com padrão) ---- */}
+            <div className={`flex-1 overflow-y-auto relative`} style={{
+              backgroundColor: isDark ? '#0b141a' : '#efeae2',
+              backgroundImage: isDark
+                ? 'url("data:image/svg+xml,%3Csvg width=\'200\' height=\'200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'p\' width=\'40\' height=\'40\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M0 20h40M20 0v40\' stroke=\'%23ffffff\' stroke-width=\'0.3\' opacity=\'0.03\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=\'200\' height=\'200\' fill=\'url(%23p)\'/%3E%3C/svg%3E")'
+                : 'url("data:image/svg+xml,%3Csvg width=\'200\' height=\'200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'p\' width=\'40\' height=\'40\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M0 20h40M20 0v40\' stroke=\'%23000000\' stroke-width=\'0.3\' opacity=\'0.03\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=\'200\' height=\'200\' fill=\'url(%23p)\'/%3E%3C/svg%3E")'
+            }}>
+              {/* Contexto do gatilho (banner compacto no topo) */}
+              <div className="px-4 pt-3 pb-1">
+                <div className={`rounded-lg px-3 py-2 text-center ${isDark ? 'bg-slate-800/80 border border-slate-700' : 'bg-white/80 border border-amber-200'} backdrop-blur-sm shadow-sm`}>
+                  <div className="flex items-center justify-center gap-2">
+                    <Bell size={11} className="text-amber-500" />
+                    <p className={`text-xs ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>
                       {selectedAction.trigger_summary}
                     </p>
                   </div>
                 </div>
               </div>
+
+              {/* Mensagens */}
+              {loadingConv ? (
+                <div className="flex items-center justify-center h-40">
+                  <Loader2 className="animate-spin text-purple-500" size={20} />
+                </div>
+              ) : conversation && conversation.messages.length > 0 ? (
+                <div className="px-6 py-3 space-y-1.5">
+                  {conversation.messages.map((msg, idx) => {
+                    // Agrupar por data
+                    const msgDate = new Date(msg.sent_at).toLocaleDateString('pt-BR');
+                    const prevDate = idx > 0 ? new Date(conversation.messages[idx - 1].sent_at).toLocaleDateString('pt-BR') : null;
+                    const showDateSeparator = idx === 0 || msgDate !== prevDate;
+
+                    return (
+                      <div key={msg.id}>
+                        {showDateSeparator && (
+                          <div className="flex justify-center my-3">
+                            <span className={`text-xs px-3 py-1 rounded-lg shadow-sm ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-white text-slate-600'}`}>
+                              {msgDate === new Date().toLocaleDateString('pt-BR') ? 'Hoje' : msgDate}
+                            </span>
+                          </div>
+                        )}
+                        <div className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`relative max-w-[65%] rounded-lg px-3 py-2 text-[14px] shadow-sm ${
+                            msg.direction === 'outbound'
+                              ? isDark ? 'bg-[#005c4b] text-slate-100' : 'bg-[#d9fdd3] text-slate-900'
+                              : isDark ? 'bg-slate-700 text-slate-100' : 'bg-white text-slate-900'
+                          }`} style={{
+                            borderRadius: msg.direction === 'outbound' ? '8px 8px 0 8px' : '8px 8px 8px 0'
+                          }}>
+                            <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                            <div className={`flex items-center gap-1 mt-0.5 ${msg.direction === 'outbound' ? 'justify-end' : ''}`}>
+                              <span className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                                {new Date(msg.sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              {msg.direction === 'outbound' && (
+                                <span className="flex items-center text-[11px]">
+                                  {msg.status === 'read' ? (
+                                    <span className="font-bold text-blue-500">✓✓</span>
+                                  ) : msg.status === 'delivered' ? (
+                                    <span className={`font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>✓✓</span>
+                                  ) : msg.status === 'failed' ? (
+                                    <span className="font-bold text-red-500">!</span>
+                                  ) : (
+                                    <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>✓</span>
+                                  )}
+                                </span>
+                              )}
+                              {msg.approved_by && (
+                                <span className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                                  {msg.approved_by === 'ai_auto' ? '🤖' : '👤'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Raciocínio da IA (colapsável) */}
+                        {msg.ai_reasoning && msg.direction === 'outbound' && (
+                          <div className="flex justify-end mt-0.5">
+                            <button
+                              onClick={() => setShowReasoningId(showReasoningId === msg.id ? null : msg.id)}
+                              className={`text-[10px] flex items-center gap-1 ${isDark ? 'text-slate-500 hover:text-purple-400' : 'text-slate-400 hover:text-purple-500'}`}
+                            >
+                              <Bot size={9} />
+                              {showReasoningId === msg.id ? 'Ocultar' : 'Raciocínio IA'}
+                            </button>
+                          </div>
+                        )}
+                        {showReasoningId === msg.id && msg.ai_reasoning && (
+                          <div className={`mt-1 ml-auto max-w-[65%] rounded-lg px-3 py-2 text-xs ${isDark ? 'bg-slate-800/90 text-slate-400 border border-slate-700' : 'bg-white/90 text-slate-500 border border-slate-200'} backdrop-blur-sm`}>
+                            <p className="font-medium mb-0.5 text-purple-500 text-[10px]">Raciocínio:</p>
+                            <p className="leading-relaxed text-[11px]">{msg.ai_reasoning}</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div ref={messagesEndRef} />
+                </div>
+              ) : (
+                <div className="flex-1 flex items-center justify-center h-40">
+                  <div className={`text-center ${t.textMuted}`}>
+                    <MessageCircle size={28} className="mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">Nenhuma mensagem ainda</p>
+                    <p className="text-xs mt-1 opacity-70">Envie a primeira mensagem abaixo</p>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* ---- Histórico de conversa ---- */}
-            {loadingConv ? (
-              <div className="flex-1 flex items-center justify-center">
-                <Loader2 className="animate-spin text-purple-500" size={20} />
-              </div>
-            ) : conversation && conversation.messages.length > 0 ? (
-              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-                {conversation.messages.map((msg) => (
-                  <div key={msg.id}>
-                    <div className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-sm rounded-2xl px-3.5 py-2.5 text-sm ${
-                        msg.direction === 'outbound'
-                          ? 'bg-purple-600 text-white rounded-br-sm'
-                          : isDark
-                            ? 'bg-slate-700 text-slate-100 rounded-bl-sm'
-                            : 'bg-slate-100 text-slate-800 rounded-bl-sm'
-                      }`}>
-                        <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                        <div className={`flex items-center gap-1.5 mt-1 ${msg.direction === 'outbound' ? 'justify-end' : ''}`}>
-                          <span className="text-xs opacity-60">
-                            {new Date(msg.sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                          {msg.direction === 'outbound' && (
-                            <span
-                              className="flex items-center text-xs"
-                              title={msg.status === 'read' ? 'Lida' : msg.status === 'delivered' ? 'Entregue' : msg.status === 'failed' ? 'Falha no envio' : 'Enviada'}
-                            >
-                              {msg.status === 'read' ? (
-                                <span className="font-bold text-blue-300">✓✓</span>
-                              ) : msg.status === 'delivered' ? (
-                                <span className="font-bold opacity-70">✓✓</span>
-                              ) : msg.status === 'failed' ? (
-                                <span className="font-bold text-red-300">!</span>
-                              ) : (
-                                <span className="opacity-40">✓</span>
-                              )}
-                            </span>
-                          )}
-                          {msg.approved_by && (
-                            <span className="text-xs opacity-60">• {msg.approved_by}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Raciocínio da IA (colapsável) */}
-                    {msg.ai_reasoning && msg.direction === 'outbound' && (
-                      <div className="flex justify-end mt-1">
-                        <button
-                          onClick={() => setShowReasoningId(showReasoningId === msg.id ? null : msg.id)}
-                          className={`text-xs flex items-center gap-1 ${t.textMuted} hover:text-purple-500`}
-                        >
-                          <Bot size={10} />
-                          {showReasoningId === msg.id ? 'Ocultar raciocínio' : 'Ver raciocínio da IA'}
-                        </button>
-                      </div>
-                    )}
-                    {showReasoningId === msg.id && msg.ai_reasoning && (
-                      <div className={`mt-1 ml-auto max-w-sm rounded-xl px-3 py-2 text-xs ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-50 text-slate-500 border border-slate-200'}`}>
-                        <p className="font-medium mb-0.5 text-purple-500">Raciocínio da IA:</p>
-                        <p className="leading-relaxed">{msg.ai_reasoning}</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-            ) : (
-              <div className={`flex-1 flex items-center justify-center ${t.textMuted}`}>
-                <div className="text-center">
-                  <MessageCircle size={24} className="mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">Nenhuma mensagem ainda</p>
-                  <p className="text-xs mt-0.5 opacity-70">Aprove a mensagem abaixo para iniciar a conversa</p>
-                </div>
-              </div>
-            )}
-
-            {/* ---- Editor de mensagem da IA ---- */}
-            <div className={`p-4 border-t ${t.divider}`}>
-              {/* Banner modo automático */}
+            {/* ---- Barra de input estilo WhatsApp (compacta) ---- */}
+            <div className={`px-3 py-2 ${isDark ? 'bg-slate-800 border-t border-slate-700' : 'bg-[#f0f2f5] border-t border-slate-200'}`}>
+              {/* Banner modo automático (compacto) */}
               {conversationMode === 'auto' && (
-                <div className={`mb-3 rounded-xl px-3 py-2 flex items-center gap-2 ${isDark ? 'bg-emerald-900/20 border border-emerald-800/30' : 'bg-emerald-50 border border-emerald-200'}`}>
-                  <Bot size={13} className="text-emerald-500 flex-shrink-0" />
-                  <p className={`text-xs ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>
-                    <span className="font-semibold">Modo Automático ativo</span> — A IA está respondendo automaticamente. Mensagens recebidas serão respondidas sem aprovação.
+                <div className={`mb-2 rounded-lg px-3 py-1.5 flex items-center gap-2 ${isDark ? 'bg-emerald-900/30 border border-emerald-800/30' : 'bg-emerald-50 border border-emerald-200'}`}>
+                  <Bot size={12} className="text-emerald-500 flex-shrink-0" />
+                  <p className={`text-[11px] ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                    <span className="font-semibold">Modo Auto</span> — IA responde sozinha
                   </p>
                 </div>
               )}
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Bot size={13} className={conversationMode === 'auto' ? 'text-emerald-500' : 'text-purple-500'} />
-                  <span className={`text-xs font-semibold ${conversationMode === 'auto' ? 'text-emerald-600' : 'text-purple-600'}`}>
-                    {conversationMode === 'auto' ? 'Próxima mensagem da IA (pré-visualização)' : 'Mensagem sugerida pela IA'}
-                  </span>
-                  {conversationMode !== 'auto' && <span className={`text-xs ${t.textMuted}`}>— edite se necessário</span>}
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={handleCopyDraft}
-                    className={`p-1.5 rounded-lg ${t.hover} ${t.textMuted} text-xs flex items-center gap-1`}
-                    title="Copiar mensagem"
-                  >
-                    {copySuccess ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
-                  </button>
+
+              <div className="flex items-end gap-2">
+                {/* Botões de ação à esquerda */}
+                <div className="flex items-center gap-0.5 pb-1">
                   <button
                     onClick={handleRegenerate}
                     disabled={regenerating}
-                    className={`p-1.5 rounded-lg ${t.hover} ${t.textMuted}`}
+                    className={`p-2 rounded-full ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-200 text-slate-500'}`}
                     title="Regenerar mensagem"
                   >
-                    {regenerating ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+                    {regenerating ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
+                  </button>
+                  <button
+                    onClick={handleCopyDraft}
+                    className={`p-2 rounded-full ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-200 text-slate-500'}`}
+                    title="Copiar mensagem"
+                  >
+                    {copySuccess ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                  </button>
+                </div>
+
+                {/* Campo de texto */}
+                <div className="flex-1">
+                  <textarea
+                    value={editingDraft}
+                    onChange={(e) => setEditingDraft(e.target.value)}
+                    rows={Math.min(Math.max(1, editingDraft.split('\n').length), 4)}
+                    className={`w-full px-4 py-2.5 text-sm rounded-xl border-0 resize-none ${isDark ? 'bg-slate-700 text-slate-100 placeholder-slate-400' : 'bg-white text-slate-800 placeholder-slate-400'} focus:ring-1 focus:ring-purple-500 leading-relaxed shadow-sm`}
+                    placeholder={conversationMode === 'auto' ? 'Próxima mensagem da IA...' : 'Mensagem sugerida pela IA (edite se necessário)...'}
+                  />
+                </div>
+
+                {/* Botão enviar */}
+                <div className="pb-1">
+                  <button
+                    onClick={handleApproveAndSend}
+                    disabled={sendingMessage || !editingDraft.trim()}
+                    className="p-2.5 rounded-full bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:hover:bg-purple-600 text-white transition-colors shadow-sm"
+                    title={conversationMode === 'auto' ? 'Enviar agora' : 'Aprovar e Enviar'}
+                  >
+                    {sendingMessage ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <Send size={18} />
+                    )}
                   </button>
                 </div>
               </div>
 
-              <textarea
-                value={editingDraft}
-                onChange={(e) => setEditingDraft(e.target.value)}
-                rows={4}
-                className={`w-full px-3 py-2 text-sm rounded-xl border resize-none ${t.input} focus:ring-2 focus:ring-purple-500 focus:border-transparent leading-relaxed`}
-                placeholder="Mensagem da IA..."
-              />
-
-              <div className="flex items-center justify-between mt-2">
-                <span className={`text-xs ${t.textMuted}`}>
-                  {editingDraft.length} caracteres
+              {/* Info de caracteres e botão ignorar */}
+              <div className="flex items-center justify-between mt-1 px-1">
+                <span className={`text-[10px] ${t.textMuted}`}>
+                  {editingDraft.length > 0 && `${editingDraft.length} caracteres`}
                 </span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleDismiss(selectedAction.id)}
-                    className={`px-3 py-1.5 text-sm rounded-lg border ${t.divider} ${t.textMuted} ${t.hover} font-medium`}
-                  >
-                    Ignorar
-                  </button>
-                  <button
-                    onClick={handleApproveAndSend}
-                    disabled={sendingMessage || !editingDraft.trim()}
-                    className="flex items-center gap-2 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors"
-                  >
-                    {sendingMessage ? (
-                      <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                      <Send size={13} />
-                    )}
-                    {sendingMessage ? 'Enviando...' : 'Aprovar e Enviar'}
-                  </button>
-                </div>
+                <button
+                  onClick={() => handleDismiss(selectedAction.id)}
+                  className={`text-[11px] ${t.textMuted} hover:text-red-500 transition-colors`}
+                >
+                  Ignorar conversa
+                </button>
               </div>
             </div>
           </>
