@@ -132,6 +132,7 @@ async function callGemini(
       topK: 40,
       topP: 0.95,
       maxOutputTokens: 1024,
+      responseMimeType: "application/json",
     },
   });
 
@@ -163,6 +164,7 @@ async function callFallbackGPT(
       messages,
       temperature: 0.7,
       max_tokens: 1024,
+      response_format: { type: "json_object" },
     }),
   });
 
