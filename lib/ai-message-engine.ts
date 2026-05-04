@@ -2,7 +2,7 @@
  * AI Message Engine — Motor de geração de mensagens para os 4 fluxos de ação autônoma.
  * 
  * Usa Google Gemini API diretamente via REST (sem SDK pesado).
- * Modelo: gemini-2.5-flash
+ * Modelo: gemini-2.5-flash (atualizado de 2.0-flash que foi descontinuado)
  * 
  * v4: Usa GEMINI_API_KEY diretamente via REST API do Google AI.
  */
@@ -137,7 +137,7 @@ async function callLLM(
     },
   };
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
   console.log("[AI Engine] Chamando Gemini API...");
 
