@@ -144,21 +144,26 @@ async function handleIncomingMessage({
   // Tenta com e sem código de país para maior compatibilidade
   // --------------------------------------------------------
   // Gerar variantes do número para compatibilidade com formato brasileiro
-  // Evolution envia 555181613577 (sem 9), banco pode ter 5551981613577 (com 9)
+  // Evolution envia 5551993188000 (com 55), banco pode ter 51993188000 (sem 55)
   const withoutCountry = normalizedFrom.replace(/^55/, "");
   const phoneVariants = [
-    normalizedFrom,
+    normalizedFrom,                                      // ex: 5551993188000
+    withoutCountry,                                      // ex: 51993188000 (sem código país)
     normalizedFrom.startsWith("55") ? normalizedFrom : `55${normalizedFrom}`,
-    `+${normalizedFrom}`,
-    `+55${withoutCountry}`,
+    `+${normalizedFrom}`,                                // ex: +5551993188000
+    `+55${withoutCountry}`,                              // ex: +5551993188000
     // Variante com 9 adicionado (celular BR): 55 + DDD(2) + 9 + número(8)
     withoutCountry.length === 10 ? `55${withoutCountry.slice(0,2)}9${withoutCountry.slice(2)}` : "",
+    withoutCountry.length === 10 ? `${withoutCountry.slice(0,2)}9${withoutCountry.slice(2)}` : "",
     // Variante sem 9 (formato antigo): 55 + DDD(2) + número(8)
     withoutCountry.length === 11 && withoutCountry[2] === "9" ? `55${withoutCountry.slice(0,2)}${withoutCountry.slice(3)}` : "",
+    withoutCountry.length === 11 && withoutCountry[2] === "9" ? `${withoutCountry.slice(0,2)}${withoutCountry.slice(3)}` : "",
   ].filter(Boolean);
+  // Remover duplicatas
+  const uniqueVariants = [...new Set(phoneVariants)];
 
   let conversation: any = null;
-  for (const phone of phoneVariants) {
+  for (const phone of uniqueVariants) {
     const { data } = await supabase
       .from("ai_conversations")
       .select("id, tenant_id, status, flow_type, contact_name, contact_phone, mode")
