@@ -268,7 +268,8 @@ const Navigation: React.FC<NavigationProps> = ({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     'helloclient': true,
     'hellorating': true,
-    'intelligence': true
+    'intelligence': true,
+    'action-group': true
   });
 
   const toggleGroup = (groupId: string) => {
@@ -319,7 +320,8 @@ const Navigation: React.FC<NavigationProps> = ({
       id: 'action-group',
       label: 'Ações',
       icon: Zap,
-      requiredPlan: 'all',
+      type: 'group',
+      color: 'emerald',
       children: [
         { id: 'action-inbox', label: 'Fila de Ações', icon: Zap, requiredPlan: 'all' },
         { id: 'action-metrics', label: 'Métricas IA', icon: BarChart3, requiredPlan: 'all', isNew: true },
@@ -480,6 +482,11 @@ const Navigation: React.FC<NavigationProps> = ({
         text: 'text-slate-600', 
         icon: 'text-slate-500' 
       },
+      emerald: { 
+        bg: isExpanded ? 'bg-emerald-50' : 'bg-transparent hover:bg-emerald-50', 
+        text: 'text-emerald-600', 
+        icon: 'text-emerald-500' 
+      },
     };
     return colors[color] || colors.blue;
   };
@@ -587,7 +594,7 @@ const Navigation: React.FC<NavigationProps> = ({
                 
                 <div className={`
                   overflow-hidden transition-all duration-300 ease-in-out
-                  ${isExpanded ? 'max-h-96 opacity-100 mt-1' : 'max-h-0 opacity-0'}
+                  ${isExpanded ? 'max-h-[800px] opacity-100 mt-1' : 'max-h-0 opacity-0'}
                 `}>
                   {item.children.map(child => renderItem(child, true))}
                 </div>
