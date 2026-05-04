@@ -22,6 +22,21 @@ export interface PromptContext {
   interestedServices?: string[];
   formResponses?: Record<string, string>;
   availableServices?: string[];
+  // Contexto enriquecido (novo)
+  businessDescription?: string;
+  businessDifferentials?: string;
+  targetAudience?: string;
+  mainPainPoints?: string;
+  productsServices?: Array<{ name: string; value: number; description: string }>;
+  leadAiAnalysis?: {
+    salesScript?: string;
+    clientInsights?: string[];
+    suggestedProduct?: string;
+    nextSteps?: string[];
+    classification?: string;
+  };
+  currentDateTime?: string;
+  currentDayOfWeek?: string;
 }
 
 export function buildPrompt(ctx: PromptContext): string {
@@ -71,6 +86,15 @@ export function buildPrompt(ctx: PromptContext): string {
         availableServices: ctx.availableServices,
         conversationHistory: ctx.conversationHistory,
         turnNumber: ctx.turnNumber,
+        // Novos campos de contexto enriquecido
+        businessDescription: ctx.businessDescription,
+        businessDifferentials: ctx.businessDifferentials,
+        targetAudience: ctx.targetAudience,
+        mainPainPoints: ctx.mainPainPoints,
+        productsServices: ctx.productsServices,
+        leadAiAnalysis: ctx.leadAiAnalysis,
+        currentDateTime: ctx.currentDateTime,
+        currentDayOfWeek: ctx.currentDayOfWeek,
       });
 
     default:

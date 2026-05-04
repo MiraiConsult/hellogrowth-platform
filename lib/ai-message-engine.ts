@@ -4,7 +4,8 @@
  * Usa Google Gemini API diretamente via REST (sem SDK pesado).
  * Modelo: gemini-2.5-flash (atualizado de 2.0-flash que foi descontinuado)
  * 
- * v4: Usa GEMINI_API_KEY diretamente via REST API do Google AI.
+ * v5: Busca contexto completo do banco (perfil do negócio, produtos, lead, histórico)
+ *     + consciência temporal (dia/hora) + regras anti-repetição
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -26,6 +27,24 @@ export interface ConversationContext {
   companySegment?: string;
   aiPersonaName?: string;
   aiPersonaTone?: string;
+  // Perfil do negócio (novo)
+  businessDescription?: string;
+  businessDifferentials?: string;
+  targetAudience?: string;
+  mainPainPoints?: string;
+  // Produtos/serviços disponíveis (novo)
+  productsServices?: Array<{ name: string; value: number; description: string }>;
+  // Análise de IA do lead (novo)
+  leadAiAnalysis?: {
+    salesScript?: string;
+    clientInsights?: string[];
+    suggestedProduct?: string;
+    nextSteps?: string[];
+    classification?: string;
+  };
+  // Contexto temporal (novo)
+  currentDateTime?: string;
+  currentDayOfWeek?: string;
   // Dados do gatilho
   npsScore?: number;
   npsComment?: string;
@@ -34,7 +53,7 @@ export interface ConversationContext {
   availableServices?: string[];
   // Dados de indicação (promotor)
   referralRewards?: Array<{ name: string; description: string }>;
-  referralReward?: string; // Texto formatado do prêmio principal
+  referralReward?: string;
   googleReviewLink?: string;
   // Histórico da conversa (multi-turn)
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
@@ -93,6 +112,15 @@ function buildSystemPrompt(ctx: ConversationContext): string {
     availableServices: ctx.availableServices,
     conversationHistory: conversationHistoryText,
     turnNumber,
+    // Novos campos de contexto enriquecido
+    businessDescription: ctx.businessDescription,
+    businessDifferentials: ctx.businessDifferentials,
+    targetAudience: ctx.targetAudience,
+    mainPainPoints: ctx.mainPainPoints,
+    productsServices: ctx.productsServices,
+    leadAiAnalysis: ctx.leadAiAnalysis,
+    currentDateTime: ctx.currentDateTime,
+    currentDayOfWeek: ctx.currentDayOfWeek,
   });
 }
 
@@ -102,83 +130,68 @@ function buildSystemPrompt(ctx: ConversationContext): string {
 
 async function callLLM(
   systemPrompt: string,
-  userMessage: string,
-  history: Array<{ role: "user" | "assistant"; content: string }> = []
+  userMessage: string
 ): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY não configurada");
 
-  // Monta o conteúdo no formato Gemini
-  const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+  const model = "gemini-2.5-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  // Adiciona histórico
-  for (const msg of history) {
-    contents.push({
-      role: msg.role === "user" ? "user" : "model",
-      parts: [{ text: msg.content }],
-    });
-  }
-
-  // Adiciona a mensagem atual do usuário
-  contents.push({
-    role: "user",
-    parts: [{ text: userMessage }],
-  });
-
-  const requestBody = {
-    contents,
-    systemInstruction: {
-      parts: [{ text: systemPrompt }],
-    },
+  const body = {
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: systemPrompt }],
+      },
+      {
+        role: "model",
+        parts: [{ text: "Entendido. Estou pronto para responder como o consultor da empresa, de forma humana e natural." }],
+      },
+      {
+        role: "user",
+        parts: [{ text: userMessage }],
+      },
+    ],
     generationConfig: {
-      temperature: 0.7,
+      temperature: 0.8,
+      topP: 0.9,
+      topK: 40,
       maxOutputTokens: 2048,
     },
   };
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-  console.log("[AI Engine] Chamando Gemini API...");
-
-  const res = await fetch(url, {
+  const resp = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(requestBody),
+    body: JSON.stringify(body),
   });
 
-  if (!res.ok) {
-    const errBody = await res.text();
-    console.error(`[AI Engine] Gemini error: ${res.status} ${errBody.substring(0, 300)}`);
-    throw new Error(`Gemini API error: ${res.status} ${errBody.substring(0, 200)}`);
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Gemini API error ${resp.status}: ${errText}`);
   }
 
-  const data = await res.json();
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  const data = await resp.json();
+  const text =
+    data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+    data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ||
+    "";
 
-  if (!content) {
-    throw new Error("Resposta vazia do Gemini");
-  }
-
-  console.log(`[AI Engine] Resposta gerada com Gemini (${content.length} chars)`);
-  return content;
+  return text;
 }
 
 // ============================================================
-// PARSE DA RESPOSTA
+// PARSE DA RESPOSTA (JSON ou texto livre)
 // ============================================================
 
 function parseResponse(raw: string): GeneratedMessage {
-  try {
-    // Remove todos os markdown wrappers (pode ter múltiplos níveis)
-    let cleaned = raw.trim();
-    // Remove blocos de código markdown: ```json ... ``` ou ``` ... ```
-    cleaned = cleaned.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "").trim();
-
-    // Tenta encontrar o JSON mais externo
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
+  // Tentar extrair JSON da resposta
+  const jsonMatch = raw.match(/\{[\s\S]*?"content"[\s\S]*?\}/);
+  if (jsonMatch) {
+    try {
       const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed.content) {
+      if (parsed.content && typeof parsed.content === "string") {
         return {
           content: parsed.content.trim(),
           reasoning: parsed.reasoning || "",
@@ -186,109 +199,74 @@ function parseResponse(raw: string): GeneratedMessage {
           sentiment: parsed.sentiment || "neutral",
         };
       }
-    }
-  } catch (e) {
-    // Se não conseguir parsear JSON completo, tentar extrair campo "content" parcialmente
-    console.warn("[AI Engine] Falha ao parsear JSON, tentando extração parcial", (e as Error).message?.substring(0, 100));
-    
-    // Tentar extrair o valor do campo "content" mesmo de JSON truncado
-    const contentMatch = raw.match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)"?/);
-    if (contentMatch && contentMatch[1] && contentMatch[1].length > 20) {
-      // Unescape o conteúdo
-      const extracted = contentMatch[1]
-        .replace(/\\n/g, "\n")
-        .replace(/\\"/g, '"')
-        .replace(/\\\\/g, "\\")
-        .trim();
-      if (extracted.length > 20) {
-        return {
-          content: extracted,
-          reasoning: "Extraído de JSON truncado",
-          suggestedNextAction: "wait_reply",
-          sentiment: "neutral",
-        };
-      }
+    } catch {
+      // JSON inválido, tentar extrair content manualmente
     }
   }
 
-  // Fallback: limpa o texto bruto removendo qualquer JSON ou markdown
-  let fallbackContent = raw.trim();
-  
-  // Se começa com { ou ```, tentar extrair só o texto útil
-  if (fallbackContent.startsWith("{") || fallbackContent.startsWith("`")) {
-    // Tentar extrair texto após "content":
-    const contentMatch = fallbackContent.match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)"?/);
-    if (contentMatch && contentMatch[1]) {
-      fallbackContent = contentMatch[1]
-        .replace(/\\n/g, "\n")
-        .replace(/\\"/g, '"')
-        .replace(/\\\\/g, "\\")
-        .trim();
-    } else {
-      // Remover JSON wrapper
-      fallbackContent = fallbackContent
-        .replace(/```(?:json)?[\s\S]*?```/g, "")
-        .replace(/^\{[\s\S]*$/, "")
-        .trim();
-    }
+  // Tentar extrair apenas o campo content de JSON parcial/truncado
+  const contentMatch = raw.match(/"content"\s*:\s*"([^"]+)"/);
+  if (contentMatch) {
+    return {
+      content: contentMatch[1].trim(),
+      reasoning: "",
+      suggestedNextAction: "wait_reply",
+      sentiment: "neutral",
+    };
   }
 
-  // Se ainda está vazio ou é JSON, usar o raw sem os wrappers
-  if (!fallbackContent || fallbackContent.startsWith("{")) {
-    fallbackContent = raw
-      .replace(/```(?:json)?/g, "")
-      .replace(/```/g, "")
-      .replace(/\{[\s\S]*\}/g, "")
-      .trim() || "Desculpe, não consegui gerar uma resposta adequada. Posso ajudar de outra forma?";
+  // Fallback: usar o texto bruto (remover markdown/json artifacts)
+  let cleaned = raw
+    .replace(/```json\s*/g, "")
+    .replace(/```\s*/g, "")
+    .replace(/^\s*\{[\s\S]*$/, "") // Remove JSON incompleto
+    .trim();
+
+  // Se ainda parece JSON, extrair só o texto
+  if (cleaned.startsWith("{") || cleaned.startsWith('"')) {
+    const textMatch = cleaned.match(/"([^"]{10,})"/);
+    if (textMatch) cleaned = textMatch[1];
+  }
+
+  // Se ficou vazio, usar raw
+  if (!cleaned || cleaned.length < 5) {
+    cleaned = raw.replace(/[{}"]/g, "").trim().substring(0, 300);
   }
 
   return {
-    content: fallbackContent,
-    reasoning: "Resposta não estruturada — usando texto bruto",
+    content: cleaned,
+    reasoning: "",
     suggestedNextAction: "wait_reply",
     sentiment: "neutral",
   };
 }
 
 // ============================================================
-// FUNÇÃO PRINCIPAL — GERAR MENSAGEM
+// GERAÇÃO DE MENSAGEM (função principal)
 // ============================================================
 
 export async function generateMessage(ctx: ConversationContext): Promise<GeneratedMessage> {
   const systemPrompt = buildSystemPrompt(ctx);
 
-  let userMessage: string;
+  // Última mensagem do cliente (para multi-turn)
+  const lastUserMessage = ctx.conversationHistory && ctx.conversationHistory.length > 0
+    ? ctx.conversationHistory[ctx.conversationHistory.length - 1]?.content || ""
+    : "";
 
-  if (ctx.isFirstMessage) {
-    // Primeira mensagem: a IA inicia a conversa
-    userMessage = `Gere a primeira mensagem para ${ctx.contactName}. Seja natural e direto.`;
-  } else if (ctx.conversationHistory && ctx.conversationHistory.length > 0) {
-    // Continuação: última mensagem do paciente
-    const lastUserMsg = [...ctx.conversationHistory].reverse().find((m) => m.role === "user");
-    userMessage = lastUserMsg?.content || "O paciente não respondeu ainda.";
-  } else {
-    userMessage = "Gere uma mensagem de follow-up.";
-  }
+  const userPrompt = ctx.isFirstMessage
+    ? "Gere a primeira mensagem de abordagem para este cliente. Lembre-se: soe como um humano real no WhatsApp."
+    : `O cliente respondeu: "${lastUserMessage}"\n\nGere sua próxima resposta. Lembre-se: soe como um humano real no WhatsApp, não repita o que já foi dito.`;
 
   const rawResponse = await callLLM(
     systemPrompt,
-    userMessage,
-    ctx.conversationHistory || []
+    userPrompt
   );
 
-  const parsed = parseResponse(rawResponse);
-
-  // Verificar se precisa escalar para humano
-  if (parsed.content.includes("[ESCALAR_HUMANO]")) {
-    parsed.content = parsed.content.replace("[ESCALAR_HUMANO]", "").trim();
-    parsed.suggestedNextAction = "escalate_human";
-  }
-
-  return parsed;
+  return parseResponse(rawResponse);
 }
 
 // ============================================================
-// HELPER: BUSCAR CONTEXTO COMPLETO DO TENANT
+// CONSTRUTOR DE CONTEXTO COMPLETO (busca tudo do banco)
 // Inclui busca do prompt customizado ativo no banco
 // ============================================================
 
@@ -309,14 +287,28 @@ export async function buildConversationContext(params: {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Buscar dados do negócio
+  // ---- Buscar dados do negócio (companies) ----
   const { data: company } = await supabase
     .from("companies")
     .select("name, segment")
     .eq("id", params.tenantId)
     .single();
 
-  // Buscar conexão WhatsApp (persona + google review link)
+  // ---- Buscar perfil do negócio (business_profile) ----
+  const { data: businessProfile } = await supabase
+    .from("business_profile")
+    .select("company_name, business_description, business_type, brand_tone, differentials, main_pain_points, target_audience")
+    .eq("tenant_id", params.tenantId)
+    .single();
+
+  // ---- Buscar produtos/serviços ----
+  const { data: products } = await supabase
+    .from("products_services")
+    .select("name, value, ai_description")
+    .eq("tenant_id", params.tenantId)
+    .is("deleted_at", null);
+
+  // ---- Buscar conexão WhatsApp (persona + google review link) ----
   const { data: waConn } = await supabase
     .from("whatsapp_connections")
     .select("ai_persona_name, ai_persona_tone, google_review_link")
@@ -324,7 +316,58 @@ export async function buildConversationContext(params: {
     .in("status", ["connected", "active"])
     .single();
 
-  // Buscar prêmios de indicação (para promotores)
+  // ---- Buscar dados do lead (respostas do formulário + análise IA) ----
+  let leadAiAnalysis: ConversationContext["leadAiAnalysis"] = undefined;
+  let enrichedFormResponses = params.formResponses;
+
+  // Buscar lead pelo telefone para pegar análise completa
+  const phoneVariants = [
+    params.contactPhone,
+    params.contactPhone.replace(/^55/, ""),
+    `55${params.contactPhone}`,
+  ];
+
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("answers, suggested_products, name")
+    .in("phone", phoneVariants)
+    .eq("tenant_id", params.tenantId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (lead?.answers) {
+    // Extrair análise de IA do lead
+    const aiAnalysis = lead.answers._ai_analysis;
+    if (aiAnalysis) {
+      leadAiAnalysis = {
+        salesScript: aiAnalysis.sales_script,
+        clientInsights: aiAnalysis.client_insights,
+        suggestedProduct: aiAnalysis.suggested_product,
+        nextSteps: aiAnalysis.next_steps,
+        classification: aiAnalysis.classification,
+      };
+    }
+
+    // Enriquecer formResponses com as respostas reais do formulário
+    if (!enrichedFormResponses || Object.keys(enrichedFormResponses).length === 0) {
+      const formAnswers: Record<string, string> = {};
+      for (const [key, val] of Object.entries(lead.answers)) {
+        if (key.startsWith("_")) continue; // Pular campos internos (_ai_analysis, _analyzing)
+        if (typeof val === "object" && val !== null) {
+          const v = (val as any).value;
+          if (v) {
+            formAnswers[key] = Array.isArray(v) ? v.join(", ") : String(v);
+          }
+        } else if (typeof val === "string") {
+          formAnswers[key] = val;
+        }
+      }
+      enrichedFormResponses = formAnswers;
+    }
+  }
+
+  // ---- Buscar prêmios de indicação (para promotores) ----
   let referralRewards: Array<{ name: string; description: string }> = [];
   if (params.flowType === "promoter") {
     const { data: rewards } = await supabase
@@ -335,7 +378,7 @@ export async function buildConversationContext(params: {
     referralRewards = rewards || [];
   }
 
-  // Buscar prompt customizado ativo no banco (se existir)
+  // ---- Buscar prompt customizado ativo no banco (se existir) ----
   let customPrompt: string | undefined;
   const { data: promptVersion } = await supabase
     .from("prompt_versions")
@@ -351,20 +394,55 @@ export async function buildConversationContext(params: {
     customPrompt = promptVersion.prompt_content;
   }
 
+  // ---- Contexto temporal (dia/hora atual no fuso do Brasil) ----
+  const now = new Date();
+  const brTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const daysOfWeek = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+  const currentDayOfWeek = daysOfWeek[brTime.getDay()];
+  const currentDateTime = brTime.toLocaleString("pt-BR", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  // ---- Formatar lista de serviços disponíveis ----
+  const availableServices = (products || []).map(p => p.name);
+
   return {
     flowType: params.flowType,
     tenantId: params.tenantId,
     contactName: params.contactName,
     contactPhone: params.contactPhone,
-    companyName: company?.name || "Empresa",
-    companySegment: company?.segment || "saúde",
+    companyName: businessProfile?.company_name || company?.name || "Empresa",
+    companySegment: businessProfile?.business_type || company?.segment || "saúde",
     aiPersonaName: waConn?.ai_persona_name || "Assistente",
-    aiPersonaTone: waConn?.ai_persona_tone || "profissional e empático",
+    aiPersonaTone: waConn?.ai_persona_tone || businessProfile?.brand_tone || "profissional e empático",
+    // Perfil do negócio
+    businessDescription: businessProfile?.business_description,
+    businessDifferentials: businessProfile?.differentials,
+    targetAudience: businessProfile?.target_audience,
+    mainPainPoints: businessProfile?.main_pain_points,
+    // Produtos
+    productsServices: (products || []).map(p => ({
+      name: p.name,
+      value: Number(p.value) || 0,
+      description: p.ai_description || "",
+    })),
+    // Análise do lead
+    leadAiAnalysis,
+    // Contexto temporal
+    currentDateTime,
+    currentDayOfWeek,
+    // Dados originais
     googleReviewLink: waConn?.google_review_link,
     npsScore: params.npsScore,
     npsComment: params.npsComment,
-    formResponses: params.formResponses,
+    formResponses: enrichedFormResponses,
     interestedServices: params.interestedServices,
+    availableServices,
     referralRewards,
     conversationHistory: params.conversationHistory || [],
     isFirstMessage: params.isFirstMessage,
