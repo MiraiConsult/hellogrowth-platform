@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { sendTextMessage } from "@/lib/whatsapp-client";
+import { sendUnifiedTextMessage, getTenantWhatsAppConfig } from "@/lib/whatsapp-client";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,15 +15,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Parâmetros obrigatórios faltando" }, { status: 400 });
     }
 
-    // Buscar conexão WhatsApp do tenant
-    const { data: connection, error: connError } = await supabase
-      .from("whatsapp_connections")
-      .select("phone_number_id, business_token")
-      .eq("tenant_id", tenantId)
-      .eq("status", "connected")
-      .single();
+    // Buscar configuração WhatsApp do tenant (suporta Evolution, 360dialog, Meta Cloud)
+    const config = await getTenantWhatsAppConfig(supabase, tenantId);
 
-    if (connError || !connection) {
+    if (!config || !config.provider) {
       return NextResponse.json({ error: "WhatsApp não conectado" }, { status: 404 });
     }
 
@@ -38,13 +33,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Conversa não encontrada" }, { status: 404 });
     }
 
-    // Enviar mensagem via WhatsApp
-    const waMessageId = await sendTextMessage({
-      phoneNumberId: connection.phone_number_id,
-      accessToken: connection.business_token,
-      to: conv.contact_phone,
-      text: message,
-    });
+    // Enviar mensagem via WhatsApp (roteamento automático por provider)
+    const waMessageId = await sendUnifiedTextMessage(config, conv.contact_phone, message);
 
     // Atualizar ou criar mensagem no banco
     const { data: existingDraft } = await supabase
