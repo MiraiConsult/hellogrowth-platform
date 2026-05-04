@@ -199,27 +199,42 @@ async function callLLM(
 
 function parseResponse(raw: string): GeneratedMessage {
   try {
-    // Remove markdown wrappers
+    // Remove todos os markdown wrappers (pode ter múltiplos níveis)
     let cleaned = raw.trim();
-    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?\s*```$/i, "").trim();
+    // Remove blocos de código markdown: ```json ... ``` ou ``` ... ```
+    cleaned = cleaned.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "").trim();
 
+    // Tenta encontrar o JSON mais externo
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
-      return {
-        content: parsed.content || "",
-        reasoning: parsed.reasoning || "",
-        suggestedNextAction: parsed.suggestedNextAction || "wait_reply",
-        sentiment: parsed.sentiment || "neutral",
-      };
+      if (parsed.content) {
+        return {
+          content: parsed.content.trim(),
+          reasoning: parsed.reasoning || "",
+          suggestedNextAction: parsed.suggestedNextAction || "wait_reply",
+          sentiment: parsed.sentiment || "neutral",
+        };
+      }
     }
   } catch (e) {
     // Se não conseguir parsear JSON, usa o texto bruto como conteúdo
-    console.warn("[AI Engine] Falha ao parsear JSON, usando texto bruto");
+    console.warn("[AI Engine] Falha ao parsear JSON, usando texto bruto", (e as Error).message?.substring(0, 100));
   }
 
+  // Fallback: limpa o texto bruto removendo qualquer JSON ou markdown
+  const fallbackContent = raw
+    .replace(/```(?:json)?[\s\S]*?```/g, "")
+    .replace(/\{[\s\S]*"content"[\s\S]*\}/g, (match) => {
+      try {
+        const parsed = JSON.parse(match);
+        return parsed.content || match;
+      } catch { return match; }
+    })
+    .trim();
+
   return {
-    content: raw.replace(/```[\s\S]*?```/g, "").trim(),
+    content: fallbackContent || raw.trim(),
     reasoning: "Resposta não estruturada — usando texto bruto",
     suggestedNextAction: "wait_reply",
     sentiment: "neutral",
