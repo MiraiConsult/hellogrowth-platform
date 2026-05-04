@@ -311,12 +311,22 @@ async function handleIncomingMessage({
         const msgText = messagesToSend[i];
         if (!msgText?.trim()) continue;
 
-        // Delay antes de enviar (exceto primeira mensagem)
-        // Simula: tempo de leitura (1s) + tempo de digitação (~40 chars/s, mín 1.5s, máx 4s)
-        if (i > 0) {
-          const typingTime = Math.min(Math.max(Math.round(msgText.length / 40) * 1000, 1500), 4000);
-          const readingTime = 800;
-          await new Promise(resolve => setTimeout(resolve, readingTime + typingTime));
+        // Delay antes de enviar — simula comportamento humano realista
+        if (i === 0) {
+          // Primeira mensagem: delay inicial de 3-8s (simula leitura + início de digitação)
+          const initialDelay = 3000 + Math.floor(Math.random() * 5000);
+          await new Promise(resolve => setTimeout(resolve, initialDelay));
+        } else {
+          // Mensagens seguintes: tempo de leitura da anterior + tempo de digitação desta
+          const prevText = messagesToSend[i - 1];
+          const wordCount = prevText.split(/\s+/).length;
+          // ~250ms por palavra para leitura (mín 1s, máx 4s)
+          const readingTime = Math.min(Math.max(wordCount * 250, 1000), 4000);
+          // ~60ms por caractere para digitação (mín 2s, máx 9s)
+          const typingTime = Math.min(Math.max(msgText.length * 60, 2000), 9000);
+          // Jitter aleatório +/- 800ms para parecer mais humano
+          const jitter = Math.floor(Math.random() * 1600) - 800;
+          await new Promise(resolve => setTimeout(resolve, readingTime + typingTime + jitter));
         }
 
         const waId = await sendUnifiedTextMessage(waConfig, targetPhone, msgText);

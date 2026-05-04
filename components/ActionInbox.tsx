@@ -791,8 +791,30 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
                 <div className="flex-1 flex items-center justify-center h-40">
                   <div className={`text-center ${t.textMuted}`}>
                     <MessageCircle size={28} className="mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">Nenhuma mensagem ainda</p>
-                    <p className="text-xs mt-1 opacity-70">Envie a primeira mensagem abaixo</p>
+                    <p className="text-sm font-medium">Nenhuma mensagem ainda</p>
+                    {conversationMode === 'auto' ? (
+                      <div className={`mt-3 rounded-xl px-4 py-3 ${isDark ? 'bg-emerald-900/30 border border-emerald-800/40' : 'bg-emerald-50 border border-emerald-200'}`}>
+                        <div className="flex items-center justify-center gap-2 mb-1">
+                          <Bot size={14} className="text-emerald-500" />
+                          <p className={`text-xs font-semibold ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>Modo Automático Ativo</p>
+                        </div>
+                        <p className={`text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>A IA irá responder automaticamente quando o cliente enviar a primeira mensagem</p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-xs mt-1 opacity-70">Envie a primeira mensagem abaixo, ou ative o modo automático para a IA responder sozinha</p>
+                        {selectedAction.conversation_id && (
+                          <button
+                            onClick={() => handleSetMode('auto')}
+                            disabled={settingMode}
+                            className={`mt-4 flex items-center gap-2 mx-auto px-5 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white transition-colors shadow-sm`}
+                          >
+                            {settingMode ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
+                            Ativar Automático
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               )}
