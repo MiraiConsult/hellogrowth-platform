@@ -8,6 +8,93 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
+// ─── COMPONENTE DE DETALHES DA CAMPANHA ──────────────────────────────────────
+interface DispatchContact {
+  id: string;
+  name: string;
+  phone: string;
+  status: string;
+  error_message?: string;
+  sent_at?: string;
+}
+
+function CampaignDetail({ campaign, tenantId }: { campaign: Campaign; tenantId: string }) {
+  const [contacts, setContacts] = useState<DispatchContact[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      const { data } = await supabase
+        .from('dispatch_contacts')
+        .select('id, name, phone, status, error_message, sent_at')
+        .eq('campaign_id', campaign.id)
+        .order('sent_at', { ascending: true });
+      setContacts(data || []);
+      setLoading(false);
+    }
+    load();
+  }, [campaign.id]);
+
+  const statusIcon = (s: string) => {
+    if (s === 'sent' || s === 'delivered') return <CheckCircle size={14} className="text-green-500" />;
+    if (s === 'failed') return <XCircle size={14} className="text-red-500" />;
+    return <Clock size={14} className="text-gray-400" />;
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-gray-100" onClick={e => e.stopPropagation()}>
+      {/* Métricas */}
+      <div className="grid grid-cols-4 gap-3 mb-4">
+        {[
+          { label: 'Total', value: campaign.total_contacts || 0, color: 'text-gray-700' },
+          { label: 'Enviados', value: campaign.sent_count || 0, color: 'text-blue-600' },
+          { label: 'Responderam', value: campaign.responded_count || 0, color: 'text-green-600' },
+          { label: 'Falhas', value: campaign.failed_count || 0, color: 'text-red-600' },
+        ].map((s, i) => (
+          <div key={i} className="text-center">
+            <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
+            <div className="text-xs text-gray-500">{s.label}</div>
+          </div>
+        ))}
+      </div>
+      {/* Lista de contatos */}
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+          <Loader2 size={14} className="animate-spin" /> Carregando contatos...
+        </div>
+      ) : contacts.length === 0 ? (
+        <p className="text-xs text-gray-400 py-2">Nenhum contato registrado.</p>
+      ) : (
+        <div className="space-y-1 max-h-48 overflow-y-auto">
+          {contacts.map(ct => (
+            <div key={ct.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-50">
+              <div className="flex items-center gap-2">
+                {statusIcon(ct.status)}
+                <div>
+                  <span className="text-sm font-medium text-gray-800">{ct.name}</span>
+                  <span className="text-xs text-gray-400 ml-2">{ct.phone}</span>
+                </div>
+              </div>
+              <div className="text-right">
+                {ct.error_message ? (
+                  <span className="text-xs text-red-500 max-w-[200px] truncate block" title={ct.error_message}>
+                    {ct.error_message}
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400">
+                    {ct.sent_at ? new Date(ct.sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface DispatchesProps {
   tenantId: string;
 }
@@ -427,19 +514,7 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
                   </div>
                 </div>
                 {selectedCampaign?.id === c.id && (
-                  <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-4 gap-3">
-                    {[
-                      { label: 'Total', value: c.total_contacts || 0, color: 'text-gray-700' },
-                      { label: 'Enviados', value: c.sent_count || 0, color: 'text-blue-600' },
-                      { label: 'Responderam', value: c.responded_count || 0, color: 'text-green-600' },
-                      { label: 'Falhas', value: c.failed_count || 0, color: 'text-red-600' },
-                    ].map((s, i) => (
-                      <div key={i} className="text-center">
-                        <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
-                        <div className="text-xs text-gray-500">{s.label}</div>
-                      </div>
-                    ))}
-                  </div>
+                  <CampaignDetail campaign={c} tenantId={tenantId} />
                 )}
               </div>
             ))}

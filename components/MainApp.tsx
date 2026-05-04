@@ -1862,15 +1862,12 @@ Responda APENAS com JSON válido (sem markdown):
         )}
 
         {currentView === 'whatsapp-setup' && (
-          <div className="p-6 space-y-8">
+          <div className="p-6">
             <WhatsAppSetup
               isDark={false}
               tenantId={getActiveTenant() || ''}
               companyName={settings.companyName || 'Minha Empresa'}
             />
-            <div className="border-t border-gray-200 pt-8">
-              <CSVImport tenantId={getActiveTenant() || ''} />
-            </div>
           </div>
         )}
 
