@@ -25,7 +25,8 @@ export async function GET(req: NextRequest) {
       .single();
 
     if (error && error.code !== "PGRST116") {
-      return NextResponse.json({ error: "Erro ao buscar conexão" }, { status: 500 });
+      console.error("[WhatsApp Connection] Supabase error:", JSON.stringify(error));
+      return NextResponse.json({ error: "Erro ao buscar conexão", details: error.message, code: error.code }, { status: 500 });
     }
 
     return NextResponse.json({ connection: connection || null });
