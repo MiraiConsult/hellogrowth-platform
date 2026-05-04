@@ -11,6 +11,32 @@
  * Tom: Humano, informal, como um vendedor real digitando no celular.
  */
 
+// Mapear objetivo do playbook para instruções concretas
+function getObjectiveInstructions(objective: string): string {
+  const objectives: Record<string, string> = {
+    // Pré-venda
+    'aggressive_sales': 'Seja AGRESSIVA comercialmente. Crie urgência, destaque limitações de vagas/tempo, empurre para o fechamento. Não aceite "vou pensar" sem dar um próximo passo concreto.',
+    'consultive': 'Seja CONSULTIVA e PACIENTE. Faça perguntas para entender profundamente a necessidade antes de sugerir qualquer coisa. Construa confiança antes de vender.',
+    'empathetic': 'Seja EMPÁTICA acima de tudo. Valide os sentimentos do cliente, demonstre que entende a situação dele antes de apresentar soluções.',
+    'balanced': 'Seja EQUILIBRADA. Nem muito agressiva nem muito passiva. Apresente as opções com naturalidade e deixe o cliente decidir no próprio ritmo.',
+    'non_insistent': 'NÃO seja insistente. Apresente a proposta uma vez, de forma clara. Se o cliente não demonstrar interesse, não force. Respeite o espaço dele.',
+    // Pós-venda (promotor)
+    'request_referral_reward': 'Seu objetivo é solicitar INDICAÇÕES oferecendo uma PREMIAÇÃO. Mencione o prêmio de forma natural e entusiasmada. Facilite ao máximo o processo de indicação.',
+    'request_referral_only': 'Seu objetivo é solicitar INDICAÇÕES de forma simples e direta, sem oferecer premiação. Foque na satisfação do cliente como motivação.',
+    'invite_return': 'Seu objetivo é CONVIDAR o cliente para retornar à clínica/empresa. Mencione novidades, promoções ou simplesmente o quanto seria bom vê-lo novamente.',
+    'google_review': 'Seu objetivo é solicitar uma AVALIAÇÃO NO GOOGLE. Explique de forma simples como fazer e por que é importante para a empresa.',
+    // Neutro
+    'understand_and_reconquer': 'Seu objetivo é ENTENDER o que pode melhorar e RECONQUISTAR o cliente. Faça perguntas abertas sobre a experiência dele e mostre que a opinião dele importa.',
+    'invite_back': 'Seu objetivo é CONVIDAR o cliente de volta. Reconheça que faz tempo que ele não visita e ofereça algo especial para ele retornar.',
+    'apologize': 'Seu objetivo é PEDIR DESCULPAS por qualquer experiência negativa. Seja genuinamente arrependida e ofereça uma solução concreta.',
+    // Detrator
+    'understand_problem': 'Seu objetivo é ENTENDER O PROBLEMA em profundidade. Não defenda a empresa, não justifique. Apenas ouça, valide e registre o problema com empatia.',
+    'escalate_to_human': 'Seu objetivo é ESCALAR PARA UM HUMANO o mais rápido possível. Diga que vai chamar alguém da equipe para resolver pessoalmente. Não tente resolver sozinha.',
+    'apologize_and_solve': 'Seu objetivo é PEDIR DESCULPAS e oferecer uma SOLUÇÃO CONCRETA. Reconheça o problema, peça desculpas genuinamente e proponha uma compensação ou correção.',
+  };
+  return objectives[objective] || `Objetivo: ${objective}`;
+}
+
 export function buildPreSalePrompt(context: {
   companyName: string;
   companySegment: string;
@@ -41,6 +67,8 @@ export function buildPreSalePrompt(context: {
   aiPersonaTone?: string;
   aiPersonaPersonality?: string;
   aiPersonaCustomInstructions?: string;
+  // Playbook
+  playbookObjective?: string;
 }): string {
   const firstName = context.contactName.split(' ')[0];
 
@@ -200,6 +228,9 @@ FLUXO NATURAL:
 - Turno 2-3: Aprofundar necessidade, apresentar solução
 - Turno 4+: Fechar agendamento/próximo passo
 - Após agendamento confirmado: Agradecer e encerrar de forma natural
+${context.playbookObjective ? `
+OBJETIVO ESPECÍFICO DESTE FLUXO (definido pelo gestor):
+${getObjectiveInstructions(context.playbookObjective)}` : ''}
 
 ═══════════════════════════════════════
 REGRAS DE ESCRITA (WhatsApp)

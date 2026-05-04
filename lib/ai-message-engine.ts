@@ -60,6 +60,9 @@ export interface ConversationContext {
   googleReviewLink?: string;
   // Histórico da conversa (multi-turn)
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
+  // Playbook do fluxo
+  playbookObjective?: string;
+  playbookOperationMode?: string;
   // Modo
   isFirstMessage: boolean;
   // Prompt customizado (vem do banco se a clínica editou)
@@ -130,6 +133,8 @@ function buildSystemPrompt(ctx: ConversationContext): string {
     aiPersonaTone: ctx.aiPersonaTone,
     aiPersonaPersonality: ctx.aiPersonaPersonality,
     aiPersonaCustomInstructions: ctx.aiPersonaCustomInstructions,
+    // Playbook
+    playbookObjective: ctx.playbookObjective,
   });
 }
 
@@ -394,6 +399,14 @@ export async function buildConversationContext(params: {
     referralRewards = rewards || [];
   }
 
+  // ---- Buscar playbook do fluxo (objetivo + modo de operação) ----
+  const { data: playbook } = await supabase
+    .from("ai_flow_playbooks")
+    .select("operation_mode, objective, custom_objective_prompt, escalate_on_unknown, escalate_after_turns")
+    .eq("tenant_id", params.tenantId)
+    .eq("flow_type", params.flowType)
+    .single();
+
   // ---- Buscar prompt customizado ativo no banco (se existir) ----
   let customPrompt: string | undefined;
   const { data: promptVersion } = await supabase
@@ -408,6 +421,11 @@ export async function buildConversationContext(params: {
 
   if (promptVersion?.prompt_content) {
     customPrompt = promptVersion.prompt_content;
+  }
+
+  // Se o playbook tem um prompt de objetivo customizado, usa como customPrompt
+  if (!customPrompt && playbook?.custom_objective_prompt) {
+    customPrompt = playbook.custom_objective_prompt;
   }
 
   // ---- Contexto temporal (dia/hora atual no fuso do Brasil) ----
@@ -453,6 +471,9 @@ export async function buildConversationContext(params: {
       value: Number(p.value) || 0,
       description: p.ai_description || "",
     })),
+    // Playbook do fluxo
+    playbookObjective: playbook?.objective,
+    playbookOperationMode: playbook?.operation_mode,
     // Análise do lead
     leadAiAnalysis,
     // Contexto temporal (inclui calendário)

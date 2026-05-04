@@ -166,7 +166,7 @@ async function handleIncomingMessage({
   for (const phone of uniqueVariants) {
     const { data } = await supabase
       .from("ai_conversations")
-      .select("id, tenant_id, status, flow_type, contact_name, contact_phone, mode")
+      .select("id, tenant_id, status, flow_type, contact_name, contact_phone, mode, human_took_over")
       .eq("contact_phone", phone)
       .in("status", ["active", "waiting_reply", "draft"])
       .order("created_at", { ascending: false })
@@ -177,6 +177,29 @@ async function handleIncomingMessage({
 
   if (!conversation) {
     console.log(`[Evolution Webhook] Nenhuma conversa ativa para ${normalizedFrom}`);
+    return;
+  }
+
+  // --------------------------------------------------------
+  // Verificar se humano assumiu a conversa (IA pausada)
+  // --------------------------------------------------------
+  if (conversation.human_took_over === true) {
+    // Salvar mensagem inbound mas NÃO gerar resposta automática
+    console.log(`[Evolution Webhook] Humano assumiu conversa ${conversation.id} — IA pausada, mensagem salva sem resposta`);
+    // Ainda salva a mensagem (feito abaixo), mas retorna após salvar
+    await supabase.from("ai_conversation_messages").insert({
+      conversation_id: conversation.id,
+      direction: "inbound",
+      content,
+      status: "received",
+      wa_message_id: waMessageId,
+      sent_at: timestamp,
+      ai_reasoning: "IA pausada — humano assumiu conversa",
+    });
+    await supabase
+      .from("ai_conversations")
+      .update({ last_message_at: new Date().toISOString() })
+      .eq("id", conversation.id);
     return;
   }
 

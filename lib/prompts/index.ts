@@ -43,6 +43,8 @@ export interface PromptContext {
   aiPersonaTone?: string;
   aiPersonaPersonality?: string;
   aiPersonaCustomInstructions?: string;
+  // Playbook
+  playbookObjective?: string;
 }
 
 export function buildPrompt(ctx: PromptContext): string {
@@ -107,6 +109,8 @@ export function buildPrompt(ctx: PromptContext): string {
         aiPersonaTone: ctx.aiPersonaTone,
         aiPersonaPersonality: ctx.aiPersonaPersonality,
         aiPersonaCustomInstructions: ctx.aiPersonaCustomInstructions,
+        // Playbook
+        playbookObjective: ctx.playbookObjective,
       });
 
     default:
