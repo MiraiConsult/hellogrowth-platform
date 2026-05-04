@@ -212,6 +212,15 @@ async function sendEvolutionMessage(
   to: string,
   text: string
 ): Promise<string> {
+  // Normalizar número: garantir que tenha código do país (55 para BR)
+  let normalizedNumber = to.replace(/\D/g, ""); // Remove tudo que não é dígito
+  if (normalizedNumber.startsWith("+")) normalizedNumber = normalizedNumber.slice(1);
+  
+  // Se tem 10 ou 11 dígitos, é número BR sem código do país
+  if (normalizedNumber.length === 10 || normalizedNumber.length === 11) {
+    normalizedNumber = "55" + normalizedNumber;
+  }
+
   const url = `${config.evolutionUrl}/message/sendText/${config.instanceName}`;
 
   const res = await fetch(url, {
@@ -221,7 +230,7 @@ async function sendEvolutionMessage(
       apikey: config.evolutionKey!,
     },
     body: JSON.stringify({
-      number: to,
+      number: normalizedNumber,
       text: text,
     }),
   });
