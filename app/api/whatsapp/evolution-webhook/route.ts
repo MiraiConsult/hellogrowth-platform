@@ -43,11 +43,19 @@ export async function POST(req: NextRequest) {
       (body.data && (body.data.key || (Array.isArray(body.data) && body.data[0]?.key)));
     
     if (isMessageEvent) {
-      // Evolution API v2 pode enviar data como array ou objeto
-      // Formato v2: body.data é um array de mensagens
-      // Formato alternativo: body.data.message é o objeto da mensagem
+      // Evolution API v2 envia data como:
+      // - Array de mensagens: [{key:{...}, message:{...}, ...}]
+      // - Objeto único com key: {key:{...}, message:{...}, ...}
+      // IMPORTANTE: NÃO usar rawData.message pois isso retorna o conteúdo da mensagem,
+      // não o wrapper completo com key/pushName/messageTimestamp
       const rawData = body.data;
-      const messages = Array.isArray(rawData) ? rawData : [rawData?.message || rawData];
+      const messages = Array.isArray(rawData) 
+        ? rawData 
+        : rawData?.key 
+          ? [rawData]  // Objeto único com key = mensagem completa
+          : Array.isArray(rawData?.messages) 
+            ? rawData.messages 
+            : [rawData]; // Fallback
 
       for (const message of messages) {
         if (!message) continue;
