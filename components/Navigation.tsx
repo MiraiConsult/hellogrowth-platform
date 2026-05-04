@@ -33,7 +33,8 @@ import {
   Smartphone,
   BellOff,
   Rocket,
-  FileText
+  FileText,
+  Download
 } from 'lucide-react';
 import { PlanType, Company, UserCompany } from '@/types';
 import CompanySwitcher from '@/components/CompanySwitcher';
