@@ -58,6 +58,11 @@ export interface ConversationContext {
   referralRewards?: Array<{ name: string; description: string }>;
   referralReward?: string;
   googleReviewLink?: string;
+  // Campanhas de engajamento ativas
+  engagementReviewCampaign?: { id: string; reward_description: string; google_review_url: string } | null;
+  engagementReferralCampaign?: { id: string; reward_description: string } | null;
+  alreadyRequestedReview?: boolean;
+  alreadyRequestedReferral?: boolean;
   // Histórico da conversa (multi-turn)
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   // Playbook do fluxo
@@ -136,6 +141,11 @@ function buildSystemPrompt(ctx: ConversationContext): string {
     aiPersonaCustomInstructions: ctx.aiPersonaCustomInstructions,
     // Playbook
     playbookObjective: ctx.playbookObjective,
+    // Campanhas de engajamento
+    engagementReviewCampaign: ctx.engagementReviewCampaign,
+    engagementReferralCampaign: ctx.engagementReferralCampaign,
+    alreadyRequestedReview: ctx.alreadyRequestedReview,
+    alreadyRequestedReferral: ctx.alreadyRequestedReferral,
   });
 }
 
@@ -478,6 +488,51 @@ export async function buildConversationContext(params: {
     referralRewards = rewards || [];
   }
 
+  // ---- Buscar campanhas de engajamento ativas (Google Review + Indicação) ----
+  let engagementReviewCampaign: any = null;
+  let engagementReferralCampaign: any = null;
+  let alreadyRequestedReview = false;
+  let alreadyRequestedReferral = false;
+
+  if (params.flowType === "promoter") {
+    const { data: engCampaigns } = await supabase
+      .from("engagement_campaigns")
+      .select("id, type, reward_description, google_review_url, ai_enabled, ai_trigger, status")
+      .eq("tenant_id", params.tenantId)
+      .eq("status", "active")
+      .eq("ai_enabled", true)
+      .in("type", ["google_review", "referral"]);
+
+    if (engCampaigns) {
+      engagementReviewCampaign = engCampaigns.find(c => c.type === "google_review") || null;
+      engagementReferralCampaign = engCampaigns.find(c => c.type === "referral") || null;
+    }
+
+    // Verificar anti-duplicação: já foi abordado antes?
+    const phoneClean = params.contactPhone.replace(/\D/g, "");
+    const phoneVariantsCheck = [phoneClean, phoneClean.replace(/^55/, ""), `55${phoneClean}`];
+
+    if (engagementReviewCampaign) {
+      const { data: existingReview } = await supabase
+        .from("review_requests")
+        .select("id")
+        .eq("tenant_id", params.tenantId)
+        .in("lead_phone", phoneVariantsCheck)
+        .limit(1);
+      alreadyRequestedReview = (existingReview?.length || 0) > 0;
+    }
+
+    if (engagementReferralCampaign) {
+      const { data: existingReferral } = await supabase
+        .from("referrals")
+        .select("id")
+        .eq("tenant_id", params.tenantId)
+        .in("referrer_phone", phoneVariantsCheck)
+        .limit(1);
+      alreadyRequestedReferral = (existingReferral?.length || 0) > 0;
+    }
+  }
+
   // ---- Buscar playbook do fluxo (objetivo + modo de operação) ----
   const { data: playbook } = await supabase
     .from("ai_flow_playbooks")
@@ -566,6 +621,11 @@ export async function buildConversationContext(params: {
     interestedServices: params.interestedServices,
     availableServices,
     referralRewards,
+    // Campanhas de engajamento
+    engagementReviewCampaign,
+    engagementReferralCampaign,
+    alreadyRequestedReview,
+    alreadyRequestedReferral,
     conversationHistory: params.conversationHistory || [],
     isFirstMessage: params.isFirstMessage,
     customPrompt,

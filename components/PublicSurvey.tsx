@@ -251,6 +251,20 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
   const handleGameComplete = (prizeCode: string, prizeName: string) => {
     const placeId = getPlaceId();
     const redirectEnabled = isGoogleRedirectEnabled();
+    const tenantId = (campaign as any).tenant_id || (campaign as any).user_id;
+
+    // Registrar engajamento via game (fire-and-forget, anti-duplicação na API)
+    if (tenantId && respondent.phone && score !== null && score >= 9) {
+      fetch('/api/engagement/game-register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-tenant-id': tenantId },
+        body: JSON.stringify({
+          name: respondent.name,
+          phone: respondent.phone,
+          score,
+        }),
+      }).catch(() => {});
+    }
     
     // Após o jogo, se tem redirect habilitado, vai para redirecting
     if (redirectEnabled && placeId) {

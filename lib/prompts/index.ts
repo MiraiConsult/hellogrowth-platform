@@ -45,6 +45,11 @@ export interface PromptContext {
   aiPersonaCustomInstructions?: string;
   // Playbook
   playbookObjective?: string;
+  // Campanhas de engajamento (promotor)
+  engagementReviewCampaign?: { id: string; reward_description: string; google_review_url: string } | null;
+  engagementReferralCampaign?: { id: string; reward_description: string } | null;
+  alreadyRequestedReview?: boolean;
+  alreadyRequestedReferral?: boolean;
 }
 
 export function buildPrompt(ctx: PromptContext): string {
@@ -68,9 +73,21 @@ export function buildPrompt(ctx: PromptContext): string {
         npsScore: ctx.npsScore!,
         npsComment: ctx.npsComment,
         referralReward: ctx.referralReward,
-        googleReviewLink: ctx.googleReviewLink,
+        googleReviewLink: ctx.googleReviewLink || ctx.engagementReviewCampaign?.google_review_url,
+        engagementReviewReward: ctx.engagementReviewCampaign?.reward_description,
+        engagementReferralReward: ctx.engagementReferralCampaign?.reward_description,
+        alreadyRequestedReview: ctx.alreadyRequestedReview,
+        alreadyRequestedReferral: ctx.alreadyRequestedReferral,
         conversationHistory: ctx.conversationHistory,
         turnNumber: ctx.turnNumber,
+        // Persona
+        aiPersonaName: ctx.aiPersonaName,
+        aiPersonaRole: ctx.aiPersonaRole,
+        aiPersonaTone: ctx.aiPersonaTone,
+        aiPersonaPersonality: ctx.aiPersonaPersonality,
+        aiPersonaCustomInstructions: ctx.aiPersonaCustomInstructions,
+        // Playbook
+        playbookObjective: ctx.playbookObjective,
       });
 
     case 'passive':

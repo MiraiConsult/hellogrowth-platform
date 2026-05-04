@@ -29,6 +29,7 @@ import TeamManagement from '@/components/TeamManagement';
 import IntelligenceCenter from '@/components/IntelligenceCenter';
 import GameConfig from '@/components/GameConfig';
 import GameParticipations from '@/components/GameParticipations';
+import Game from '@/components/Game';
 import ReportSettings from '@/components/ReportSettings';
 import AlertSettings from '@/components/AlertSettings';
 import ActionInbox from '@/components/ActionInbox';
@@ -319,6 +320,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [publicSettings, setPublicSettings] = useState<AccountSettings | undefined>(undefined);
   const [publicCompanyName, setPublicCompanyName] = useState<string>('');
   const [publicLogoUrl, setPublicLogoUrl] = useState<string>('');
+  const [publicReferralCode, setPublicReferralCode] = useState<string | null>(null);
 
   // --- INITIAL DATA FETCH ---
   const fetchData = async () => {
@@ -559,6 +561,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         const params = new URLSearchParams(window.location.search);
         const surveyId = params.get('survey');
         const formId = params.get('form');
+        const refCode = params.get('ref');
+        if (refCode) setPublicReferralCode(refCode);
 
         if (surveyId) {
           setPreviewCampaignId(surveyId);
@@ -1230,6 +1234,21 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       return false;
     }
     
+    // Vincular lead ao referral se veio de um link de indicação
+    if (insertedLead && publicReferralCode) {
+      fetch('/api/engagement/referrals', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-tenant-id': formTenantId },
+        body: JSON.stringify({
+          referral_code: publicReferralCode,
+          referred_lead_id: insertedLead.id,
+          referred_name: insertedLead.name,
+          referred_phone: insertedLead.phone,
+          status: 'closed',
+        }),
+      }).catch((err) => console.error('[Referral→Link] Erro:', err));
+    }
+
     // Trigger: Criar ação na fila para aprovação de disparo WhatsApp (pré-venda)
     if (insertedLead && formTenantId && insertedLead.phone) {
       fetch('/api/triggers/create-action', {
@@ -1692,9 +1711,7 @@ Responda APENAS com JSON válido (sem markdown):
         />}
         
         {currentView === 'games' && (
-            <div className="p-6">
-                <GameConfig tenantId={getActiveTenant()!} />
-            </div>
+            <Game tenantId={getActiveTenant()!} campaigns={campaigns} />
         )}
         
         {currentView === 'game-participations' && (
