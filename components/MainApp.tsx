@@ -1126,6 +1126,23 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'any_nps_response', companyId: campaignTenantId, data: npsAlertData }),
         }).catch(() => {});
+
+        // Trigger: Criar ação na fila para aprovação de disparo WhatsApp
+        if (data.customer_phone) {
+          fetch('/api/triggers/create-action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantId: campaignTenantId,
+              contactName: data.customer_name || 'Cliente',
+              contactPhone: data.customer_phone,
+              flowType: data.score <= 6 ? 'detractor' : data.score >= 9 ? 'promoter' : 'passive',
+              npsScore: data.score,
+              npsComment: data.comment || '',
+              triggeredBy: 'nps_form',
+            }),
+          }).catch((err) => console.error('[NPS→Action] Erro:', err));
+        }
       }
     }
 
@@ -1212,6 +1229,24 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       return false;
     }
     
+    // Trigger: Criar ação na fila para aprovação de disparo WhatsApp (pré-venda)
+    if (insertedLead && formTenantId && insertedLead.phone) {
+      fetch('/api/triggers/create-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: formTenantId,
+          contactName: insertedLead.name || 'Lead',
+          contactPhone: insertedLead.phone,
+          flowType: 'pre_sale',
+          formResponses: enrichedAnswers,
+          interestedServices: data.patient?.interested_services || [],
+          leadId: insertedLead.id,
+          triggeredBy: 'presale_form',
+        }),
+      }).catch((err) => console.error('[PreSale→Action] Erro:', err));
+    }
+
     // Disparar alertas de novo lead e lead de alto valor (fire-and-forget)
     if (insertedLead && formTenantId) {
       const alertData = {

@@ -108,7 +108,7 @@ async function callGemini(
   userMessage: string,
   history: Array<{ role: "user" | "assistant"; content: string }> = []
 ): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY não configurada");
 
   const genAI = new GoogleGenerativeAI(apiKey);

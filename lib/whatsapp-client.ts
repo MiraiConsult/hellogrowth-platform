@@ -57,7 +57,8 @@ export async function sendUnifiedTextMessage(
   switch (config.provider) {
     case '360dialog':
       if (!config.apiKey) throw new Error('360dialog API Key não configurada');
-      return await send360Message(config.apiKey, to, text);
+      const result = await send360Message(to, text, config.apiKey);
+      return result.messageId || `360_${Date.now()}`;
 
     case 'meta_cloud':
       if (!config.phoneNumberId || !config.accessToken) {
@@ -95,7 +96,8 @@ export async function sendUnifiedTemplateMessage(
   switch (config.provider) {
     case '360dialog':
       if (!config.apiKey) throw new Error('360dialog API Key não configurada');
-      return await send360Template(config.apiKey, to, templateName, languageCode, components);
+      const tplResult = await send360Template(to, templateName, languageCode, components as any, config.apiKey);
+      return tplResult.messageId || `360tpl_${Date.now()}`;
 
     case 'meta_cloud':
       if (!config.phoneNumberId || !config.accessToken) {
