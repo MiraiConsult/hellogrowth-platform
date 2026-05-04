@@ -357,6 +357,48 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
     }
   };
 
+  // Ativar modo auto E enviar a primeira mensagem imediatamente
+  const handleActivateAutoAndSend = async () => {
+    if (!selectedAction?.conversation_id || !conversation) return;
+    setSettingMode(true);
+    try {
+      // Atualizar UI imediatamente para feedback visual
+      setConversationMode('auto');
+      setConversation(prev => prev ? { ...prev, mode: 'auto' } : prev);
+
+      const res = await fetch('/api/action-inbox/activate-auto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: conversation.id,
+          tenantId,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        console.log('[ActionInbox] Modo auto ativado:', data);
+        // Recarregar mensagens após envio (com delay para aguardar o envio)
+        setTimeout(() => {
+          if (selectedAction?.conversation_id) {
+            fetchConversation(selectedAction.conversation_id);
+          }
+        }, 3000);
+      } else {
+        console.error('[ActionInbox] Erro ao ativar modo auto');
+        // Reverter UI em caso de erro
+        setConversationMode('approval_required');
+        setConversation(prev => prev ? { ...prev, mode: 'approval_required' } : prev);
+      }
+    } catch (err) {
+      console.error('Error activating auto mode:', err);
+      setConversationMode('approval_required');
+      setConversation(prev => prev ? { ...prev, mode: 'approval_required' } : prev);
+    } finally {
+      setSettingMode(false);
+    }
+  };
+
   const getPriorityDot = (priority: string) => {
     if (priority === 'high') return 'bg-red-500';
     if (priority === 'medium') return 'bg-amber-500';
@@ -655,9 +697,19 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
                       <span>Aprovação</span>
                     </button>
                     <button
-                      onClick={() => handleSetMode('auto')}
+                      onClick={() => {
+                        // Se não há mensagens enviadas ainda, ativa E envia a primeira mensagem
+                        const hasMessages = conversation?.messages?.some(
+                          (m: ConversationMessage) => m.direction === 'outbound' && m.status === 'sent'
+                        );
+                        if (!hasMessages && conversationMode !== 'auto') {
+                          handleActivateAutoAndSend();
+                        } else {
+                          handleSetMode('auto');
+                        }
+                      }}
                       disabled={settingMode}
-                      title="Modo Automático: IA responde sozinha sem aprovação"
+                      title="Modo Automático: IA inicia e responde sozinha"
                       className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
                         conversationMode === 'auto'
                           ? 'bg-emerald-600 text-white shadow-sm'
@@ -796,21 +848,30 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
                       <div className={`mt-3 rounded-xl px-4 py-3 ${isDark ? 'bg-emerald-900/30 border border-emerald-800/40' : 'bg-emerald-50 border border-emerald-200'}`}>
                         <div className="flex items-center justify-center gap-2 mb-1">
                           <Bot size={14} className="text-emerald-500" />
-                          <p className={`text-xs font-semibold ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>Modo Automático Ativo</p>
+                          {settingMode ? (
+                            <p className={`text-xs font-semibold ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>Enviando primeira mensagem...</p>
+                          ) : (
+                            <p className={`text-xs font-semibold ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>Modo Automático Ativo</p>
+                          )}
                         </div>
-                        <p className={`text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>A IA irá responder automaticamente quando o cliente enviar a primeira mensagem</p>
+                        <p className={`text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                          {settingMode
+                            ? 'A IA está gerando e enviando a primeira mensagem...'
+                            : 'A IA irá responder automaticamente quando o cliente responder'
+                          }
+                        </p>
                       </div>
                     ) : (
                       <>
-                        <p className="text-xs mt-1 opacity-70">Envie a primeira mensagem abaixo, ou ative o modo automático para a IA responder sozinha</p>
+                        <p className="text-xs mt-1 opacity-70">Envie a primeira mensagem abaixo, ou ative o modo automático para a IA iniciar a conversa sozinha</p>
                         {selectedAction.conversation_id && (
                           <button
-                            onClick={() => handleSetMode('auto')}
+                            onClick={handleActivateAutoAndSend}
                             disabled={settingMode}
                             className={`mt-4 flex items-center gap-2 mx-auto px-5 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white transition-colors shadow-sm`}
                           >
                             {settingMode ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
-                            Ativar Automático
+                            {settingMode ? 'Enviando...' : 'Ativar Automático'}
                           </button>
                         )}
                       </>
