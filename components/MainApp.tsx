@@ -1803,7 +1803,7 @@ Responda APENAS com JSON válido (sem markdown):
 
         {currentView === 'action-inbox' && (
           <ActionInbox
-            isDark={isDark}
+            isDark={false}
             tenantId={getActiveTenant() || ''}
           />
         )}
@@ -1811,7 +1811,7 @@ Responda APENAS com JSON válido (sem markdown):
         {currentView === 'whatsapp-setup' && (
           <div className="p-6 space-y-8">
             <WhatsAppSetup
-              isDark={isDark}
+              isDark={false}
               tenantId={getActiveTenant() || ''}
               companyName={settings.companyName || 'Minha Empresa'}
             />
@@ -1823,21 +1823,21 @@ Responda APENAS com JSON válido (sem markdown):
 
         {currentView === 'action-metrics' && (
           <ActionMetrics
-            isDark={isDark}
+            isDark={false}
             tenantId={getActiveTenant() || ''}
           />
         )}
 
         {currentView === 'referral-rewards' && (
           <ReferralRewards
-            isDark={isDark}
+            isDark={false}
             tenantId={getActiveTenant() || ''}
           />
         )}
 
         {currentView === 'prompt-manager' && (
           <PromptManager
-            isDark={isDark}
+            isDark={false}
             tenantId={getActiveTenant() || ''}
           />
         )}
