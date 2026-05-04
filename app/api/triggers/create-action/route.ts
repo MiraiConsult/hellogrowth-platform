@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       .from("whatsapp_connections")
       .select("id, status")
       .eq("tenant_id", tenantId)
-      .eq("status", "connected")
+      .in("status", ["connected", "active"])
       .single();
 
     if (!connection) {

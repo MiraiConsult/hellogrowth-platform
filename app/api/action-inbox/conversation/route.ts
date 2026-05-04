@@ -24,13 +24,15 @@ export async function GET(req: NextRequest) {
         status,
         nps_score,
         trigger_data,
+        mode,
         ai_conversation_messages(
           id,
           direction,
           content,
           status,
           sent_at,
-          wa_message_id
+          wa_message_id,
+          ai_reasoning
         )
       `)
       .eq("id", id)
@@ -40,9 +42,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Conversa não encontrada" }, { status: 404 });
     }
 
-    // Separar draft da IA das mensagens enviadas
+    // Separar draft da IA das mensagens enviadas/recebidas
+    // Inclui: outbound sent/delivered/read + inbound received
     const messages = (conv.ai_conversation_messages || [])
-      .filter((m: { status: string }) => m.status !== "draft")
+      .filter((m: { status: string; direction: string }) => {
+        if (m.status === "draft") return false; // nunca mostrar drafts no histórico
+        return true; // mostrar sent, delivered, read, received
+      })
       .sort((a: { sent_at: string }, b: { sent_at: string }) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime());
 
     const aiDraft = (conv.ai_conversation_messages || [])
@@ -59,6 +65,7 @@ export async function GET(req: NextRequest) {
         messages,
         ai_draft: aiDraft?.content || "",
         ai_draft_id: aiDraft?.id || null,
+        mode: (conv as any).mode || "approval_required",
       },
     });
   } catch (error) {

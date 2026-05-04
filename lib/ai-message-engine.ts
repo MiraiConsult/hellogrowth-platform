@@ -297,7 +297,7 @@ export async function buildConversationContext(params: {
     .from("whatsapp_connections")
     .select("ai_persona_name, ai_persona_tone, google_review_link")
     .eq("tenant_id", params.tenantId)
-    .eq("status", "connected")
+    .in("status", ["connected", "active"])
     .single();
 
   // Buscar prêmios de indicação (para promotores)

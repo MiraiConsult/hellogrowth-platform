@@ -50,6 +50,8 @@ interface Conversation {
   flow_type: string;
   messages: ConversationMessage[];
   ai_draft?: string;
+  ai_draft_id?: string;
+  mode?: 'approval_required' | 'auto';
 }
 
 interface Stats {
@@ -161,7 +163,10 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
   const [showReasoningId, setShowReasoningId] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [conversationMode, setConversationMode] = useState<'approval_required' | 'auto'>('approval_required');
+  const [settingMode, setSettingMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const autoRefreshRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchActions = useCallback(async (pageNum = 1, append = false) => {
     if (!append) setLoading(true);
@@ -193,19 +198,25 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
     }
   }, [tenantId, statusFilter, typeFilter, searchQuery]);
 
-  const fetchConversation = useCallback(async (conversationId: string) => {
-    setLoadingConv(true);
+  const fetchConversation = useCallback(async (conversationId: string, silent = false) => {
+    if (!silent) setLoadingConv(true);
     try {
       const res = await fetch(`/api/action-inbox/conversation?id=${conversationId}`);
       if (res.ok) {
         const data = await res.json();
         setConversation(data.conversation);
-        setEditingDraft(data.conversation?.ai_draft || '');
+        if (!silent) {
+          setEditingDraft(data.conversation?.ai_draft || '');
+        } else if (data.conversation?.ai_draft) {
+          // Em modo silent, atualiza draft apenas se houver novo draft
+          setEditingDraft(prev => data.conversation.ai_draft || prev);
+        }
+        setConversationMode(data.conversation?.mode || 'approval_required');
       }
     } catch (err) {
       console.error('Error fetching conversation:', err);
     } finally {
-      setLoadingConv(false);
+      if (!silent) setLoadingConv(false);
     }
   }, []);
 
@@ -219,6 +230,19 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [conversation?.messages]);
+
+  // Auto-refresh: atualiza a conversa a cada 5s quando há conversa ativa em waiting_reply
+  useEffect(() => {
+    if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+    if (selectedAction?.conversation_id && selectedAction?.status === 'waiting_reply') {
+      autoRefreshRef.current = setInterval(() => {
+        fetchConversation(selectedAction.conversation_id!, true);
+      }, 5000);
+    }
+    return () => {
+      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+    };
+  }, [selectedAction?.conversation_id, selectedAction?.status, fetchConversation]);
 
   const handleSelectAction = async (action: ActionItem) => {
     setSelectedAction(action);
@@ -307,6 +331,30 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
     const nextPage = page + 1;
     setPage(nextPage);
     fetchActions(nextPage, true);
+  };
+
+  const handleSetMode = async (mode: 'approval_required' | 'auto') => {
+    if (!selectedAction?.conversation_id || !conversation) return;
+    setSettingMode(true);
+    try {
+      const res = await fetch('/api/action-inbox/set-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: conversation.id,
+          mode,
+          tenantId,
+        }),
+      });
+      if (res.ok) {
+        setConversationMode(mode);
+        setConversation(prev => prev ? { ...prev, mode } : prev);
+      }
+    } catch (err) {
+      console.error('Error setting mode:', err);
+    } finally {
+      setSettingMode(false);
+    }
   };
 
   const getPriorityDot = (priority: string) => {
@@ -592,7 +640,38 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
+                {/* Toggle modo IA */}
+                {selectedAction.conversation_id && (
+                  <div className={`flex items-center gap-1 rounded-lg p-0.5 border ${t.divider} ${isDark ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                    <button
+                      onClick={() => handleSetMode('approval_required')}
+                      disabled={settingMode}
+                      title="Modo Aprovação: IA gera draft, você aprova antes de enviar"
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
+                        conversationMode === 'approval_required'
+                          ? 'bg-purple-600 text-white shadow-sm'
+                          : `${t.textMuted} hover:text-purple-500`
+                      }`}
+                    >
+                      <User size={10} />
+                      <span>Aprovação</span>
+                    </button>
+                    <button
+                      onClick={() => handleSetMode('auto')}
+                      disabled={settingMode}
+                      title="Modo Automático: IA responde sozinha sem aprovação"
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
+                        conversationMode === 'auto'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : `${t.textMuted} hover:text-emerald-500`
+                      }`}
+                    >
+                      <Bot size={10} />
+                      <span>Automático</span>
+                    </button>
+                  </div>
+                )}
                 <a
                   href={`https://wa.me/${selectedAction.contact_phone.replace(/\D/g, '')}`}
                   target="_blank"
@@ -708,11 +787,22 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
 
             {/* ---- Editor de mensagem da IA ---- */}
             <div className={`p-4 border-t ${t.divider}`}>
+              {/* Banner modo automático */}
+              {conversationMode === 'auto' && (
+                <div className={`mb-3 rounded-xl px-3 py-2 flex items-center gap-2 ${isDark ? 'bg-emerald-900/20 border border-emerald-800/30' : 'bg-emerald-50 border border-emerald-200'}`}>
+                  <Bot size={13} className="text-emerald-500 flex-shrink-0" />
+                  <p className={`text-xs ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                    <span className="font-semibold">Modo Automático ativo</span> — A IA está respondendo automaticamente. Mensagens recebidas serão respondidas sem aprovação.
+                  </p>
+                </div>
+              )}
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Bot size={13} className="text-purple-500" />
-                  <span className="text-xs font-semibold text-purple-600">Mensagem sugerida pela IA</span>
-                  <span className={`text-xs ${t.textMuted}`}>— edite se necessário</span>
+                  <Bot size={13} className={conversationMode === 'auto' ? 'text-emerald-500' : 'text-purple-500'} />
+                  <span className={`text-xs font-semibold ${conversationMode === 'auto' ? 'text-emerald-600' : 'text-purple-600'}`}>
+                    {conversationMode === 'auto' ? 'Próxima mensagem da IA (pré-visualização)' : 'Mensagem sugerida pela IA'}
+                  </span>
+                  {conversationMode !== 'auto' && <span className={`text-xs ${t.textMuted}`}>— edite se necessário</span>}
                 </div>
                 <div className="flex items-center gap-1">
                   <button
