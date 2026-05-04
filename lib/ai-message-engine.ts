@@ -398,15 +398,18 @@ export async function buildConversationContext(params: {
   const now = new Date();
   const brTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
   const daysOfWeek = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+  const months = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
   const currentDayOfWeek = daysOfWeek[brTime.getDay()];
-  const currentDateTime = brTime.toLocaleString("pt-BR", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const currentDateTime = `${currentDayOfWeek}, ${brTime.getDate()} de ${months[brTime.getMonth()]} de ${brTime.getFullYear()}, ${String(brTime.getHours()).padStart(2, '0')}:${String(brTime.getMinutes()).padStart(2, '0')}`;
+
+  // Gerar calendário dos próximos 7 dias para ajudar com agendamentos
+  const calendarDays: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const futureDate = new Date(brTime.getTime() + i * 24 * 60 * 60 * 1000);
+    const dayName = daysOfWeek[futureDate.getDay()];
+    const label = i === 0 ? "HOJE" : i === 1 ? "amanhã" : i === 2 ? "depois de amanhã" : dayName;
+    calendarDays.push(`  ${label} = ${dayName}, ${futureDate.getDate()} de ${months[futureDate.getMonth()]}`);
+  }
 
   // ---- Formatar lista de serviços disponíveis ----
   const availableServices = (products || []).map(p => p.name);
@@ -433,8 +436,8 @@ export async function buildConversationContext(params: {
     })),
     // Análise do lead
     leadAiAnalysis,
-    // Contexto temporal
-    currentDateTime,
+    // Contexto temporal (inclui calendário)
+    currentDateTime: currentDateTime + "\n\nCalendário dos próximos dias:\n" + calendarDays.join("\n"),
     currentDayOfWeek,
     // Dados originais
     googleReviewLink: waConn?.google_review_link,
