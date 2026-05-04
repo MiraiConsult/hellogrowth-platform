@@ -25,7 +25,13 @@ export async function POST(req: NextRequest) {
     
     // Simular extração de mensagem
     const rawData = body.data;
-    const messages = Array.isArray(rawData) ? rawData : [rawData?.message || rawData];
+    const messages = Array.isArray(rawData) 
+      ? rawData 
+      : rawData?.key 
+        ? [rawData]  // Objeto único com key = mensagem completa
+        : Array.isArray(rawData?.messages) 
+          ? rawData.messages 
+          : [rawData]; // Fallback
     diagnostics.push(`Messages count: ${messages.length}`);
     
     for (const message of messages) {
