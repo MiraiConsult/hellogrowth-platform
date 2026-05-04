@@ -294,32 +294,54 @@ async function handleIncomingMessage({
   if (!aiResult?.content) return;
 
   if (mode === "auto") {
-    // ---- MODO AUTO: enviar imediatamente ----
+    // ---- MODO AUTO: enviar cada mensagem com delay (simula digitação humana) ----
     try {
       const waConfig = await getTenantWhatsAppConfig(supabase, conversation.tenant_id);
-      const waMessageId = await sendUnifiedTextMessage(
-        waConfig,
-        convFull?.contact_phone || normalizedFrom,
-        aiResult.content
-      );
+      const targetPhone = convFull?.contact_phone || normalizedFrom;
 
-      await supabase.from("ai_conversation_messages").insert({
-        conversation_id: conversation.id,
-        direction: "outbound",
-        content: aiResult.content,
-        status: "sent",
-        wa_message_id: waMessageId,
-        sent_at: new Date().toISOString(),
-        ai_reasoning: aiResult.reasoning,
-        approved_by: "ai_auto",
-      });
+      // Usar array de mensagens (novo formato) ou fallback para content único
+      const messagesToSend: string[] = aiResult.messages && aiResult.messages.length > 0
+        ? aiResult.messages
+        : [aiResult.content];
+
+      console.log(`[Evolution Webhook] Enviando ${messagesToSend.length} mensagens para ${targetPhone}`);
+
+      let lastWaMessageId = "";
+      for (let i = 0; i < messagesToSend.length; i++) {
+        const msgText = messagesToSend[i];
+        if (!msgText?.trim()) continue;
+
+        // Delay antes de enviar (exceto primeira mensagem)
+        // Simula: tempo de leitura (1s) + tempo de digitação (~40 chars/s, mín 1.5s, máx 4s)
+        if (i > 0) {
+          const typingTime = Math.min(Math.max(Math.round(msgText.length / 40) * 1000, 1500), 4000);
+          const readingTime = 800;
+          await new Promise(resolve => setTimeout(resolve, readingTime + typingTime));
+        }
+
+        const waId = await sendUnifiedTextMessage(waConfig, targetPhone, msgText);
+        lastWaMessageId = waId || lastWaMessageId;
+
+        await supabase.from("ai_conversation_messages").insert({
+          conversation_id: conversation.id,
+          direction: "outbound",
+          content: msgText,
+          status: "sent",
+          wa_message_id: waId,
+          sent_at: new Date().toISOString(),
+          ai_reasoning: i === 0 ? aiResult.reasoning : `Mensagem ${i + 1}/${messagesToSend.length}`,
+          approved_by: "ai_auto",
+        });
+
+        console.log(`[Evolution Webhook] Mensagem ${i + 1}/${messagesToSend.length} enviada: "${msgText.substring(0, 60)}"`);
+      }
 
       await supabase
         .from("ai_conversations")
         .update({ status: "waiting_reply", last_message_at: new Date().toISOString() })
         .eq("id", conversation.id);
 
-      console.log(`[Evolution Webhook] Resposta automática enviada para ${normalizedFrom}: ${waMessageId}`);
+      console.log(`[Evolution Webhook] Todas as mensagens enviadas para ${targetPhone}`);
     } catch (sendErr: any) {
       console.error("[Evolution Webhook] Erro ao enviar resposta automática:", sendErr.message);
     }
@@ -333,11 +355,15 @@ async function handleIncomingMessage({
       .eq("status", "draft")
       .eq("direction", "outbound");
 
-    // Inserir novo draft
+    // Inserir novo draft (todas as mensagens concatenadas com \n\n para visualização)
+    const draftContent = aiResult.messages && aiResult.messages.length > 1
+      ? aiResult.messages.join("\n\n")
+      : aiResult.content;
+
     await supabase.from("ai_conversation_messages").insert({
       conversation_id: conversation.id,
       direction: "outbound",
-      content: aiResult.content,
+      content: draftContent,
       status: "draft",
       sent_at: new Date().toISOString(),
       ai_reasoning: aiResult.reasoning,

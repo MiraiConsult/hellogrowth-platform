@@ -70,7 +70,8 @@ export interface ConversationContext {
 }
 
 export interface GeneratedMessage {
-  content: string;
+  content: string;          // Primeira mensagem (compatibilidade)
+  messages: string[];       // Array de mensagens para envio sequencial
   reasoning: string;
   suggestedNextAction: "wait_reply" | "escalate_human" | "close_conversation" | "send_template";
   sentiment: "positive" | "neutral" | "negative";
@@ -200,59 +201,137 @@ async function callLLM(
 // ============================================================
 
 function parseResponse(raw: string): GeneratedMessage {
-  // Tentar extrair JSON da resposta
-  const jsonMatch = raw.match(/\{[\s\S]*?"content"[\s\S]*?\}/);
+  // Tentar extrair JSON completo da resposta
+  // Suporta tanto o novo formato {messages: [...]} quanto o antigo {content: "..."}
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
       const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed.content && typeof parsed.content === "string") {
+
+      // Novo formato: array de mensagens
+      if (parsed.messages && Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+        const msgs = parsed.messages.map((m: any) => String(m).trim()).filter(Boolean);
         return {
-          content: parsed.content.trim(),
+          content: msgs[0],
+          messages: msgs,
+          reasoning: parsed.reasoning || "",
+          suggestedNextAction: parsed.suggestedNextAction || "wait_reply",
+          sentiment: parsed.sentiment || "neutral",
+        };
+      }
+
+      // Formato antigo: content string — converter para array
+      if (parsed.content && typeof parsed.content === "string") {
+        const content = parsed.content.trim();
+        // Quebrar em partes se tiver \n\n ou for muito longa
+        const parts = splitIntoMessages(content);
+        return {
+          content: parts[0],
+          messages: parts,
           reasoning: parsed.reasoning || "",
           suggestedNextAction: parsed.suggestedNextAction || "wait_reply",
           sentiment: parsed.sentiment || "neutral",
         };
       }
     } catch {
-      // JSON inválido, tentar extrair content manualmente
+      // JSON inválido, continuar
     }
   }
 
-  // Tentar extrair apenas o campo content de JSON parcial/truncado
+  // Tentar extrair array messages de JSON parcial
+  const messagesMatch = raw.match(/"messages"\s*:\s*(\[[\s\S]*?\])/);
+  if (messagesMatch) {
+    try {
+      const msgs = JSON.parse(messagesMatch[1]) as string[];
+      if (msgs.length > 0) {
+        return {
+          content: msgs[0],
+          messages: msgs,
+          reasoning: "",
+          suggestedNextAction: "wait_reply",
+          sentiment: "neutral",
+        };
+      }
+    } catch { /* continuar */ }
+  }
+
+  // Tentar extrair content de JSON parcial/truncado
   const contentMatch = raw.match(/"content"\s*:\s*"([^"]+)"/);
   if (contentMatch) {
+    const parts = splitIntoMessages(contentMatch[1].trim());
     return {
-      content: contentMatch[1].trim(),
+      content: parts[0],
+      messages: parts,
       reasoning: "",
       suggestedNextAction: "wait_reply",
       sentiment: "neutral",
     };
   }
 
-  // Fallback: usar o texto bruto (remover markdown/json artifacts)
+  // Fallback: usar o texto bruto
   let cleaned = raw
     .replace(/```json\s*/g, "")
     .replace(/```\s*/g, "")
-    .replace(/^\s*\{[\s\S]*$/, "") // Remove JSON incompleto
     .trim();
 
-  // Se ainda parece JSON, extrair só o texto
   if (cleaned.startsWith("{") || cleaned.startsWith('"')) {
     const textMatch = cleaned.match(/"([^"]{10,})"/);
     if (textMatch) cleaned = textMatch[1];
   }
 
-  // Se ficou vazio, usar raw
   if (!cleaned || cleaned.length < 5) {
     cleaned = raw.replace(/[{}"]/g, "").trim().substring(0, 300);
   }
 
+  const parts = splitIntoMessages(cleaned);
   return {
-    content: cleaned,
+    content: parts[0],
+    messages: parts,
     reasoning: "",
     suggestedNextAction: "wait_reply",
     sentiment: "neutral",
   };
+}
+
+// Quebra um texto longo em mensagens curtas (simulando digitação humana)
+function splitIntoMessages(text: string): string[] {
+  if (!text) return [""];
+
+  // Se já é curto (< 120 chars), retornar como está
+  if (text.length <= 120) return [text];
+
+  // Tentar quebrar por \n\n (parágrafos)
+  const byParagraph = text.split(/\n\n+/).map(s => s.trim()).filter(Boolean);
+  if (byParagraph.length >= 2) {
+    return byParagraph.slice(0, 4);
+  }
+
+  // Tentar quebrar por \n
+  const byLine = text.split(/\n/).map(s => s.trim()).filter(Boolean);
+  if (byLine.length >= 2) {
+    return byLine.slice(0, 4);
+  }
+
+  // Quebrar por frases (. ! ?)
+  const bySentence = text.match(/[^.!?]+[.!?]+/g) || [text];
+  if (bySentence.length >= 2) {
+    // Agrupar frases em no máximo 4 mensagens
+    const result: string[] = [];
+    let current = "";
+    for (const sentence of bySentence) {
+      if (current.length + sentence.length > 120 && current.length > 0) {
+        result.push(current.trim());
+        current = sentence;
+      } else {
+        current += (current ? " " : "") + sentence.trim();
+      }
+      if (result.length >= 3) break;
+    }
+    if (current.trim()) result.push(current.trim());
+    return result.slice(0, 4);
+  }
+
+  return [text];
 }
 
 // ============================================================
