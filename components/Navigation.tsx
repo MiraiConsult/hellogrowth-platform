@@ -331,17 +331,7 @@ const Navigation: React.FC<NavigationProps> = ({
         { id: 'conversation-export', label: 'Conversas', icon: MessageSquare, requiredPlan: 'all' },
       ],
     },
-    {
-      id: 'game-group',
-      label: 'Game',
-      icon: Gift,
-      type: 'group',
-      color: 'amber',
-      children: [
-        { id: 'games', label: 'Roleta da Sorte', icon: Gift, requiredPlan: 'rating' },
-        { id: 'game-participations', label: 'Participantes', icon: Users, requiredPlan: 'rating' },
-      ]
-    },
+    { id: 'games', label: 'Game', icon: Gift, requiredPlan: 'rating' },
     {
       id: 'settings-group',
       label: 'Configurações',

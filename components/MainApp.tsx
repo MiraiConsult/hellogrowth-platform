@@ -1711,7 +1711,7 @@ Responda APENAS com JSON válido (sem markdown):
         />}
         
         {currentView === 'games' && (
-            <Game tenantId={getActiveTenant()!} campaigns={campaigns} />
+            <Game tenantId={getActiveTenant()!} campaigns={campaigns} businessProfile={businessProfile} />
         )}
         
         {currentView === 'game-participations' && (

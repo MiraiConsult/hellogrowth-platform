@@ -10,11 +10,12 @@ import EngagementResults from '@/components/EngagementResults';
 interface GameProps {
   tenantId: string;
   campaigns: any[];
+  businessProfile?: any;
 }
 
 type Tab = 'campaigns' | 'wheel' | 'participants' | 'results';
 
-export default function Game({ tenantId, campaigns }: GameProps) {
+export default function Game({ tenantId, campaigns, businessProfile }: GameProps) {
   const [activeTab, setActiveTab] = useState<Tab>('campaigns');
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -51,7 +52,7 @@ export default function Game({ tenantId, campaigns }: GameProps) {
       <div className="flex-1 overflow-auto">
         <div className="p-6">
           {activeTab === 'campaigns' && (
-            <EngagementCampaigns tenantId={tenantId} />
+            <EngagementCampaigns tenantId={tenantId} googlePlaceId={businessProfile?.google_place_id || ''} />
           )}
           {activeTab === 'wheel' && (
             <GameConfig tenantId={tenantId} />

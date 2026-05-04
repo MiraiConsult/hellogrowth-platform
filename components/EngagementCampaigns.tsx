@@ -20,6 +20,7 @@ interface EngagementCampaign {
 
 interface EngagementCampaignsProps {
   tenantId: string;
+  googlePlaceId?: string;
 }
 
 const DEFAULT_REVIEW: EngagementCampaign = {
@@ -63,7 +64,11 @@ const REWARD_CONDITION_OPTIONS = [
   { value: 'form_submitted', label: 'Quando o indicado preencher o formulário' },
 ];
 
-export default function EngagementCampaigns({ tenantId }: EngagementCampaignsProps) {
+export default function EngagementCampaigns({ tenantId, googlePlaceId }: EngagementCampaignsProps) {
+  // Link automático do Google Review baseado no Place ID
+  const autoGoogleReviewUrl = googlePlaceId
+    ? `https://search.google.com/local/writereview?placeid=${googlePlaceId}`
+    : '';
   const [reviewCampaign, setReviewCampaign] = useState<EngagementCampaign>(DEFAULT_REVIEW);
   const [referralCampaign, setReferralCampaign] = useState<EngagementCampaign>(DEFAULT_REFERRAL);
   const [saving, setSaving] = useState<'review' | 'referral' | null>(null);
@@ -76,6 +81,16 @@ export default function EngagementCampaigns({ tenantId }: EngagementCampaignsPro
     loadCampaigns();
   }, [tenantId]);
 
+  // Auto-preenche o link quando o Place ID muda e o campo está vazio
+  useEffect(() => {
+    if (googlePlaceId && !reviewCampaign.google_review_url) {
+      setReviewCampaign(prev => ({
+        ...prev,
+        google_review_url: `https://search.google.com/local/writereview?placeid=${googlePlaceId}`,
+      }));
+    }
+  }, [googlePlaceId]);
+
   const loadCampaigns = async () => {
     try {
       const res = await fetch('/api/engagement/campaigns', {
@@ -85,7 +100,13 @@ export default function EngagementCampaigns({ tenantId }: EngagementCampaignsPro
         const data: EngagementCampaign[] = await res.json();
         const review = data.find((c) => c.type === 'google_review');
         const referral = data.find((c) => c.type === 'referral');
-        if (review) setReviewCampaign(review);
+        if (review) {
+          // Se não tem URL salva mas tem Place ID, preenche automaticamente
+          if (!review.google_review_url && googlePlaceId) {
+            review.google_review_url = `https://search.google.com/local/writereview?placeid=${googlePlaceId}`;
+          }
+          setReviewCampaign(review);
+        }
         if (referral) setReferralCampaign(referral);
       }
     } catch (err) {
@@ -198,84 +219,98 @@ export default function EngagementCampaigns({ tenantId }: EngagementCampaignsPro
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               <Link className="w-4 h-4 inline mr-1" />
               Link do Google Review
+              {googlePlaceId && reviewCampaign.google_review_url === autoGoogleReviewUrl && (
+                <span className="ml-2 text-xs font-normal text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                  Preenchido automaticamente
+                </span>
+              )}
             </label>
             <input
               type="url"
               value={reviewCampaign.google_review_url || ''}
               onChange={(e) => setReviewCampaign({ ...reviewCampaign, google_review_url: e.target.value })}
-              placeholder="https://g.page/r/..."
+              placeholder={googlePlaceId ? autoGoogleReviewUrl : 'https://g.page/r/...'}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Cole o link direto para avaliação no Google Business
-            </p>
-          </div>
-
-          {/* Prêmio */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Prêmio (opcional)
-            </label>
-            <input
-              type="text"
-              value={reviewCampaign.reward_description}
-              onChange={(e) => setReviewCampaign({ ...reviewCampaign, reward_description: e.target.value })}
-              placeholder="Ex: Desconto de 10% na próxima consulta"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Descreva o prêmio que será entregue manualmente após a avaliação
-            </p>
+            {!googlePlaceId ? (
+              <p className="text-xs text-amber-600 mt-1">
+                ⚠️ Cadastre o Place ID do Google no <strong>Perfil do Negócio</strong> para preencher automaticamente
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500 mt-1">
+                Link gerado automaticamente pelo Place ID cadastrado. Você pode editar se necessário.
+              </p>
+            )}
           </div>
 
           {/* Canais de ativação */}
-          <div className="bg-gray-50 rounded-lg p-4 space-y-4">
-            <h4 className="text-sm font-semibold text-gray-700">Canais de ativação</h4>
+          <div className="bg-gray-50 rounded-lg p-4 space-y-5">
+            <h4 className="text-sm font-semibold text-gray-700">Como oferecer o prêmio</h4>
 
-            {/* Game */}
+            {/* Canal: Roleta */}
             <div className="space-y-3">
               {renderToggle(
                 reviewCampaign.game_enabled,
                 (v) => setReviewCampaign({ ...reviewCampaign, game_enabled: v }),
-                'Ativar via Roleta (NPS Game)',
-                'Após resposta NPS positiva, mostrar a roleta com este prêmio vinculado'
+                'Via Roleta da Sorte',
+                'Após o NPS, o cliente gira a roleta e ganha o prêmio configurado na aba Roleta'
+              )}
+              {reviewCampaign.game_enabled && (
+                <div className="ml-11 text-xs text-blue-600 bg-blue-50 rounded-lg p-2.5">
+                  🎯 O prêmio exibido na roleta é configurado na aba <strong>Roleta</strong>. Ative a roleta e configure os prêmios lá.
+                </div>
               )}
             </div>
 
-            {/* IA */}
+            {/* Canal: IA WhatsApp */}
             <div className="space-y-3">
               {renderToggle(
                 reviewCampaign.ai_enabled,
                 (v) => setReviewCampaign({ ...reviewCampaign, ai_enabled: v }),
-                'Ativar via IA no WhatsApp',
-                'A IA pedirá avaliação no Google automaticamente'
+                'Via IA no WhatsApp',
+                'A IA pede avaliação pelo WhatsApp e menciona o prêmio abaixo'
               )}
               {reviewCampaign.ai_enabled && (
-                <div className="ml-11 space-y-2">
-                  <label className="block text-xs font-medium text-gray-600">Quando acionar:</label>
-                  <select
-                    value={reviewCampaign.ai_trigger || 'promoter'}
-                    onChange={(e) => setReviewCampaign({ ...reviewCampaign, ai_trigger: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
-                  >
-                    {AI_TRIGGER_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                  {reviewCampaign.ai_trigger === 'after_days' && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={1}
-                        max={365}
-                        value={reviewCampaign.ai_trigger_days || ''}
-                        onChange={(e) => setReviewCampaign({ ...reviewCampaign, ai_trigger_days: parseInt(e.target.value) || null })}
-                        placeholder="7"
-                        className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
-                      />
-                      <span className="text-xs text-gray-500">dias após o cadastro</span>
-                    </div>
-                  )}
+                <div className="ml-11 space-y-3">
+                  {/* Prêmio mencionado pela IA */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Prêmio oferecido pela IA (opcional)</label>
+                    <input
+                      type="text"
+                      value={reviewCampaign.reward_description}
+                      onChange={(e) => setReviewCampaign({ ...reviewCampaign, reward_description: e.target.value })}
+                      placeholder="Ex: Desconto de 10% na próxima consulta"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">A IA mencionará este prêmio ao pedir a avaliação. Entregue manualmente após confirmar a avaliação.</p>
+                  </div>
+                  {/* Gatilho */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Quando acionar:</label>
+                    <select
+                      value={reviewCampaign.ai_trigger || 'promoter'}
+                      onChange={(e) => setReviewCampaign({ ...reviewCampaign, ai_trigger: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                    >
+                      {AI_TRIGGER_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    {reviewCampaign.ai_trigger === 'after_days' && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <input
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={reviewCampaign.ai_trigger_days || ''}
+                          onChange={(e) => setReviewCampaign({ ...reviewCampaign, ai_trigger_days: parseInt(e.target.value) || null })}
+                          placeholder="7"
+                          className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
+                        />
+                        <span className="text-xs text-gray-500">dias após o cadastro</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -356,83 +391,84 @@ export default function EngagementCampaigns({ tenantId }: EngagementCampaignsPro
             )}
           </div>
 
-          {/* Prêmio */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Prêmio para quem indica (opcional)
-            </label>
-            <input
-              type="text"
-              value={referralCampaign.reward_description}
-              onChange={(e) => setReferralCampaign({ ...referralCampaign, reward_description: e.target.value })}
-              placeholder="Ex: 1 sessão grátis por indicação"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
-            />
-          </div>
-
-          {/* Condição do prêmio */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Condição para entregar o prêmio
-            </label>
-            <select
-              value={referralCampaign.reward_condition}
-              onChange={(e) => setReferralCampaign({ ...referralCampaign, reward_condition: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
-            >
-              <option value="">Selecione uma condição</option>
-              {REWARD_CONDITION_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-
           {/* Canais de ativação */}
-          <div className="bg-gray-50 rounded-lg p-4 space-y-4">
-            <h4 className="text-sm font-semibold text-gray-700">Canais de ativação</h4>
+          <div className="bg-gray-50 rounded-lg p-4 space-y-5">
+            <h4 className="text-sm font-semibold text-gray-700">Como oferecer a indicação</h4>
 
-            {/* Game */}
+            {/* Canal: Roleta */}
             <div className="space-y-3">
               {renderToggle(
                 referralCampaign.game_enabled,
                 (v) => setReferralCampaign({ ...referralCampaign, game_enabled: v }),
-                'Ativar via Roleta (NPS Game)',
-                'Após resposta NPS positiva, mostrar a roleta com link de indicação'
+                'Via Roleta da Sorte',
+                'Após o NPS, o cliente gira a roleta e recebe o link de indicação como prêmio'
+              )}
+              {referralCampaign.game_enabled && (
+                <div className="ml-11 text-xs text-blue-600 bg-blue-50 rounded-lg p-2.5">
+                  🎯 Configure a roleta na aba <strong>Roleta</strong> com o prêmio &quot;Link de Indicação&quot;. O link único do cliente será exibido automaticamente.
+                </div>
               )}
             </div>
 
-            {/* IA */}
+            {/* Canal: IA WhatsApp */}
             <div className="space-y-3">
               {renderToggle(
                 referralCampaign.ai_enabled,
                 (v) => setReferralCampaign({ ...referralCampaign, ai_enabled: v }),
-                'Ativar via IA no WhatsApp',
-                'A IA enviará link de indicação personalizado automaticamente'
+                'Via IA no WhatsApp',
+                'A IA envia o link de indicação único pelo WhatsApp e menciona o prêmio'
               )}
               {referralCampaign.ai_enabled && (
-                <div className="ml-11 space-y-2">
-                  <label className="block text-xs font-medium text-gray-600">Quando acionar:</label>
-                  <select
-                    value={referralCampaign.ai_trigger || 'promoter'}
-                    onChange={(e) => setReferralCampaign({ ...referralCampaign, ai_trigger: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
-                  >
-                    {AI_TRIGGER_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                  {referralCampaign.ai_trigger === 'after_days' && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={1}
-                        max={365}
-                        value={referralCampaign.ai_trigger_days || ''}
-                        onChange={(e) => setReferralCampaign({ ...referralCampaign, ai_trigger_days: parseInt(e.target.value) || null })}
-                        placeholder="7"
-                        className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
-                      />
-                      <span className="text-xs text-gray-500">dias após o cadastro</span>
+                <div className="ml-11 space-y-3">
+                  {/* Prêmio para quem indica */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Prêmio para quem indica (opcional)</label>
+                    <input
+                      type="text"
+                      value={referralCampaign.reward_description}
+                      onChange={(e) => setReferralCampaign({ ...referralCampaign, reward_description: e.target.value })}
+                      placeholder="Ex: 1 sessão grátis por indicação"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                    />
+                  </div>
+                  {/* Condição do prêmio */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Condição para entregar o prêmio</label>
+                    <select
+                      value={referralCampaign.reward_condition}
+                      onChange={(e) => setReferralCampaign({ ...referralCampaign, reward_condition: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                    >
+                      <option value="">Selecione uma condição</option>
+                      {REWARD_CONDITION_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* Gatilho */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Quando acionar:</label>
+                    <select
+                      value={referralCampaign.ai_trigger || 'promoter'}
+                      onChange={(e) => setReferralCampaign({ ...referralCampaign, ai_trigger: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                    >
+                      {AI_TRIGGER_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    {referralCampaign.ai_trigger === 'after_days' && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <input
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={referralCampaign.ai_trigger_days || ''}
+                          onChange={(e) => setReferralCampaign({ ...referralCampaign, ai_trigger_days: parseInt(e.target.value) || null })}
+                          placeholder="7"
+                          className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
+                        />
+                        <span className="text-xs text-gray-500">dias após o cadastro</span>
                     </div>
                   )}
                 </div>
