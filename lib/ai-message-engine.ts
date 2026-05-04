@@ -132,8 +132,7 @@ async function callLLM(
     },
     generationConfig: {
       temperature: 0.7,
-      maxOutputTokens: 1024,
-      responseMimeType: "application/json",
+      maxOutputTokens: 2048,
     },
   };
 
@@ -189,23 +188,62 @@ function parseResponse(raw: string): GeneratedMessage {
       }
     }
   } catch (e) {
-    // Se não conseguir parsear JSON, usa o texto bruto como conteúdo
-    console.warn("[AI Engine] Falha ao parsear JSON, usando texto bruto", (e as Error).message?.substring(0, 100));
+    // Se não conseguir parsear JSON completo, tentar extrair campo "content" parcialmente
+    console.warn("[AI Engine] Falha ao parsear JSON, tentando extração parcial", (e as Error).message?.substring(0, 100));
+    
+    // Tentar extrair o valor do campo "content" mesmo de JSON truncado
+    const contentMatch = raw.match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)"?/);
+    if (contentMatch && contentMatch[1] && contentMatch[1].length > 20) {
+      // Unescape o conteúdo
+      const extracted = contentMatch[1]
+        .replace(/\\n/g, "\n")
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, "\\")
+        .trim();
+      if (extracted.length > 20) {
+        return {
+          content: extracted,
+          reasoning: "Extraído de JSON truncado",
+          suggestedNextAction: "wait_reply",
+          sentiment: "neutral",
+        };
+      }
+    }
   }
 
   // Fallback: limpa o texto bruto removendo qualquer JSON ou markdown
-  const fallbackContent = raw
-    .replace(/```(?:json)?[\s\S]*?```/g, "")
-    .replace(/\{[\s\S]*"content"[\s\S]*\}/g, (match) => {
-      try {
-        const parsed = JSON.parse(match);
-        return parsed.content || match;
-      } catch { return match; }
-    })
-    .trim();
+  let fallbackContent = raw.trim();
+  
+  // Se começa com { ou ```, tentar extrair só o texto útil
+  if (fallbackContent.startsWith("{") || fallbackContent.startsWith("`")) {
+    // Tentar extrair texto após "content":
+    const contentMatch = fallbackContent.match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)"?/);
+    if (contentMatch && contentMatch[1]) {
+      fallbackContent = contentMatch[1]
+        .replace(/\\n/g, "\n")
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, "\\")
+        .trim();
+    } else {
+      // Remover JSON wrapper
+      fallbackContent = fallbackContent
+        .replace(/```(?:json)?[\s\S]*?```/g, "")
+        .replace(/^\{[\s\S]*$/, "")
+        .trim();
+    }
+  }
+
+  // Se ainda está vazio ou é JSON, usar o raw sem os wrappers
+  if (!fallbackContent || fallbackContent.startsWith("{")) {
+    fallbackContent = raw
+      .replace(/```(?:json)?/g, "")
+      .replace(/```/g, "")
+      .replace(/\{[\s\S]*\}/g, "")
+      .trim() || "Desculpe, não consegui gerar uma resposta adequada. Posso ajudar de outra forma?";
+  }
 
   return {
-    content: fallbackContent || raw.trim(),
+    content: fallbackContent,
     reasoning: "Resposta não estruturada — usando texto bruto",
     suggestedNextAction: "wait_reply",
     sentiment: "neutral",
