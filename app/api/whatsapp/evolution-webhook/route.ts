@@ -306,7 +306,12 @@ async function handleIncomingMessage({
 
       console.log(`[Evolution Webhook] Enviando ${messagesToSend.length} mensagens para ${targetPhone}`);
 
+      // Timestamp da mensagem do cliente que gerou esta resposta
+      const clientMessageTimestamp = new Date().toISOString();
+
       let lastWaMessageId = "";
+      let abortedDueToNewMessage = false;
+
       for (let i = 0; i < messagesToSend.length; i++) {
         const msgText = messagesToSend[i];
         if (!msgText?.trim()) continue;
@@ -327,6 +332,24 @@ async function handleIncomingMessage({
           // Jitter aleatório +/- 800ms para parecer mais humano
           const jitter = Math.floor(Math.random() * 1600) - 800;
           await new Promise(resolve => setTimeout(resolve, readingTime + typingTime + jitter));
+        }
+
+        // Verificar se o cliente enviou uma nova mensagem DURANTE o delay
+        // Se sim, abortar as mensagens restantes para não enviar conteúdo desatualizado
+        if (i > 0) {
+          const { data: newClientMsg } = await supabase
+            .from("ai_conversation_messages")
+            .select("id")
+            .eq("conversation_id", conversation.id)
+            .eq("direction", "inbound")
+            .gt("sent_at", clientMessageTimestamp)
+            .limit(1);
+
+          if (newClientMsg && newClientMsg.length > 0) {
+            console.log(`[Evolution Webhook] Cliente enviou nova mensagem durante envio do lote — abortando mensagens restantes (${i + 1} a ${messagesToSend.length})`);
+            abortedDueToNewMessage = true;
+            break;
+          }
         }
 
         const waId = await sendUnifiedTextMessage(waConfig, targetPhone, msgText);
