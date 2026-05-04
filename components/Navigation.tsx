@@ -328,7 +328,6 @@ const Navigation: React.FC<NavigationProps> = ({
         { id: 'action-inbox', label: 'Fila de Ações', icon: Zap, requiredPlan: 'all' },
         { id: 'dispatches', label: 'Disparos', icon: SendHorizonal, requiredPlan: 'all' },
         { id: 'action-metrics', label: 'Métricas IA', icon: BarChart3, requiredPlan: 'all' },
-        { id: 'conversation-export', label: 'Conversas', icon: MessageSquare, requiredPlan: 'all' },
       ],
     },
     { id: 'games', label: 'Game', icon: Gift, requiredPlan: 'rating' },
