@@ -1,10 +1,10 @@
 /**
  * AI Message Engine — Motor de geração de mensagens para os 4 fluxos de ação autônoma.
  * 
- * Usa OpenAI-compatible API (suporta gemini-2.5-flash e gpt-4.1-mini como fallback).
- * Não depende do SDK do Google diretamente — usa a API REST via fetch.
+ * Usa Google Gemini API diretamente via REST (sem SDK pesado).
+ * Modelo: gemini-2.5-flash
  * 
- * v3: Usa prompts do módulo lib/prompts/ com suporte a versões do banco.
+ * v4: Usa GEMINI_API_KEY diretamente via REST API do Google AI.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -97,8 +97,7 @@ function buildSystemPrompt(ctx: ConversationContext): string {
 }
 
 // ============================================================
-// CHAMADA AO LLM via OpenAI-compatible API
-// Suporta gemini-2.5-flash (via proxy) e gpt-4.1-mini como fallback
+// CHAMADA AO GEMINI via REST API
 // ============================================================
 
 async function callLLM(
@@ -106,57 +105,63 @@ async function callLLM(
   userMessage: string,
   history: Array<{ role: "user" | "assistant"; content: string }> = []
 ): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY não configurada");
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY não configurada");
 
-  // Usa a base URL do ambiente (proxy que suporta gemini-2.5-flash e gpt-4.1-mini)
-  const baseUrl = (process.env.OPENAI_BASE_URL || process.env.OPENAI_API_BASE || "https://api.openai.com/v1").replace(/\/$/, "");
+  // Monta o conteúdo no formato Gemini
+  const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
 
-  const messages = [
-    { role: "system", content: systemPrompt },
-    ...history.map((msg) => ({ role: msg.role, content: msg.content })),
-    { role: "user", content: userMessage },
-  ];
-
-  // Tenta gemini-2.5-flash primeiro, fallback para gpt-4.1-mini
-  const modelsToTry = ["gemini-2.5-flash", "gpt-4.1-mini"];
-
-  let lastError: Error | null = null;
-  for (const model of modelsToTry) {
-    try {
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: 0.7,
-          max_tokens: 1024,
-          response_format: { type: "json_object" },
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(`LLM error (${model}): ${res.status} ${JSON.stringify(err)}`);
-      }
-
-      const data = await res.json();
-      const content = data.choices?.[0]?.message?.content || "";
-      if (content) {
-        console.log(`[AI Engine] Resposta gerada com ${model}`);
-        return content;
-      }
-      throw new Error(`Resposta vazia do modelo ${model}`);
-    } catch (err: any) {
-      console.warn(`[AI Engine] ${model} falhou: ${err.message?.substring(0, 150)}`);
-      lastError = err;
-    }
+  // Adiciona histórico
+  for (const msg of history) {
+    contents.push({
+      role: msg.role === "user" ? "user" : "model",
+      parts: [{ text: msg.content }],
+    });
   }
-  throw lastError || new Error("Todos os modelos LLM falharam");
+
+  // Adiciona a mensagem atual do usuário
+  contents.push({
+    role: "user",
+    parts: [{ text: userMessage }],
+  });
+
+  const requestBody = {
+    contents,
+    systemInstruction: {
+      parts: [{ text: systemPrompt }],
+    },
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 1024,
+      responseMimeType: "application/json",
+    },
+  };
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+  console.log("[AI Engine] Chamando Gemini API...");
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text();
+    console.error(`[AI Engine] Gemini error: ${res.status} ${errBody.substring(0, 300)}`);
+    throw new Error(`Gemini API error: ${res.status} ${errBody.substring(0, 200)}`);
+  }
+
+  const data = await res.json();
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+  if (!content) {
+    throw new Error("Resposta vazia do Gemini");
+  }
+
+  console.log(`[AI Engine] Resposta gerada com Gemini (${content.length} chars)`);
+  return content;
 }
 
 // ============================================================
