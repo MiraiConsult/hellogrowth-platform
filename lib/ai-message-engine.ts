@@ -1,15 +1,12 @@
 /**
  * AI Message Engine — Motor de geração de mensagens para os 4 fluxos de ação autônoma.
  * 
- * Roda server-side (Inngest functions). Chama Gemini diretamente via SDK,
- * sem passar pela rota /api/gemini (que é para client-side).
+ * Usa OpenAI-compatible API (suporta gemini-2.5-flash e gpt-4.1-mini como fallback).
+ * Não depende do SDK do Google diretamente — usa a API REST via fetch.
  * 
- * Inclui fallback para GPT-4o-mini via OpenAI-compatible API.
- * 
- * v2: Usa prompts do módulo lib/prompts/ com suporte a versões do banco.
+ * v3: Usa prompts do módulo lib/prompts/ com suporte a versões do banco.
  */
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@supabase/supabase-js";
 import { buildPrompt, type FlowType } from "./prompts";
 
@@ -100,52 +97,20 @@ function buildSystemPrompt(ctx: ConversationContext): string {
 }
 
 // ============================================================
-// CHAMADA AO LLM (Gemini + fallback GPT-4o-mini)
+// CHAMADA AO LLM via OpenAI-compatible API
+// Suporta gemini-2.5-flash (via proxy) e gpt-4.1-mini como fallback
 // ============================================================
 
-async function callGemini(
-  systemPrompt: string,
-  userMessage: string,
-  history: Array<{ role: "user" | "assistant"; content: string }> = []
-): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY não configurada");
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    systemInstruction: systemPrompt,
-  });
-
-  const contents = [
-    ...history.map((msg) => ({
-      role: msg.role === "assistant" ? "model" : "user",
-      parts: [{ text: msg.content }],
-    })),
-    { role: "user", parts: [{ text: userMessage }] },
-  ];
-
-  const result = await model.generateContent({
-    contents,
-    generationConfig: {
-      temperature: 0.7,
-      topK: 40,
-      topP: 0.95,
-      maxOutputTokens: 1024,
-      responseMimeType: "application/json",
-    },
-  });
-
-  return result.response.text();
-}
-
-async function callFallbackGPT(
+async function callLLM(
   systemPrompt: string,
   userMessage: string,
   history: Array<{ role: "user" | "assistant"; content: string }> = []
 ): Promise<string> {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY não configurada para fallback");
+  if (!apiKey) throw new Error("OPENAI_API_KEY não configurada");
+
+  // Usa a base URL do ambiente (proxy que suporta gemini-2.5-flash e gpt-4.1-mini)
+  const baseUrl = (process.env.OPENAI_BASE_URL || process.env.OPENAI_API_BASE || "https://api.openai.com/v1").replace(/\/$/, "");
 
   const messages = [
     { role: "system", content: systemPrompt },
@@ -153,46 +118,45 @@ async function callFallbackGPT(
     { role: "user", content: userMessage },
   ];
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages,
-      temperature: 0.7,
-      max_tokens: 1024,
-      response_format: { type: "json_object" },
-    }),
-  });
+  // Tenta gemini-2.5-flash primeiro, fallback para gpt-4.1-mini
+  const modelsToTry = ["gemini-2.5-flash", "gpt-4.1-mini"];
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(`GPT fallback error: ${res.status} ${JSON.stringify(err)}`);
-  }
-
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content || "";
-}
-
-async function callLLM(
-  systemPrompt: string,
-  userMessage: string,
-  history: Array<{ role: "user" | "assistant"; content: string }> = []
-): Promise<string> {
-  try {
-    return await callGemini(systemPrompt, userMessage, history);
-  } catch (error: any) {
-    console.warn(`[AI Engine] Gemini falhou, tentando fallback GPT: ${error.message?.substring(0, 100)}`);
+  let lastError: Error | null = null;
+  for (const model of modelsToTry) {
     try {
-      return await callFallbackGPT(systemPrompt, userMessage, history);
-    } catch (fallbackError: any) {
-      console.error(`[AI Engine] Fallback GPT também falhou: ${fallbackError.message}`);
-      throw new Error(`Ambos LLMs falharam. Gemini: ${error.message}. GPT: ${fallbackError.message}`);
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.7,
+          max_tokens: 1024,
+          response_format: { type: "json_object" },
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(`LLM error (${model}): ${res.status} ${JSON.stringify(err)}`);
+      }
+
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content || "";
+      if (content) {
+        console.log(`[AI Engine] Resposta gerada com ${model}`);
+        return content;
+      }
+      throw new Error(`Resposta vazia do modelo ${model}`);
+    } catch (err: any) {
+      console.warn(`[AI Engine] ${model} falhou: ${err.message?.substring(0, 150)}`);
+      lastError = err;
     }
   }
+  throw lastError || new Error("Todos os modelos LLM falharam");
 }
 
 // ============================================================
