@@ -449,6 +449,25 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
                 {enabledFields.map((field) => {
                   const inputType = field.field === 'email' ? 'email' : field.field === 'phone' ? 'tel' : 'text';
                   
+                  // Máscara de telefone: (XX)XXXXX-XXXX
+                  const handlePhoneChange = (value: string) => {
+                    // Remove tudo que não é número
+                    const digits = value.replace(/\D/g, '');
+                    // Limitar a 11 dígitos
+                    const limited = digits.substring(0, 11);
+                    // Aplicar máscara
+                    let formatted = limited;
+                    if (limited.length > 2) {
+                      formatted = `(${limited.substring(0, 2)})${limited.substring(2)}`;
+                    } else if (limited.length > 0) {
+                      formatted = `(${limited}`;
+                    }
+                    if (limited.length > 7) {
+                      formatted = `(${limited.substring(0, 2)})${limited.substring(2, 7)}-${limited.substring(7)}`;
+                    }
+                    setPatientData({...patientData, [field.field]: formatted});
+                  };
+
                   return (
                     <div key={field.field}>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -457,10 +476,10 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
                       <input 
                         type={inputType}
                         value={patientData[field.field]}
-                        onChange={(e) => setPatientData({...patientData, [field.field]: e.target.value})}
+                        onChange={(e) => field.field === 'phone' ? handlePhoneChange(e.target.value) : setPatientData({...patientData, [field.field]: e.target.value})}
                         className="w-full rounded-lg border-gray-300 shadow-sm focus:ring-primary-500 focus:border-primary-500 p-3 border bg-white text-gray-900 placeholder-gray-500"
                         style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                        placeholder={field.placeholder}
+                        placeholder={field.field === 'phone' ? '(51)99999-9999' : field.placeholder}
                         required={field.required}
                       />
                     </div>

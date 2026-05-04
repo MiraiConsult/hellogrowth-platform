@@ -29,7 +29,23 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Erro ao buscar conexão", details: error.message, code: error.code }, { status: 500 });
     }
 
-    return NextResponse.json({ connection: connection || null });
+    // Buscar persona
+    const { data: persona } = await supabase
+      .from("ai_persona_config")
+      .select("name, role, tone, personality, custom_instructions")
+      .eq("tenant_id", tenantId)
+      .single();
+
+    return NextResponse.json({
+      connection: connection || null,
+      persona: persona || {
+        name: "Maria",
+        role: "Consultora de Atendimento",
+        tone: "friendly_professional",
+        personality: "consultive",
+        custom_instructions: "",
+      },
+    });
   } catch (error) {
     console.error("[WhatsApp Connection GET] Error:", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });

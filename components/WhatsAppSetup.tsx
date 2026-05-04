@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Smartphone, CheckCircle, AlertCircle, Loader2, Wifi, WifiOff,
   MessageSquare, Shield, Zap, RefreshCw, ExternalLink, Info,
-  Star, TrendingUp, Users, ChevronRight, Lock
+  Star, TrendingUp, Users, ChevronRight, Lock, User, Sparkles, Save
 } from 'lucide-react';
 
 interface Props {
@@ -25,6 +25,14 @@ interface WhatsAppConnection {
   connected_at: string;
 }
 
+interface AIPersona {
+  name: string;
+  role: string;
+  tone: string;
+  personality: string;
+  custom_instructions: string;
+}
+
 interface TemplateStatus {
   template_name: string;
   template_category: string;
@@ -33,6 +41,22 @@ interface TemplateStatus {
   approved_at?: string;
   rejected_reason?: string;
 }
+
+const TONE_OPTIONS = [
+  { value: 'friendly_professional', label: 'Amigável e profissional', desc: 'Equilibra proximidade com seriedade. Ideal para clínicas e consultórios.' },
+  { value: 'warm_empathetic', label: 'Empático e acolhedor', desc: 'Tom carinhoso e compreensivo. Ideal para saúde, bem-estar e estética.' },
+  { value: 'casual_close', label: 'Descontraído e próximo', desc: 'Informal e divertido. Ideal para negócios jovens e criativos.' },
+  { value: 'formal_respectful', label: 'Formal e respeitoso', desc: 'Linguagem polida e distante. Ideal para advocacia e finanças.' },
+  { value: 'direct_objective', label: 'Direto e objetivo', desc: 'Mensagens curtas e práticas. Ideal para serviços técnicos.' },
+];
+
+const PERSONALITY_OPTIONS = [
+  { value: 'consultive', label: 'Consultiva', desc: 'Faz perguntas, entende necessidades, sugere soluções personalizadas' },
+  { value: 'proactive', label: 'Proativa', desc: 'Toma iniciativa, sugere horários, antecipa dúvidas do cliente' },
+  { value: 'supportive', label: 'Acolhedora', desc: 'Ouve com atenção, valida sentimentos, oferece suporte emocional' },
+  { value: 'persuasive', label: 'Persuasiva', desc: 'Destaca benefícios, cria urgência sutil, guia para a conversão' },
+  { value: 'informative', label: 'Informativa', desc: 'Explica procedimentos, tira dúvidas técnicas, educa o cliente' },
+];
 
 export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) {
   const t = {
@@ -52,9 +76,17 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
   const [loading, setLoading] = useState(true);
   const [connectingStep, setConnectingStep] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [submittingTemplates, setSubmittingTemplates] = useState(false);
-  const [personaName, setPersonaName] = useState('Maria');
-  const [personaTone, setPersonaTone] = useState('Amigável e profissional');
   const [savingPersona, setSavingPersona] = useState(false);
+  const [personaSaved, setPersonaSaved] = useState(false);
+
+  // Persona fields
+  const [persona, setPersona] = useState<AIPersona>({
+    name: 'Maria',
+    role: 'Consultora de Atendimento',
+    tone: 'friendly_professional',
+    personality: 'consultive',
+    custom_instructions: '',
+  });
 
   const fetchConnection = useCallback(async () => {
     setLoading(true);
@@ -63,9 +95,8 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
       if (res.ok) {
         const data = await res.json();
         setConnection(data.connection);
-        if (data.connection) {
-          setPersonaName(data.connection.ai_persona_name || 'Maria');
-          setPersonaTone(data.connection.ai_persona_tone || 'Amigável e profissional');
+        if (data.persona) {
+          setPersona(data.persona);
         }
       }
     } catch (err) {
@@ -104,7 +135,6 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
       return;
     }
 
-    // Abrir popup do 360dialog Embedded Signup (Meta Cloud API via BSP)
     const width = 600;
     const height = 700;
     const left = (window.screen.width - width) / 2;
@@ -118,7 +148,6 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
       `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
     );
 
-    // Escutar mensagem do popup após autorização (callback via postMessage)
     const messageHandler = async (event: MessageEvent) => {
       if (event.data?.type === '360dialog-connect') {
         window.removeEventListener('message', messageHandler);
@@ -127,7 +156,6 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
         const { client, channels } = event.data;
         if (channels && channels.length > 0) {
           try {
-            // Processar onboarding no backend
             const res = await fetch('/api/whatsapp-connection/onboarding', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -137,7 +165,6 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
             if (res.ok) {
               setConnectingStep('success');
               await fetchConnection();
-              // Submeter templates automaticamente
               await handleSubmitTemplates();
             } else {
               setConnectingStep('error');
@@ -153,7 +180,6 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
 
     window.addEventListener('message', messageHandler);
 
-    // Monitorar fechamento do popup (caso o usuário feche sem completar)
     const checkPopup = setInterval(() => {
       if (popup?.closed) {
         clearInterval(checkPopup);
@@ -184,18 +210,16 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
 
   const handleSavePersona = async () => {
     setSavingPersona(true);
+    setPersonaSaved(false);
     try {
-      const res = await fetch('/api/whatsapp/connection', {
-        method: 'PATCH',
+      const res = await fetch('/api/whatsapp/persona', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId,
-          ai_persona_name: personaName,
-          ai_persona_tone: personaTone,
-        }),
+        body: JSON.stringify({ tenantId, ...persona }),
       });
       if (res.ok) {
-        await fetchConnection();
+        setPersonaSaved(true);
+        setTimeout(() => setPersonaSaved(false), 3000);
       }
     } catch (err) {
       console.error('Error saving persona:', err);
@@ -290,7 +314,7 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
 
               {connectingStep === 'error' && (
                 <div className="flex items-center gap-2 text-red-500 text-sm">
-                  <AlertCircle size={16} />
+                  <AlertCircle size={14} />
                   <span>Erro ao conectar. Tente novamente ou entre em contato com o suporte.</span>
                 </div>
               )}
@@ -338,56 +362,171 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
           )}
         </div>
 
-        {/* Persona da IA */}
-        {connection && (
-          <div className={`rounded-xl border p-6 ${t.card}`}>
-            <h2 className={`text-lg font-semibold ${t.text} mb-4`}>Persona da IA</h2>
-            <p className={`text-sm ${t.textMuted} mb-4`}>
-              Configure como a IA vai se apresentar e o tom de voz nas conversas com seus clientes.
-            </p>
+        {/* ============================================================
+            PERSONA DA IA (sempre visível, independente da conexão)
+        ============================================================ */}
+        <div className={`rounded-xl border p-6 ${t.card}`}>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <User size={20} className="text-white" />
+            </div>
+            <div>
+              <h2 className={`text-lg font-semibold ${t.text}`}>Identidade da Atendente</h2>
+              <p className={`text-sm ${t.textMuted}`}>
+                Configure quem a IA vai ser nas conversas. Seus clientes não saberão que é uma IA.
+              </p>
+            </div>
+          </div>
 
-            <div className="space-y-4">
+          <div className="space-y-5 mt-5">
+            {/* Nome e Cargo */}
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className={`block text-sm font-medium ${t.label} mb-1`}>
-                  Nome da atendente virtual
+                <label className={`block text-sm font-medium ${t.label} mb-1.5`}>
+                  Nome da atendente
                 </label>
                 <input
                   type="text"
-                  value={personaName}
-                  onChange={(e) => setPersonaName(e.target.value)}
+                  value={persona.name}
+                  onChange={(e) => setPersona({ ...persona, name: e.target.value })}
                   placeholder="Ex: Maria, Ana, Sofia..."
-                  className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input}`}
+                  className={`w-full px-3 py-2.5 rounded-lg border text-sm ${t.input}`}
                 />
+                <p className={`text-xs ${t.textMuted} mt-1`}>Como ela vai se apresentar</p>
               </div>
 
               <div>
-                <label className={`block text-sm font-medium ${t.label} mb-1`}>
-                  Tom de voz
+                <label className={`block text-sm font-medium ${t.label} mb-1.5`}>
+                  Cargo / Função
                 </label>
-                <select
-                  value={personaTone}
-                  onChange={(e) => setPersonaTone(e.target.value)}
-                  className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input}`}
-                >
-                  <option value="Amigável e profissional">Amigável e profissional</option>
-                  <option value="Formal e respeitoso">Formal e respeitoso</option>
-                  <option value="Descontraído e próximo">Descontraído e próximo</option>
-                  <option value="Empático e acolhedor">Empático e acolhedor</option>
-                  <option value="Direto e objetivo">Direto e objetivo</option>
-                </select>
+                <input
+                  type="text"
+                  value={persona.role}
+                  onChange={(e) => setPersona({ ...persona, role: e.target.value })}
+                  placeholder="Ex: Consultora, Recepcionista..."
+                  className={`w-full px-3 py-2.5 rounded-lg border text-sm ${t.input}`}
+                />
+                <p className={`text-xs ${t.textMuted} mt-1`}>Cargo que aparece na conversa</p>
               </div>
+            </div>
 
+            {/* Tom de Voz */}
+            <div>
+              <label className={`block text-sm font-medium ${t.label} mb-2`}>
+                Tom de voz
+              </label>
+              <div className="grid grid-cols-1 gap-2">
+                {TONE_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                      persona.tone === option.value
+                        ? isDark ? 'border-purple-500 bg-purple-900/20' : 'border-purple-500 bg-purple-50'
+                        : isDark ? 'border-slate-600 hover:border-slate-500' : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="tone"
+                      value={option.value}
+                      checked={persona.tone === option.value}
+                      onChange={(e) => setPersona({ ...persona, tone: e.target.value })}
+                      className="mt-0.5 accent-purple-600"
+                    />
+                    <div>
+                      <p className={`text-sm font-medium ${t.text}`}>{option.label}</p>
+                      <p className={`text-xs ${t.textMuted}`}>{option.desc}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Personalidade */}
+            <div>
+              <label className={`block text-sm font-medium ${t.label} mb-2`}>
+                Personalidade / Estilo de abordagem
+              </label>
+              <div className="grid grid-cols-1 gap-2">
+                {PERSONALITY_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                      persona.personality === option.value
+                        ? isDark ? 'border-purple-500 bg-purple-900/20' : 'border-purple-500 bg-purple-50'
+                        : isDark ? 'border-slate-600 hover:border-slate-500' : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="personality"
+                      value={option.value}
+                      checked={persona.personality === option.value}
+                      onChange={(e) => setPersona({ ...persona, personality: e.target.value })}
+                      className="mt-0.5 accent-purple-600"
+                    />
+                    <div>
+                      <p className={`text-sm font-medium ${t.text}`}>{option.label}</p>
+                      <p className={`text-xs ${t.textMuted}`}>{option.desc}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Instruções customizadas */}
+            <div>
+              <label className={`block text-sm font-medium ${t.label} mb-1.5`}>
+                Instruções adicionais <span className={`font-normal ${t.textMuted}`}>(opcional)</span>
+              </label>
+              <textarea
+                value={persona.custom_instructions}
+                onChange={(e) => setPersona({ ...persona, custom_instructions: e.target.value })}
+                rows={3}
+                placeholder="Ex: Sempre mencionar que temos estacionamento gratuito. Nunca falar de preços exatos, apenas faixas..."
+                className={`w-full px-3 py-2.5 rounded-lg border text-sm resize-none ${t.input}`}
+              />
+              <p className={`text-xs ${t.textMuted} mt-1`}>Regras específicas que a atendente deve seguir</p>
+            </div>
+
+            {/* Botão salvar */}
+            <div className="flex items-center gap-3">
               <button
                 onClick={handleSavePersona}
                 disabled={savingPersona}
-                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
               >
-                {savingPersona ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-                {savingPersona ? 'Salvando...' : 'Salvar Persona'}
+                {savingPersona ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : personaSaved ? (
+                  <CheckCircle size={14} />
+                ) : (
+                  <Save size={14} />
+                )}
+                {savingPersona ? 'Salvando...' : personaSaved ? 'Salvo!' : 'Salvar Identidade'}
               </button>
+              {personaSaved && (
+                <span className="text-sm text-emerald-500 font-medium">Configurações salvas com sucesso</span>
+              )}
+            </div>
+
+            {/* Preview */}
+            <div className={`rounded-lg p-4 ${isDark ? 'bg-slate-700/50' : 'bg-slate-50'} border ${t.divider}`}>
+              <p className={`text-xs font-medium ${t.textMuted} mb-2`}>Pré-visualização de como ela se apresenta:</p>
+              <div className={`rounded-lg px-3 py-2 text-sm ${isDark ? 'bg-slate-800 text-slate-200' : 'bg-white text-slate-700'} shadow-sm`}>
+                <p className="leading-relaxed">
+                  &quot;Oi! Aqui é a <strong>{persona.name || 'Maria'}</strong>, {persona.role || 'consultora'} da {companyName || 'empresa'}. 
+                  {persona.personality === 'consultive' && ' Vi que você demonstrou interesse nos nossos serviços. Posso te ajudar com alguma dúvida?'}
+                  {persona.personality === 'proactive' && ' Vi seu cadastro e já separei algumas opções que combinam com o que você procura!'}
+                  {persona.personality === 'supportive' && ' Fico feliz que tenha entrado em contato. Estou aqui pra te ajudar no que precisar.'}
+                  {persona.personality === 'persuasive' && ' Temos uma condição especial essa semana que acho que vai te interessar!'}
+                  {persona.personality === 'informative' && ' Posso te explicar como funciona nosso processo e tirar qualquer dúvida.'}
+                  &quot;
+                </p>
+              </div>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Status dos Templates */}
         {connection && (
@@ -457,7 +596,7 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
             <div className="space-y-3">
               {[
                 { step: '1', label: 'Conecte seu WhatsApp Business', desc: 'Clique no botão acima e siga as instruções da Meta' },
-                { step: '2', label: 'Configure a persona da IA', desc: 'Defina o nome e tom de voz da sua atendente virtual' },
+                { step: '2', label: 'Configure a identidade da atendente', desc: 'Defina nome, cargo, tom e personalidade' },
                 { step: '3', label: 'Templates são aprovados', desc: 'A Meta aprova as mensagens em até 24h' },
                 { step: '4', label: 'IA começa a agir', desc: 'Automaticamente após NPS respondido ou manualmente para leads' },
               ].map(({ step, label, desc }) => (

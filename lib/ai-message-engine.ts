@@ -27,6 +27,9 @@ export interface ConversationContext {
   companySegment?: string;
   aiPersonaName?: string;
   aiPersonaTone?: string;
+  aiPersonaRole?: string;
+  aiPersonaPersonality?: string;
+  aiPersonaCustomInstructions?: string;
   // Perfil do negócio (novo)
   businessDescription?: string;
   businessDifferentials?: string;
@@ -121,6 +124,12 @@ function buildSystemPrompt(ctx: ConversationContext): string {
     leadAiAnalysis: ctx.leadAiAnalysis,
     currentDateTime: ctx.currentDateTime,
     currentDayOfWeek: ctx.currentDayOfWeek,
+    // Persona detalhada
+    aiPersonaName: ctx.aiPersonaName,
+    aiPersonaRole: ctx.aiPersonaRole,
+    aiPersonaTone: ctx.aiPersonaTone,
+    aiPersonaPersonality: ctx.aiPersonaPersonality,
+    aiPersonaCustomInstructions: ctx.aiPersonaCustomInstructions,
   });
 }
 
@@ -316,6 +325,13 @@ export async function buildConversationContext(params: {
     .in("status", ["connected", "active"])
     .single();
 
+  // ---- Buscar persona da IA (configuração detalhada) ----
+  const { data: personaConfig } = await supabase
+    .from("ai_persona_config")
+    .select("name, role, tone, personality, custom_instructions")
+    .eq("tenant_id", params.tenantId)
+    .single();
+
   // ---- Buscar dados do lead (respostas do formulário + análise IA) ----
   let leadAiAnalysis: ConversationContext["leadAiAnalysis"] = undefined;
   let enrichedFormResponses = params.formResponses;
@@ -421,8 +437,11 @@ export async function buildConversationContext(params: {
     contactPhone: params.contactPhone,
     companyName: businessProfile?.company_name || company?.name || "Empresa",
     companySegment: businessProfile?.business_type || company?.segment || "saúde",
-    aiPersonaName: waConn?.ai_persona_name || "Assistente",
-    aiPersonaTone: waConn?.ai_persona_tone || businessProfile?.brand_tone || "profissional e empático",
+    aiPersonaName: personaConfig?.name || waConn?.ai_persona_name || "Maria",
+    aiPersonaTone: personaConfig?.tone || waConn?.ai_persona_tone || businessProfile?.brand_tone || "friendly_professional",
+    aiPersonaRole: personaConfig?.role || "Consultora de Atendimento",
+    aiPersonaPersonality: personaConfig?.personality || "consultive",
+    aiPersonaCustomInstructions: personaConfig?.custom_instructions || "",
     // Perfil do negócio
     businessDescription: businessProfile?.business_description,
     businessDifferentials: businessProfile?.differentials,

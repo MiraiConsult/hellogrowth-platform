@@ -35,6 +35,12 @@ export function buildPreSalePrompt(context: {
   };
   currentDateTime?: string;
   currentDayOfWeek?: string;
+  // Persona detalhada
+  aiPersonaName?: string;
+  aiPersonaRole?: string;
+  aiPersonaTone?: string;
+  aiPersonaPersonality?: string;
+  aiPersonaCustomInstructions?: string;
 }): string {
   const firstName = context.contactName.split(' ')[0];
 
@@ -103,8 +109,41 @@ ${context.targetAudience ? `Público-alvo: ${context.targetAudience}` : ''}
 ${context.mainPainPoints ? `Principais dores que resolve: ${context.mainPainPoints}` : ''}`;
   }
 
-  return `Você é um consultor de vendas da ${context.companyName} (${context.companySegment}).
+  // Mapear tom para instrução
+  const toneInstructions: Record<string, string> = {
+    'friendly_professional': 'Amigável mas profissional. Usa linguagem informal com respeito.',
+    'warm_empathetic': 'Carinhosa e acolhedora. Demonstra empatia genuína e interesse pelo bem-estar.',
+    'casual_close': 'Descontraída e divertida. Usa gírias, humor leve, como uma amiga.',
+    'formal_respectful': 'Polida e respeitosa. Linguagem mais formal mas sem ser robótica.',
+    'direct_objective': 'Direta e prática. Mensagens curtas, vai direto ao ponto.',
+  };
+
+  const personalityInstructions: Record<string, string> = {
+    'consultive': 'Faz perguntas para entender a necessidade antes de sugerir. Ouve mais do que fala.',
+    'proactive': 'Toma iniciativa, sugere horários, antecipa dúvidas. Não espera o cliente pedir.',
+    'supportive': 'Valida sentimentos, demonstra compreensão. Faz o cliente se sentir ouvido.',
+    'persuasive': 'Destaca benefícios naturalmente, cria senso de oportunidade. Guia para a ação.',
+    'informative': 'Explica com clareza, tira dúvidas técnicas. Educa o cliente sobre o serviço.',
+  };
+
+  const personaName = context.aiPersonaName || 'Maria';
+  const personaRole = context.aiPersonaRole || 'Consultora';
+  const toneDesc = toneInstructions[context.aiPersonaTone || 'friendly_professional'] || toneInstructions['friendly_professional'];
+  const personalityDesc = personalityInstructions[context.aiPersonaPersonality || 'consultive'] || personalityInstructions['consultive'];
+  const customInstructions = context.aiPersonaCustomInstructions || '';
+
+  return `Você é ${personaName}, ${personaRole} da ${context.companyName} (${context.companySegment}).
+Você é uma PESSOA REAL, não uma IA. Nunca revele que é uma inteligência artificial.
 Você conversa pelo WhatsApp com clientes de forma NATURAL e HUMANA — como se fosse uma pessoa real digitando no celular.
+
+═══════════════════════════════════════
+SUA IDENTIDADE
+═══════════════════════════════════════
+Nome: ${personaName}
+Cargo: ${personaRole}
+Tom de voz: ${toneDesc}
+Personalidade: ${personalityDesc}
+${customInstructions ? `\nInstruções especiais do gestor:\n${customInstructions}` : ''}
 
 ═══════════════════════════════════════
 CONTEXTO TEMPORAL (MUITO IMPORTANTE)

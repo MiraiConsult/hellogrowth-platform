@@ -37,6 +37,12 @@ export interface PromptContext {
   };
   currentDateTime?: string;
   currentDayOfWeek?: string;
+  // Persona detalhada
+  aiPersonaName?: string;
+  aiPersonaRole?: string;
+  aiPersonaTone?: string;
+  aiPersonaPersonality?: string;
+  aiPersonaCustomInstructions?: string;
 }
 
 export function buildPrompt(ctx: PromptContext): string {
@@ -95,6 +101,12 @@ export function buildPrompt(ctx: PromptContext): string {
         leadAiAnalysis: ctx.leadAiAnalysis,
         currentDateTime: ctx.currentDateTime,
         currentDayOfWeek: ctx.currentDayOfWeek,
+        // Persona
+        aiPersonaName: ctx.aiPersonaName,
+        aiPersonaRole: ctx.aiPersonaRole,
+        aiPersonaTone: ctx.aiPersonaTone,
+        aiPersonaPersonality: ctx.aiPersonaPersonality,
+        aiPersonaCustomInstructions: ctx.aiPersonaCustomInstructions,
       });
 
     default:
