@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { sendMessage as send360Message, sendTemplate as send360Template } from "./360dialog-client";
+import { sendTextMessage as send360Message, sendTemplateMessage as send360Template } from "./360dialog-client";
 
 const GRAPH_API_BASE = "https://graph.facebook.com/v19.0";
 
