@@ -34,7 +34,8 @@ import {
   BellOff,
   Rocket,
   FileText,
-  Download
+  Download,
+  SendHorizonal
 } from 'lucide-react';
 import { PlanType, Company, UserCompany } from '@/types';
 import CompanySwitcher from '@/components/CompanySwitcher';
@@ -325,6 +326,7 @@ const Navigation: React.FC<NavigationProps> = ({
       children: [
         { id: 'whatsapp-setup', label: 'WhatsApp IA', icon: Smartphone, requiredPlan: 'all' },
         { id: 'action-inbox', label: 'Fila de Ações', icon: Zap, requiredPlan: 'all' },
+        { id: 'dispatches', label: 'Disparos', icon: SendHorizonal, requiredPlan: 'all' },
         { id: 'action-metrics', label: 'Métricas IA', icon: BarChart3, requiredPlan: 'all' },
         { id: 'conversation-export', label: 'Conversas', icon: MessageSquare, requiredPlan: 'all' },
       ],
