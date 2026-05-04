@@ -226,13 +226,21 @@ async function sendEvolutionMessage(
     }),
   });
 
+  const data = await res.json();
+
+  // O Evolution pode retornar status 400 com exists:false para números brasileiros
+  // mas ainda assim entrega a mensagem. Verificamos se há um key.id na resposta.
+  if (data?.key?.id) {
+    return data.key.id;
+  }
+
   if (!res.ok) {
-    const error = await res.text();
+    const error = JSON.stringify(data);
     throw new Error(`Evolution API error: ${error}`);
   }
 
-  const data = await res.json();
-  return data.key?.id || `evo_${Date.now()}`;
+  return `evo_${Date.now()}`;
+
 }
 
 // ============================================================

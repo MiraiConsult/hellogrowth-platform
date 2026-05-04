@@ -30,9 +30,19 @@ export async function POST(req: NextRequest) {
     
     console.log(`[Evolution Webhook] Evento recebido: ${event}`);
     console.log(`[Evolution Webhook] Data type: ${Array.isArray(body.data) ? 'array' : typeof body.data}`);
+    console.log(`[Evolution Webhook] Body keys: ${Object.keys(body).join(', ')}`);
+    if (body.data) {
+      const sample = Array.isArray(body.data) ? body.data[0] : body.data;
+      console.log(`[Evolution Webhook] Data sample keys: ${Object.keys(sample || {}).join(', ')}`);
+      if (sample?.key) console.log(`[Evolution Webhook] key.fromMe=${sample.key.fromMe}, remoteJid=${sample.key.remoteJid}`);
+    }
 
-    // Processar apenas mensagens recebidas (não enviadas pelo bot)
-    if (event === "messages.upsert" || event === "message" || event === "MESSAGES_UPSERT") {
+    // Processar mensagens recebidas - aceitar múltiplos formatos de evento
+    const isMessageEvent = event === "messages.upsert" || event === "message" || 
+      event === "MESSAGES_UPSERT" || event === "messages.update" ||
+      (body.data && (body.data.key || (Array.isArray(body.data) && body.data[0]?.key)));
+    
+    if (isMessageEvent) {
       // Evolution API v2 pode enviar data como array ou objeto
       // Formato v2: body.data é um array de mensagens
       // Formato alternativo: body.data.message é o objeto da mensagem
