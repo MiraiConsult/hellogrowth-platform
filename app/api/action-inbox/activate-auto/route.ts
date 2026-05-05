@@ -26,7 +26,7 @@ const supabase = createClient(
 
 export async function POST(req: NextRequest) {
   try {
-    const { conversationId, tenantId } = await req.json();
+    const { conversationId, tenantId, objective } = await req.json();
 
     if (!conversationId || !tenantId) {
       return NextResponse.json(
@@ -71,14 +71,34 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ---- 2. Ativar modo auto ----
+    // ---- 2. Ativar modo auto e salvar o objetivo ----
     await supabase
       .from("ai_conversations")
-      .update({ mode: "auto", status: "active" })
+      .update({ mode: "auto", status: "active", conversation_objective: objective || null })
       .eq("id", conversationId);
 
     // ---- 3. Gerar primeira mensagem com IA ----
     const triggerData = conv.trigger_data || {};
+
+    // Se o objetivo é pós-consulta com NPS, buscar o nome do formulário e montar o link
+    let enrichedObjective = objective || null;
+    if (objective?.type === 'post_consultation' && objective?.npsFormId) {
+      const { data: npsForm } = await supabase
+        .from('campaigns')
+        .select('name, id')
+        .eq('id', objective.npsFormId)
+        .single();
+
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://hellogrowth.online';
+      const npsLink = `${appUrl}/nps/${objective.npsFormId}`;
+
+      enrichedObjective = {
+        ...objective,
+        npsFormName: npsForm?.name || 'Pesquisa de Satisfação',
+        npsFormLink: npsLink,
+      };
+    }
+
     let aiResult;
     try {
       const ctx = await buildConversationContext({
@@ -92,6 +112,7 @@ export async function POST(req: NextRequest) {
         interestedServices: triggerData.interestedServices,
         conversationHistory: [],
         isFirstMessage: true,
+        conversationObjective: enrichedObjective,
       });
       aiResult = await generateMessage(ctx);
     } catch (aiError: any) {

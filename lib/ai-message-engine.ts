@@ -70,6 +70,13 @@ export interface ConversationContext {
   playbookOperationMode?: string;
   // Modo
   isFirstMessage: boolean;
+  // Objetivo da conversa (definido pelo operador antes de iniciar)
+  conversationObjective?: {
+    type: 'schedule_first' | 'reschedule' | 'post_consultation' | 'close_budget' | 'reactivate';
+    context?: string;
+    npsFormId?: string;
+    npsFormName?: string;
+  } | null;
   // Prompt customizado (vem do banco se a clínica editou)
   customPrompt?: string;
 }
@@ -146,6 +153,8 @@ function buildSystemPrompt(ctx: ConversationContext): string {
     engagementReferralCampaign: ctx.engagementReferralCampaign,
     alreadyRequestedReview: ctx.alreadyRequestedReview,
     alreadyRequestedReferral: ctx.alreadyRequestedReferral,
+    // Objetivo da conversa
+    conversationObjective: ctx.conversationObjective,
   });
 }
 
@@ -384,6 +393,12 @@ export async function buildConversationContext(params: {
   interestedServices?: string[];
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   isFirstMessage: boolean;
+  conversationObjective?: {
+    type: 'schedule_first' | 'reschedule' | 'post_consultation' | 'close_budget' | 'reactivate';
+    context?: string;
+    npsFormId?: string;
+    npsFormName?: string;
+  } | null;
 }): Promise<ConversationContext> {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -628,6 +643,7 @@ export async function buildConversationContext(params: {
     alreadyRequestedReferral,
     conversationHistory: params.conversationHistory || [],
     isFirstMessage: params.isFirstMessage,
+    conversationObjective: params.conversationObjective || null,
     customPrompt,
   };
 }

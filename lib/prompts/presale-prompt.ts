@@ -61,6 +61,12 @@ export function buildPreSalePrompt(context: {
   aiPersonaPersonality?: string;
   aiPersonaCustomInstructions?: string;
   playbookObjective?: string;
+  conversationObjective?: {
+    type: 'schedule_first' | 'reschedule' | 'post_consultation' | 'close_budget' | 'reactivate';
+    context?: string;
+    npsFormId?: string;
+    npsFormName?: string;
+  } | null;
 }): string {
   const firstName = context.contactName.split(' ')[0];
 
@@ -259,7 +265,33 @@ Turno 4+: Fechar agendamento/próximo passo
 Após agendamento confirmado: Agradecer, informar próximos passos e encerrar
 ${context.playbookObjective ? `
 OBJETIVO DESTE FLUXO (definido pelo gestor):
-${getObjectiveInstructions(context.playbookObjective)}` : ''}
+${getObjectiveInstructions(context.playbookObjective)}` : ''}${context.conversationObjective ? `
+
+═══════════════════════════════════════
+OBJETIVO DESTA CONVERSA (definido pelo operador)
+═══════════════════════════════════════
+${context.conversationObjective.type === 'schedule_first' ? `AGENDAR PRIMEIRA CONSULTA
+Este lead nunca veio à clínica. Seu objetivo é qualificar o interesse e agendar a primeira consulta.` 
+: context.conversationObjective.type === 'reschedule' ? `REAGENDAR / RETOMAR CONTATO
+Este lead demonstrou interesse mas sumiu. Retome o contato de forma natural, sem agir como se fosse um lead novo. Não repita perguntas que ele já respondeu anteriormente.`
+: context.conversationObjective.type === 'post_consultation' ? `ACOMPANHAMENTO PÓS-CONSULTA
+Este paciente acabou de fazer uma consulta. NÃO tente marcar nova consulta agora.
+Pergunte como foi a experiência de forma genuína e acolhedora.${context.conversationObjective.npsFormName ? `
+
+ENVIAR PESQUISA NPS: Após ouvir o feedback inicial do paciente, envie o link da pesquisa "${context.conversationObjective.npsFormName}" de forma natural.
+Exemplo: "Que bom! Você teria 1 minutinho pra responder uma pesquisa rápida? É só clicar aqui: ${context.conversationObjective?.npsFormLink || '[LINK DA PESQUISA]'}"
+IMPORTANTE: Envie a pesquisa independentemente do feedback ser positivo ou negativo. O sistema precisa registrar TODAS as opiniões, incluindo críticas. Não filtre por satisfação.` : ''}`
+: context.conversationObjective.type === 'close_budget' ? `FECHAR ORÇAMENTO
+Este lead já recebeu um orçamento mas não fechou. Não reapresente o serviço como se ele não soubesse — ele já conhece.
+Foque em remover objeções, entender o que está travando a decisão e facilitar o fechamento.`
+: context.conversationObjective.type === 'reactivate' ? `REATIVAR CLIENTE INATIVO
+Este cliente não vem há algum tempo. Use um tom de reconexão genuína, não de venda agressiva.
+Demonstre que sentiu falta e que há novidades. Não force — deixe o cliente sentir que a iniciativa é boa.`
+: ''}${context.conversationObjective.context ? `
+
+CONTEXTO ADICIONAL DO OPERADOR (instrução prioritária):
+"${context.conversationObjective.context}"
+Adapte toda a conversa levando em conta essa informação. Ela tem prioridade sobre o fluxo padrão.` : ''}` : ''}
 
 ═══════════════════════════════════════
 ESTILO DE ESCRITA (WhatsApp)

@@ -10,6 +10,14 @@ import {
   MoreVertical, Copy, RotateCcw, ExternalLink
 } from 'lucide-react';
 
+// ---- Tipos de objetivo da conversa ----
+type ConversationObjectiveType =
+  | 'schedule_first'
+  | 'reschedule'
+  | 'post_consultation'
+  | 'close_budget'
+  | 'reactivate';
+
 interface Props {
   isDark: boolean;
   tenantId: string;
@@ -165,6 +173,14 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
   const [regenerating, setRegenerating] = useState(false);
   const [conversationMode, setConversationMode] = useState<'approval_required' | 'auto'>('approval_required');
   const [settingMode, setSettingMode] = useState(false);
+  // Modal de objetivo da conversa
+  const [showObjectiveModal, setShowObjectiveModal] = useState(false);
+  const [selectedObjective, setSelectedObjective] = useState<ConversationObjectiveType>('schedule_first');
+  const [objectiveContext, setObjectiveContext] = useState('');
+  const [objectiveNpsFormId, setObjectiveNpsFormId] = useState('');
+  const [objectiveNpsFormName, setObjectiveNpsFormName] = useState('');
+  const [sendNpsAfterConsultation, setSendNpsAfterConsultation] = useState(false);
+  const [availableForms, setAvailableForms] = useState<Array<{id: string; name: string}>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const autoRefreshRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -357,9 +373,39 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
     }
   };
 
+  // Buscar formulários/pesquisas disponíveis para o select de NPS
+  const fetchForms = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/campaigns?tenantId=${tenantId}&type=nps`);
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableForms((data.campaigns || []).map((c: any) => ({ id: c.id, name: c.name })));
+      }
+    } catch (err) {
+      console.error('Error fetching forms:', err);
+    }
+  }, [tenantId]);
+
+  // Abrir modal de objetivo
+  const handleOpenObjectiveModal = () => {
+    setSelectedObjective('schedule_first');
+    setObjectiveContext('');
+    setObjectiveNpsFormId('');
+    setObjectiveNpsFormName('');
+    setSendNpsAfterConsultation(false);
+    fetchForms();
+    setShowObjectiveModal(true);
+  };
+
   // Ativar modo auto E enviar a primeira mensagem imediatamente
-  const handleActivateAutoAndSend = async () => {
+  const handleActivateAutoAndSend = async (objective?: {
+    type: ConversationObjectiveType;
+    context?: string;
+    npsFormId?: string;
+    npsFormName?: string;
+  }) => {
     if (!selectedAction?.conversation_id || !conversation) return;
+    setShowObjectiveModal(false);
     setSettingMode(true);
     try {
       // Atualizar UI imediatamente para feedback visual
@@ -372,6 +418,7 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
         body: JSON.stringify({
           conversationId: conversation.id,
           tenantId,
+          objective,
         }),
       });
 
@@ -426,6 +473,7 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
   };
 
   return (
+    <>
     <div className={`flex h-screen ${t.bg}`} style={{ height: 'calc(100vh - 64px)' }}>
 
       {/* ============================================================
@@ -698,12 +746,12 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
                     </button>
                     <button
                       onClick={() => {
-                        // Se não há mensagens enviadas ainda, ativa E envia a primeira mensagem
+                        // Se não há mensagens enviadas ainda, abre modal de objetivo
                         const hasMessages = conversation?.messages?.some(
                           (m: ConversationMessage) => m.direction === 'outbound' && m.status === 'sent'
                         );
                         if (!hasMessages && conversationMode !== 'auto') {
-                          handleActivateAutoAndSend();
+                          handleOpenObjectiveModal();
                         } else {
                           handleSetMode('auto');
                         }
@@ -866,7 +914,7 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
                         <p className="text-xs mt-1 opacity-70">Envie a primeira mensagem abaixo, ou ative o modo automático para a IA iniciar a conversa sozinha</p>
                         {selectedAction.conversation_id && (
                           <button
-                            onClick={handleActivateAutoAndSend}
+                            onClick={handleOpenObjectiveModal}
                             disabled={settingMode}
                             className={`mt-4 flex items-center gap-2 mx-auto px-5 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white transition-colors shadow-sm`}
                           >
@@ -958,5 +1006,133 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
         )}
       </div>
     </div>
+
+    {/* ---- Modal de Objetivo da Conversa ---- */}
+    {showObjectiveModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className={`w-full max-w-md rounded-2xl shadow-2xl ${isDark ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-slate-200'} overflow-hidden`}>
+          {/* Header */}
+          <div className={`px-5 py-4 border-b ${isDark ? 'border-slate-700' : 'border-slate-100'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className={`text-base font-semibold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>Qual é o objetivo com esse lead?</h3>
+                <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>A IA vai adaptar a abordagem conforme o objetivo</p>
+              </div>
+              <button onClick={() => setShowObjectiveModal(false)} className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}>
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Opções de objetivo */}
+          <div className="px-5 py-4 space-y-2">
+            {([
+              { type: 'schedule_first' as ConversationObjectiveType, icon: '📅', label: 'Agendar primeira consulta', desc: 'Lead novo que ainda não veio' },
+              { type: 'reschedule' as ConversationObjectiveType, icon: '🔄', label: 'Reagendar / Retomar contato', desc: 'Sumiu após responder o formulário' },
+              { type: 'post_consultation' as ConversationObjectiveType, icon: '💬', label: 'Acompanhar pós-consulta', desc: 'Acabou de fazer uma consulta' },
+              { type: 'close_budget' as ConversationObjectiveType, icon: '💰', label: 'Fechar orçamento', desc: 'Recebeu proposta mas não fechou' },
+              { type: 'reactivate' as ConversationObjectiveType, icon: '✨', label: 'Reativar cliente inativo', desc: 'Não vem há muito tempo' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.type}
+                onClick={() => setSelectedObjective(opt.type)}
+                className={`w-full flex items-start gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                  selectedObjective === opt.type
+                    ? isDark ? 'border-purple-500 bg-purple-900/20' : 'border-purple-500 bg-purple-50'
+                    : isDark ? 'border-slate-700 hover:border-slate-600' : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <span className="text-xl mt-0.5">{opt.icon}</span>
+                <div>
+                  <p className={`text-sm font-medium ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>{opt.label}</p>
+                  <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{opt.desc}</p>
+                </div>
+                {selectedObjective === opt.type && (
+                  <Check size={16} className="ml-auto mt-1 text-purple-500 flex-shrink-0" />
+                )}
+              </button>
+            ))}
+
+            {/* Enviar NPS (apenas para pós-consulta) */}
+            {selectedObjective === 'post_consultation' && (
+              <div className={`mt-1 p-3 rounded-xl border ${isDark ? 'border-slate-700 bg-slate-700/30' : 'border-slate-200 bg-slate-50'}`}>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sendNpsAfterConsultation}
+                    onChange={(e) => setSendNpsAfterConsultation(e.target.checked)}
+                    className="w-4 h-4 rounded accent-purple-500"
+                  />
+                  <span className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>Enviar pesquisa NPS</span>
+                </label>
+                {sendNpsAfterConsultation && (
+                  <div className="mt-2">
+                    <p className={`text-xs mb-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Qual pesquisa enviar?</p>
+                    <select
+                      value={objectiveNpsFormId}
+                      onChange={(e) => {
+                        const form = availableForms.find(f => f.id === e.target.value);
+                        setObjectiveNpsFormId(e.target.value);
+                        setObjectiveNpsFormName(form?.name || '');
+                      }}
+                      className={`w-full text-sm rounded-lg px-3 py-2 border ${
+                        isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-white border-slate-300 text-slate-800'
+                      }`}
+                    >
+                      <option value="">Selecione uma pesquisa...</option>
+                      {availableForms.map(f => (
+                        <option key={f.id} value={f.id}>{f.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Contexto adicional */}
+            <div>
+              <label className={`block text-xs font-medium mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                Contexto adicional <span className="font-normal opacity-70">(opcional)</span>
+              </label>
+              <textarea
+                value={objectiveContext}
+                onChange={(e) => setObjectiveContext(e.target.value)}
+                placeholder="Ex: Ela veio semana passada, gostou mas disse que ia pensar no preço..."
+                rows={2}
+                className={`w-full text-sm rounded-xl px-3 py-2 border resize-none ${
+                  isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-white border-slate-300 text-slate-800 placeholder-slate-400'
+                }`}
+              />
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className={`px-5 py-3 border-t ${isDark ? 'border-slate-700' : 'border-slate-100'} flex gap-2`}>
+            <button
+              onClick={() => setShowObjectiveModal(false)}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-medium border ${
+                isDark ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+              } transition-colors`}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => handleActivateAutoAndSend({
+                type: selectedObjective,
+                context: objectiveContext || undefined,
+                npsFormId: (selectedObjective === 'post_consultation' && sendNpsAfterConsultation) ? objectiveNpsFormId : undefined,
+                npsFormName: (selectedObjective === 'post_consultation' && sendNpsAfterConsultation) ? objectiveNpsFormName : undefined,
+              })}
+              disabled={settingMode || (selectedObjective === 'post_consultation' && sendNpsAfterConsultation && !objectiveNpsFormId)}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white transition-colors shadow-sm flex items-center justify-center gap-2"
+            >
+              <Bot size={14} />
+              Ativar e Iniciar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

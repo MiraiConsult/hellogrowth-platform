@@ -50,6 +50,13 @@ export interface PromptContext {
   engagementReferralCampaign?: { id: string; reward_description: string } | null;
   alreadyRequestedReview?: boolean;
   alreadyRequestedReferral?: boolean;
+  // Objetivo da conversa (definido pelo operador)
+  conversationObjective?: {
+    type: 'schedule_first' | 'reschedule' | 'post_consultation' | 'close_budget' | 'reactivate';
+    context?: string;
+    npsFormId?: string;
+    npsFormName?: string;
+  } | null;
 }
 
 export function buildPrompt(ctx: PromptContext): string {
@@ -128,6 +135,8 @@ export function buildPrompt(ctx: PromptContext): string {
         aiPersonaCustomInstructions: ctx.aiPersonaCustomInstructions,
         // Playbook
         playbookObjective: ctx.playbookObjective,
+        // Objetivo da conversa
+        conversationObjective: ctx.conversationObjective,
       });
 
     default:

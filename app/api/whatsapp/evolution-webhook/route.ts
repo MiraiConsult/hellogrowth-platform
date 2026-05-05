@@ -264,7 +264,7 @@ async function handleIncomingMessage({
   // Buscar dados do lead/trigger para personalização
   const { data: convFull } = await supabase
     .from("ai_conversations")
-    .select("trigger_data, nps_score, contact_name, contact_phone, flow_type")
+    .select("trigger_data, nps_score, contact_name, contact_phone, flow_type, conversation_objective")
     .eq("id", conversation.id)
     .single();
 
@@ -284,6 +284,7 @@ async function handleIncomingMessage({
       interestedServices: triggerData.interestedServices,
       conversationHistory,
       isFirstMessage: false,
+      conversationObjective: convFull?.conversation_objective || null,
     });
     aiResult = await generateMessage(ctx);
   } catch (err: any) {
