@@ -5,8 +5,10 @@ export async function GET(request: NextRequest) {
   const placeId = searchParams.get('placeId');
 
   if (!placeId) {
+    console.error('[Google Places] Missing placeId in request. URL:', request.url);
     return NextResponse.json({ error: 'Place ID is required' }, { status: 400 });
   }
+  console.log('[Google Places] Fetching placeId:', placeId);
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
 
@@ -36,6 +38,7 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       const errorData = await response.json();
+      console.error('[Google Places] API error for placeId:', placeId, 'Status:', response.status, 'Error:', JSON.stringify(errorData));
       return NextResponse.json({
         result: null,
         status: 'ERROR',
