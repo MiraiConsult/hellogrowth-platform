@@ -1893,6 +1893,7 @@ Responda APENAS com JSON válido (sem markdown):
               isDark={false}
               tenantId={getActiveTenant() || ''}
               companyName={settings.companyName || 'Minha Empresa'}
+              actionsModule={(() => { try { const a = typeof activeCompany?.plan_addons === 'string' ? JSON.parse(activeCompany?.plan_addons || '{}') : (activeCompany?.plan_addons || {}); return a.actions || 'none'; } catch { return 'none'; } })()}
             />
           </div>
         )}

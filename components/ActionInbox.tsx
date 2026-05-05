@@ -512,7 +512,7 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       setFlowStatus(data || null);
     } catch {
       setFlowStatus(null);
@@ -784,7 +784,7 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
           ) : (
             <>
               {actions.map((action) => {
-                const config = FLOW_CONFIG[action.type];
+                const config = FLOW_CONFIG[action.type] || FLOW_CONFIG.pre_sale;
                 const Icon = config.icon;
                 const isSelected = selectedAction?.id === action.id;
                 const statusCfg = STATUS_CONFIG[action.status] || STATUS_CONFIG.pending;
@@ -939,8 +939,8 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
                   <p className={`font-semibold text-[15px] ${t.text}`}>{selectedAction.contact_name}</p>
                   <div className="flex items-center gap-2">
                     <p className={`text-xs ${t.textMuted}`}>{selectedAction.contact_phone}</p>
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isDark ? FLOW_CONFIG[selectedAction.type].darkBg : FLOW_CONFIG[selectedAction.type].badgeBg} ${FLOW_CONFIG[selectedAction.type].badgeText}`}>
-                      {FLOW_CONFIG[selectedAction.type].label}
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isDark ? (FLOW_CONFIG[selectedAction.type] || FLOW_CONFIG.pre_sale).darkBg : (FLOW_CONFIG[selectedAction.type] || FLOW_CONFIG.pre_sale).badgeBg} ${(FLOW_CONFIG[selectedAction.type] || FLOW_CONFIG.pre_sale).badgeText}`}>
+                      {(FLOW_CONFIG[selectedAction.type] || FLOW_CONFIG.pre_sale).label}
                       {selectedAction.nps_score !== undefined && selectedAction.nps_score !== null && ` • NPS ${selectedAction.nps_score}`}
                     </span>
                   </div>

@@ -13,6 +13,7 @@ interface Props {
   isDark: boolean;
   tenantId: string;
   companyName: string;
+  actionsModule?: 'none' | 'simplified' | 'complete';
 }
 
 interface WhatsAppConnection {
@@ -113,7 +114,7 @@ const DEFAULT_PLAYBOOKS: Playbooks = {
   detractor: { operation_mode: 'hybrid', objective: 'understand_problem', escalate_on_unknown: true, escalate_after_turns: 3, escalate_on_human_request: true, custom_objective_prompt: '' },
 };
 
-export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) {
+export default function WhatsAppSetup({ isDark, tenantId, companyName, actionsModule = 'complete' }: Props) {
   const t = {
     bg: isDark ? 'bg-slate-900' : 'bg-slate-50',
     card: isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200',
@@ -132,7 +133,7 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
   const [personaSaved, setPersonaSaved] = useState(false);
   const [savingPlaybooks, setSavingPlaybooks] = useState(false);
   const [playbooksSaved, setPlaybooksSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<'persona' | 'playbooks' | 'connection'>('persona');
+  const [activeTab, setActiveTab] = useState<'persona' | 'playbooks' | 'connection'>(actionsModule === 'simplified' ? 'connection' : 'persona');
   const [expandedFlow, setExpandedFlow] = useState<string | null>('pre_sale');
 
   const [persona, setPersona] = useState<AIPersona>({
@@ -310,8 +311,10 @@ export default function WhatsAppSetup({ isDark, tenantId, companyName }: Props) 
         {/* Tabs */}
         <div className={`flex gap-1 p-1 rounded-xl border ${t.card}`}>
           {[
-            { id: 'persona', label: 'Identidade da IA', icon: Bot },
-            { id: 'playbooks', label: 'Playbooks por Fluxo', icon: Target },
+            ...(actionsModule !== 'simplified' ? [
+              { id: 'persona', label: 'Identidade da IA', icon: Bot },
+              { id: 'playbooks', label: 'Playbooks por Fluxo', icon: Target },
+            ] : []),
             { id: 'connection', label: 'Conexão WhatsApp', icon: Smartphone },
           ].map(tab => {
             const Icon = tab.icon;

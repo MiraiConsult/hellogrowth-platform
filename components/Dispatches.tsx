@@ -632,6 +632,7 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId, actionsModule = 'none
               tenant_id: tenantId,
               contact_name: recipient.name,
               contact_phone: phone,
+              type: 'pre_sale',
               status: 'pending',
               flow_type: 'simplified',
               module_type: 'simplified',
