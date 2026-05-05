@@ -493,7 +493,7 @@ export const processInboundReply = inngest.createFunction(
     const convData = await step.run("fetch-conversation", async () => {
       const { data } = await supabase
         .from("ai_conversations")
-        .select("flow_type, contact_name, contact_phone, nps_score, trigger_data, tenant_id")
+        .select("flow_type, contact_name, contact_phone, nps_score, trigger_data, tenant_id, module_type")
         .eq("id", conversationId)
         .single();
       return data;
@@ -501,6 +501,12 @@ export const processInboundReply = inngest.createFunction(
 
     if (!convData) {
       return { status: "error", reason: "Conversa não encontrada" };
+    }
+
+    // GUARD: Módulo Simplificado não usa IA — ignorar processamento
+    if ((convData as any).module_type === "simplified") {
+      console.log(`[Inngest] Conversa ${conversationId} é do módulo simplificado, ignorando processamento por IA`);
+      return { status: "skipped", reason: "Módulo simplificado não usa IA" };
     }
 
     // Step 3: Buscar histórico

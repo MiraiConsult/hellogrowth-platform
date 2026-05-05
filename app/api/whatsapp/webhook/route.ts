@@ -351,25 +351,62 @@ async function processSimplifiedFlow(params: {
 
   // Enviar resposta automática se houver
   if (replyMessage) {
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || "";
-    const accessToken = process.env.WHATSAPP_API_KEY || process.env.WHATSAPP_BUSINESS_TOKEN || "";
+    // Buscar credenciais do WhatsApp do banco (whatsapp_connections)
+    const { data: waConn } = await supabase
+      .from("whatsapp_connections")
+      .select("phone_number_id, business_token")
+      .eq("tenant_id", conversation.tenant_id)
+      .eq("status", "connected")
+      .single();
 
-    const waMessageId = await sendTextMessage({
-      phoneNumberId,
-      accessToken,
-      to: conversation.contact_phone,
-      text: replyMessage,
-    });
+    const phoneNumberId = waConn?.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
+    const accessToken = waConn?.business_token || process.env.WHATSAPP_API_KEY || process.env.WHATSAPP_BUSINESS_TOKEN || "";
 
-    await supabase.from("ai_conversation_messages").insert({
-      conversation_id: conversation.id,
-      direction: "outbound",
-      content: replyMessage,
-      status: "sent",
-      wa_message_id: waMessageId,
-      sent_at: new Date().toISOString(),
-      ai_reasoning: `Simplified flow: ${currentStep} → ${nextStep || currentStep}`,
-    });
+    if (!phoneNumberId || !accessToken) {
+      console.error(`[SimplifiedFlow] WhatsApp não configurado para tenant ${conversation.tenant_id}`);
+      // Salvar como draft se não conseguir enviar
+      await supabase.from("ai_conversation_messages").insert({
+        conversation_id: conversation.id,
+        direction: "outbound",
+        content: replyMessage,
+        status: "draft",
+        sent_at: new Date().toISOString(),
+        ai_reasoning: `Simplified flow: ${currentStep} → ${nextStep || currentStep} (WhatsApp não configurado)`,
+      });
+      return;
+    }
+
+    try {
+      const waMessageId = await sendTextMessage({
+        phoneNumberId,
+        accessToken,
+        to: conversation.contact_phone,
+        text: replyMessage,
+      });
+
+      await supabase.from("ai_conversation_messages").insert({
+        conversation_id: conversation.id,
+        direction: "outbound",
+        content: replyMessage,
+        status: "sent",
+        wa_message_id: waMessageId,
+        sent_at: new Date().toISOString(),
+        ai_reasoning: `Simplified flow: ${currentStep} → ${nextStep || currentStep}`,
+      });
+
+      console.log(`[SimplifiedFlow] Mensagem enviada: ${currentStep} → ${nextStep || currentStep}`);
+    } catch (sendError) {
+      console.error(`[SimplifiedFlow] Erro ao enviar mensagem:`, sendError);
+      // Salvar como draft se falhar o envio
+      await supabase.from("ai_conversation_messages").insert({
+        conversation_id: conversation.id,
+        direction: "outbound",
+        content: replyMessage,
+        status: "draft",
+        sent_at: new Date().toISOString(),
+        ai_reasoning: `Simplified flow: ${currentStep} → ${nextStep || currentStep} (erro no envio)`,
+      });
+    }
   }
 }
 
