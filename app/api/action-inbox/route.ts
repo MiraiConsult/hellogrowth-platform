@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
       .select(`
         id,
         flow_type,
+        module_type,
         contact_name,
         contact_phone,
         status,
@@ -33,6 +34,10 @@ export async function GET(req: NextRequest) {
         trigger_data,
         created_at,
         last_message_at,
+        flow_step,
+        flow_step_status,
+        appointment_datetime,
+        dispatch_campaign_id,
         ai_conversation_messages(
           id,
           direction,
@@ -109,6 +114,7 @@ export async function GET(req: NextRequest) {
       return {
         id: conv.id,
         type: conv.flow_type as "detractor" | "promoter" | "passive" | "pre_sale",
+        flow_type: conv.flow_type,
         priority,
         contact_name: conv.contact_name,
         contact_phone: conv.contact_phone,
@@ -121,6 +127,11 @@ export async function GET(req: NextRequest) {
         nps_score: conv.nps_score,
         lead_services: (triggerData?.interested_services as string[]) || [],
         message_count: sentMessages.length,
+        module_type: (conv as any).module_type || null,
+        flow_step: (conv as any).flow_step || null,
+        flow_step_status: (conv as any).flow_step_status || null,
+        appointment_datetime: (conv as any).appointment_datetime || null,
+        dispatch_campaign_id: (conv as any).dispatch_campaign_id || null,
       };
     });
 

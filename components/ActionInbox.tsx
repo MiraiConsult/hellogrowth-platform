@@ -508,7 +508,7 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
         .from('dispatch_flow_configs')
         .select('*')
         .eq('tenant_id', tenantId)
-        .eq('phone', phone)
+        .eq('contact_phone', phone)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .limit(1)
@@ -591,7 +591,7 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
           consultation_confirmed_at: new Date().toISOString(),
         })
         .eq('dispatch_campaign_id', flowStatus.dispatch_campaign_id)
-        .eq('phone', flowStatus.phone);
+        .eq('contact_phone', flowStatus.contact_phone);
       setShowPostsaleModal(true);
       await fetchFlowStatus(selectedAction.contact_phone);
     } finally {
@@ -629,7 +629,7 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
           postsale_nps_id: postsaleNpsId,
         })
         .eq('dispatch_campaign_id', flowStatus.dispatch_campaign_id)
-        .eq('phone', flowStatus.phone);
+        .eq('contact_phone', flowStatus.contact_phone);
 
       setShowPostsaleModal(false);
       setPostsaleNpsId('');
@@ -784,7 +784,7 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
           ) : (
             <>
               {actions.map((action) => {
-                const config = FLOW_CONFIG[action.type] || FLOW_CONFIG.pre_sale;
+                const config = FLOW_CONFIG[action.flow_type] || FLOW_CONFIG.pre_sale;
                 const Icon = config.icon;
                 const isSelected = selectedAction?.id === action.id;
                 const statusCfg = STATUS_CONFIG[action.status] || STATUS_CONFIG.pending;
@@ -939,8 +939,8 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
                   <p className={`font-semibold text-[15px] ${t.text}`}>{selectedAction.contact_name}</p>
                   <div className="flex items-center gap-2">
                     <p className={`text-xs ${t.textMuted}`}>{selectedAction.contact_phone}</p>
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isDark ? (FLOW_CONFIG[selectedAction.type] || FLOW_CONFIG.pre_sale).darkBg : (FLOW_CONFIG[selectedAction.type] || FLOW_CONFIG.pre_sale).badgeBg} ${(FLOW_CONFIG[selectedAction.type] || FLOW_CONFIG.pre_sale).badgeText}`}>
-                      {(FLOW_CONFIG[selectedAction.type] || FLOW_CONFIG.pre_sale).label}
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isDark ? (FLOW_CONFIG[selectedAction.flow_type] || FLOW_CONFIG.pre_sale).darkBg : (FLOW_CONFIG[selectedAction.flow_type] || FLOW_CONFIG.pre_sale).badgeBg} ${(FLOW_CONFIG[selectedAction.flow_type] || FLOW_CONFIG.pre_sale).badgeText}`}>
+                      {(FLOW_CONFIG[selectedAction.flow_type] || FLOW_CONFIG.pre_sale).label}
                       {selectedAction.nps_score !== undefined && selectedAction.nps_score !== null && ` • NPS ${selectedAction.nps_score}`}
                     </span>
                   </div>
