@@ -29,6 +29,7 @@ interface Props {
 interface FlowStatus {
   dispatch_campaign_id: string;
   phone: string;
+  contact_phone: string;
   lead_id?: string;
   current_step: 'confirmation' | 'presale' | 'anamnese' | 'insistence' | 'postsale_pending' | 'postsale_sent' | 'done';
   status: 'active' | 'paused' | 'completed';
@@ -57,6 +58,7 @@ interface ClientInfo {
 interface ActionItem {
   id: string;
   type: 'detractor' | 'promoter' | 'passive' | 'pre_sale';
+  flow_type?: string;
   priority: 'high' | 'medium' | 'low';
   contact_name: string;
   contact_phone: string;
@@ -69,6 +71,11 @@ interface ActionItem {
   nps_score?: number;
   lead_services?: string[];
   message_count?: number;
+  module_type?: string;
+  flow_step?: string;
+  flow_step_status?: string;
+  dispatch_campaign_id?: string;
+  appointment_datetime?: string;
 }
 
 interface ConversationMessage {
@@ -784,7 +791,7 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
           ) : (
             <>
               {actions.map((action) => {
-                const config = FLOW_CONFIG[action.flow_type] || FLOW_CONFIG.pre_sale;
+                const config = (FLOW_CONFIG as any)[action.flow_type as string] || FLOW_CONFIG.pre_sale;
                 const Icon = config.icon;
                 const isSelected = selectedAction?.id === action.id;
                 const statusCfg = STATUS_CONFIG[action.status] || STATUS_CONFIG.pending;
@@ -939,8 +946,8 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
                   <p className={`font-semibold text-[15px] ${t.text}`}>{selectedAction.contact_name}</p>
                   <div className="flex items-center gap-2">
                     <p className={`text-xs ${t.textMuted}`}>{selectedAction.contact_phone}</p>
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isDark ? (FLOW_CONFIG[selectedAction.flow_type] || FLOW_CONFIG.pre_sale).darkBg : (FLOW_CONFIG[selectedAction.flow_type] || FLOW_CONFIG.pre_sale).badgeBg} ${(FLOW_CONFIG[selectedAction.flow_type] || FLOW_CONFIG.pre_sale).badgeText}`}>
-                      {(FLOW_CONFIG[selectedAction.flow_type] || FLOW_CONFIG.pre_sale).label}
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isDark ? ((FLOW_CONFIG as any)[selectedAction.flow_type as string] || FLOW_CONFIG.pre_sale).darkBg : ((FLOW_CONFIG as any)[selectedAction.flow_type as string] || FLOW_CONFIG.pre_sale).badgeBg} ${((FLOW_CONFIG as any)[selectedAction.flow_type as string] || FLOW_CONFIG.pre_sale).badgeText}`}>
+                      {((FLOW_CONFIG as any)[selectedAction.flow_type as string] || FLOW_CONFIG.pre_sale).label}
                       {selectedAction.nps_score !== undefined && selectedAction.nps_score !== null && ` • NPS ${selectedAction.nps_score}`}
                     </span>
                   </div>
@@ -1214,15 +1221,20 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
                       </div>
                     ) : (
                       <>
-                        <p className="text-xs mt-1 opacity-70">Envie a primeira mensagem abaixo, ou ative o modo automático para a IA iniciar a conversa sozinha</p>
+                        <p className="text-xs mt-1 opacity-70">
+                          {actionsModule === 'simplified'
+                            ? 'Ative o modo automático para o sistema acompanhar o cliente conforme o fluxo configurado'
+                            : 'Envie a primeira mensagem abaixo, ou ative o modo automático para a IA iniciar a conversa sozinha'
+                          }
+                        </p>
                         {selectedAction.conversation_id && (
                           <button
-                            onClick={handleOpenObjectiveModal}
+                            onClick={() => actionsModule === 'simplified' ? handleSetMode('auto') : handleOpenObjectiveModal()}
                             disabled={settingMode}
                             className={`mt-4 flex items-center gap-2 mx-auto px-5 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white transition-colors shadow-sm`}
                           >
                             {settingMode ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
-                            {settingMode ? 'Enviando...' : 'Ativar Automático'}
+                            {settingMode ? 'Ativando...' : 'Ativar Automático'}
                           </button>
                         )}
                       </>

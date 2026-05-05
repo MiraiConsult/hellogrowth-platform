@@ -629,11 +629,11 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId, actionsModule = 'none
             });
 
             // Criar entrada na Fila de Ações (ai_conversations)
-            await supabase.from('ai_conversations').insert({
+            const { data: convData } = await supabase.from('ai_conversations').insert({
               tenant_id: tenantId,
               contact_name: recipient.name,
               contact_phone: phone,
-              status: 'pending',
+              status: 'active',
               flow_type: 'pre_sale',
               module_type: 'simplified',
               dispatch_campaign_id: campaignId,
@@ -646,7 +646,19 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId, actionsModule = 'none
                 ? new Date(recipientFlow.step1_datetime).toISOString()
                 : null,
               last_message_at: new Date().toISOString(),
-            });
+            }).select('id').single();
+
+            // Registrar mensagem enviada em ai_conversation_messages
+            if (convData?.id) {
+              await supabase.from('ai_conversation_messages').insert({
+                conversation_id: convData.id,
+                direction: 'outbound',
+                content: firstMessage,
+                status: data.ok ? 'sent' : 'failed',
+                wa_message_id: data.waMessageId || null,
+                sent_at: new Date().toISOString(),
+              });
+            }
           }
         }
       } catch (err: any) {

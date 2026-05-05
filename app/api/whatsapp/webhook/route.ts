@@ -109,9 +109,9 @@ async function handleIncomingMessage(
   // --------------------------------------------------------
   const { data: conversation } = await supabase
     .from("ai_conversations")
-    .select("id, tenant_id, status, flow_type, contact_name, contact_phone")
+    .select("id, tenant_id, status, flow_type, contact_name, contact_phone, module_type, flow_step, flow_step_status, dispatch_campaign_id, appointment_datetime")
     .eq("contact_phone", message.from)
-    .in("status", ["active", "waiting_reply", "draft"])
+    .in("status", ["active", "waiting_reply", "draft", "pending"])
     .order("created_at", { ascending: false })
     .limit(1)
     .single();
@@ -185,6 +185,18 @@ async function handleIncomingMessage(
     .eq("id", conversation.id);
 
   // --------------------------------------------------------
+  // Módulo Simplificado: processar fluxo estruturado
+  // --------------------------------------------------------
+  if ((conversation as any).module_type === "simplified") {
+    await processSimplifiedFlow({
+      conversation: conversation as any,
+      messageContent: content,
+      contactPhone: message.from,
+    });
+    return;
+  }
+
+  // --------------------------------------------------------
   // Processar resposta: via Inngest (se configurado) ou direto
   // --------------------------------------------------------
   if (process.env.INNGEST_EVENT_KEY) {
@@ -217,6 +229,128 @@ async function handleIncomingMessage(
     contactName: contact?.profile?.name || "",
     flowType: conversation.flow_type,
   });
+}
+
+// ============================================================
+// Processamento do fluxo simplificado
+// ============================================================
+async function processSimplifiedFlow(params: {
+  conversation: {
+    id: string;
+    tenant_id: string;
+    contact_name: string;
+    contact_phone: string;
+    flow_step: string;
+    flow_step_status: string;
+    dispatch_campaign_id: string | null;
+    appointment_datetime: string | null;
+  };
+  messageContent: string;
+  contactPhone: string;
+}) {
+  const { conversation, messageContent } = params;
+  const msg = messageContent.trim().toUpperCase();
+
+  // Buscar configuração do fluxo
+  const { data: flowConfig } = await supabase
+    .from("dispatch_flow_configs")
+    .select("*")
+    .eq("contact_phone", conversation.contact_phone)
+    .eq("tenant_id", conversation.tenant_id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const config = (flowConfig?.flow_config as any) || {};
+  const currentStep = conversation.flow_step;
+
+  let nextStep: string | null = null;
+  let replyMessage: string | null = null;
+  let newStatus = "active";
+
+  if (currentStep === "confirmation") {
+    // Cliente respondeu à confirmação de consulta
+    const confirmed = msg.includes("SIM") || msg === "S" || msg.includes("CONFIRMO") || msg.includes("OK");
+    const denied = msg.includes("NÃO") || msg === "N" || msg.includes("NAO") || msg.includes("CANCELAR") || msg.includes("CANCELO");
+
+    if (confirmed) {
+      if (config.step2_anamnese) {
+        nextStep = "presale";
+        // Buscar link do formulário de pré-venda
+        const formId = config.form_id || null;
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://hellogrowth.online";
+        const formLink = formId ? `${baseUrl}/form/${formId}` : null;
+        replyMessage = formLink
+          ? `Ótimo, ${conversation.contact_name.split(" ")[0]}! Consulta confirmada! 😊 Para nos preparar melhor para o seu atendimento, pedimos que preencha este formulário rápido: ${formLink}`
+          : `Ótimo, ${conversation.contact_name.split(" ")[0]}! Consulta confirmada! 😊 Aguardamos você!`;
+      } else if (config.step4_postsale) {
+        nextStep = "postsale_pending";
+        replyMessage = `Ótimo, ${conversation.contact_name.split(" ")[0]}! Consulta confirmada! 😊 Aguardamos você!`;
+      } else {
+        nextStep = "done";
+        newStatus = "completed";
+        replyMessage = `Ótimo, ${conversation.contact_name.split(" ")[0]}! Consulta confirmada! 😊 Aguardamos você!`;
+      }
+    } else if (denied) {
+      nextStep = "cancelled";
+      newStatus = "completed";
+      replyMessage = `Entendido, ${conversation.contact_name.split(" ")[0]}. Se quiser reagendar, entre em contato conosco. Até logo!`;
+    } else {
+      // Resposta não reconhecida — pedir para confirmar novamente
+      replyMessage = `Olá ${conversation.contact_name.split(" ")[0]}! Por favor, responda SIM para confirmar ou NÃO para cancelar sua consulta.`;
+    }
+  } else if (currentStep === "presale") {
+    // Cliente está na etapa de pré-venda — qualquer resposta indica interação
+    // Aguardar o usuário confirmar que a consulta ocorreu para avançar ao pós-venda
+    if (config.step4_postsale) {
+      nextStep = "postsale_pending";
+      // Não enviar mensagem automática — aguardar confirmação do usuário
+    }
+  }
+
+  // Atualizar o flow_step na conversa
+  if (nextStep) {
+    await supabase
+      .from("ai_conversations")
+      .update({
+        flow_step: nextStep,
+        flow_step_status: nextStep === "postsale_pending" ? "waiting_user" : "waiting_client",
+        flow_step_updated_at: new Date().toISOString(),
+        status: newStatus,
+      })
+      .eq("id", conversation.id);
+
+    // Atualizar dispatch_flow_configs
+    if (flowConfig?.id) {
+      await supabase
+        .from("dispatch_flow_configs")
+        .update({ current_step: nextStep, status: newStatus === "completed" ? "completed" : "active" })
+        .eq("id", flowConfig.id);
+    }
+  }
+
+  // Enviar resposta automática se houver
+  if (replyMessage) {
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || "";
+    const accessToken = process.env.WHATSAPP_API_KEY || process.env.WHATSAPP_BUSINESS_TOKEN || "";
+
+    const waMessageId = await sendTextMessage({
+      phoneNumberId,
+      accessToken,
+      to: conversation.contact_phone,
+      text: replyMessage,
+    });
+
+    await supabase.from("ai_conversation_messages").insert({
+      conversation_id: conversation.id,
+      direction: "outbound",
+      content: replyMessage,
+      status: "sent",
+      wa_message_id: waMessageId,
+      sent_at: new Date().toISOString(),
+      ai_reasoning: `Simplified flow: ${currentStep} → ${nextStep || currentStep}`,
+    });
+  }
 }
 
 // ============================================================
