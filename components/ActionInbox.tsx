@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
 import {
   Zap, MessageSquare, CheckCircle, Clock, AlertTriangle, TrendingUp,
   Users, Star, Heart, Send, Eye, ChevronRight, Loader2, RefreshCw,
@@ -373,16 +374,20 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
     }
   };
 
-  // Buscar formulários/pesquisas disponíveis para o select de NPS
+  // Buscar pesquisas NPS disponíveis para o select do modal
   const fetchForms = useCallback(async () => {
+    if (!tenantId) return;
     try {
-      const res = await fetch(`/api/campaigns?tenantId=${tenantId}&type=nps`);
-      if (res.ok) {
-        const data = await res.json();
-        setAvailableForms((data.campaigns || []).map((c: any) => ({ id: c.id, name: c.name })));
+      const { data, error } = await supabase
+        .from('campaigns')
+        .select('id, name')
+        .eq('tenant_id', tenantId)
+        .order('name', { ascending: true });
+      if (!error && data) {
+        setAvailableForms(data.map((c: any) => ({ id: c.id, name: c.name })));
       }
     } catch (err) {
-      console.error('Error fetching forms:', err);
+      console.error('Error fetching NPS campaigns:', err);
     }
   }, [tenantId]);
 
