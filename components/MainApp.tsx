@@ -952,6 +952,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     };
 
     if (campaign.id && campaigns.find(c => c.id === campaign.id)) {
+      // Campanha existente no estado local → atualizar no banco
       const { error: updateError } = await supabase.from('campaigns').update(campaignData).eq('id', campaign.id);
       if (updateError) {
         console.error('Erro ao atualizar campanha:', updateError);
@@ -961,7 +962,31 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }
       setCampaigns(prev => prev.map(c => c.id === campaign.id ? { ...c, ...campaign } : c));
       logActivity({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, action: 'update', entity_type: 'campaign', entity_id: campaign.id, entity_name: campaign.name });
+    } else if (campaign.id) {
+      // Campanha tem ID mas não está no estado local → foi criada pela API (ex: template)
+      // Apenas adicionar ao estado local sem inserir novamente no banco
+      const normalizedCampaign = {
+        ...campaign,
+        npsScore: (campaign as any).nps_score ?? 0,
+        responses: (campaign as any).response_count ?? 0,
+        questions: Array.isArray(campaign.questions) ? campaign.questions : [],
+        initialFields: (campaign as any).initial_fields ?? campaign.initialFields ?? [],
+        enableRedirection: (campaign as any).enable_redirection ?? campaign.enableRedirection ?? false,
+        google_redirect: (campaign as any).google_redirect ?? false,
+        google_place_id: (campaign as any).google_place_id ?? '',
+        offer_prize: (campaign as any).offer_prize ?? false,
+        game_id: (campaign as any).game_id ?? null,
+        before_google_message: (campaign as any).before_google_message ?? '',
+        after_game_message: (campaign as any).after_game_message ?? '',
+        objective: (campaign as any).objective ?? '',
+        tone: (campaign as any).tone ?? '',
+        evaluation_points: (campaign as any).evaluation_points ?? [],
+      };
+      setCampaigns(prev => [...prev, normalizedCampaign]);
+      if (showOnboardingWizard || onboardingInProgress) setNpsCreatedSignal(prev => prev + 1);
+      logActivity({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, action: 'create', entity_type: 'campaign', entity_id: campaign.id, entity_name: campaign.name });
     } else {
+      // Campanha nova sem ID → inserir no banco
       const { data, error: insertError } = await supabase.from('campaigns').insert([campaignData]).select().single();
       if (insertError) {
         console.error('Erro ao inserir campanha:', insertError);

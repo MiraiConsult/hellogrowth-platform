@@ -382,6 +382,7 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
         .from('campaigns')
         .select('id, name')
         .eq('tenant_id', tenantId)
+        .is('deleted_at', null)
         .order('name', { ascending: true });
       if (!error && data) {
         setAvailableForms(data.map((c: any) => ({ id: c.id, name: c.name })));
