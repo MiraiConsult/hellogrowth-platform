@@ -175,19 +175,16 @@ async function handleIncomingMessage(
     return;
   }
 
-  // Atualizar status da conversa
-  await supabase
-    .from("ai_conversations")
-    .update({
-      last_message_at: new Date().toISOString(),
-      status: "active",
-    })
-    .eq("id", conversation.id);
-
   // --------------------------------------------------------
-  // Módulo Simplificado: processar fluxo estruturado
+  // Módulo Simplificado: processar fluxo estruturado ANTES de qualquer IA
   // --------------------------------------------------------
   if ((conversation as any).module_type === "simplified") {
+    // Apenas atualizar last_message_at, sem mudar status
+    await supabase
+      .from("ai_conversations")
+      .update({ last_message_at: new Date().toISOString() })
+      .eq("id", conversation.id);
+
     await processSimplifiedFlow({
       conversation: conversation as any,
       messageContent: content,
@@ -195,6 +192,15 @@ async function handleIncomingMessage(
     });
     return;
   }
+
+  // Atualizar status da conversa (apenas para módulo completo/IA)
+  await supabase
+    .from("ai_conversations")
+    .update({
+      last_message_at: new Date().toISOString(),
+      status: "active",
+    })
+    .eq("id", conversation.id);
 
   // --------------------------------------------------------
   // Processar resposta: via Inngest (se configurado) ou direto
@@ -249,7 +255,7 @@ async function processSimplifiedFlow(params: {
   contactPhone: string;
 }) {
   const { conversation, messageContent } = params;
-  const msg = messageContent.trim().toUpperCase();
+  const msg = messageContent.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   // Buscar configuração do fluxo
   const { data: flowConfig } = await supabase
@@ -270,8 +276,17 @@ async function processSimplifiedFlow(params: {
 
   if (currentStep === "confirmation") {
     // Cliente respondeu à confirmação de consulta
-    const confirmed = msg.includes("SIM") || msg === "S" || msg.includes("CONFIRMO") || msg.includes("OK");
-    const denied = msg.includes("NÃO") || msg === "N" || msg.includes("NAO") || msg.includes("CANCELAR") || msg.includes("CANCELO");
+    // Reconhece variações de SIM: sim, s, confirmo, confirmado, ok, certo, claro, com certeza, pode ser, pode, tá, ta, 1
+    const confirmed = /^(SIM|S|OK|1)$/.test(msg) ||
+      msg.includes("SIM") || msg.includes("CONFIRMO") || msg.includes("CONFIRMADO") ||
+      msg.includes("CERTO") || msg.includes("CLARO") || msg.includes("CERTEZA") ||
+      msg.includes("PODE") || msg.startsWith("TA ") || msg === "TA" || msg === "TO" ||
+      msg.includes("COMBINADO") || msg.includes("ESTAREI") || msg.includes("PRESENTE");
+    // Reconhece variações de NÃO: não, nao, n, cancela, cancelar, cancelo, impossivel, nao posso
+    const denied = /^(NAO|N|0)$/.test(msg) ||
+      msg.includes("NAO") || msg.includes("CANCELAR") || msg.includes("CANCELO") ||
+      msg.includes("CANCELA") || msg.includes("IMPOSSIVEL") || msg.includes("NAO POSSO") ||
+      msg.includes("DESMARCAR") || msg.includes("DESMARCO") || msg.includes("REMARCAR");
 
     if (confirmed) {
       if (config.step2_anamnese) {
@@ -300,12 +315,17 @@ async function processSimplifiedFlow(params: {
       replyMessage = `Olá ${conversation.contact_name.split(" ")[0]}! Por favor, responda SIM para confirmar ou NÃO para cancelar sua consulta.`;
     }
   } else if (currentStep === "presale") {
-    // Cliente está na etapa de pré-venda — qualquer resposta indica interação
-    // Aguardar o usuário confirmar que a consulta ocorreu para avançar ao pós-venda
-    if (config.step4_postsale) {
-      nextStep = "postsale_pending";
-      // Não enviar mensagem automática — aguardar confirmação do usuário
-    }
+    // Cliente está na etapa de pré-venda
+    // Apenas registrar a mensagem — NÃO avançar automaticamente
+    // O avanço para postsale_pending só ocorre quando o usuário clica em "Consulta realizada"
+    // Não fazer nada aqui — a mensagem já foi salva acima
+    console.log(`[SimplifiedFlow] Etapa presale: mensagem recebida do cliente, aguardando ação do usuário`);
+  } else if (currentStep === "postsale_pending") {
+    // Etapa aguardando o usuário confirmar a consulta — ignorar mensagens do cliente
+    console.log(`[SimplifiedFlow] Etapa postsale_pending: mensagem ignorada, aguardando ação do usuário`);
+  } else if (currentStep === "postsale_sent") {
+    // NPS já enviado — registrar resposta mas não fazer mais nada automaticamente
+    console.log(`[SimplifiedFlow] Etapa postsale_sent: mensagem recebida após NPS`);
   }
 
   // Atualizar o flow_step na conversa
