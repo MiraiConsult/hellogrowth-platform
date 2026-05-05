@@ -556,14 +556,26 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId, actionsModule = 'none
       setSendingIndex(i);
 
       const phone = normalizePhone(recipient.phone);
-      const personalizedMessage = messageTemplate
-        .replace(/\{\{nome\}\}/gi, recipient.name.split(' ')[0])
-        .replace(/\{\{link\}\}/gi, link);
 
       // Fluxo individual para este destinatário
       const recipientFlow = isSimplified
         ? (flowMode === 'individual' ? (individualFlows[recipient.id] || generalFlow) : generalFlow)
         : null;
+
+      // Determinar mensagem correta baseada no fluxo
+      let firstMessage: string;
+      if (isSimplified && recipientFlow?.step1_confirmation) {
+        // Primeira etapa é confirmação de consulta — sem link
+        const dt = recipientFlow.step1_datetime
+          ? new Date(recipientFlow.step1_datetime).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+          : '';
+        firstMessage = `Olá ${recipient.name.split(' ')[0]}! 😊 Gostaríamos de confirmar sua consulta${dt ? ` agendada para ${dt}` : ''}. Você confirma sua presença? Responda SIM ou NÃO.`;
+      } else {
+        // Mensagem padrão com link do formulário/NPS
+        firstMessage = messageTemplate
+          .replace(/\{\{nome\}\}/gi, recipient.name.split(' ')[0])
+          .replace(/\{\{link\}\}/gi, link);
+      }
 
       try {
         const res = await fetch('/api/whatsapp/send-dispatch', {
@@ -572,7 +584,7 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId, actionsModule = 'none
           body: JSON.stringify({
             tenantId,
             phone,
-            message: personalizedMessage,
+            message: firstMessage,
             recipientName: recipient.name,
             leadId: recipient.lead_id,
             campaignId,
@@ -598,16 +610,41 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId, actionsModule = 'none
             error_message: data.error || null,
           });
 
-          // Salvar configuração de fluxo individual no banco
+          // Fluxo simplificado: salvar config e criar ai_conversation para Fila de Ações
           if (isSimplified && recipientFlow) {
+            const firstStep = recipientFlow.step1_confirmation ? 'confirmation'
+              : recipientFlow.step2_anamnese ? 'presale'
+              : recipientFlow.step4_postsale ? 'postsale_pending'
+              : 'done';
+
             await supabase.from('dispatch_flow_configs').insert({
               dispatch_campaign_id: campaignId,
               tenant_id: tenantId,
               phone,
               lead_id: recipient.lead_id || null,
               flow_config: recipientFlow,
-              current_step: recipientFlow.step1_confirmation ? 'confirmation' : (recipientFlow.step2_anamnese ? 'anamnese' : (recipientFlow.step4_postsale ? 'postsale_pending' : 'done')),
+              current_step: firstStep,
               status: 'active',
+            });
+
+            // Criar entrada na Fila de Ações (ai_conversations)
+            await supabase.from('ai_conversations').insert({
+              tenant_id: tenantId,
+              contact_name: recipient.name,
+              contact_phone: phone,
+              status: 'pending',
+              flow_type: 'simplified',
+              module_type: 'simplified',
+              dispatch_campaign_id: campaignId,
+              trigger_type: 'dispatch',
+              triggered_by: 'dispatch',
+              flow_step: firstStep,
+              flow_step_status: 'waiting_client',
+              flow_step_updated_at: new Date().toISOString(),
+              appointment_datetime: recipientFlow.step1_confirmation && recipientFlow.step1_datetime
+                ? new Date(recipientFlow.step1_datetime).toISOString()
+                : null,
+              last_message_at: new Date().toISOString(),
             });
           }
         }

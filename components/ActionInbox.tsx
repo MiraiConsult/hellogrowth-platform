@@ -30,7 +30,7 @@ interface FlowStatus {
   dispatch_campaign_id: string;
   phone: string;
   lead_id?: string;
-  current_step: 'confirmation' | 'anamnese' | 'insistence' | 'postsale_pending' | 'postsale_sent' | 'done';
+  current_step: 'confirmation' | 'presale' | 'anamnese' | 'insistence' | 'postsale_pending' | 'postsale_sent' | 'done';
   status: 'active' | 'paused' | 'completed';
   flow_config: any;
   last_action_at?: string;
@@ -842,7 +842,8 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
                               'bg-gray-100 text-gray-600'
                             }`}>
                               {(action as any).flow_step === 'confirmation' ? '📅 Confirmação' :
-                               (action as any).flow_step === 'anamnese' ? '📋 Anamnese' :
+                               (action as any).flow_step === 'anamnese' ? '📋 Pré-Venda' :
+                             (action as any).flow_step === 'presale' ? '📋 Pré-Venda' :
                                (action as any).flow_step === 'insistence' ? '🔁 Insistência' :
                                (action as any).flow_step === 'postsale_pending' ? '⏳ Aguarda pós-venda' :
                                (action as any).flow_step === 'postsale_sent' ? '✅ Pós-venda enviado' :
@@ -965,8 +966,8 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
                   <Info size={13} />
                   <span className="hidden sm:inline">Info</span>
                 </button>
-                {/* Toggle modo IA */}
-                {selectedAction.conversation_id && (
+                {/* Toggle modo IA — somente no módulo Completo */}
+                {actionsModule === 'complete' && selectedAction.conversation_id && (
                   <div className={`flex items-center gap-0.5 rounded-lg p-0.5 border ${t.divider} ${isDark ? 'bg-slate-700' : 'bg-white'}`}>
                     <button
                       onClick={() => handleSetMode('approval_required')}
@@ -1062,14 +1063,15 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
                           <span className="text-xs font-semibold text-gray-700">Fluxo Simplificado</span>
                           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
                             flowStatus.current_step === 'confirmation' ? 'bg-purple-100 text-purple-700' :
-                            flowStatus.current_step === 'anamnese' ? 'bg-blue-100 text-blue-700' :
+                            flowStatus.current_step === 'presale' ? 'bg-blue-100 text-blue-700' :
                             flowStatus.current_step === 'insistence' ? 'bg-amber-100 text-amber-700' :
                             flowStatus.current_step === 'postsale_pending' ? 'bg-orange-100 text-orange-700' :
                             flowStatus.current_step === 'postsale_sent' ? 'bg-green-100 text-green-700' :
                             'bg-gray-100 text-gray-600'
                           }`}>
                             {flowStatus.current_step === 'confirmation' ? 'Aguardando confirmação' :
-                             flowStatus.current_step === 'anamnese' ? 'Aguardando anamnese' :
+                             flowStatus.current_step === 'presale' ? 'Aguardando formulário de pré-venda' :
+                             flowStatus.current_step === 'anamnese' ? 'Aguardando formulário de pré-venda' :
                              flowStatus.current_step === 'insistence' ? 'Insistindo' :
                              flowStatus.current_step === 'postsale_pending' ? '⏳ Aguarda sua confirmação' :
                              flowStatus.current_step === 'postsale_sent' ? 'Pós-venda enviado' :
@@ -1230,128 +1232,7 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
               )}
             </div>
 
-            {/* ---- Painel lateral de informações do cliente ---- */}
-            {showClientInfo && (
-              <div className={`w-80 flex-shrink-0 border-l ${t.divider} overflow-y-auto ${isDark ? 'bg-slate-800' : 'bg-white'}`}>
-                <div className={`p-4 border-b ${t.divider} flex items-center justify-between`}>
-                  <div className="flex items-center gap-2">
-                    <Info size={15} className="text-purple-600" />
-                    <span className={`font-semibold text-sm ${t.text}`}>Informações do Cliente</span>
-                  </div>
-                  <button onClick={() => setShowClientInfo(false)} className={`p-1 rounded-lg ${t.hover} ${t.textMuted}`}>
-                    <X size={14} />
-                  </button>
-                </div>
-
-                {loadingClientInfo ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="animate-spin text-purple-500" size={20} />
-                  </div>
-                ) : (
-                  <div className="p-4 space-y-5">
-
-                    {/* Anamnese */}
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <FileText size={14} className="text-blue-600" />
-                        <span className={`text-xs font-semibold ${t.text}`}>Anamnese</span>
-                      </div>
-                      {clientInfo?.anamnese ? (
-                        <div className={`rounded-xl p-3 ${isDark ? 'bg-slate-700' : 'bg-blue-50'} space-y-2`}>
-                          <p className="text-[11px] text-gray-500">
-                            Respondida em: {clientInfo.anamnese.answered_at ? new Date(clientInfo.anamnese.answered_at).toLocaleDateString('pt-BR') : 'N/A'}
-                          </p>
-                          {clientInfo.anamnese.ai_analysis && (
-                            <div>
-                              <p className="text-[10px] font-semibold text-purple-600 mb-0.5">Análise da IA:</p>
-                              <p className="text-[11px] text-gray-700 leading-relaxed">{clientInfo.anamnese.ai_analysis}</p>
-                            </div>
-                          )}
-                          {clientInfo.anamnese.suggested_products && Array.isArray(clientInfo.anamnese.suggested_products) && clientInfo.anamnese.suggested_products.length > 0 && (
-                            <div>
-                              <p className="text-[10px] font-semibold text-green-600 mb-1">Produtos sugeridos:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {clientInfo.anamnese.suggested_products.map((p: string, i: number) => (
-                                  <span key={i} className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{p}</span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {clientInfo.anamnese.answers && (
-                            <div>
-                              <p className="text-[10px] font-semibold text-gray-500 mb-1">Respostas:</p>
-                              <div className="space-y-1">
-                                {Object.entries(clientInfo.anamnese.answers)
-                                  .filter(([k]) => !k.startsWith('_'))
-                                  .slice(0, 5)
-                                  .map(([k, v]: [string, any]) => (
-                                    <div key={k}>
-                                      <p className="text-[10px] text-gray-500">{k}</p>
-                                      <p className="text-[11px] text-gray-800 font-medium">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</p>
-                                    </div>
-                                  ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <p className={`text-xs ${t.textMuted} italic`}>Nenhuma anamnese respondida</p>
-                      )}
-                    </div>
-
-                    {/* Respostas NPS */}
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <BarChart3 size={14} className="text-green-600" />
-                        <span className={`text-xs font-semibold ${t.text}`}>Pesquisas NPS</span>
-                      </div>
-                      {clientInfo?.nps && clientInfo.nps.length > 0 ? (
-                        <div className="space-y-2">
-                          {clientInfo.nps.map((nps, i) => (
-                            <div key={i} className={`rounded-xl p-3 ${isDark ? 'bg-slate-700' : 'bg-green-50'}`}>
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-[10px] text-gray-500">{nps.campaign_name || 'Pesquisa'}</span>
-                                <span className={`text-sm font-bold ${
-                                  (nps.score || 0) >= 9 ? 'text-green-600' :
-                                  (nps.score || 0) >= 7 ? 'text-amber-600' : 'text-red-600'
-                                }`}>{nps.score}/10</span>
-                              </div>
-                              {nps.comment && <p className="text-[11px] text-gray-700 italic">"{nps.comment}"</p>}
-                              <p className="text-[10px] text-gray-400 mt-1">{nps.answered_at ? new Date(nps.answered_at).toLocaleDateString('pt-BR') : ''}</p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className={`text-xs ${t.textMuted} italic`}>Nenhuma resposta NPS</p>
-                      )}
-                    </div>
-
-                    {/* Produtos do catálogo */}
-                    {clientInfo?.products && clientInfo.products.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <Package size={14} className="text-purple-600" />
-                          <span className={`text-xs font-semibold ${t.text}`}>Catálogo de Produtos</span>
-                        </div>
-                        <div className="space-y-1">
-                          {clientInfo.products.slice(0, 8).map((p, i) => (
-                            <div key={i} className={`flex items-center justify-between py-1 px-2 rounded-lg ${isDark ? 'bg-slate-700' : 'bg-gray-50'}`}>
-                              <span className="text-[11px] text-gray-800">{p.name}</span>
-                              <span className="text-[11px] font-medium text-purple-600">
-                                {p.value > 0 ? `R$ ${p.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                  </div>
-                )}
-              </div>
-            )}
-
-            </div>{/* fim div flex layout (chat + painel info) */}
+            </div>{/* fim div flex layout (chat) */}
 
             {/* ---- Barra de input estilo WhatsApp (compacta) ---- */}
             <div className={`px-3 py-2 ${isDark ? 'bg-slate-800 border-t border-slate-700' : 'bg-[#f0f2f5] border-t border-slate-200'}`}>
@@ -1491,8 +1372,153 @@ export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }
       </div>
     )}
 
+    {/* ---- Modal de Informações do Cliente ---- */}
+    {showClientInfo && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className={`w-full max-w-lg rounded-2xl shadow-2xl ${isDark ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-slate-200'} overflow-hidden max-h-[85vh] flex flex-col`}>
+          {/* Header */}
+          <div className={`px-5 py-4 border-b ${isDark ? 'border-slate-700' : 'border-slate-100'} flex items-center justify-between flex-shrink-0`}>
+            <div className="flex items-center gap-2">
+              <Info size={16} className="text-purple-600" />
+              <div>
+                <h3 className={`text-base font-semibold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>Informações do Cliente</h3>
+                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{selectedAction?.contact_name}</p>
+              </div>
+            </div>
+            <button onClick={() => setShowClientInfo(false)} className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}>
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Conteúdo */}
+          <div className="overflow-y-auto flex-1 p-5 space-y-6">
+            {loadingClientInfo ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="animate-spin text-purple-500" size={24} />
+              </div>
+            ) : (
+              <>
+                {/* Formulário de Pré-Venda */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText size={15} className="text-blue-600" />
+                    <span className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>Formulário de Pré-Venda</span>
+                  </div>
+                  {clientInfo?.anamnese ? (
+                    <div className={`rounded-xl p-4 ${isDark ? 'bg-slate-700' : 'bg-blue-50'} space-y-3`}>
+                      <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                        Respondido em: {clientInfo.anamnese.answered_at ? new Date(clientInfo.anamnese.answered_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                      </p>
+                      {clientInfo.anamnese.ai_analysis && (
+                        <div>
+                          <p className="text-xs font-semibold text-purple-600 mb-1">Análise da IA:</p>
+                          <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-gray-700'}`}>{clientInfo.anamnese.ai_analysis}</p>
+                        </div>
+                      )}
+                      {clientInfo.anamnese.suggested_products && Array.isArray(clientInfo.anamnese.suggested_products) && clientInfo.anamnese.suggested_products.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-green-600 mb-1.5">Produtos sugeridos:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {clientInfo.anamnese.suggested_products.map((p: string, i: number) => (
+                              <span key={i} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">{p}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {clientInfo.anamnese.answers && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 mb-2">Respostas do formulário:</p>
+                          <div className="space-y-2">
+                            {Object.entries(clientInfo.anamnese.answers)
+                              .filter(([k]) => !k.startsWith('_'))
+                              .map(([k, v]: [string, any]) => (
+                                <div key={k} className={`rounded-lg p-2 ${isDark ? 'bg-slate-600' : 'bg-white'}`}>
+                                  <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{k}</p>
+                                  <p className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</p>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className={`rounded-xl p-4 ${isDark ? 'bg-slate-700' : 'bg-gray-50'} text-center`}>
+                      <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} italic`}>Nenhum formulário de pré-venda respondido</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Pesquisas NPS */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <BarChart3 size={15} className="text-green-600" />
+                    <span className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>Pesquisas NPS</span>
+                  </div>
+                  {clientInfo?.nps && clientInfo.nps.length > 0 ? (
+                    <div className="space-y-2">
+                      {clientInfo.nps.map((nps, i) => (
+                        <div key={i} className={`rounded-xl p-4 ${isDark ? 'bg-slate-700' : 'bg-green-50'}`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`text-xs font-medium ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>{nps.campaign_name || 'Pesquisa'}</span>
+                            <span className={`text-lg font-bold ${
+                              (nps.score || 0) >= 9 ? 'text-green-600' :
+                              (nps.score || 0) >= 7 ? 'text-amber-600' : 'text-red-600'
+                            }`}>{nps.score}<span className="text-xs font-normal text-gray-400">/10</span></span>
+                          </div>
+                          {nps.comment && <p className={`text-sm italic ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>"{nps.comment}"</p>}
+                          <p className={`text-xs mt-1 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>{nps.answered_at ? new Date(nps.answered_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className={`rounded-xl p-4 ${isDark ? 'bg-slate-700' : 'bg-gray-50'} text-center`}>
+                      <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'} italic`}>Nenhuma resposta NPS registrada</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Produtos do catálogo */}
+                {clientInfo?.products && clientInfo.products.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Package size={15} className="text-purple-600" />
+                      <span className={`text-sm font-semibold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>Catálogo de Produtos</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {clientInfo.products.map((p, i) => (
+                        <div key={i} className={`flex items-center justify-between py-2 px-3 rounded-xl ${isDark ? 'bg-slate-700' : 'bg-gray-50'}`}>
+                          <span className={`text-sm ${isDark ? 'text-slate-200' : 'text-gray-800'}`}>{p.name}</span>
+                          {p.value > 0 && (
+                            <span className="text-sm font-semibold text-purple-600">
+                              R$ {p.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className={`px-5 py-3 border-t ${isDark ? 'border-slate-700' : 'border-slate-100'} flex-shrink-0`}>
+            <button
+              onClick={() => setShowClientInfo(false)}
+              className={`w-full py-2.5 rounded-xl text-sm font-medium border ${
+                isDark ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+              } transition-colors`}
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* ---- Modal de Objetivo da Conversa ---- */}
-    {showObjectiveModal && (
+    {showObjectiveModal && actionsModule === 'complete' && (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
         <div className={`w-full max-w-md rounded-2xl shadow-2xl ${isDark ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-slate-200'} overflow-hidden`}>
           {/* Header */}
