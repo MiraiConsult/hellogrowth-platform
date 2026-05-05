@@ -348,6 +348,16 @@ const Navigation: React.FC<NavigationProps> = ({
     },
   ];
 
+  // Verificar se o addon de ações está ativo
+  const actionsAddon = (() => {
+    try {
+      const a = typeof activeCompany?.plan_addons === 'string'
+        ? JSON.parse(activeCompany?.plan_addons || '{}')
+        : (activeCompany?.plan_addons || {});
+      return a.actions || 'none';
+    } catch { return 'none'; }
+  })();
+
   const hasPlanPermission = (requiredPlan: string) => {
     if (activePlan === 'growth' || activePlan === 'growth_lifetime') return true;
     if (activePlan === 'trial') return true;
@@ -535,6 +545,8 @@ const Navigation: React.FC<NavigationProps> = ({
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
         {navStructure.map((item) => {
           if ('type' in item && item.type === 'group') {
+            // Ocultar grupo de Ações se o addon não estiver ativo
+            if (item.id === 'action-group' && actionsAddon === 'none') return null;
             const hasAnyChildPermission = item.children.some(child => hasPlanPermission(child.requiredPlan) && hasRolePermission(child.id));
             if (!hasAnyChildPermission) return null;
 

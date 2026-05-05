@@ -332,14 +332,14 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
   const [companyForm, setCompanyForm] = useState({
     name: '', plan: 'hello_growth', subscriptionStatus: 'trialing',
     trialModel: 'model_b', trialEndAt: '', maxUsers: 1,
-    addons: { game: false, mpd: false },
+    addons: { game: false, mpd: false, actions: 'none' as 'none' | 'simplified' | 'complete' },
     stripeCustomerId: '', stripeSubscriptionId: '',
   });
   const [newClientTrialModel, setNewClientTrialModel] = useState<'none' | 'model_a' | 'model_b'>('none');
   const [newClientTrialPlan, setNewClientTrialPlan] = useState('hello_growth');
   const [newClientTrialDays, setNewClientTrialDays] = useState(30);
   const [paymentLinkForm, setPaymentLinkForm] = useState({
-    plan: 'hello_growth', userCount: 1, addons: { game: false, mpd: false }, customNote: '',
+    plan: 'hello_growth', userCount: 1, addons: { game: false, mpd: false, actions: 'none' as 'none' | 'simplified' | 'complete' }, customNote: '',
   });
 
   // ── Fetch Colaboradores ──
@@ -461,7 +461,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             companies: [clientForm.companyName || clientForm.name],
             plan: newClientTrialPlan,
             userCount: 1,
-            addons: { game: false, mpd: false },
+            addons: { game: false, mpd: false, actions: 'none' },
             trial_model: 'model_b',
             trial_end_at: trialEndAt,
             userName: clientForm.name,
@@ -514,7 +514,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             id: companyId,
             name: clientForm.companyName || clientForm.name,
             plan: companyPlan,
-            plan_addons: JSON.stringify({ game: false, mpd: false }),
+            plan_addons: JSON.stringify({ game: false, mpd: false, actions: 'none' }),
             subscription_status: subscriptionStatus,
             ...(isTrialModelA ? {
               trial_start_at: new Date().toISOString(),
@@ -786,7 +786,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
       trialModel: company.trial_model || '',
       trialEndAt: company.trial_end_at ? company.trial_end_at.split('T')[0] : '',
       maxUsers: company.max_users || 1,
-      addons: { game: addons.game || false, mpd: addons.mpd || false },
+      addons: { game: addons.game || false, mpd: addons.mpd || false, actions: (addons.actions || 'none') as 'none' | 'simplified' | 'complete' },
       stripeCustomerId: company.stripe_customer_id || '',
       stripeSubscriptionId: company.stripe_subscription_id || '',
     });
@@ -795,7 +795,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
 
   const openAddCompany = (client: Client) => {
     setSelectedClient(client);
-    setCompanyForm({ name: '', plan: 'hello_growth', subscriptionStatus: 'trialing', trialModel: 'model_b', trialEndAt: '', maxUsers: 1, addons: { game: false, mpd: false }, stripeCustomerId: '', stripeSubscriptionId: '' });
+    setCompanyForm({ name: '', plan: 'hello_growth', subscriptionStatus: 'trialing', trialModel: 'model_b', trialEndAt: '', maxUsers: 1, addons: { game: false, mpd: false, actions: 'none' as 'none' | 'simplified' | 'complete' }, stripeCustomerId: '', stripeSubscriptionId: '' });
     setEditModal('new_company');
   };
 
@@ -804,7 +804,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
     setEditingCompany(company);
     let plan = company.plan;
     if (!plan.startsWith('hello_')) plan = `hello_${plan}`;
-    setPaymentLinkForm({ plan, userCount: company.max_users || 1, addons: { game: false, mpd: false }, customNote: '' });
+    const compAddons = typeof company.plan_addons === 'string' ? JSON.parse(company.plan_addons || '{}') : (company.plan_addons || {});
+    setPaymentLinkForm({ plan, userCount: company.max_users || 1, addons: { game: compAddons.game || false, mpd: compAddons.mpd || false, actions: (compAddons.actions || 'none') as 'none' | 'simplified' | 'complete' }, customNote: '' });
     setPaymentLinkResult(null);
     setEditModal('payment_link');
   };
@@ -1490,6 +1491,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
                                           {company.trial_model && <ModelBadge model={company.trial_model} />}
                                           {addons.game && <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded border border-purple-200">Game</span>}
                                           {addons.mpd && <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded border border-blue-200">MPD</span>}
+                                          {addons.actions === 'simplified' && <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 text-xs rounded border border-orange-200">Ações Simpl.</span>}
+                                          {addons.actions === 'complete' && <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded border border-emerald-200">Ações Compl.</span>}
                                         </div>
                                         <div className="flex items-center gap-4 mt-1 flex-wrap">
                                           {company.trial_end_at && <span className={`text-xs ${t.textMuted}`}>Vence: {new Date(company.trial_end_at).toLocaleDateString('pt-BR')}</span>}
@@ -1767,7 +1770,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             <FormField label="Vencimento do Trial" t={t}><input type="date" value={companyForm.trialEndAt} onChange={e => setCompanyForm(f => ({ ...f, trialEndAt: e.target.value }))} className={inputCls} /></FormField>
             <FormField label="Máx. Usuários" t={t}><input type="number" min={1} max={50} value={companyForm.maxUsers} onChange={e => setCompanyForm(f => ({ ...f, maxUsers: parseInt(e.target.value) || 1 }))} className={inputCls} /></FormField>
             <FormField label="Add-ons" t={t}>
-              <div className="flex gap-3 mt-1">
+              <div className="flex gap-3 mt-1 flex-wrap">
                 {[['game', 'Game'], ['mpd', 'MPD']].map(([k, l]) => (
                   <label key={k} className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={(companyForm.addons as any)[k]} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, [k]: e.target.checked } }))} className="w-4 h-4 rounded accent-emerald-500" />
@@ -1775,6 +1778,13 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
                   </label>
                 ))}
               </div>
+            </FormField>
+            <FormField label="Módulo de Ações" t={t}>
+              <select value={(companyForm.addons as any).actions || 'none'} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, actions: e.target.value as 'none' | 'simplified' | 'complete' } }))} className={inputCls}>
+                <option value="none">Nenhum</option>
+                <option value="simplified">Simplificado</option>
+                <option value="complete">Completo</option>
+              </select>
             </FormField>
             <FormField label="Stripe Customer ID" t={t} className="col-span-2"><input type="text" value={companyForm.stripeCustomerId} onChange={e => setCompanyForm(f => ({ ...f, stripeCustomerId: e.target.value }))} className={inputCls} placeholder="cus_..." /></FormField>
             <FormField label="Stripe Subscription ID" t={t} className="col-span-2"><input type="text" value={companyForm.stripeSubscriptionId} onChange={e => setCompanyForm(f => ({ ...f, stripeSubscriptionId: e.target.value }))} className={inputCls} placeholder="sub_..." /></FormField>
@@ -1799,7 +1809,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             <FormField label="Vencimento do Trial" t={t}><input type="date" value={companyForm.trialEndAt} onChange={e => setCompanyForm(f => ({ ...f, trialEndAt: e.target.value }))} className={inputCls} /></FormField>
             <FormField label="Máx. Usuários" t={t}><input type="number" min={1} max={50} value={companyForm.maxUsers} onChange={e => setCompanyForm(f => ({ ...f, maxUsers: parseInt(e.target.value) || 1 }))} className={inputCls} /></FormField>
             <FormField label="Add-ons" t={t}>
-              <div className="flex gap-3 mt-1">
+              <div className="flex gap-3 mt-1 flex-wrap">
                 {[['game', 'Game'], ['mpd', 'MPD']].map(([k, l]) => (
                   <label key={k} className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={(companyForm.addons as any)[k]} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, [k]: e.target.checked } }))} className="w-4 h-4 rounded accent-emerald-500" />
@@ -1807,6 +1817,13 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
                   </label>
                 ))}
               </div>
+            </FormField>
+            <FormField label="Módulo de Ações" t={t}>
+              <select value={(companyForm.addons as any).actions || 'none'} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, actions: e.target.value as 'none' | 'simplified' | 'complete' } }))} className={inputCls}>
+                <option value="none">Nenhum</option>
+                <option value="simplified">Simplificado</option>
+                <option value="complete">Completo</option>
+              </select>
             </FormField>
           </div>
           <div className={`flex gap-3 pt-4 mt-2 border-t ${t.modalHeader}`}>
@@ -1855,7 +1872,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
                 <input type="number" min={1} max={10} value={paymentLinkForm.userCount} onChange={e => setPaymentLinkForm(f => ({ ...f, userCount: parseInt(e.target.value) || 1 }))} className={inputCls} />
               </FormField>
               <FormField label="Add-ons" t={t}>
-                <div className="flex gap-4 mt-1">
+                <div className="flex gap-4 mt-1 flex-wrap">
                   {[['game', 'Game'], ['mpd', 'MPD']].map(([k, l]) => (
                     <label key={k} className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" checked={(paymentLinkForm.addons as any)[k]} onChange={e => setPaymentLinkForm(f => ({ ...f, addons: { ...f.addons, [k]: e.target.checked } }))} className="w-4 h-4 rounded accent-emerald-500" />
@@ -1863,6 +1880,13 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
                     </label>
                   ))}
                 </div>
+              </FormField>
+              <FormField label="Módulo de Ações" t={t}>
+                <select value={(paymentLinkForm.addons as any).actions || 'none'} onChange={e => setPaymentLinkForm(f => ({ ...f, addons: { ...f.addons, actions: e.target.value as 'none' | 'simplified' | 'complete' } }))} className={inputCls}>
+                  <option value="none">Nenhum</option>
+                  <option value="simplified">Simplificado</option>
+                  <option value="complete">Completo</option>
+                </select>
               </FormField>
               <div className={`${t.paymentBox} border rounded-lg p-3 flex items-center justify-between`}>
                 <span className={`text-sm ${t.textSub}`}>Valor mensal total:</span>

@@ -4,11 +4,13 @@ import {
   Send, Plus, Users, FileSpreadsheet, ChevronRight, ChevronLeft,
   Loader2, Download, AlertCircle, Search, X, Check, Clock,
   MessageSquare, FileText, BarChart3, Eye, RefreshCw, Trash2,
-  CheckCircle, XCircle, Phone, Upload, Zap
+  CheckCircle, XCircle, Phone, Upload, Zap, GitBranch, Settings2,
+  CalendarDays, RotateCcw, Info, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
-// ─── COMPONENTE DE DETALHES DA CAMPANHA ──────────────────────────────────────
+// ─── TIPOS ─────────────────────────────────────────────────────────────────────
+
 interface DispatchContact {
   id: string;
   name: string;
@@ -16,87 +18,6 @@ interface DispatchContact {
   status: string;
   error_message?: string;
   sent_at?: string;
-}
-
-function CampaignDetail({ campaign, tenantId }: { campaign: Campaign; tenantId: string }) {
-  const [contacts, setContacts] = useState<DispatchContact[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      const { data } = await supabase
-        .from('dispatch_contacts')
-        .select('id, name, phone, status, error_message, sent_at')
-        .eq('campaign_id', campaign.id)
-        .order('sent_at', { ascending: true });
-      setContacts(data || []);
-      setLoading(false);
-    }
-    load();
-  }, [campaign.id]);
-
-  const statusIcon = (s: string) => {
-    if (s === 'sent' || s === 'delivered') return <CheckCircle size={14} className="text-green-500" />;
-    if (s === 'failed') return <XCircle size={14} className="text-red-500" />;
-    return <Clock size={14} className="text-gray-400" />;
-  };
-
-  return (
-    <div className="mt-4 pt-4 border-t border-gray-100" onClick={e => e.stopPropagation()}>
-      {/* Métricas */}
-      <div className="grid grid-cols-4 gap-3 mb-4">
-        {[
-          { label: 'Total', value: campaign.total_contacts || 0, color: 'text-gray-700' },
-          { label: 'Enviados', value: campaign.sent_count || 0, color: 'text-blue-600' },
-          { label: 'Responderam', value: campaign.responded_count || 0, color: 'text-green-600' },
-          { label: 'Falhas', value: campaign.failed_count || 0, color: 'text-red-600' },
-        ].map((s, i) => (
-          <div key={i} className="text-center">
-            <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
-            <div className="text-xs text-gray-500">{s.label}</div>
-          </div>
-        ))}
-      </div>
-      {/* Lista de contatos */}
-      {loading ? (
-        <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
-          <Loader2 size={14} className="animate-spin" /> Carregando contatos...
-        </div>
-      ) : contacts.length === 0 ? (
-        <p className="text-xs text-gray-400 py-2">Nenhum contato registrado.</p>
-      ) : (
-        <div className="space-y-1 max-h-48 overflow-y-auto">
-          {contacts.map(ct => (
-            <div key={ct.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-50">
-              <div className="flex items-center gap-2">
-                {statusIcon(ct.status)}
-                <div>
-                  <span className="text-sm font-medium text-gray-800">{ct.name}</span>
-                  <span className="text-xs text-gray-400 ml-2">{ct.phone}</span>
-                </div>
-              </div>
-              <div className="text-right">
-                {ct.error_message ? (
-                  <span className="text-xs text-red-500 max-w-[200px] truncate block" title={ct.error_message}>
-                    {ct.error_message}
-                  </span>
-                ) : (
-                  <span className="text-xs text-gray-400">
-                    {ct.sent_at ? new Date(ct.sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface DispatchesProps {
-  tenantId: string;
 }
 
 interface Campaign {
@@ -133,10 +54,274 @@ interface Recipient {
   lead_id?: string;
 }
 
-type Step = 'list' | 'new-step1' | 'new-step2' | 'new-step3' | 'sending' | 'done';
-type OriginTab = 'existing' | 'csv' | 'manual';
+// Configuração de fluxo por cliente (ou geral)
+interface FlowConfig {
+  step1_confirmation: boolean;       // Confirmação de consulta
+  step1_datetime: string;            // Data/hora da consulta (obrigatório se step1 ativo)
+  step2_anamnese: boolean;           // Solicitação de anamnese
+  step3_insistence: boolean;         // Insistência se não respondeu
+  step3_days: number;                // Dias para reenviar
+  step3_max_times: number;           // Máximo de tentativas
+  step4_postsale: boolean;           // Pós-venda (aguarda confirmação do usuário)
+  postsale_nps_id: string;           // ID da pesquisa NPS para pós-venda
+}
 
-const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
+const defaultFlowConfig: FlowConfig = {
+  step1_confirmation: true,
+  step1_datetime: '',
+  step2_anamnese: true,
+  step3_insistence: true,
+  step3_days: 2,
+  step3_max_times: 2,
+  step4_postsale: true,
+  postsale_nps_id: '',
+};
+
+type Step = 'list' | 'new-step1' | 'new-step2' | 'new-step2b' | 'new-step3' | 'sending' | 'done';
+type OriginTab = 'existing' | 'csv' | 'manual';
+type FlowMode = 'general' | 'individual';
+
+// ─── COMPONENTE DE DETALHES DA CAMPANHA ──────────────────────────────────────
+
+function CampaignDetail({ campaign, tenantId }: { campaign: Campaign; tenantId: string }) {
+  const [contacts, setContacts] = useState<DispatchContact[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      const { data } = await supabase
+        .from('dispatch_contacts')
+        .select('id, name, phone, status, error_message, sent_at')
+        .eq('campaign_id', campaign.id)
+        .order('sent_at', { ascending: true });
+      setContacts(data || []);
+      setLoading(false);
+    }
+    load();
+  }, [campaign.id]);
+
+  const statusIcon = (s: string) => {
+    if (s === 'sent' || s === 'delivered') return <CheckCircle size={14} className="text-green-500" />;
+    if (s === 'failed') return <XCircle size={14} className="text-red-500" />;
+    return <Clock size={14} className="text-gray-400" />;
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-gray-100" onClick={e => e.stopPropagation()}>
+      <div className="grid grid-cols-4 gap-3 mb-4">
+        {[
+          { label: 'Total', value: campaign.total_contacts || 0, color: 'text-gray-700' },
+          { label: 'Enviados', value: campaign.sent_count || 0, color: 'text-blue-600' },
+          { label: 'Responderam', value: campaign.responded_count || 0, color: 'text-green-600' },
+          { label: 'Falhas', value: campaign.failed_count || 0, color: 'text-red-600' },
+        ].map((s, i) => (
+          <div key={i} className="text-center">
+            <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
+            <div className="text-xs text-gray-500">{s.label}</div>
+          </div>
+        ))}
+      </div>
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+          <Loader2 size={14} className="animate-spin" /> Carregando contatos...
+        </div>
+      ) : contacts.length === 0 ? (
+        <p className="text-xs text-gray-400 py-2">Nenhum contato registrado.</p>
+      ) : (
+        <div className="space-y-1 max-h-48 overflow-y-auto">
+          {contacts.map(ct => (
+            <div key={ct.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-50">
+              <div className="flex items-center gap-2">
+                {statusIcon(ct.status)}
+                <div>
+                  <span className="text-sm font-medium text-gray-800">{ct.name}</span>
+                  <span className="text-xs text-gray-400 ml-2">{ct.phone}</span>
+                </div>
+              </div>
+              <div className="text-right">
+                {ct.error_message ? (
+                  <span className="text-xs text-red-500 max-w-[200px] truncate block" title={ct.error_message}>
+                    {ct.error_message}
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-400">
+                    {ct.sent_at ? new Date(ct.sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── TOGGLE COMPONENT ─────────────────────────────────────────────────────────
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+        checked ? 'bg-purple-600' : 'bg-gray-300'
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-6' : 'translate-x-1'
+        }`}
+      />
+    </button>
+  );
+}
+
+// ─── FLOW CONFIG PANEL ────────────────────────────────────────────────────────
+
+function FlowConfigPanel({
+  config,
+  onChange,
+  npsList,
+  recipientName,
+}: {
+  config: FlowConfig;
+  onChange: (c: FlowConfig) => void;
+  npsList: NpsCampaign[];
+  recipientName?: string;
+}) {
+  const set = (patch: Partial<FlowConfig>) => onChange({ ...config, ...patch });
+
+  return (
+    <div className="space-y-4">
+      {recipientName && (
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-semibold text-xs flex-shrink-0">
+            {recipientName.charAt(0).toUpperCase()}
+          </div>
+          <span className="text-sm font-semibold text-gray-800">{recipientName}</span>
+        </div>
+      )}
+
+      {/* Etapa 1 — Confirmação de consulta */}
+      <div className={`rounded-xl border p-4 transition-all ${config.step1_confirmation ? 'border-purple-200 bg-purple-50' : 'border-gray-200 bg-gray-50'}`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <CalendarDays size={16} className={config.step1_confirmation ? 'text-purple-600' : 'text-gray-400'} />
+            <span className="text-sm font-semibold text-gray-800">Confirmação de consulta</span>
+          </div>
+          <Toggle checked={config.step1_confirmation} onChange={v => set({ step1_confirmation: v })} />
+        </div>
+        {config.step1_confirmation && (
+          <div className="mt-3">
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Data e hora da consulta <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={config.step1_datetime}
+              onChange={e => set({ step1_datetime: e.target.value })}
+              className="w-full border border-purple-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 bg-white"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Etapa 2 — Anamnese */}
+      <div className={`rounded-xl border p-4 transition-all ${config.step2_anamnese ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-gray-50'}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileText size={16} className={config.step2_anamnese ? 'text-blue-600' : 'text-gray-400'} />
+            <span className="text-sm font-semibold text-gray-800">Solicitação de anamnese</span>
+          </div>
+          <Toggle checked={config.step2_anamnese} onChange={v => set({ step2_anamnese: v })} />
+        </div>
+        {config.step2_anamnese && (
+          <p className="text-xs text-blue-600 mt-2">Enviará o link do formulário selecionado para preenchimento.</p>
+        )}
+      </div>
+
+      {/* Etapa 3 — Insistência */}
+      <div className={`rounded-xl border p-4 transition-all ${config.step3_insistence ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-gray-50'}`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <RotateCcw size={16} className={config.step3_insistence ? 'text-amber-600' : 'text-gray-400'} />
+            <span className="text-sm font-semibold text-gray-800">Insistência automática</span>
+          </div>
+          <Toggle checked={config.step3_insistence} onChange={v => set({ step3_insistence: v })} />
+        </div>
+        {config.step3_insistence && (
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Reenviar após (dias)</label>
+              <input
+                type="number"
+                min={1}
+                max={30}
+                value={config.step3_days}
+                onChange={e => set({ step3_days: parseInt(e.target.value) || 1 })}
+                className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Máximo de tentativas</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={config.step3_max_times}
+                onChange={e => set({ step3_max_times: parseInt(e.target.value) || 1 })}
+                className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 bg-white"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Etapa 4 — Pós-venda */}
+      <div className={`rounded-xl border p-4 transition-all ${config.step4_postsale ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <BarChart3 size={16} className={config.step4_postsale ? 'text-green-600' : 'text-gray-400'} />
+            <span className="text-sm font-semibold text-gray-800">Pós-venda (NPS)</span>
+          </div>
+          <Toggle checked={config.step4_postsale} onChange={v => set({ step4_postsale: v })} />
+        </div>
+        {config.step4_postsale && (
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-green-700">Aguarda sua confirmação de que a consulta foi realizada antes de enviar.</p>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Pesquisa NPS para enviar</label>
+              <select
+                value={config.postsale_nps_id}
+                onChange={e => set({ postsale_nps_id: e.target.value })}
+                className="w-full border border-green-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 bg-white"
+              >
+                <option value="">Selecionar pesquisa...</option>
+                {npsList.map(n => (
+                  <option key={n.id} value={n.id}>{n.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── PROPS ────────────────────────────────────────────────────────────────────
+
+interface DispatchesProps {
+  tenantId: string;
+  actionsModule?: 'none' | 'simplified' | 'complete';
+  npsCampaignsList?: NpsCampaign[];
+}
+
+// ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
+
+const Dispatches: React.FC<DispatchesProps> = ({ tenantId, actionsModule = 'none', npsCampaignsList = [] }) => {
   const [step, setStep] = useState<Step>('list');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loadingCampaigns, setLoadingCampaigns] = useState(true);
@@ -162,10 +347,18 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
   const [csvContacts, setCsvContacts] = useState<Recipient[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Step 2b — configuração de fluxo (apenas para módulo simplificado)
+  const [flowMode, setFlowMode] = useState<FlowMode>('general');
+  const [generalFlow, setGeneralFlow] = useState<FlowConfig>({ ...defaultFlowConfig });
+  const [individualFlows, setIndividualFlows] = useState<Record<string, FlowConfig>>({});
+  const [expandedRecipient, setExpandedRecipient] = useState<string | null>(null);
+
   // Step 3 — revisão e envio
   const [sendResults, setSendResults] = useState<{ name: string; phone: string; ok: boolean; error?: string }[]>([]);
   const [sendingIndex, setSendingIndex] = useState(0);
   const [isSending, setIsSending] = useState(false);
+
+  const isSimplified = actionsModule === 'simplified';
 
   // Carregar campanhas de disparo
   const loadCampaigns = useCallback(async () => {
@@ -190,11 +383,10 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
     const load = async () => {
       const [{ data: f }, { data: n }] = await Promise.all([
         supabase.from('forms').select('id, name').eq('tenant_id', tenantId),
-        supabase.from('campaigns').select('id, name').eq('tenant_id', tenantId),
+        supabase.from('campaigns').select('id, name').eq('tenant_id', tenantId).is('deleted_at', null),
       ]);
       setForms(f || []);
       setNpsCampaigns(n || []);
-      // Mensagem padrão
       if (!messageTemplate) {
         setMessageTemplate('Olá {{nome}}! 😊 Gostaríamos muito de contar com sua opinião. Acesse o link abaixo e leva menos de 2 minutos: {{link}}');
       }
@@ -228,6 +420,20 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
     };
     load();
   }, [originTab, step, tenantId]);
+
+  // Inicializar fluxos individuais quando entrar no step 2b
+  useEffect(() => {
+    if (step !== 'new-step2b') return;
+    const newIndividual: Record<string, FlowConfig> = {};
+    allRecipients.forEach(r => {
+      if (!individualFlows[r.id]) {
+        newIndividual[r.id] = { ...generalFlow };
+      }
+    });
+    if (Object.keys(newIndividual).length > 0) {
+      setIndividualFlows(prev => ({ ...prev, ...newIndividual }));
+    }
+  }, [step]);
 
   // Todos os destinatários selecionados
   const allRecipients: Recipient[] = [
@@ -291,11 +497,26 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
   };
 
   // Obter link do formulário/NPS
-  const getLink = () => {
+  const getLink = (npsId?: string) => {
     const base = typeof window !== 'undefined' ? window.location.origin : 'https://hellogrowth.com.br';
     if (dispatchType === 'form' && selectedFormId) return `${base}/form/${selectedFormId}`;
-    if (dispatchType === 'nps' && selectedNpsId) return `${base}/nps/${selectedNpsId}`;
+    const nId = npsId || selectedNpsId;
+    if (dispatchType === 'nps' && nId) return `${base}/nps/${nId}`;
     return `${base}/form/link`;
+  };
+
+  // Validar fluxo antes de avançar
+  const isFlowValid = () => {
+    if (!isSimplified) return true;
+    if (flowMode === 'general') {
+      if (generalFlow.step1_confirmation && !generalFlow.step1_datetime) return false;
+    } else {
+      for (const r of allRecipients) {
+        const fc = individualFlows[r.id] || generalFlow;
+        if (fc.step1_confirmation && !fc.step1_datetime) return false;
+      }
+    }
+    return true;
   };
 
   // Enviar campanha
@@ -320,6 +541,8 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
         origin: csvContacts.length > 0 ? 'csv' : 'existing',
         total_contacts: allRecipients.length,
         started_at: new Date().toISOString(),
+        flow_mode: isSimplified ? flowMode : null,
+        flow_config: isSimplified ? (flowMode === 'general' ? generalFlow : null) : null,
       })
       .select()
       .single();
@@ -336,6 +559,11 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
       const personalizedMessage = messageTemplate
         .replace(/\{\{nome\}\}/gi, recipient.name.split(' ')[0])
         .replace(/\{\{link\}\}/gi, link);
+
+      // Fluxo individual para este destinatário
+      const recipientFlow = isSimplified
+        ? (flowMode === 'individual' ? (individualFlows[recipient.id] || generalFlow) : generalFlow)
+        : null;
 
       try {
         const res = await fetch('/api/whatsapp/send-dispatch', {
@@ -369,13 +597,25 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
             sent_at: new Date().toISOString(),
             error_message: data.error || null,
           });
+
+          // Salvar configuração de fluxo individual no banco
+          if (isSimplified && recipientFlow) {
+            await supabase.from('dispatch_flow_configs').insert({
+              dispatch_campaign_id: campaignId,
+              tenant_id: tenantId,
+              phone,
+              lead_id: recipient.lead_id || null,
+              flow_config: recipientFlow,
+              current_step: recipientFlow.step1_confirmation ? 'confirmation' : (recipientFlow.step2_anamnese ? 'anamnese' : (recipientFlow.step4_postsale ? 'postsale_pending' : 'done')),
+              status: 'active',
+            });
+          }
         }
       } catch (err: any) {
         results.push({ name: recipient.name, phone, ok: false, error: err.message });
       }
 
       setSendResults([...results]);
-      // Delay entre envios (evitar spam)
       if (i < allRecipients.length - 1) {
         await new Promise(r => setTimeout(r, 1500));
       }
@@ -413,6 +653,10 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
     setManualPhone('');
     setSendResults([]);
     setOriginTab('existing');
+    setFlowMode('general');
+    setGeneralFlow({ ...defaultFlowConfig });
+    setIndividualFlows({});
+    setExpandedRecipient(null);
     setStep('list');
   };
 
@@ -448,69 +692,59 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
         </div>
 
         {/* Stats */}
-        {campaigns.length > 0 && (
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            {[
-              { label: 'Total de campanhas', value: campaigns.length, icon: <Zap size={20} className="text-purple-600" /> },
-              { label: 'Contatos enviados', value: campaigns.reduce((a, c) => a + (c.sent_count || 0), 0), icon: <Send size={20} className="text-blue-600" /> },
-              { label: 'Responderam', value: campaigns.reduce((a, c) => a + (c.responded_count || 0), 0), icon: <MessageSquare size={20} className="text-green-600" /> },
-              { label: 'Taxa de resposta', value: (() => {
-                const sent = campaigns.reduce((a, c) => a + (c.sent_count || 0), 0);
-                const resp = campaigns.reduce((a, c) => a + (c.responded_count || 0), 0);
-                return sent > 0 ? `${Math.round((resp / sent) * 100)}%` : '—';
-              })(), icon: <BarChart3 size={20} className="text-orange-600" /> },
-            ].map((stat, i) => (
-              <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-2">{stat.icon}<span className="text-xs text-gray-500">{stat.label}</span></div>
-                <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          {[
+            { label: 'Total de Campanhas', value: campaigns.length, color: 'text-gray-700', bg: 'bg-gray-50' },
+            { label: 'Concluídas', value: campaigns.filter(c => c.status === 'completed').length, color: 'text-green-600', bg: 'bg-green-50' },
+            { label: 'Total Enviados', value: campaigns.reduce((a, c) => a + (c.sent_count || 0), 0), color: 'text-blue-600', bg: 'bg-blue-50' },
+            { label: 'Total Respondidos', value: campaigns.reduce((a, c) => a + (c.responded_count || 0), 0), color: 'text-purple-600', bg: 'bg-purple-50' },
+          ].map((s, i) => (
+            <div key={i} className={`${s.bg} rounded-xl p-4`}>
+              <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+              <div className="text-xs text-gray-500 mt-1">{s.label}</div>
+            </div>
+          ))}
+        </div>
 
         {/* Lista */}
         {loadingCampaigns ? (
-          <div className="flex items-center justify-center py-20">
+          <div className="flex items-center justify-center py-16">
             <Loader2 className="animate-spin text-purple-600" size={32} />
           </div>
         ) : campaigns.length === 0 ? (
-          <div className="bg-white border border-dashed border-gray-300 rounded-xl p-16 text-center">
-            <Send size={48} className="mx-auto text-gray-300 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-700 mb-2">Nenhum disparo ainda</h3>
-            <p className="text-gray-500 mb-6 text-sm">Crie sua primeira campanha para enviar formulários ou pesquisas NPS via WhatsApp</p>
-            <button
-              onClick={() => setStep('new-step1')}
-              className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition font-medium"
-            >
+          <div className="text-center py-16">
+            <Send size={40} className="mx-auto text-gray-300 mb-3" />
+            <p className="text-gray-500">Nenhum disparo realizado ainda</p>
+            <button onClick={() => setStep('new-step1')} className="mt-4 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition text-sm font-medium">
               Criar primeiro disparo
             </button>
           </div>
         ) : (
           <div className="space-y-3">
             {campaigns.map(c => (
-              <div key={c.id} className="bg-white border border-gray-200 rounded-xl p-4 hover:border-purple-300 transition cursor-pointer"
-                onClick={() => setSelectedCampaign(selectedCampaign?.id === c.id ? null : c)}>
+              <div
+                key={c.id}
+                className="bg-white border border-gray-200 rounded-xl p-4 cursor-pointer hover:border-purple-300 transition"
+                onClick={() => setSelectedCampaign(selectedCampaign?.id === c.id ? null : c)}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${c.type === 'form' ? 'bg-blue-50' : 'bg-green-50'}`}>
-                      {c.type === 'form' ? <FileText size={18} className="text-blue-600" /> : <BarChart3 size={18} className="text-green-600" />}
+                    <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                      <Send size={18} className="text-purple-600" />
                     </div>
                     <div>
-                      <div className="font-semibold text-gray-900">{c.name}</div>
-                      <div className="text-xs text-gray-500">
-                        {c.type === 'form' ? 'Formulário' : 'Pesquisa NPS'} •{' '}
-                        {new Date(c.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </div>
+                      <p className="font-semibold text-gray-900">{c.name}</p>
+                      <p className="text-xs text-gray-500">{new Date(c.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right text-sm">
-                      <div className="font-semibold text-gray-900">{c.sent_count || 0}/{c.total_contacts || 0}</div>
-                      <div className="text-xs text-gray-500">enviados</div>
-                    </div>
+                  <div className="flex items-center gap-3">
                     <span className={`text-xs font-medium px-2 py-1 rounded-full ${statusColor(c.status)}`}>
                       {statusLabel(c.status)}
                     </span>
+                    <div className="text-right text-xs text-gray-500">
+                      <div>{c.sent_count || 0} enviados</div>
+                      <div>{c.responded_count || 0} responderam</div>
+                    </div>
                   </div>
                 </div>
                 {selectedCampaign?.id === c.id && (
@@ -526,51 +760,56 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
 
   // ─── STEP 1: CONFIGURAÇÃO ──────────────────────────────────────────────────
   if (step === 'new-step1') {
-    const selectedItem = dispatchType === 'form'
-      ? forms.find(f => f.id === selectedFormId)
-      : npsCampaigns.find(n => n.id === selectedNpsId);
-
+    const stepsCount = isSimplified ? 4 : 3;
     return (
       <div className="p-6 max-w-2xl mx-auto">
-        <button onClick={resetForm} className="flex items-center gap-1 text-gray-500 hover:text-gray-700 mb-6 text-sm">
-          <ChevronLeft size={16} /> Voltar para Disparos
+        <button onClick={() => setStep('list')} className="flex items-center gap-1 text-gray-500 hover:text-gray-700 mb-6 text-sm">
+          <ChevronLeft size={16} /> Voltar
         </button>
+
+        {/* Progress */}
         <div className="flex items-center gap-3 mb-8">
           <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold">1</div>
-          <div className="flex-1 h-1 bg-gray-200 rounded"><div className="h-1 bg-purple-600 rounded w-1/3" /></div>
-          <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center text-sm font-bold">2</div>
-          <div className="flex-1 h-1 bg-gray-200 rounded" />
-          <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center text-sm font-bold">3</div>
+          {Array.from({ length: stepsCount - 1 }).map((_, i) => (
+            <React.Fragment key={i}>
+              <div className="flex-1 h-1 bg-gray-200 rounded"><div className="h-1 bg-gray-200 rounded" /></div>
+              <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center text-sm font-bold">{i + 2}</div>
+            </React.Fragment>
+          ))}
         </div>
 
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Configurar disparo</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Configurar disparo</h2>
+        <p className="text-gray-500 text-sm mb-6">Defina o nome, tipo e mensagem do disparo</p>
 
         <div className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nome da campanha</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nome do disparo</label>
             <input
               type="text"
               value={dispatchName}
               onChange={e => setDispatchName(e.target.value)}
-              placeholder="Ex: Pré-venda Maio 2026"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              placeholder="Ex: Anamnese Junho 2025"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">O que você quer disparar?</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de conteúdo</label>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { value: 'form', label: 'Formulário', desc: 'Pré-venda, captação de leads', icon: <FileText size={20} className="text-blue-600" /> },
-                { value: 'nps', label: 'Pesquisa NPS', desc: 'Satisfação pós-atendimento', icon: <BarChart3 size={20} className="text-green-600" /> },
-              ].map(opt => (
+                { id: 'form', label: 'Formulário', icon: <FileText size={20} />, desc: 'Anamnese, cadastro, etc.' },
+                { id: 'nps', label: 'Pesquisa NPS', icon: <BarChart3 size={20} />, desc: 'Avaliação pós-consulta' },
+              ].map(t => (
                 <button
-                  key={opt.value}
-                  onClick={() => setDispatchType(opt.value as 'form' | 'nps')}
-                  className={`p-4 border-2 rounded-xl text-left transition ${dispatchType === opt.value ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}
+                  key={t.id}
+                  onClick={() => setDispatchType(t.id as 'form' | 'nps')}
+                  className={`p-4 rounded-xl border-2 text-left transition ${
+                    dispatchType === t.id ? 'border-purple-600 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}
                 >
-                  <div className="flex items-center gap-2 mb-1">{opt.icon}<span className="font-semibold text-gray-900">{opt.label}</span></div>
-                  <p className="text-xs text-gray-500">{opt.desc}</p>
+                  <div className={`mb-2 ${dispatchType === t.id ? 'text-purple-600' : 'text-gray-400'}`}>{t.icon}</div>
+                  <div className="font-medium text-gray-900 text-sm">{t.label}</div>
+                  <div className="text-xs text-gray-500">{t.desc}</div>
                 </button>
               ))}
             </div>
@@ -578,30 +817,30 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {dispatchType === 'form' ? 'Selecione o formulário' : 'Selecione a pesquisa NPS'}
+              {dispatchType === 'form' ? 'Formulário' : 'Pesquisa NPS'}
             </label>
             <select
               value={dispatchType === 'form' ? selectedFormId : selectedNpsId}
               onChange={e => dispatchType === 'form' ? setSelectedFormId(e.target.value) : setSelectedNpsId(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500"
             >
-              <option value="">Selecione...</option>
-              {(dispatchType === 'form' ? forms : npsCampaigns).map(item => (
-                <option key={item.id} value={item.id}>{item.name}</option>
+              <option value="">Selecionar...</option>
+              {(dispatchType === 'form' ? forms : npsCampaigns).map(f => (
+                <option key={f.id} value={f.id}>{f.name}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mensagem de convite</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mensagem</label>
             <textarea
+              rows={4}
               value={messageTemplate}
               onChange={e => setMessageTemplate(e.target.value)}
-              rows={4}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 resize-none"
               placeholder="Olá {{nome}}! Gostaríamos de sua opinião. Acesse: {{link}}"
             />
-            <p className="text-xs text-gray-400 mt-1">Use <code className="bg-gray-100 px-1 rounded">{'{{nome}}'}</code> para o primeiro nome e <code className="bg-gray-100 px-1 rounded">{'{{link}}'}</code> para o link do formulário/NPS</p>
+            <p className="text-xs text-gray-400 mt-1">Use <code className="bg-gray-100 px-1 rounded">{'{{nome}}'}</code> para o primeiro nome e <code className="bg-gray-100 px-1 rounded">{'{{link}}'}</code> para o link</p>
           </div>
 
           {messageTemplate && (
@@ -631,17 +870,26 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
 
   // ─── STEP 2: DESTINATÁRIOS ─────────────────────────────────────────────────
   if (step === 'new-step2') {
+    const stepsCount = isSimplified ? 4 : 3;
     return (
       <div className="p-6 max-w-2xl mx-auto">
         <button onClick={() => setStep('new-step1')} className="flex items-center gap-1 text-gray-500 hover:text-gray-700 mb-6 text-sm">
           <ChevronLeft size={16} /> Voltar
         </button>
+
+        {/* Progress */}
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold">1</div>
-          <div className="flex-1 h-1 bg-gray-200 rounded"><div className="h-1 bg-purple-600 rounded" /></div>
+          <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold"><Check size={14} /></div>
+          <div className="flex-1 h-1 bg-purple-600 rounded" />
           <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold">2</div>
-          <div className="flex-1 h-1 bg-gray-200 rounded"><div className="h-1 bg-purple-600 rounded w-0" /></div>
-          <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center text-sm font-bold">3</div>
+          {isSimplified && (
+            <>
+              <div className="flex-1 h-1 bg-gray-200 rounded" />
+              <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center text-sm font-bold">3</div>
+            </>
+          )}
+          <div className="flex-1 h-1 bg-gray-200 rounded" />
+          <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center text-sm font-bold">{stepsCount}</div>
         </div>
 
         <h2 className="text-xl font-bold text-gray-900 mb-2">Selecionar destinatários</h2>
@@ -833,8 +1081,139 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
             <ChevronLeft size={16} /> Voltar
           </button>
           <button
-            onClick={() => setStep('new-step3')}
+            onClick={() => isSimplified ? setStep('new-step2b') : setStep('new-step3')}
             disabled={allRecipients.length === 0}
+            className="flex items-center gap-2 bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSimplified ? 'Próximo: Fluxo' : `Próximo: Revisar (${allRecipients.length})`} <ChevronRight size={18} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── STEP 2B: CONFIGURAÇÃO DE FLUXO (APENAS MÓDULO SIMPLIFICADO) ──────────
+  if (step === 'new-step2b') {
+    const availableNps = npsCampaigns.length > 0 ? npsCampaigns : npsCampaignsList;
+    return (
+      <div className="p-6 max-w-2xl mx-auto">
+        <button onClick={() => setStep('new-step2')} className="flex items-center gap-1 text-gray-500 hover:text-gray-700 mb-6 text-sm">
+          <ChevronLeft size={16} /> Voltar
+        </button>
+
+        {/* Progress */}
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold"><Check size={14} /></div>
+          <div className="flex-1 h-1 bg-purple-600 rounded" />
+          <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold"><Check size={14} /></div>
+          <div className="flex-1 h-1 bg-purple-600 rounded" />
+          <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold">3</div>
+          <div className="flex-1 h-1 bg-gray-200 rounded" />
+          <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center text-sm font-bold">4</div>
+        </div>
+
+        <div className="flex items-center gap-2 mb-1">
+          <GitBranch size={20} className="text-purple-600" />
+          <h2 className="text-xl font-bold text-gray-900">Configurar fluxo de acompanhamento</h2>
+        </div>
+        <p className="text-gray-500 text-sm mb-6">
+          Defina as etapas de comunicação para os {allRecipients.length} destinatário{allRecipients.length > 1 ? 's' : ''} selecionado{allRecipients.length > 1 ? 's' : ''}
+        </p>
+
+        {/* Modo: geral ou individual */}
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg mb-6">
+          {[
+            { id: 'general', label: 'Fluxo geral', icon: <Users size={14} />, desc: 'Mesmo fluxo para todos' },
+            { id: 'individual', label: 'Personalizado', icon: <Settings2 size={14} />, desc: 'Fluxo por cliente' },
+          ].map(m => (
+            <button
+              key={m.id}
+              onClick={() => setFlowMode(m.id as FlowMode)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium rounded-md transition ${
+                flowMode === m.id ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {m.icon} {m.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Fluxo geral */}
+        {flowMode === 'general' && (
+          <FlowConfigPanel
+            config={generalFlow}
+            onChange={setGeneralFlow}
+            npsList={availableNps}
+          />
+        )}
+
+        {/* Fluxo individual */}
+        {flowMode === 'individual' && (
+          <div className="space-y-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2 mb-4">
+              <Info size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-700">
+                Cada cliente começa com o fluxo padrão. Clique em um cliente para personalizar seu fluxo individualmente.
+              </p>
+            </div>
+            {allRecipients.map(r => {
+              const flow = individualFlows[r.id] || generalFlow;
+              const isExpanded = expandedRecipient === r.id;
+              const activeSteps = [
+                flow.step1_confirmation && 'Confirmação',
+                flow.step2_anamnese && 'Anamnese',
+                flow.step3_insistence && 'Insistência',
+                flow.step4_postsale && 'Pós-venda',
+              ].filter(Boolean);
+              return (
+                <div key={r.id} className="border border-gray-200 rounded-xl overflow-hidden">
+                  <button
+                    className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition"
+                    onClick={() => setExpandedRecipient(isExpanded ? null : r.id)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-semibold text-sm flex-shrink-0">
+                        {r.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="text-left">
+                        <div className="font-medium text-gray-900 text-sm">{r.name}</div>
+                        <div className="text-xs text-gray-500">{activeSteps.length} etapa{activeSteps.length !== 1 ? 's' : ''} ativa{activeSteps.length !== 1 ? 's' : ''}: {activeSteps.join(', ')}</div>
+                      </div>
+                    </div>
+                    {isExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                  </button>
+                  {isExpanded && (
+                    <div className="p-4 pt-0 border-t border-gray-100">
+                      <FlowConfigPanel
+                        config={flow}
+                        onChange={newConfig => setIndividualFlows(prev => ({ ...prev, [r.id]: newConfig }))}
+                        npsList={availableNps}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Validação */}
+        {!isFlowValid() && (
+          <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2">
+            <AlertCircle size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-600">
+              Preencha a data e hora da consulta para todos os clientes com confirmação ativada.
+            </p>
+          </div>
+        )}
+
+        <div className="mt-8 flex justify-between">
+          <button onClick={() => setStep('new-step2')} className="flex items-center gap-1 text-gray-500 hover:text-gray-700 text-sm">
+            <ChevronLeft size={16} /> Voltar
+          </button>
+          <button
+            onClick={() => setStep('new-step3')}
+            disabled={!isFlowValid()}
             className="flex items-center gap-2 bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Próximo: Revisar ({allRecipients.length}) <ChevronRight size={18} />
@@ -846,17 +1225,23 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
 
   // ─── STEP 3: REVISÃO ───────────────────────────────────────────────────────
   if (step === 'new-step3') {
+    const stepsCount = isSimplified ? 4 : 3;
     return (
       <div className="p-6 max-w-2xl mx-auto">
-        <button onClick={() => setStep('new-step2')} className="flex items-center gap-1 text-gray-500 hover:text-gray-700 mb-6 text-sm">
+        <button onClick={() => isSimplified ? setStep('new-step2b') : setStep('new-step2')} className="flex items-center gap-1 text-gray-500 hover:text-gray-700 mb-6 text-sm">
           <ChevronLeft size={16} /> Voltar
         </button>
+
+        {/* Progress */}
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold"><Check size={14} /></div>
-          <div className="flex-1 h-1 bg-purple-600 rounded" />
-          <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold"><Check size={14} /></div>
-          <div className="flex-1 h-1 bg-purple-600 rounded" />
-          <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold">3</div>
+          {Array.from({ length: stepsCount }).map((_, i) => (
+            <React.Fragment key={i}>
+              {i > 0 && <div className="flex-1 h-1 bg-purple-600 rounded" />}
+              <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold">
+                {i < stepsCount - 1 ? <Check size={14} /> : stepsCount}
+              </div>
+            </React.Fragment>
+          ))}
         </div>
 
         <h2 className="text-xl font-bold text-gray-900 mb-6">Revisar e disparar</h2>
@@ -874,6 +1259,27 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
             <span className="text-gray-500">Destinatários</span>
             <span className="font-semibold text-purple-700">{allRecipients.length} contatos</span>
           </div>
+          {isSimplified && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Fluxo</span>
+              <span className="font-medium text-gray-900">{flowMode === 'general' ? 'Geral (todos iguais)' : 'Personalizado por cliente'}</span>
+            </div>
+          )}
+          {isSimplified && flowMode === 'general' && (
+            <div className="pt-2 border-t border-gray-200">
+              <p className="text-xs text-gray-500 mb-2 font-medium">Etapas ativas:</p>
+              <div className="flex flex-wrap gap-2">
+                {generalFlow.step1_confirmation && (
+                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                    Confirmação — {generalFlow.step1_datetime ? new Date(generalFlow.step1_datetime).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'sem data'}
+                  </span>
+                )}
+                {generalFlow.step2_anamnese && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Anamnese</span>}
+                {generalFlow.step3_insistence && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Insistência ({generalFlow.step3_days}d × {generalFlow.step3_max_times}x)</span>}
+                {generalFlow.step4_postsale && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Pós-venda</span>}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mb-5">
@@ -907,12 +1313,12 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
           <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-amber-700">
             Serão enviadas <strong>{allRecipients.length} mensagens</strong> via WhatsApp com intervalo de 1,5s entre cada uma.
-            Após o envio, a IA ficará aguardando as respostas para continuar a conversa automaticamente.
+            {isSimplified && ' O fluxo de acompanhamento será iniciado automaticamente conforme as etapas configuradas.'}
           </p>
         </div>
 
         <div className="flex justify-between">
-          <button onClick={() => setStep('new-step2')} className="flex items-center gap-1 text-gray-500 hover:text-gray-700 text-sm">
+          <button onClick={() => isSimplified ? setStep('new-step2b') : setStep('new-step2')} className="flex items-center gap-1 text-gray-500 hover:text-gray-700 text-sm">
             <ChevronLeft size={16} /> Voltar
           </button>
           <button
@@ -972,11 +1378,19 @@ const Dispatches: React.FC<DispatchesProps> = ({ tenantId }) => {
           <span className="text-green-600 font-semibold">{successCount} mensagens enviadas</span>
           {failedCount > 0 && <span className="text-red-500"> · {failedCount} falhas</span>}
         </p>
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-left">
-          <p className="text-sm text-blue-700">
-            <strong>Próximo passo:</strong> A IA está aguardando as respostas. Quando os clientes responderem, ela continuará a conversa automaticamente conforme o playbook configurado.
-          </p>
-        </div>
+        {isSimplified ? (
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-6 text-left">
+            <p className="text-sm text-purple-700">
+              <strong>Fluxo iniciado!</strong> O sistema acompanhará automaticamente cada cliente conforme as etapas configuradas. Acompanhe o progresso na <strong>Fila de Ações</strong>.
+            </p>
+          </div>
+        ) : (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-left">
+            <p className="text-sm text-blue-700">
+              <strong>Próximo passo:</strong> A IA está aguardando as respostas. Quando os clientes responderem, ela continuará a conversa automaticamente conforme o playbook configurado.
+            </p>
+          </div>
+        )}
         <div className="flex gap-3 justify-center">
           <button onClick={resetForm} className="border border-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-50 transition font-medium">
             Ver histórico

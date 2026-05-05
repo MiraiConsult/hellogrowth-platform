@@ -8,7 +8,8 @@ import {
   Filter, Search, ThumbsUp, ThumbsDown, Minus, Phone, X, Check,
   Bot, User, ArrowRight, Sparkles, Bell, ChevronLeft, ChevronDown,
   BarChart2, MessageCircle, CheckSquare, AlertCircle, Inbox,
-  MoreVertical, Copy, RotateCcw, ExternalLink
+  MoreVertical, Copy, RotateCcw, ExternalLink, Info, CalendarDays,
+  FileText, BarChart3, GitBranch, ChevronUp, Package
 } from 'lucide-react';
 
 // ---- Tipos de objetivo da conversa ----
@@ -22,6 +23,35 @@ type ConversationObjectiveType =
 interface Props {
   isDark: boolean;
   tenantId: string;
+  actionsModule?: 'none' | 'simplified' | 'complete';
+}
+
+interface FlowStatus {
+  dispatch_campaign_id: string;
+  phone: string;
+  lead_id?: string;
+  current_step: 'confirmation' | 'anamnese' | 'insistence' | 'postsale_pending' | 'postsale_sent' | 'done';
+  status: 'active' | 'paused' | 'completed';
+  flow_config: any;
+  last_action_at?: string;
+  next_action_at?: string;
+  insistence_count?: number;
+}
+
+interface ClientInfo {
+  anamnese?: {
+    answered_at?: string;
+    answers?: Record<string, any>;
+    ai_analysis?: string;
+    suggested_products?: string[];
+  };
+  nps?: {
+    score?: number;
+    answered_at?: string;
+    comment?: string;
+    campaign_name?: string;
+  }[];
+  products?: { name: string; value: number }[];
 }
 
 interface ActionItem {
@@ -137,7 +167,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string 
 
 const PAGE_SIZE = 20;
 
-export default function ActionInbox({ isDark, tenantId }: Props) {
+export default function ActionInbox({ isDark, tenantId, actionsModule = 'none' }: Props) {
   const t = {
     bg: isDark ? 'bg-slate-900' : 'bg-slate-50',
     card: isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200',
@@ -174,6 +204,16 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
   const [regenerating, setRegenerating] = useState(false);
   const [conversationMode, setConversationMode] = useState<'approval_required' | 'auto'>('approval_required');
   const [settingMode, setSettingMode] = useState(false);
+  // Fluxo simplificado
+  const [flowStatus, setFlowStatus] = useState<FlowStatus | null>(null);
+  const [loadingFlowStatus, setLoadingFlowStatus] = useState(false);
+  const [confirmingConsultation, setConfirmingConsultation] = useState(false);
+  const [showPostsaleModal, setShowPostsaleModal] = useState(false);
+  const [postsaleNpsId, setPostsaleNpsId] = useState('');
+  // Painel de informações do cliente
+  const [showClientInfo, setShowClientInfo] = useState(false);
+  const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
+  const [loadingClientInfo, setLoadingClientInfo] = useState(false);
   // Modal de objetivo da conversa
   const [showObjectiveModal, setShowObjectiveModal] = useState(false);
   const [selectedObjective, setSelectedObjective] = useState<ConversationObjectiveType>('schedule_first');
@@ -263,11 +303,18 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
 
   const handleSelectAction = async (action: ActionItem) => {
     setSelectedAction(action);
+    setShowClientInfo(false);
+    setClientInfo(null);
+    setFlowStatus(null);
     if (action.conversation_id) {
       await fetchConversation(action.conversation_id);
     } else {
       setConversation(null);
       setEditingDraft(action.ai_recommendation);
+    }
+    // Buscar fluxo simplificado se módulo ativo
+    if (actionsModule === 'simplified') {
+      fetchFlowStatus(action.contact_phone);
     }
   };
 
@@ -449,6 +496,146 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
       setConversation(prev => prev ? { ...prev, mode: 'approval_required' } : prev);
     } finally {
       setSettingMode(false);
+    }
+  };
+
+  // Buscar status do fluxo simplificado para o contato selecionado
+  const fetchFlowStatus = useCallback(async (phone: string) => {
+    if (!tenantId || actionsModule !== 'simplified') return;
+    setLoadingFlowStatus(true);
+    try {
+      const { data } = await supabase
+        .from('dispatch_flow_configs')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('phone', phone)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      setFlowStatus(data || null);
+    } catch {
+      setFlowStatus(null);
+    } finally {
+      setLoadingFlowStatus(false);
+    }
+  }, [tenantId, actionsModule]);
+
+  // Buscar informações do cliente (anamnese, NPS, produtos)
+  const fetchClientInfo = useCallback(async (phone: string, leadId?: string) => {
+    if (!tenantId) return;
+    setLoadingClientInfo(true);
+    try {
+      const info: ClientInfo = {};
+
+      // Buscar anamnese (lead com respostas)
+      if (leadId) {
+        const { data: lead } = await supabase
+          .from('leads')
+          .select('answers, created_at')
+          .eq('id', leadId)
+          .single();
+        if (lead?.answers) {
+          info.anamnese = {
+            answered_at: lead.created_at,
+            answers: lead.answers,
+            ai_analysis: lead.answers?._ai_analysis,
+            suggested_products: lead.answers?._suggested_products,
+          };
+        }
+      }
+
+      // Buscar respostas NPS pelo telefone
+      const { data: npsResponses } = await supabase
+        .from('nps_responses')
+        .select('score, created_at, comment, campaign_id, campaigns(name)')
+        .eq('tenant_id', tenantId)
+        .or(`phone.eq.${phone},respondent_phone.eq.${phone}`)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (npsResponses && npsResponses.length > 0) {
+        info.nps = npsResponses.map((r: any) => ({
+          score: r.score,
+          answered_at: r.created_at,
+          comment: r.comment,
+          campaign_name: r.campaigns?.name,
+        }));
+      }
+
+      // Buscar produtos do catálogo
+      const { data: products } = await supabase
+        .from('products_services')
+        .select('name, value')
+        .eq('tenant_id', tenantId)
+        .limit(10);
+      if (products) info.products = products;
+
+      setClientInfo(info);
+    } catch (err) {
+      console.error('Error fetching client info:', err);
+    } finally {
+      setLoadingClientInfo(false);
+    }
+  }, [tenantId]);
+
+  // Confirmar consulta realizada e liberar pós-venda
+  const handleConfirmConsultation = async () => {
+    if (!flowStatus || !selectedAction) return;
+    setConfirmingConsultation(true);
+    try {
+      await supabase
+        .from('dispatch_flow_configs')
+        .update({
+          current_step: 'postsale_pending',
+          consultation_confirmed_at: new Date().toISOString(),
+        })
+        .eq('dispatch_campaign_id', flowStatus.dispatch_campaign_id)
+        .eq('phone', flowStatus.phone);
+      setShowPostsaleModal(true);
+      await fetchFlowStatus(selectedAction.contact_phone);
+    } finally {
+      setConfirmingConsultation(false);
+    }
+  };
+
+  // Enviar pós-venda
+  const handleSendPostsale = async () => {
+    if (!flowStatus || !selectedAction || !postsaleNpsId) return;
+    setConfirmingConsultation(true);
+    try {
+      const base = typeof window !== 'undefined' ? window.location.origin : '';
+      const link = `${base}/nps/${postsaleNpsId}`;
+      const firstName = selectedAction.contact_name.split(' ')[0];
+      const message = `Olá ${firstName}! 😊 Gostaríamos muito de saber como foi sua consulta. Leva menos de 2 minutos: ${link}`;
+
+      await fetch('/api/whatsapp/send-dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId,
+          phone: selectedAction.contact_phone,
+          message,
+          recipientName: selectedAction.contact_name,
+          npsId: postsaleNpsId,
+        }),
+      });
+
+      await supabase
+        .from('dispatch_flow_configs')
+        .update({
+          current_step: 'postsale_sent',
+          postsale_sent_at: new Date().toISOString(),
+          postsale_nps_id: postsaleNpsId,
+        })
+        .eq('dispatch_campaign_id', flowStatus.dispatch_campaign_id)
+        .eq('phone', flowStatus.phone);
+
+      setShowPostsaleModal(false);
+      setPostsaleNpsId('');
+      await fetchFlowStatus(selectedAction.contact_phone);
+    } finally {
+      setConfirmingConsultation(false);
     }
   };
 
@@ -643,6 +830,32 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
                           {action.trigger_summary}
                         </p>
 
+                        {/* Tags de etapa do fluxo simplificado */}
+                        {actionsModule === 'simplified' && (action as any).flow_step && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                              (action as any).flow_step === 'confirmation' ? 'bg-purple-100 text-purple-700' :
+                              (action as any).flow_step === 'anamnese' ? 'bg-blue-100 text-blue-700' :
+                              (action as any).flow_step === 'insistence' ? 'bg-amber-100 text-amber-700' :
+                              (action as any).flow_step === 'postsale_pending' ? 'bg-orange-100 text-orange-700' :
+                              (action as any).flow_step === 'postsale_sent' ? 'bg-green-100 text-green-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>
+                              {(action as any).flow_step === 'confirmation' ? '📅 Confirmação' :
+                               (action as any).flow_step === 'anamnese' ? '📋 Anamnese' :
+                               (action as any).flow_step === 'insistence' ? '🔁 Insistência' :
+                               (action as any).flow_step === 'postsale_pending' ? '⏳ Aguarda pós-venda' :
+                               (action as any).flow_step === 'postsale_sent' ? '✅ Pós-venda enviado' :
+                               '✓ Concluído'}
+                            </span>
+                            {(action as any).waiting_user && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">
+                                ⚠ Aguarda você
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         {/* Contagem de mensagens */}
                         {(action.message_count || 0) > 0 && (
                           <div className={`flex items-center gap-1 mt-1 text-xs ${t.textMuted}`}>
@@ -734,6 +947,24 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
               </div>
 
               <div className="flex items-center gap-1">
+                {/* Botão de informações do cliente */}
+                <button
+                  onClick={() => {
+                    if (!showClientInfo) {
+                      fetchClientInfo(selectedAction.contact_phone, (selectedAction as any).lead_id);
+                    }
+                    setShowClientInfo(!showClientInfo);
+                  }}
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    showClientInfo
+                      ? 'bg-purple-600 text-white'
+                      : `${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-200 text-slate-500'}`
+                  }`}
+                  title="Informações do cliente"
+                >
+                  <Info size={13} />
+                  <span className="hidden sm:inline">Info</span>
+                </button>
                 {/* Toggle modo IA */}
                 {selectedAction.conversation_id && (
                   <div className={`flex items-center gap-0.5 rounded-lg p-0.5 border ${t.divider} ${isDark ? 'bg-slate-700' : 'bg-white'}`}>
@@ -794,6 +1025,9 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
               </div>
             </div>
 
+            {/* ---- Layout com painel de info opcional ---- */}
+            <div className="flex flex-1 overflow-hidden">
+
             {/* ---- Área de chat estilo WhatsApp (fundo com padrão) ---- */}
             <div className={`flex-1 overflow-y-auto relative`} style={{
               backgroundColor: isDark ? '#0b141a' : '#efeae2',
@@ -812,6 +1046,67 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
                   </div>
                 </div>
               </div>
+
+              {/* Status bar do fluxo simplificado */}
+              {actionsModule === 'simplified' && flowStatus && (
+                <div className="px-4 pb-2">
+                  <div className={`rounded-xl border p-3 ${
+                    flowStatus.current_step === 'postsale_pending'
+                      ? 'bg-orange-50 border-orange-200'
+                      : 'bg-white/90 border-slate-200'
+                  } backdrop-blur-sm shadow-sm`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <GitBranch size={12} className="text-purple-600" />
+                          <span className="text-xs font-semibold text-gray-700">Fluxo Simplificado</span>
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                            flowStatus.current_step === 'confirmation' ? 'bg-purple-100 text-purple-700' :
+                            flowStatus.current_step === 'anamnese' ? 'bg-blue-100 text-blue-700' :
+                            flowStatus.current_step === 'insistence' ? 'bg-amber-100 text-amber-700' :
+                            flowStatus.current_step === 'postsale_pending' ? 'bg-orange-100 text-orange-700' :
+                            flowStatus.current_step === 'postsale_sent' ? 'bg-green-100 text-green-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {flowStatus.current_step === 'confirmation' ? 'Aguardando confirmação' :
+                             flowStatus.current_step === 'anamnese' ? 'Aguardando anamnese' :
+                             flowStatus.current_step === 'insistence' ? 'Insistindo' :
+                             flowStatus.current_step === 'postsale_pending' ? '⏳ Aguarda sua confirmação' :
+                             flowStatus.current_step === 'postsale_sent' ? 'Pós-venda enviado' :
+                             'Concluído'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-600">
+                          {flowStatus.current_step === 'postsale_pending'
+                            ? '⚠️ Aguardando sua confirmação de que a consulta foi realizada para enviar o pós-venda.'
+                            : flowStatus.current_step === 'postsale_sent'
+                            ? '✅ Pós-venda enviado com sucesso.'
+                            : flowStatus.current_step === 'done'
+                            ? '✅ Fluxo concluído.'
+                            : `Status: aguardando cliente responder. ${flowStatus.last_action_at ? `Última ação: ${new Date(flowStatus.last_action_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}`
+                          }
+                        </p>
+                        {flowStatus.current_step === 'insistence' && flowStatus.next_action_at && (
+                          <p className="text-[11px] text-amber-700 mt-0.5">
+                            Próximo reenvio: {new Date(flowStatus.next_action_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        )}
+                      </div>
+                      {/* Botão de ação conforme etapa */}
+                      {flowStatus.current_step === 'postsale_pending' && (
+                        <button
+                          onClick={() => setShowPostsaleModal(true)}
+                          disabled={confirmingConsultation}
+                          className="flex items-center gap-1 bg-green-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-green-700 transition flex-shrink-0"
+                        >
+                          {confirmingConsultation ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+                          Consulta realizada
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Mensagens */}
               {loadingConv ? (
@@ -935,6 +1230,129 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
               )}
             </div>
 
+            {/* ---- Painel lateral de informações do cliente ---- */}
+            {showClientInfo && (
+              <div className={`w-80 flex-shrink-0 border-l ${t.divider} overflow-y-auto ${isDark ? 'bg-slate-800' : 'bg-white'}`}>
+                <div className={`p-4 border-b ${t.divider} flex items-center justify-between`}>
+                  <div className="flex items-center gap-2">
+                    <Info size={15} className="text-purple-600" />
+                    <span className={`font-semibold text-sm ${t.text}`}>Informações do Cliente</span>
+                  </div>
+                  <button onClick={() => setShowClientInfo(false)} className={`p-1 rounded-lg ${t.hover} ${t.textMuted}`}>
+                    <X size={14} />
+                  </button>
+                </div>
+
+                {loadingClientInfo ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="animate-spin text-purple-500" size={20} />
+                  </div>
+                ) : (
+                  <div className="p-4 space-y-5">
+
+                    {/* Anamnese */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileText size={14} className="text-blue-600" />
+                        <span className={`text-xs font-semibold ${t.text}`}>Anamnese</span>
+                      </div>
+                      {clientInfo?.anamnese ? (
+                        <div className={`rounded-xl p-3 ${isDark ? 'bg-slate-700' : 'bg-blue-50'} space-y-2`}>
+                          <p className="text-[11px] text-gray-500">
+                            Respondida em: {clientInfo.anamnese.answered_at ? new Date(clientInfo.anamnese.answered_at).toLocaleDateString('pt-BR') : 'N/A'}
+                          </p>
+                          {clientInfo.anamnese.ai_analysis && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-purple-600 mb-0.5">Análise da IA:</p>
+                              <p className="text-[11px] text-gray-700 leading-relaxed">{clientInfo.anamnese.ai_analysis}</p>
+                            </div>
+                          )}
+                          {clientInfo.anamnese.suggested_products && Array.isArray(clientInfo.anamnese.suggested_products) && clientInfo.anamnese.suggested_products.length > 0 && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-green-600 mb-1">Produtos sugeridos:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {clientInfo.anamnese.suggested_products.map((p: string, i: number) => (
+                                  <span key={i} className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">{p}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {clientInfo.anamnese.answers && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-gray-500 mb-1">Respostas:</p>
+                              <div className="space-y-1">
+                                {Object.entries(clientInfo.anamnese.answers)
+                                  .filter(([k]) => !k.startsWith('_'))
+                                  .slice(0, 5)
+                                  .map(([k, v]: [string, any]) => (
+                                    <div key={k}>
+                                      <p className="text-[10px] text-gray-500">{k}</p>
+                                      <p className="text-[11px] text-gray-800 font-medium">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</p>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className={`text-xs ${t.textMuted} italic`}>Nenhuma anamnese respondida</p>
+                      )}
+                    </div>
+
+                    {/* Respostas NPS */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <BarChart3 size={14} className="text-green-600" />
+                        <span className={`text-xs font-semibold ${t.text}`}>Pesquisas NPS</span>
+                      </div>
+                      {clientInfo?.nps && clientInfo.nps.length > 0 ? (
+                        <div className="space-y-2">
+                          {clientInfo.nps.map((nps, i) => (
+                            <div key={i} className={`rounded-xl p-3 ${isDark ? 'bg-slate-700' : 'bg-green-50'}`}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] text-gray-500">{nps.campaign_name || 'Pesquisa'}</span>
+                                <span className={`text-sm font-bold ${
+                                  (nps.score || 0) >= 9 ? 'text-green-600' :
+                                  (nps.score || 0) >= 7 ? 'text-amber-600' : 'text-red-600'
+                                }`}>{nps.score}/10</span>
+                              </div>
+                              {nps.comment && <p className="text-[11px] text-gray-700 italic">"{nps.comment}"</p>}
+                              <p className="text-[10px] text-gray-400 mt-1">{nps.answered_at ? new Date(nps.answered_at).toLocaleDateString('pt-BR') : ''}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className={`text-xs ${t.textMuted} italic`}>Nenhuma resposta NPS</p>
+                      )}
+                    </div>
+
+                    {/* Produtos do catálogo */}
+                    {clientInfo?.products && clientInfo.products.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Package size={14} className="text-purple-600" />
+                          <span className={`text-xs font-semibold ${t.text}`}>Catálogo de Produtos</span>
+                        </div>
+                        <div className="space-y-1">
+                          {clientInfo.products.slice(0, 8).map((p, i) => (
+                            <div key={i} className={`flex items-center justify-between py-1 px-2 rounded-lg ${isDark ? 'bg-slate-700' : 'bg-gray-50'}`}>
+                              <span className="text-[11px] text-gray-800">{p.name}</span>
+                              <span className="text-[11px] font-medium text-purple-600">
+                                {p.value > 0 ? `R$ ${p.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                )}
+              </div>
+            )}
+
+            </div>{/* fim div flex layout (chat + painel info) */}
+
             {/* ---- Barra de input estilo WhatsApp (compacta) ---- */}
             <div className={`px-3 py-2 ${isDark ? 'bg-slate-800 border-t border-slate-700' : 'bg-[#f0f2f5] border-t border-slate-200'}`}>
               {/* Banner modo automático (compacto) */}
@@ -1012,6 +1430,66 @@ export default function ActionInbox({ isDark, tenantId }: Props) {
         )}
       </div>
     </div>
+
+    {/* ---- Modal de Pós-Venda ---- */}
+    {showPostsaleModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div className={`w-full max-w-md rounded-2xl shadow-2xl ${isDark ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-slate-200'} overflow-hidden`}>
+          <div className={`px-5 py-4 border-b ${isDark ? 'border-slate-700' : 'border-slate-100'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className={`text-base font-semibold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>Enviar Pós-Venda</h3>
+                <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Selecione a pesquisa NPS para enviar ao cliente</p>
+              </div>
+              <button onClick={() => setShowPostsaleModal(false)} className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}>
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            <div className={`rounded-xl p-3 ${isDark ? 'bg-slate-700/50' : 'bg-green-50'} flex items-start gap-2`}>
+              <CheckCircle size={16} className="text-green-600 flex-shrink-0 mt-0.5" />
+              <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                Consulta confirmada para <strong>{selectedAction?.contact_name}</strong>. Escolha qual pesquisa NPS enviar:
+              </p>
+            </div>
+            <div>
+              <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Pesquisa NPS</label>
+              <select
+                value={postsaleNpsId}
+                onChange={e => setPostsaleNpsId(e.target.value)}
+                className={`w-full text-sm rounded-xl px-3 py-2.5 border ${
+                  isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-white border-slate-300 text-slate-800'
+                }`}
+              >
+                <option value="">Selecionar pesquisa...</option>
+                {availableForms.map(f => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className={`px-5 py-3 border-t ${isDark ? 'border-slate-700' : 'border-slate-100'} flex gap-2`}>
+            <button
+              onClick={() => setShowPostsaleModal(false)}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-medium border ${
+                isDark ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+              } transition-colors`}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSendPostsale}
+              disabled={!postsaleNpsId || confirmingConsultation}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white transition-colors shadow-sm flex items-center justify-center gap-2"
+            >
+              {confirmingConsultation ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+              Enviar Pós-Venda
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* ---- Modal de Objetivo da Conversa ---- */}
     {showObjectiveModal && (

@@ -1883,6 +1883,7 @@ Responda APENAS com JSON válido (sem markdown):
           <ActionInbox
             isDark={false}
             tenantId={getActiveTenant() || ''}
+            actionsModule={(() => { try { const a = typeof activeCompany?.plan_addons === 'string' ? JSON.parse(activeCompany?.plan_addons || '{}') : (activeCompany?.plan_addons || {}); return a.actions || 'none'; } catch { return 'none'; } })()}
           />
         )}
 
@@ -1899,6 +1900,8 @@ Responda APENAS com JSON válido (sem markdown):
         {currentView === 'dispatches' && (
           <Dispatches
             tenantId={getActiveTenant() || ''}
+            actionsModule={(() => { try { const a = typeof activeCompany?.plan_addons === 'string' ? JSON.parse(activeCompany?.plan_addons || '{}') : (activeCompany?.plan_addons || {}); return a.actions || 'none'; } catch { return 'none'; } })()}
+            npsCampaignsList={campaigns}
           />
         )}
         {currentView === 'action-metrics' && (
