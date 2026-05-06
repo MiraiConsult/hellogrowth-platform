@@ -474,7 +474,22 @@ export const processInboundReply = inngest.createFunction(
   async ({ event, step }) => {
     const { tenantId, conversationId, messageContent, waMessageId } = event.data;
 
-    // Step 1: Salvar mensagem inbound
+    // GUARD PRIMEIRO: Verificar module_type ANTES de qualquer processamento
+    const moduleCheck = await step.run("check-module-type", async () => {
+      const { data } = await supabase
+        .from("ai_conversations")
+        .select("module_type")
+        .eq("id", conversationId)
+        .single();
+      return data?.module_type;
+    });
+
+    if (moduleCheck === "simplified") {
+      console.log(`[Inngest] Conversa ${conversationId} é do módulo simplificado, IGNORANDO completamente`);
+      return { status: "skipped", reason: "Módulo simplificado não usa IA" };
+    }
+
+    // Step 1: Salvar mensagem inbound (apenas para módulo completo)
     await step.run("save-inbound", async () => {
       await saveMessage({
         conversationId,
@@ -501,12 +516,6 @@ export const processInboundReply = inngest.createFunction(
 
     if (!convData) {
       return { status: "error", reason: "Conversa não encontrada" };
-    }
-
-    // GUARD: Módulo Simplificado não usa IA — ignorar processamento
-    if ((convData as any).module_type === "simplified") {
-      console.log(`[Inngest] Conversa ${conversationId} é do módulo simplificado, ignorando processamento por IA`);
-      return { status: "skipped", reason: "Módulo simplificado não usa IA" };
     }
 
     // Step 3: Buscar histórico

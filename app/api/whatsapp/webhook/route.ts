@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { verifyWebhookSignature, sendTextMessage } from "@/lib/whatsapp-client";
+import { verifyWebhookSignature, sendTextMessage, getTenantWhatsAppConfig, sendUnifiedTextMessage } from "@/lib/whatsapp-client";
 import { detectIntent, isOptOut } from "@/lib/intent-detector";
 import { generateMessage, type ConversationContext } from "@/lib/ai-message-engine";
 import { inngest } from "@/lib/inngest-client";
@@ -365,38 +365,16 @@ async function processSimplifiedFlow(params: {
 
   // Enviar resposta automática se houver
   if (replyMessage) {
-    // Buscar credenciais do WhatsApp do banco (whatsapp_connections)
-    const { data: waConn } = await supabase
-      .from("whatsapp_connections")
-      .select("phone_number_id, business_token")
-      .eq("tenant_id", conversation.tenant_id)
-      .eq("status", "connected")
-      .single();
-
-    const phoneNumberId = waConn?.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
-    const accessToken = waConn?.business_token || process.env.WHATSAPP_API_KEY || process.env.WHATSAPP_BUSINESS_TOKEN || "";
-
-    if (!phoneNumberId || !accessToken) {
-      console.error(`[SimplifiedFlow] WhatsApp não configurado para tenant ${conversation.tenant_id}`);
-      // Salvar como draft se não conseguir enviar
-      await supabase.from("ai_conversation_messages").insert({
-        conversation_id: conversation.id,
-        direction: "outbound",
-        content: replyMessage,
-        status: "draft",
-        sent_at: new Date().toISOString(),
-        ai_reasoning: `Simplified flow: ${currentStep} → ${nextStep || currentStep} (WhatsApp não configurado)`,
-      });
-      return;
-    }
+    // Buscar config do WhatsApp usando helper unificado (suporta Evolution, Meta Cloud, 360dialog)
+    const waConfig = await getTenantWhatsAppConfig(supabase, conversation.tenant_id);
+    console.log(`[SimplifiedFlow] Provider: ${waConfig.provider}, tenant: ${conversation.tenant_id}`);
 
     try {
-      const waMessageId = await sendTextMessage({
-        phoneNumberId,
-        accessToken,
-        to: conversation.contact_phone,
-        text: replyMessage,
-      });
+      const waMessageId = await sendUnifiedTextMessage(
+        waConfig,
+        conversation.contact_phone,
+        replyMessage
+      );
 
       await supabase.from("ai_conversation_messages").insert({
         conversation_id: conversation.id,
@@ -405,12 +383,12 @@ async function processSimplifiedFlow(params: {
         status: "sent",
         wa_message_id: waMessageId,
         sent_at: new Date().toISOString(),
-        ai_reasoning: `Simplified flow: ${currentStep} → ${nextStep || currentStep}`,
+        ai_reasoning: `Simplified flow: ${currentStep} → ${nextStep || currentStep} (provider: ${waConfig.provider})`,
       });
 
-      console.log(`[SimplifiedFlow] Mensagem enviada: ${currentStep} → ${nextStep || currentStep}`);
-    } catch (sendError) {
-      console.error(`[SimplifiedFlow] Erro ao enviar mensagem:`, sendError);
+      console.log(`[SimplifiedFlow] Mensagem enviada via ${waConfig.provider}: ${currentStep} → ${nextStep || currentStep}`);
+    } catch (sendError: any) {
+      console.error(`[SimplifiedFlow] Erro ao enviar mensagem via ${waConfig.provider}:`, sendError?.message || sendError);
       // Salvar como draft se falhar o envio
       await supabase.from("ai_conversation_messages").insert({
         conversation_id: conversation.id,
@@ -418,7 +396,7 @@ async function processSimplifiedFlow(params: {
         content: replyMessage,
         status: "draft",
         sent_at: new Date().toISOString(),
-        ai_reasoning: `Simplified flow: ${currentStep} → ${nextStep || currentStep} (erro no envio)`,
+        ai_reasoning: `Simplified flow: ${currentStep} → ${nextStep || currentStep} (erro: ${sendError?.message || 'unknown'})`,
       });
     }
   }
