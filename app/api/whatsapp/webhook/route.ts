@@ -257,7 +257,7 @@ async function processSimplifiedFlow(params: {
   const { conversation, messageContent } = params;
   const msg = messageContent.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-  // Buscar configuração do fluxo
+  // Buscar configuração do fluxo (dispatch_flow_configs)
   const { data: flowConfig } = await supabase
     .from("dispatch_flow_configs")
     .select("*")
@@ -268,6 +268,19 @@ async function processSimplifiedFlow(params: {
     .maybeSingle();
 
   const config = (flowConfig?.flow_config as any) || {};
+
+  // Buscar form_id e nps_campaign_id da dispatch_campaign (não estão no flow_config)
+  let campaignFormId: string | null = null;
+  let campaignNpsId: string | null = config.postsale_nps_id || null;
+  if (conversation.dispatch_campaign_id) {
+    const { data: campaign } = await supabase
+      .from("dispatch_campaigns")
+      .select("form_id, nps_campaign_id")
+      .eq("id", conversation.dispatch_campaign_id)
+      .single();
+    campaignFormId = campaign?.form_id || null;
+    campaignNpsId = campaign?.nps_campaign_id || campaignNpsId;
+  }
   const currentStep = conversation.flow_step;
 
   let nextStep: string | null = null;
@@ -289,22 +302,23 @@ async function processSimplifiedFlow(params: {
       msg.includes("DESMARCAR") || msg.includes("DESMARCO") || msg.includes("REMARCAR");
 
     if (confirmed) {
+      const firstName = conversation.contact_name.split(" ")[0];
       if (config.step2_anamnese) {
         nextStep = "presale";
-        // Buscar link do formulário de pré-venda
-        const formId = config.form_id || null;
+        // Usar form_id da dispatch_campaign (não do flow_config)
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://hellogrowth.online";
-        const formLink = formId ? `${baseUrl}/form/${formId}` : null;
+        const formLink = campaignFormId ? `${baseUrl}/form/${campaignFormId}` : null;
         replyMessage = formLink
-          ? `Ótimo, ${conversation.contact_name.split(" ")[0]}! Consulta confirmada! 😊 Para nos preparar melhor para o seu atendimento, pedimos que preencha este formulário rápido: ${formLink}`
-          : `Ótimo, ${conversation.contact_name.split(" ")[0]}! Consulta confirmada! 😊 Aguardamos você!`;
+          ? `Ótimo, ${firstName}! Consulta confirmada! 😊 Para nos preparar melhor para o seu atendimento, pedimos que preencha este formulário rápido antes da consulta: ${formLink}`
+          : `Ótimo, ${firstName}! Consulta confirmada! 😊 Aguardamos você!`;
+        console.log(`[SimplifiedFlow] Confirmação SIM: form_id=${campaignFormId}, formLink=${formLink}`);
       } else if (config.step4_postsale) {
         nextStep = "postsale_pending";
-        replyMessage = `Ótimo, ${conversation.contact_name.split(" ")[0]}! Consulta confirmada! 😊 Aguardamos você!`;
+        replyMessage = `Ótimo, ${firstName}! Consulta confirmada! 😊 Aguardamos você!`;
       } else {
         nextStep = "done";
         newStatus = "completed";
-        replyMessage = `Ótimo, ${conversation.contact_name.split(" ")[0]}! Consulta confirmada! 😊 Aguardamos você!`;
+        replyMessage = `Ótimo, ${firstName}! Consulta confirmada! 😊 Aguardamos você!`;
       }
     } else if (denied) {
       nextStep = "cancelled";
