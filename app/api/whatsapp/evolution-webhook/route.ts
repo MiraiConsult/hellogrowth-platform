@@ -467,28 +467,39 @@ async function processSimplifiedFlowEvolution(params: {
   const msg = messageContent.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   // Buscar configuração do fluxo (dispatch_flow_configs)
-  const { data: flowConfig } = await supabase
+  // Usar array em vez de maybeSingle para evitar erro com múltiplos registros
+  const { data: flowConfigs, error: flowConfigError } = await supabase
     .from("dispatch_flow_configs")
     .select("*")
     .eq("contact_phone", conversation.contact_phone)
     .eq("tenant_id", conversation.tenant_id)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
 
+  if (flowConfigError) {
+    console.error(`[SimplifiedFlow-Evo] Erro ao buscar flow_config:`, flowConfigError.message);
+  }
+  const flowConfig = flowConfigs?.[0] || null;
   const config = (flowConfig?.flow_config as any) || {};
+  console.log(`[SimplifiedFlow-Evo] flow_config encontrado: ${!!flowConfig}, step2_anamnese=${config.step2_anamnese}, step4_postsale=${config.step4_postsale}`);
 
   // Buscar form_id e nps_campaign_id da dispatch_campaign
   let campaignFormId: string | null = null;
   let campaignNpsId: string | null = config.postsale_nps_id || null;
   if (conversation.dispatch_campaign_id) {
-    const { data: campaign } = await supabase
+    const { data: campaign, error: campaignError } = await supabase
       .from("dispatch_campaigns")
       .select("form_id, nps_campaign_id")
       .eq("id", conversation.dispatch_campaign_id)
       .single();
+    if (campaignError) {
+      console.error(`[SimplifiedFlow-Evo] Erro ao buscar campaign:`, campaignError.message);
+    }
     campaignFormId = campaign?.form_id || null;
     campaignNpsId = campaign?.nps_campaign_id || campaignNpsId;
+    console.log(`[SimplifiedFlow-Evo] campaign form_id=${campaignFormId}, nps_campaign_id=${campaignNpsId}`);
+  } else {
+    console.log(`[SimplifiedFlow-Evo] AVISO: dispatch_campaign_id é null!`);
   }
   const currentStep = conversation.flow_step;
 
@@ -511,21 +522,24 @@ async function processSimplifiedFlowEvolution(params: {
 
     if (confirmed) {
       const firstName = conversation.contact_name.split(" ")[0];
+      console.log(`[SimplifiedFlow-Evo] CONFIRMED! step2_anamnese=${config.step2_anamnese}, step4_postsale=${config.step4_postsale}, campaignFormId=${campaignFormId}, dispatch_campaign_id=${conversation.dispatch_campaign_id}`);
       if (config.step2_anamnese) {
         nextStep = "presale";
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://hellogrowth.online";
         const formLink = campaignFormId ? `${baseUrl}/form/${campaignFormId}` : null;
         replyMessage = formLink
           ? `Ótimo, ${firstName}! Consulta confirmada! 😊 Para nos preparar melhor para o seu atendimento, pedimos que preencha este formulário rápido antes da consulta: ${formLink}`
-          : `Ótimo, ${firstName}! Consulta confirmada! 😊 Aguardamos você!`;
-        console.log(`[SimplifiedFlow-Evo] Confirmação SIM: form_id=${campaignFormId}, formLink=${formLink}`);
+          : `Ótimo, ${firstName}! Consulta confirmada! 😊 Para nos preparar melhor, aguardamos o preenchimento do formulário de pré-venda.`;
+        console.log(`[SimplifiedFlow-Evo] Confirmação SIM → presale: form_id=${campaignFormId}, formLink=${formLink}`);
       } else if (config.step4_postsale) {
         nextStep = "postsale_pending";
         replyMessage = `Ótimo, ${firstName}! Consulta confirmada! 😊 Aguardamos você!`;
+        console.log(`[SimplifiedFlow-Evo] Confirmação SIM → postsale_pending`);
       } else {
         nextStep = "done";
         newStatus = "completed";
         replyMessage = `Ótimo, ${firstName}! Consulta confirmada! 😊 Aguardamos você!`;
+        console.log(`[SimplifiedFlow-Evo] Confirmação SIM → done (sem step2 nem step4)`);
       }
     } else if (denied) {
       nextStep = "cancelled";
@@ -546,15 +560,20 @@ async function processSimplifiedFlowEvolution(params: {
 
   // Atualizar o flow_step na conversa
   if (nextStep) {
+    // Para etapas que aguardam resposta do cliente, manter como waiting_reply
+    const conversationStatus = newStatus === "completed" ? "completed" 
+      : (nextStep === "presale" || nextStep === "postsale_sent") ? "waiting_reply" 
+      : newStatus;
     await supabase
       .from("ai_conversations")
       .update({
         flow_step: nextStep,
         flow_step_status: nextStep === "postsale_pending" ? "waiting_user" : "waiting_client",
         flow_step_updated_at: new Date().toISOString(),
-        status: newStatus,
+        status: conversationStatus,
       })
       .eq("id", conversation.id);
+    console.log(`[SimplifiedFlow-Evo] Conversa atualizada: flow_step=${nextStep}, status=${conversationStatus}`);
 
     // Atualizar dispatch_flow_configs
     if (flowConfig?.id) {
