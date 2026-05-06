@@ -223,6 +223,40 @@ async function handleIncomingMessage({
   });
 
   // --------------------------------------------------------
+  // MÓDULO SIMPLIFICADO: processar fluxo estruturado sem IA
+  // --------------------------------------------------------
+  // Buscar module_type e dados do fluxo simplificado
+  const { data: convExtra } = await supabase
+    .from("ai_conversations")
+    .select("module_type, flow_step, flow_step_status, dispatch_campaign_id, appointment_datetime")
+    .eq("id", conversation.id)
+    .single();
+
+  if (convExtra?.module_type === "simplified") {
+    console.log(`[Evolution Webhook] Módulo SIMPLIFICADO detectado — processando fluxo estruturado (step: ${convExtra.flow_step})`);
+    // Atualizar apenas last_message_at sem mudar status para active
+    await supabase
+      .from("ai_conversations")
+      .update({ last_message_at: new Date().toISOString() })
+      .eq("id", conversation.id);
+
+    await processSimplifiedFlowEvolution({
+      conversation: {
+        id: conversation.id,
+        tenant_id: conversation.tenant_id,
+        contact_name: conversation.contact_name || contactName,
+        contact_phone: conversation.contact_phone || normalizedFrom,
+        flow_step: convExtra.flow_step || "confirmation",
+        flow_step_status: convExtra.flow_step_status || "waiting_client",
+        dispatch_campaign_id: convExtra.dispatch_campaign_id,
+        appointment_datetime: convExtra.appointment_datetime,
+      },
+      messageContent: content,
+    });
+    return;
+  }
+
+  // --------------------------------------------------------
   // Escalar para humano se necessário
   // --------------------------------------------------------
   if (intentResult.intent === "escalate_human" && intentResult.confidence !== "low") {
@@ -234,7 +268,7 @@ async function handleIncomingMessage({
     return;
   }
 
-  // Atualizar timestamp da última mensagem
+  // Atualizar timestamp da última mensagem (apenas para módulo completo/IA)
   await supabase
     .from("ai_conversations")
     .update({ last_message_at: new Date().toISOString(), status: "active" })
@@ -410,5 +444,160 @@ async function handleIncomingMessage({
       .eq("id", conversation.id);
 
     console.log(`[Evolution Webhook] Novo draft gerado para aprovação — conversa ${conversation.id}`);
+  }
+}
+
+// ============================================================
+// Processamento do fluxo simplificado (Evolution API)
+// ============================================================
+async function processSimplifiedFlowEvolution(params: {
+  conversation: {
+    id: string;
+    tenant_id: string;
+    contact_name: string;
+    contact_phone: string;
+    flow_step: string;
+    flow_step_status: string;
+    dispatch_campaign_id: string | null;
+    appointment_datetime: string | null;
+  };
+  messageContent: string;
+}) {
+  const { conversation, messageContent } = params;
+  const msg = messageContent.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  // Buscar configuração do fluxo (dispatch_flow_configs)
+  const { data: flowConfig } = await supabase
+    .from("dispatch_flow_configs")
+    .select("*")
+    .eq("contact_phone", conversation.contact_phone)
+    .eq("tenant_id", conversation.tenant_id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const config = (flowConfig?.flow_config as any) || {};
+
+  // Buscar form_id e nps_campaign_id da dispatch_campaign
+  let campaignFormId: string | null = null;
+  let campaignNpsId: string | null = config.postsale_nps_id || null;
+  if (conversation.dispatch_campaign_id) {
+    const { data: campaign } = await supabase
+      .from("dispatch_campaigns")
+      .select("form_id, nps_campaign_id")
+      .eq("id", conversation.dispatch_campaign_id)
+      .single();
+    campaignFormId = campaign?.form_id || null;
+    campaignNpsId = campaign?.nps_campaign_id || campaignNpsId;
+  }
+  const currentStep = conversation.flow_step;
+
+  let nextStep: string | null = null;
+  let replyMessage: string | null = null;
+  let newStatus = "active";
+
+  if (currentStep === "confirmation") {
+    // Reconhece variações de SIM
+    const confirmed = /^(SIM|S|OK|1)$/.test(msg) ||
+      msg.includes("SIM") || msg.includes("CONFIRMO") || msg.includes("CONFIRMADO") ||
+      msg.includes("CERTO") || msg.includes("CLARO") || msg.includes("CERTEZA") ||
+      msg.includes("PODE") || msg.startsWith("TA ") || msg === "TA" || msg === "TO" ||
+      msg.includes("COMBINADO") || msg.includes("ESTAREI") || msg.includes("PRESENTE");
+    // Reconhece variações de NÃO
+    const denied = /^(NAO|N|0)$/.test(msg) ||
+      msg.includes("NAO") || msg.includes("CANCELAR") || msg.includes("CANCELO") ||
+      msg.includes("CANCELA") || msg.includes("IMPOSSIVEL") || msg.includes("NAO POSSO") ||
+      msg.includes("DESMARCAR") || msg.includes("DESMARCO") || msg.includes("REMARCAR");
+
+    if (confirmed) {
+      const firstName = conversation.contact_name.split(" ")[0];
+      if (config.step2_anamnese) {
+        nextStep = "presale";
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://hellogrowth.online";
+        const formLink = campaignFormId ? `${baseUrl}/form/${campaignFormId}` : null;
+        replyMessage = formLink
+          ? `Ótimo, ${firstName}! Consulta confirmada! 😊 Para nos preparar melhor para o seu atendimento, pedimos que preencha este formulário rápido antes da consulta: ${formLink}`
+          : `Ótimo, ${firstName}! Consulta confirmada! 😊 Aguardamos você!`;
+        console.log(`[SimplifiedFlow-Evo] Confirmação SIM: form_id=${campaignFormId}, formLink=${formLink}`);
+      } else if (config.step4_postsale) {
+        nextStep = "postsale_pending";
+        replyMessage = `Ótimo, ${firstName}! Consulta confirmada! 😊 Aguardamos você!`;
+      } else {
+        nextStep = "done";
+        newStatus = "completed";
+        replyMessage = `Ótimo, ${firstName}! Consulta confirmada! 😊 Aguardamos você!`;
+      }
+    } else if (denied) {
+      nextStep = "cancelled";
+      newStatus = "completed";
+      replyMessage = `Entendido, ${conversation.contact_name.split(" ")[0]}. Se quiser reagendar, entre em contato conosco. Até logo!`;
+    } else {
+      // Resposta não reconhecida — pedir para confirmar novamente
+      replyMessage = `Olá ${conversation.contact_name.split(" ")[0]}! Por favor, responda SIM para confirmar ou NÃO para cancelar sua consulta.`;
+    }
+  } else if (currentStep === "presale") {
+    // Etapa pré-venda: aguardar preenchimento do formulário
+    console.log(`[SimplifiedFlow-Evo] Etapa presale: mensagem recebida do cliente, aguardando ação do usuário`);
+  } else if (currentStep === "postsale_pending") {
+    console.log(`[SimplifiedFlow-Evo] Etapa postsale_pending: aguardando ação do usuário`);
+  } else if (currentStep === "postsale_sent") {
+    console.log(`[SimplifiedFlow-Evo] Etapa postsale_sent: mensagem recebida após NPS`);
+  }
+
+  // Atualizar o flow_step na conversa
+  if (nextStep) {
+    await supabase
+      .from("ai_conversations")
+      .update({
+        flow_step: nextStep,
+        flow_step_status: nextStep === "postsale_pending" ? "waiting_user" : "waiting_client",
+        flow_step_updated_at: new Date().toISOString(),
+        status: newStatus,
+      })
+      .eq("id", conversation.id);
+
+    // Atualizar dispatch_flow_configs
+    if (flowConfig?.id) {
+      await supabase
+        .from("dispatch_flow_configs")
+        .update({ current_step: nextStep, status: newStatus === "completed" ? "completed" : "active" })
+        .eq("id", flowConfig.id);
+    }
+  }
+
+  // Enviar resposta automática via Evolution API
+  if (replyMessage) {
+    const waConfig = await getTenantWhatsAppConfig(supabase, conversation.tenant_id);
+    console.log(`[SimplifiedFlow-Evo] Provider: ${waConfig.provider}, tenant: ${conversation.tenant_id}`);
+
+    try {
+      const waMessageId = await sendUnifiedTextMessage(
+        waConfig,
+        conversation.contact_phone,
+        replyMessage
+      );
+
+      await supabase.from("ai_conversation_messages").insert({
+        conversation_id: conversation.id,
+        direction: "outbound",
+        content: replyMessage,
+        status: "sent",
+        wa_message_id: waMessageId,
+        sent_at: new Date().toISOString(),
+        ai_reasoning: `Simplified flow (evo): ${currentStep} → ${nextStep || currentStep}`,
+      });
+
+      console.log(`[SimplifiedFlow-Evo] ✅ Mensagem enviada via ${waConfig.provider}: ${currentStep} → ${nextStep || currentStep}`);
+    } catch (sendError: any) {
+      console.error(`[SimplifiedFlow-Evo] ❌ Erro ao enviar:`, sendError?.message || sendError);
+      await supabase.from("ai_conversation_messages").insert({
+        conversation_id: conversation.id,
+        direction: "outbound",
+        content: replyMessage,
+        status: "draft",
+        sent_at: new Date().toISOString(),
+        ai_reasoning: `Simplified flow (evo): ${currentStep} → ${nextStep || currentStep} (erro: ${sendError?.message || 'unknown'})`,
+      });
+    }
   }
 }
