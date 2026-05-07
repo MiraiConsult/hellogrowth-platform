@@ -5,15 +5,111 @@ import { supabase } from '@/lib/supabase';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const action = searchParams.get('action') || 'list';
     const search = searchParams.get('search') || '';
     const planFilter = searchParams.get('plan') || 'all';
     const statusFilter = searchParams.get('status') || 'all';
     const modelFilter = searchParams.get('model') || 'all';
 
+    // Buscar contatos extras de um cliente
+    if (action === 'contacts') {
+      const userId = searchParams.get('userId');
+      if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
+      const { data, error } = await supabase
+        .from('client_contacts')
+        .select('*')
+        .eq('user_id', userId)
+        .order('position', { ascending: true });
+      if (error) throw error;
+      return NextResponse.json({ contacts: data || [] });
+    }
+
+    // Buscar dados extras de pipeline e NPS para o perfil do cliente
+    if (action === 'profile_extras') {
+      const userId = searchParams.get('userId');
+      const tenantId = searchParams.get('tenantId');
+      if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
+
+      // Buscar card do kanban pelo email ou nome do cliente
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('email, name, company_name, tenant_id')
+        .eq('id', userId)
+        .single();
+
+      let kanbanCard: any = null;
+      if (userRow) {
+        // Buscar por email primeiro
+        let cardQuery = supabase
+          .from('kanban_cards')
+          .select('id, client_name, company_name, stage_id, board_id, cs_name, sdr_name, fup_date, next_contact_date, health_status, notes, created_at')
+          .is('deleted_at', null);
+        if (userRow.email) {
+          const { data: cardByEmail } = await cardQuery.eq('client_email', userRow.email).limit(1);
+          if (cardByEmail && cardByEmail.length > 0) kanbanCard = cardByEmail[0];
+        }
+        // Fallback por nome da empresa
+        if (!kanbanCard && (userRow.company_name || userRow.name)) {
+          const searchName = userRow.company_name || userRow.name;
+          const { data: cardByName } = await supabase
+            .from('kanban_cards')
+            .select('id, client_name, company_name, stage_id, board_id, cs_name, sdr_name, fup_date, next_contact_date, health_status, notes, created_at')
+            .is('deleted_at', null)
+            .or(`company_name.ilike.%${searchName}%,client_name.ilike.%${searchName}%`)
+            .limit(1);
+          if (cardByName && cardByName.length > 0) kanbanCard = cardByName[0];
+        }
+      }
+
+      // Buscar etapa e board do card
+      let stageName: string | null = null;
+      let boardName: string | null = null;
+      if (kanbanCard) {
+        const { data: stageRow } = await supabase.from('kanban_stages').select('name, color, emoji').eq('id', kanbanCard.stage_id).single();
+        const { data: boardRow } = await supabase.from('kanban_boards').select('name').eq('id', kanbanCard.board_id).single();
+        stageName = stageRow ? `${stageRow.emoji} ${stageRow.name}` : null;
+        boardName = boardRow?.name || null;
+      }
+
+      // Buscar NPS do tenant
+      const effectiveTenantId = tenantId || userRow?.tenant_id || userId;
+      let npsData: any = { total: 0, avg: null, promoters: 0, detractors: 0, neutrals: 0 };
+      if (effectiveTenantId) {
+        const { data: npsRows } = await supabase
+          .from('nps_responses')
+          .select('score, status')
+          .eq('tenant_id', effectiveTenantId)
+          .is('deleted_at', null);
+        if (npsRows && npsRows.length > 0) {
+          const total = npsRows.length;
+          const avg = npsRows.reduce((sum: number, r: any) => sum + (r.score || 0), 0) / total;
+          const promoters = npsRows.filter((r: any) => r.score >= 9).length;
+          const detractors = npsRows.filter((r: any) => r.score <= 6).length;
+          const neutrals = total - promoters - detractors;
+          npsData = { total, avg: Math.round(avg * 10) / 10, promoters, detractors, neutrals };
+        }
+      }
+
+      return NextResponse.json({
+        kanbanCard: kanbanCard ? { ...kanbanCard, stageName, boardName } : null,
+        nps: npsData,
+      });
+    }
+
+    // Buscar nichos disponíveis
+    if (action === 'niches') {
+      const { data, error } = await supabase
+        .from('client_niches')
+        .select('*')
+        .order('position', { ascending: true });
+      if (error) throw error;
+      return NextResponse.json({ niches: data || [] });
+    }
+
     // Buscar todos os usuários (exceto admin)
     let usersQuery = supabase
       .from('users')
-      .select('id, name, email, phone, plan, company_name, created_at, settings, tenant_id, role, last_login, sdr_name, cs_name, internal_notes')
+      .select('id, name, email, phone, plan, company_name, created_at, settings, tenant_id, role, last_login, sdr_name, cs_name, internal_notes, city, state, niche, niche_data')
       .neq('email', 'admin@hellogrowth.com')
       .order('created_at', { ascending: false });
 
@@ -111,6 +207,10 @@ export async function GET(request: NextRequest) {
           sdrName: (user as any).sdr_name || null,
           csName: (user as any).cs_name || null,
           internalNotes: (user as any).internal_notes || null,
+          city: (user as any).city || null,
+          state: (user as any).state || null,
+          niche: (user as any).niche || null,
+          nicheData: (user as any).niche_data || null,
           companies: enrichedCompanies,
           primaryCompany: enrichedCompanies.find((c: any) => c.isDefault) || enrichedCompanies[0] || null,
           consolidatedStatus,
@@ -168,7 +268,29 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, userData, companyUpdates, addCompany, removeCompanyId } = body;
+    const { userId, userData, companyUpdates, addCompany, removeCompanyId, action, contacts } = body;
+
+    // Salvar contatos extras (action: save_contacts)
+    if (action === 'save_contacts') {
+      await supabase.from('client_contacts').delete().eq('user_id', userId);
+      if (contacts && contacts.length > 0) {
+        const toInsert = contacts.map((c: any, idx: number) => ({
+          id: crypto.randomUUID(),
+          user_id: userId,
+          name: c.name,
+          email: c.email || null,
+          phone: c.phone || null,
+          notes: c.role || null,
+          is_primary: idx === 0,
+          position: idx,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }));
+        const { error } = await supabase.from('client_contacts').insert(toInsert);
+        if (error) throw error;
+      }
+      return NextResponse.json({ ok: true });
+    }
 
     if (!userId) {
       return NextResponse.json({ error: 'userId is required' }, { status: 400 });
@@ -188,9 +310,35 @@ export async function PATCH(request: NextRequest) {
           ...(userData.sdrName !== undefined ? { sdr_name: userData.sdrName } : {}),
           ...(userData.csName !== undefined ? { cs_name: userData.csName } : {}),
           ...(userData.internalNotes !== undefined ? { internal_notes: userData.internalNotes } : {}),
+          ...(userData.city !== undefined ? { city: userData.city } : {}),
+          ...(userData.state !== undefined ? { state: userData.state } : {}),
+          ...(userData.niche !== undefined ? { niche: userData.niche } : {}),
+          ...(userData.nicheData !== undefined ? { niche_data: userData.nicheData } : {}),
         })
         .eq('id', userId);
       if (error) throw error;
+    }
+
+    // Gerenciar contatos extras do cliente
+    if (userData?.contacts !== undefined) {
+      // Deletar contatos existentes e reinserir
+      await supabase.from('client_contacts').delete().eq('user_id', userId);
+      if (userData.contacts.length > 0) {
+        const contactsToInsert = userData.contacts.map((c: any, idx: number) => ({
+          id: crypto.randomUUID(),
+          user_id: userId,
+          name: c.name,
+          email: c.email || null,
+          phone: c.phone || null,
+          notes: c.notes || null,
+          is_primary: idx === 0,
+          position: idx,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }));
+        const { error: contactsError } = await supabase.from('client_contacts').insert(contactsToInsert);
+        if (contactsError) throw contactsError;
+      }
     }
 
     // Atualizar empresa específica
