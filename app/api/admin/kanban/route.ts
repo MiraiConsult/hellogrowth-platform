@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
       const { data, error } = await supabase
         .from('kanban_boards')
         .select('*')
+        .is('tenant_id', null)
         .order('position', { ascending: true });
       if (error) throw error;
       return NextResponse.json({ data });
@@ -79,9 +80,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ overdue: overdue || [], dueToday: dueToday || [] });
     }
 
-    // all — boards + stages + cards together
+    // all — boards + stages + cards together (admin only: tenant_id IS NULL)
     const [boardsRes, stagesRes, cardsRes] = await Promise.all([
-      supabase.from('kanban_boards').select('*').order('position', { ascending: true }),
+      supabase.from('kanban_boards').select('*').is('tenant_id', null).order('position', { ascending: true }),
       boardId
         ? supabase.from('kanban_stages').select('*').eq('board_id', boardId).order('position', { ascending: true })
         : supabase.from('kanban_stages').select('*').order('position', { ascending: true }),

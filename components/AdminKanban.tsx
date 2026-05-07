@@ -1210,6 +1210,15 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                 <div className="flex gap-2 mt-5">
                   <button onClick={() => { setEditingBoard(null); setShowAddBoard(false); }}
                     className={`flex-1 py-2 rounded-lg border text-sm font-medium ${t.border} ${t.textSub}`}>Cancelar</button>
+                  {editingBoard && !editingBoard.is_default && (
+                    <button
+                      onClick={() => { setEditingBoard(null); setShowAddBoard(false); deleteBoard(editingBoard); }}
+                      className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
+                      title="Excluir este fluxo"
+                    >
+                      <Trash2 size={14} /> Excluir
+                    </button>
+                  )}
                   <button onClick={saveBoard} disabled={savingBoard}
                     className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60">
                     {savingBoard ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
