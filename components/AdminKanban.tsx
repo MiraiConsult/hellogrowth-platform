@@ -6,7 +6,7 @@ import {
   Phone, MessageCircle, Video, Mail, Calendar, Clock,
   ArrowRightCircle, Bell, HeartHandshake, ChevronRight,
   Building2, User, Activity, Copy, ExternalLink,
-  LayoutList, LayoutGrid, AlarmClock,
+  LayoutList, LayoutGrid, AlarmClock, MapPin, Users2, Stethoscope,
 } from 'lucide-react';
 
 interface Board {
@@ -241,6 +241,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   // Dados reais do cliente (buscados ao abrir o modal)
   const [clientData, setClientData] = useState<any>(null);
   const [loadingClientData, setLoadingClientData] = useState(false);
+  const [clientExtraContacts, setClientExtraContacts] = useState<any[]>([]);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
@@ -526,6 +527,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     setDetailCard(card);
     setDetailTab('info'); // Abrir direto na aba de informações
     setClientData(null);
+    setClientExtraContacts([]);
     const freq = card.contact_frequency || 'weekly';
     const nextDate = card.next_contact_date || calcNextContactDate(freq);
     setCsConfig({ next_contact_date: nextDate, contact_frequency: freq });
@@ -553,14 +555,15 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       try {
         const res = await fetch(`/api/admin/clients?search=${encodeURIComponent(searchTerm)}`);
         const data = await res.json();
+        const clientList = data.clients || data.users || [];
         // Tentar match exato por email primeiro, depois por nome
         let found = card.client_email
-          ? (data.users || []).find((u: any) => u.email?.toLowerCase() === card.client_email?.toLowerCase())
+          ? clientList.find((u: any) => u.email?.toLowerCase() === card.client_email?.toLowerCase())
           : null;
         // Fallback: match por nome da empresa ou nome do cliente
-        if (!found && (data.users || []).length > 0) {
+        if (!found && clientList.length > 0) {
           const companyLower = (card.company_name || card.client_name || '').toLowerCase();
-          found = (data.users || []).find((u: any) =>
+          found = clientList.find((u: any) =>
             (u.companyName || '').toLowerCase() === companyLower ||
             (u.name || '').toLowerCase() === companyLower
           );
@@ -573,6 +576,12 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
             sdr_name: card.sdr_name || found.sdrName || '',
             client_phone: card.client_phone || found.phone || '',
           }));
+          // Buscar contatos extras do cliente
+          try {
+            const cr = await fetch(`/api/admin/clients?action=contacts&userId=${found.id}`);
+            const cd = await cr.json();
+            setClientExtraContacts(cd.contacts || []);
+          } catch { setClientExtraContacts([]); }
         }
       } catch { /* silent */ }
       finally { setLoadingClientData(false); }
@@ -1092,18 +1101,28 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       {view === 'board' && boards.length > 1 && (
         <div className="flex items-center gap-2 px-4 pb-2 overflow-x-auto flex-shrink-0">
           {boards.map(board => (
-            <button
-              key={board.id}
-              onClick={() => switchBoard(board.id)}
-              className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${activeBoardId === board.id
-                ? 'text-white border-transparent shadow-md'
-                : `${t.border} ${t.textSub} hover:border-violet-400`
-              }`}
-              style={activeBoardId === board.id ? { backgroundColor: board.color } : {}}
-            >
-              {board.name}
-              {board.is_default && <span className="text-xs opacity-70">(padrão)</span>}
-            </button>
+            <div key={board.id} className="flex-shrink-0 flex items-center gap-0.5">
+              <button
+                onClick={() => switchBoard(board.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${activeBoardId === board.id
+                  ? 'text-white border-transparent shadow-md'
+                  : `${t.border} ${t.textSub} hover:border-violet-400`
+                } ${!board.is_default ? 'rounded-r-none border-r-0' : ''}`}
+                style={activeBoardId === board.id ? { backgroundColor: board.color } : {}}
+              >
+                {board.name}
+                {board.is_default && <span className="text-xs opacity-70">(padrão)</span>}
+              </button>
+              {!board.is_default && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteBoard(board); }}
+                  title="Excluir fluxo"
+                  className={`flex items-center justify-center w-7 h-[38px] rounded-r-xl border ${t.border} ${t.surfaceHover} text-red-400 hover:text-red-500 hover:bg-red-500/10 transition-colors`}
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -1864,7 +1883,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       {detailCard && (
         <div className="fixed inset-0 z-50 flex">
           {/* Overlay */}
-          <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={() => { setDetailCard(null); setDetailContacts([]); setClientData(null); }} />
+          <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={() => { setDetailCard(null); setDetailContacts([]); setClientData(null); setClientExtraContacts([]); }} />
           {/* Sidebar */}
           <div className={`w-full max-w-lg ${t.surface} border-l ${t.border} shadow-2xl flex flex-col h-full animate-slide-in-right`}>
 
@@ -1914,7 +1933,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                       Mover Fluxo
                     </button>
                   )}
-                  <button onClick={() => { setDetailCard(null); setDetailContacts([]); setClientData(null); }}
+                  <button onClick={() => { setDetailCard(null); setDetailContacts([]); setClientData(null); setClientExtraContacts([]); }}
                     className={`p-1.5 rounded-xl ${t.surfaceHover} ${t.textSub}`}><X size={16} /></button>
                 </div>
               </div>
@@ -2283,6 +2302,94 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                       })()}
                     </div>
                   </div>
+
+                  {/* Perfil da Clínica */}
+                  {clientData && (clientData.niche || clientData.city || clientData.state || clientData.nicheData) && (
+                    <div className={`rounded-2xl border ${t.border} overflow-hidden`}>
+                      <div className={`px-4 py-3 flex items-center gap-2 border-b ${t.border} ${isDark ? 'bg-gray-800/50' : 'bg-slate-50'}`}>
+                        <Stethoscope size={14} className="text-teal-500" />
+                        <span className={`text-xs font-semibold ${t.text}`}>Perfil da Clínica</span>
+                      </div>
+                      <div className="px-4 py-3 space-y-2">
+                        {(clientData.city || clientData.state) && (
+                          <div className="flex items-center gap-2">
+                            <MapPin size={13} className={t.textMuted} />
+                            <span className={`text-sm ${t.text}`}>
+                              {[clientData.city, clientData.state].filter(Boolean).join(' — ')}
+                            </span>
+                          </div>
+                        )}
+                        {clientData.niche && (
+                          <div className="flex items-center gap-2">
+                            <Building2 size={13} className={t.textMuted} />
+                            <span className={`text-sm ${t.text} capitalize`}>
+                              {clientData.niche === 'clinica_odontologica' ? 'Clínica Odontológica' :
+                               clientData.niche === 'clinica_estetica' ? 'Clínica Estética' :
+                               clientData.niche === 'clinica_medica' ? 'Clínica Médica' :
+                               clientData.niche === 'pet_shop' ? 'Pet Shop / Veterinária' :
+                               clientData.niche === 'academia' ? 'Academia / Fitness' :
+                               clientData.niche === 'restaurante' ? 'Restaurante / Food' :
+                               clientData.niche === 'ecommerce' ? 'E-commerce' :
+                               clientData.niche === 'servicos' ? 'Serviços Gerais' :
+                               clientData.niche}
+                            </span>
+                          </div>
+                        )}
+                        {clientData.nicheData?.cadeiras && (
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs ${t.textMuted}`}>Cadeiras</span>
+                            <span className={`text-sm font-medium ${t.text}`}>{clientData.nicheData.cadeiras}</span>
+                          </div>
+                        )}
+                        {clientData.nicheData?.dentistas && (
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs ${t.textMuted}`}>Dentistas</span>
+                            <span className={`text-sm font-medium ${t.text}`}>{clientData.nicheData.dentistas}</span>
+                          </div>
+                        )}
+                        {clientData.nicheData?.secretaria && (
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs ${t.textMuted}`}>Secretária</span>
+                            <span className={`text-sm font-medium ${t.text} capitalize`}>{clientData.nicheData.secretaria === 'sim' ? 'Sim' : 'Não'}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Contatos Extras */}
+                  {clientExtraContacts.length > 0 && (
+                    <div className={`rounded-2xl border ${t.border} overflow-hidden`}>
+                      <div className={`px-4 py-3 flex items-center gap-2 border-b ${t.border} ${isDark ? 'bg-gray-800/50' : 'bg-slate-50'}`}>
+                        <Users2 size={14} className="text-indigo-500" />
+                        <span className={`text-xs font-semibold ${t.text}`}>Contatos da Empresa</span>
+                        <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full ${isDark ? 'bg-indigo-900/40 text-indigo-400' : 'bg-indigo-100 text-indigo-600'} font-medium`}>{clientExtraContacts.length}</span>
+                      </div>
+                      <div className="px-4 py-3 space-y-3">
+                        {clientExtraContacts.map((c: any, idx: number) => (
+                          <div key={idx} className={`rounded-xl border ${t.border} p-3 space-y-1.5`}>
+                            <div className="flex items-center justify-between">
+                              <span className={`text-sm font-semibold ${t.text}`}>{c.name || 'Sem nome'}</span>
+                              {c.role && <span className={`text-xs px-2 py-0.5 rounded-full ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-100 text-slate-600'}`}>{c.role}</span>}
+                            </div>
+                            {c.phone && (
+                              <div className="flex items-center gap-2">
+                                <Phone size={11} className={t.textMuted} />
+                                <a href={`https://wa.me/${c.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                                  className="text-xs text-emerald-500 hover:underline">{c.phone}</a>
+                              </div>
+                            )}
+                            {c.email && (
+                              <div className="flex items-center gap-2">
+                                <Mail size={11} className={t.textMuted} />
+                                <span className={`text-xs ${t.textSub}`}>{c.email}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Observações */}
                   <div>
