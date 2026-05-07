@@ -205,6 +205,8 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   // ── VIEW MODE ─────────────────────────────────────────────────────────────────
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [fupFilter, setFupFilter] = useState<'all' | 'overdue' | 'today' | 'week' | 'month'>('all');
+  const [listSortCol, setListSortCol] = useState<'client' | 'stage' | 'cs' | 'health' | 'fup' | 'next_contact' | null>(null);
+  const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc');
 
   const activeFilterCount = [filterStage, filterCS, filterSDR, filterPlan].filter(Boolean).length;
 
@@ -1627,12 +1629,49 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
           return true;
         });
 
-        // Ordenar: overdue primeiro, depois today, depois por data mais próxima, sem FUP por último
+        // Ordenação da lista
+        const toggleSort = (col: typeof listSortCol) => {
+          if (listSortCol === col) setListSortDir(d => d === 'asc' ? 'desc' : 'asc');
+          else { setListSortCol(col); setListSortDir('asc'); }
+        };
+        const SortIcon = ({ col }: { col: typeof listSortCol }) => {
+          if (listSortCol !== col) return <span className="opacity-30">↕</span>;
+          return <span>{listSortDir === 'asc' ? '↑' : '↓'}</span>;
+        };
         const sortedCards = [...fupFilteredCards].sort((a, b) => {
-          const sa = getFupStatus(a.fup_date);
-          const sb = getFupStatus(b.fup_date);
+          const dir = listSortDir === 'asc' ? 1 : -1;
+          if (listSortCol === 'client') {
+            return dir * (a.company_name || a.client_name || '').localeCompare(b.company_name || b.client_name || '');
+          }
+          if (listSortCol === 'stage') {
+            const sa = stages.find(s => s.id === a.stage_id)?.name || '';
+            const sb = stages.find(s => s.id === b.stage_id)?.name || '';
+            return dir * sa.localeCompare(sb);
+          }
+          if (listSortCol === 'cs') {
+            return dir * (a.cs_name || '').localeCompare(b.cs_name || '');
+          }
+          if (listSortCol === 'health') {
+            const hOrder: Record<string, number> = { engajado: 0, no_ritmo: 1, lento: 2, sem_resposta: 3, '': 4 };
+            return dir * ((hOrder[a.health_status || ''] ?? 4) - (hOrder[b.health_status || ''] ?? 4));
+          }
+          if (listSortCol === 'fup') {
+            if (!a.fup_date && !b.fup_date) return 0;
+            if (!a.fup_date) return dir;
+            if (!b.fup_date) return -dir;
+            return dir * a.fup_date.localeCompare(b.fup_date);
+          }
+          if (listSortCol === 'next_contact') {
+            if (!a.next_contact_date && !b.next_contact_date) return 0;
+            if (!a.next_contact_date) return dir;
+            if (!b.next_contact_date) return -dir;
+            return dir * a.next_contact_date.localeCompare(b.next_contact_date);
+          }
+          // default: FUP overdue first
+          const sa2 = getFupStatus(a.fup_date);
+          const sb2 = getFupStatus(b.fup_date);
           const order = { overdue: 0, today: 1, week: 2, month: 3, future: 4, none: 5 };
-          if (order[sa] !== order[sb]) return order[sa] - order[sb];
+          if (order[sa2] !== order[sb2]) return order[sa2] - order[sb2];
           if (a.fup_date && b.fup_date) return a.fup_date.localeCompare(b.fup_date);
           return 0;
         });
@@ -1666,12 +1705,26 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className={`border-b ${t.border}`}>
-                    <th className={`text-left px-4 py-3 text-xs font-semibold ${t.textSub} uppercase tracking-wide`}>Cliente</th>
-                    <th className={`text-left px-4 py-3 text-xs font-semibold ${t.textSub} uppercase tracking-wide hidden md:table-cell`}>Etapa</th>
-                    <th className={`text-left px-4 py-3 text-xs font-semibold ${t.textSub} uppercase tracking-wide hidden lg:table-cell`}>CS / SDR</th>
-                    <th className={`text-left px-4 py-3 text-xs font-semibold ${t.textSub} uppercase tracking-wide hidden sm:table-cell`}>Saúde</th>
-                    <th className={`text-left px-4 py-3 text-xs font-semibold ${t.textSub} uppercase tracking-wide`}>FUP</th>
-                    <th className={`text-left px-4 py-3 text-xs font-semibold ${t.textSub} uppercase tracking-wide hidden xl:table-cell`}>Próx. Contato</th>
+                    {[
+                      { col: 'client' as const, label: 'Cliente', cls: '' },
+                      { col: 'stage' as const, label: 'Etapa', cls: 'hidden md:table-cell' },
+                      { col: 'cs' as const, label: 'CS / SDR', cls: 'hidden lg:table-cell' },
+                      { col: 'health' as const, label: 'Saúde', cls: 'hidden sm:table-cell' },
+                      { col: 'fup' as const, label: 'FUP', cls: '' },
+                      { col: 'next_contact' as const, label: 'Próx. Contato', cls: 'hidden xl:table-cell' },
+                    ].map(({ col, label, cls }) => (
+                      <th
+                        key={col}
+                        onClick={() => toggleSort(col)}
+                        className={`text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none transition-colors ${cls} ${
+                          listSortCol === col ? 'text-violet-500' : t.textSub
+                        } hover:text-violet-500`}
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          {label} <SortIcon col={col} />
+                        </span>
+                      </th>
+                    ))}
                     <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
@@ -2276,95 +2329,6 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                       </div>
                     </div>
                   </div>
-
-                  {/* FUP */}
-                  <div className={`rounded-2xl border ${t.border} overflow-hidden`}>
-                    <div className={`px-4 py-3 flex items-center gap-2 border-b ${t.border} ${isDark ? 'bg-gray-800/50' : 'bg-slate-50'}`}>
-                      <AlarmClock size={14} className="text-amber-500" />
-                      <span className={`text-xs font-semibold ${t.text}`}>Follow-up (FUP)</span>
-                    </div>
-                    <div className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="date"
-                          value={infoForm.fup_date}
-                          onChange={e => setInfoForm(p => ({ ...p, fup_date: e.target.value }))}
-                          className={`flex-1 px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-amber-500`}
-                        />
-                        {infoForm.fup_date && (
-                          <button
-                            onClick={() => setInfoForm(p => ({ ...p, fup_date: '' }))}
-                            className={`p-2 rounded-lg ${t.surfaceHover} text-red-400 hover:text-red-500`}
-                            title="Limpar FUP"
-                          >
-                            <X size={14} />
-                          </button>
-                        )}
-                      </div>
-                      {infoForm.fup_date && (() => {
-                        const today = new Date(); today.setHours(0,0,0,0);
-                        const fup = new Date(infoForm.fup_date + 'T00:00:00');
-                        const diff = Math.floor((fup.getTime() - today.getTime()) / (1000*60*60*24));
-                        if (diff < 0) return <p className="text-xs text-red-500 mt-1.5 font-medium">Atrasado há {Math.abs(diff)} dia{Math.abs(diff) !== 1 ? 's' : ''}</p>;
-                        if (diff === 0) return <p className="text-xs text-amber-500 mt-1.5 font-medium">FUP para hoje!</p>;
-                        return <p className={`text-xs ${t.textMuted} mt-1.5`}>Em {diff} dia{diff !== 1 ? 's' : ''}</p>;
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* Perfil da Clínica */}
-                  {clientData && (clientData.niche || clientData.city || clientData.state || clientData.nicheData) && (
-                    <div className={`rounded-2xl border ${t.border} overflow-hidden`}>
-                      <div className={`px-4 py-3 flex items-center gap-2 border-b ${t.border} ${isDark ? 'bg-gray-800/50' : 'bg-slate-50'}`}>
-                        <Stethoscope size={14} className="text-teal-500" />
-                        <span className={`text-xs font-semibold ${t.text}`}>Perfil da Clínica</span>
-                      </div>
-                      <div className="px-4 py-3 space-y-2">
-                        {(clientData.city || clientData.state) && (
-                          <div className="flex items-center gap-2">
-                            <MapPin size={13} className={t.textMuted} />
-                            <span className={`text-sm ${t.text}`}>
-                              {[clientData.city, clientData.state].filter(Boolean).join(' — ')}
-                            </span>
-                          </div>
-                        )}
-                        {clientData.niche && (
-                          <div className="flex items-center gap-2">
-                            <Building2 size={13} className={t.textMuted} />
-                            <span className={`text-sm ${t.text} capitalize`}>
-                              {clientData.niche === 'clinica_odontologica' ? 'Clínica Odontológica' :
-                               clientData.niche === 'clinica_estetica' ? 'Clínica Estética' :
-                               clientData.niche === 'clinica_medica' ? 'Clínica Médica' :
-                               clientData.niche === 'pet_shop' ? 'Pet Shop / Veterinária' :
-                               clientData.niche === 'academia' ? 'Academia / Fitness' :
-                               clientData.niche === 'restaurante' ? 'Restaurante / Food' :
-                               clientData.niche === 'ecommerce' ? 'E-commerce' :
-                               clientData.niche === 'servicos' ? 'Serviços Gerais' :
-                               clientData.niche}
-                            </span>
-                          </div>
-                        )}
-                        {clientData.nicheData?.cadeiras && (
-                          <div className="flex items-center justify-between">
-                            <span className={`text-xs ${t.textMuted}`}>Cadeiras</span>
-                            <span className={`text-sm font-medium ${t.text}`}>{clientData.nicheData.cadeiras}</span>
-                          </div>
-                        )}
-                        {clientData.nicheData?.dentistas && (
-                          <div className="flex items-center justify-between">
-                            <span className={`text-xs ${t.textMuted}`}>Dentistas</span>
-                            <span className={`text-sm font-medium ${t.text}`}>{clientData.nicheData.dentistas}</span>
-                          </div>
-                        )}
-                        {clientData.nicheData?.secretaria && (
-                          <div className="flex items-center justify-between">
-                            <span className={`text-xs ${t.textMuted}`}>Secretária</span>
-                            <span className={`text-sm font-medium ${t.text} capitalize`}>{clientData.nicheData.secretaria === 'sim' ? 'Sim' : 'Não'}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
 
                   {/* Contatos Extras */}
                   {clientExtraContacts.length > 0 && (
