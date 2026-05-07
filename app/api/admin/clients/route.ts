@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     // Buscar todos os usuários (exceto admin)
     let usersQuery = supabase
       .from('users')
-      .select('id, name, email, phone, plan, company_name, created_at, settings, tenant_id, role, last_login, sdr_name, cs_name, internal_notes')
+      .select('id, name, email, phone, plan, company_name, created_at, settings, tenant_id, role, last_login, sdr_name, cs_name, internal_notes, city, state, niche, niche_data')
       .neq('email', 'admin@hellogrowth.com')
       .order('created_at', { ascending: false });
 
@@ -111,6 +111,10 @@ export async function GET(request: NextRequest) {
           sdrName: (user as any).sdr_name || null,
           csName: (user as any).cs_name || null,
           internalNotes: (user as any).internal_notes || null,
+          city: (user as any).city || null,
+          state: (user as any).state || null,
+          niche: (user as any).niche || null,
+          nicheData: (user as any).niche_data || {},
           companies: enrichedCompanies,
           primaryCompany: enrichedCompanies.find((c: any) => c.isDefault) || enrichedCompanies[0] || null,
           consolidatedStatus,
@@ -188,6 +192,10 @@ export async function PATCH(request: NextRequest) {
           ...(userData.sdrName !== undefined ? { sdr_name: userData.sdrName } : {}),
           ...(userData.csName !== undefined ? { cs_name: userData.csName } : {}),
           ...(userData.internalNotes !== undefined ? { internal_notes: userData.internalNotes } : {}),
+          ...(userData.city !== undefined ? { city: userData.city } : {}),
+          ...(userData.state !== undefined ? { state: userData.state } : {}),
+          ...(userData.niche !== undefined ? { niche: userData.niche } : {}),
+          ...(userData.nicheData !== undefined ? { niche_data: userData.nicheData } : {}),
         })
         .eq('id', userId);
       if (error) throw error;

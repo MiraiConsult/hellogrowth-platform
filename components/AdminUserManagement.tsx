@@ -64,6 +64,10 @@ interface Client {
   sdrName?: string | null;
   csName?: string | null;
   internalNotes?: string | null;
+  city?: string | null;
+  state?: string | null;
+  niche?: string | null;
+  nicheData?: Record<string, any> | null;
 }
 
 interface AdminUserManagementProps {
@@ -299,7 +303,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
   const [reportContent, setReportContent] = useState('');
 
   // ── Form states ──
-  const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '' });
+  const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '', city: '', state: '', niche: '', chairs: '' as string | number, dentists: '' as string | number, has_secretary: false });
+  const [niches, setNiches] = useState<{ id: string; name: string; slug: string; has_clinic_fields: boolean }[]>([]);
 
   // ── Kanban selection for new client ──
   const [kanbanBoards, setKanbanBoards] = useState<{ id: string; name: string; color: string }[]>([]);
@@ -384,6 +389,20 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
     const timer = setTimeout(fetchClients, 300);
     return () => clearTimeout(timer);
   }, [fetchClients]);
+
+  const fetchNiches = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/niches');
+      if (res.ok) {
+        const data = await res.json();
+        setNiches(data.niches || []);
+      }
+    } catch (err) {
+      console.error('Error fetching niches:', err);
+    }
+  }, []);
+
+  useEffect(() => { fetchNiches(); }, [fetchNiches]);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
@@ -474,6 +493,14 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
         const { data: existing } = await supabase.from('users').select('id').eq('email', clientForm.email.toLowerCase()).single();
         if (existing) throw new Error('E-mail já cadastrado.');
         const companyId = crypto.randomUUID();
+        const selectedNicheNew = niches.find(n => n.slug === clientForm.niche);
+        const isClinicNicheNew = Boolean(selectedNicheNew?.has_clinic_fields);
+        const nicheDataNew: Record<string, any> = {};
+        if (isClinicNicheNew) {
+          if (clientForm.chairs !== '') nicheDataNew.chairs = Number(clientForm.chairs) || 0;
+          if (clientForm.dentists !== '') nicheDataNew.dentists = Number(clientForm.dentists) || 0;
+          nicheDataNew.has_secretary = clientForm.has_secretary;
+        }
         const userData: any = {
           name: clientForm.name,
           email: clientForm.email.toLowerCase().trim(),
@@ -484,6 +511,10 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
           role: 'admin',
           is_owner: true,
           password: '12345',
+          city: clientForm.city.trim() || null,
+          state: clientForm.state.trim() || null,
+          niche: clientForm.niche || null,
+          niche_data: nicheDataNew,
           settings: {
             companyName: clientForm.companyName || clientForm.name,
             adminEmail: clientForm.email.toLowerCase().trim(),
@@ -552,7 +583,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
         showToast('success', `Cliente criado! Login: ${clientForm.email} / 12345`);
       }
       setEditModal(null);
-      setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '' });
+      setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '', city: '', state: '', niche: '', chairs: '', dentists: '', has_secretary: false });
       setNewClientTrialModel('none');
       setNewClientBoardId('');
       setNewClientStageId('');
@@ -569,6 +600,14 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
     if (!selectedClient) return;
     setIsSaving(true);
     try {
+      const selectedNicheEdit = niches.find(n => n.slug === clientForm.niche);
+      const isClinicEdit = Boolean(selectedNicheEdit?.has_clinic_fields);
+      const nicheDataEdit: Record<string, any> = {};
+      if (isClinicEdit) {
+        if (clientForm.chairs !== '') nicheDataEdit.chairs = Number(clientForm.chairs) || 0;
+        if (clientForm.dentists !== '') nicheDataEdit.dentists = Number(clientForm.dentists) || 0;
+        nicheDataEdit.has_secretary = clientForm.has_secretary;
+      }
       const res = await fetch('/api/admin/clients', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -580,6 +619,10 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             phone: clientForm.phone || null,
             plan: clientForm.plan,
             companyName: clientForm.companyName,
+            city: clientForm.city.trim() || null,
+            state: clientForm.state.trim() || null,
+            niche: clientForm.niche || null,
+            nicheData: nicheDataEdit,
             ...(clientForm.password ? { password: clientForm.password } : {}),
           },
         }),
@@ -594,6 +637,10 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
         phone: clientForm.phone || undefined,
         plan: clientForm.plan,
         companyName: clientForm.companyName,
+        city: clientForm.city.trim() || null,
+        state: clientForm.state.trim() || null,
+        niche: clientForm.niche || null,
+        nicheData: nicheDataEdit,
       });
     } catch (err: any) {
       showToast('error', err.message || 'Erro ao atualizar.');
@@ -771,7 +818,20 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
   // ── Open Modals ──
   const openEditClient = (client: Client) => {
     setSelectedClient(client);
-    setClientForm({ name: client.name, email: client.email, phone: client.phone || '', plan: client.plan, companyName: client.companyName || '', password: '' });
+    setClientForm({
+      name: client.name,
+      email: client.email,
+      phone: client.phone || '',
+      plan: client.plan,
+      companyName: client.companyName || '',
+      password: '',
+      city: client.city || '',
+      state: client.state || '',
+      niche: client.niche || '',
+      chairs: client.nicheData?.chairs ?? '',
+      dentists: client.nicheData?.dentists ?? '',
+      has_secretary: Boolean(client.nicheData?.has_secretary),
+    });
     setEditModal('client');
   };
 
@@ -922,7 +982,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
         <div className={`px-2 py-2 border-t ${isDark ? 'border-gray-800' : 'border-slate-100'} space-y-0.5`}>
           {activeTab === 'clients' && (
             <button
-              onClick={() => { setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '' }); setNewClientTrialModel('none'); setEditModal('new_client'); fetchKanbanBoardsAndStages(); }}
+              onClick={() => { setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '', city: '', state: '', niche: '', chairs: '', dentists: '', has_secretary: false }); setNewClientTrialModel('none'); setEditModal('new_client'); fetchKanbanBoardsAndStages(); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors bg-emerald-600 hover:bg-emerald-500 text-white`}
             >
               <span className="shrink-0"><UserPlus size={18} /></span>
@@ -1626,6 +1686,33 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             <FormField label="E-mail (Login)" t={t}><input type="email" value={clientForm.email} onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))} className={inputCls} placeholder="joao@empresa.com" /></FormField>
             <FormField label="WhatsApp / Telefone" t={t}><input type="tel" value={clientForm.phone} onChange={e => setClientForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} placeholder="5551999999999" /></FormField>
             <FormField label="Empresa Principal" t={t}><input type="text" value={clientForm.companyName} onChange={e => setClientForm(f => ({ ...f, companyName: e.target.value }))} className={inputCls} placeholder="Nome da empresa" /></FormField>
+            <div className="grid grid-cols-3 gap-3">
+              <FormField label="Cidade" t={t} className="col-span-2"><input type="text" value={clientForm.city} onChange={e => setClientForm(f => ({ ...f, city: e.target.value }))} className={inputCls} placeholder="Curitiba" /></FormField>
+              <FormField label="UF" t={t}><input type="text" maxLength={2} value={clientForm.state} onChange={e => setClientForm(f => ({ ...f, state: e.target.value.toUpperCase() }))} className={inputCls} placeholder="PR" /></FormField>
+            </div>
+            <FormField label="Nicho" t={t}>
+              <select value={clientForm.niche} onChange={e => setClientForm(f => ({ ...f, niche: e.target.value }))} className={inputCls}>
+                <option value="">— Selecione um nicho —</option>
+                {niches.map(n => <option key={n.id} value={n.slug}>{n.name}</option>)}
+              </select>
+            </FormField>
+            {(() => {
+              const n = niches.find(x => x.slug === clientForm.niche);
+              if (!n?.has_clinic_fields) return null;
+              return (
+                <div className={`border rounded-xl p-3 space-y-2 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-slate-200 bg-slate-50'}`}>
+                  <div className={`text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>Dados da clínica</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <FormField label="Cadeiras" t={t}><input type="number" min={0} value={clientForm.chairs} onChange={e => setClientForm(f => ({ ...f, chairs: e.target.value }))} className={inputCls} /></FormField>
+                    <FormField label="Dentistas" t={t}><input type="number" min={0} value={clientForm.dentists} onChange={e => setClientForm(f => ({ ...f, dentists: e.target.value }))} className={inputCls} /></FormField>
+                  </div>
+                  <label className={`flex items-center gap-2 text-sm ${t.textSub}`}>
+                    <input type="checkbox" checked={clientForm.has_secretary} onChange={e => setClientForm(f => ({ ...f, has_secretary: e.target.checked }))} className="w-4 h-4 accent-emerald-500" />
+                    Possui secretária
+                  </label>
+                </div>
+              );
+            })()}
             <div className={`${t.securityBox} border rounded-lg p-3 text-xs ${t.securityText} flex items-center gap-2`}>
               <Key size={14} /> Senha padrão: <strong className={t.text}>12345</strong>
             </div>
@@ -1733,6 +1820,33 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             <FormField label="E-mail (Login)" t={t}><input type="email" value={clientForm.email} onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))} className={inputCls} /></FormField>
             <FormField label="WhatsApp / Telefone" t={t}><input type="tel" value={clientForm.phone} onChange={e => setClientForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} placeholder="5551999999999" /></FormField>
             <FormField label="Empresa Principal" t={t}><input type="text" value={clientForm.companyName} onChange={e => setClientForm(f => ({ ...f, companyName: e.target.value }))} className={inputCls} /></FormField>
+            <div className="grid grid-cols-3 gap-3">
+              <FormField label="Cidade" t={t} className="col-span-2"><input type="text" value={clientForm.city} onChange={e => setClientForm(f => ({ ...f, city: e.target.value }))} className={inputCls} /></FormField>
+              <FormField label="UF" t={t}><input type="text" maxLength={2} value={clientForm.state} onChange={e => setClientForm(f => ({ ...f, state: e.target.value.toUpperCase() }))} className={inputCls} /></FormField>
+            </div>
+            <FormField label="Nicho" t={t}>
+              <select value={clientForm.niche} onChange={e => setClientForm(f => ({ ...f, niche: e.target.value }))} className={inputCls}>
+                <option value="">— Selecione um nicho —</option>
+                {niches.map(n => <option key={n.id} value={n.slug}>{n.name}</option>)}
+              </select>
+            </FormField>
+            {(() => {
+              const n = niches.find(x => x.slug === clientForm.niche);
+              if (!n?.has_clinic_fields) return null;
+              return (
+                <div className={`border rounded-xl p-3 space-y-2 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-slate-200 bg-slate-50'}`}>
+                  <div className={`text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>Dados da clínica</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <FormField label="Cadeiras" t={t}><input type="number" min={0} value={clientForm.chairs} onChange={e => setClientForm(f => ({ ...f, chairs: e.target.value }))} className={inputCls} /></FormField>
+                    <FormField label="Dentistas" t={t}><input type="number" min={0} value={clientForm.dentists} onChange={e => setClientForm(f => ({ ...f, dentists: e.target.value }))} className={inputCls} /></FormField>
+                  </div>
+                  <label className={`flex items-center gap-2 text-sm ${t.textSub}`}>
+                    <input type="checkbox" checked={clientForm.has_secretary} onChange={e => setClientForm(f => ({ ...f, has_secretary: e.target.checked }))} className="w-4 h-4 accent-emerald-500" />
+                    Possui secretária
+                  </label>
+                </div>
+              );
+            })()}
             <FormField label="Plano de Acesso" t={t}>
               <select value={clientForm.plan} onChange={e => setClientForm(f => ({ ...f, plan: e.target.value }))} className={inputCls}>
                 <option value="trial">Trial</option>
@@ -1890,6 +2004,10 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
           isDark={isDark}
           onClose={() => setProfileClient(null)}
           adminName="Admin"
+          onClientUpdate={(patch) => {
+            updateClientInState(profileClient.id, patch as any);
+            setProfileClient(prev => prev ? { ...prev, ...patch } as any : prev);
+          }}
         />
       )}
     </div>

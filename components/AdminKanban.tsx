@@ -15,6 +15,7 @@ interface Board {
   color: string;
   position: number;
   is_default: boolean;
+  tenant_id?: string | null;
 }
 
 interface Stage {
@@ -113,7 +114,8 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   const [stages, setStages] = useState<Stage[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'board' | 'settings' | 'boards'>('board');
+  const [view, setView] = useState<'board' | 'list' | 'settings' | 'boards'>('board');
+  const [fupFilter, setFupFilter] = useState<'all' | 'overdue' | 'today' | 'week' | 'month' | 'no_date'>('all');
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
 
@@ -249,12 +251,16 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         : '/api/admin/kanban?action=all';
       const res = await fetch(url);
       const data = await res.json();
-      if (data.boards) setBoards(data.boards);
+      // Mostrar somente boards admin-scope (tenant_id IS NULL).
+      // Os "Funil Principal" criados automaticamente por tenant pertencem
+      // ao painel do cliente e não devem aparecer no Kanban CS.
+      const adminBoards: Board[] = (data.boards || []).filter((b: any) => b.tenant_id == null);
+      setBoards(adminBoards);
       setStages(data.stages || []);
       setCards(data.cards || []);
-      // Set active board to first board if not set
-      if (!boardId && data.boards && data.boards.length > 0) {
-        const defaultBoard = data.boards.find((b: Board) => b.is_default) || data.boards[0];
+      // Set active board to first admin board if not set
+      if (!boardId && adminBoards.length > 0) {
+        const defaultBoard = adminBoards.find((b: Board) => b.is_default) || adminBoards[0];
         setActiveBoardId(defaultBoard.id);
         // Re-fetch with board_id
         const res2 = await fetch(`/api/admin/kanban?action=all&board_id=${defaultBoard.id}`);
@@ -916,7 +922,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         {/* Botões de ação — compactos */}
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* Filtros avançados (só no board view) */}
-          {view === 'board' && (
+          {(view === 'board' || view === 'list') && (
             <button
               onClick={() => setShowFilters(!showFilters)}
               title="Filtros avançados"
@@ -937,7 +943,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
           )}
 
           {/* Limpar filtros */}
-          {view === 'board' && (filterSearch || activeFilterCount > 0) && (
+          {(view === 'board' || view === 'list') && (filterSearch || activeFilterCount > 0) && (
             <button onClick={clearFilters} title="Limpar filtros"
               className={`p-1.5 rounded-lg border text-xs ${t.border} text-red-500 hover:bg-red-50 transition-colors`}>
               <X size={13} />
@@ -958,6 +964,26 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
               </span>
             </button>
           )}
+
+          {/* Toggle Quadro / Lista */}
+          <div className={`flex items-center rounded-lg border ${t.border} overflow-hidden`}>
+            <button
+              onClick={() => setView('board')}
+              title="Visualização em Quadro"
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors ${view === 'board' ? 'bg-emerald-600 text-white' : `${t.textSub} hover:text-emerald-600`}`}
+            >
+              <Kanban size={13} />
+              <span className="hidden sm:inline">Quadro</span>
+            </button>
+            <button
+              onClick={() => setView('list')}
+              title="Visualização em Lista"
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors border-l ${t.border} ${view === 'list' ? 'bg-emerald-600 text-white' : `${t.textSub} hover:text-emerald-600`}`}
+            >
+              <SlidersHorizontal size={13} />
+              <span className="hidden sm:inline">Lista</span>
+            </button>
+          </div>
 
           {/* Fluxos */}
           <button
@@ -1035,7 +1061,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       )}
 
       {/* Painel de filtros avançados — expansível abaixo do header */}
-      {view === 'board' && showFilters && (
+      {(view === 'board' || view === 'list') && showFilters && (
         <div className={`${t.surface} rounded-2xl border ${t.border} p-3 mx-4`}>
           <div className={`grid grid-cols-2 gap-3`}>
             {/* CS Responsável */}
@@ -1061,7 +1087,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       )}
 
       {/* Board tabs — dentro da zona fixa */}
-      {view === 'board' && boards.length > 1 && (
+      {(view === 'board' || view === 'list') && boards.length > 1 && (
         <div className="flex items-center gap-2 px-4 pb-2 overflow-x-auto flex-shrink-0">
           {boards.map(board => (
             <button
@@ -1343,6 +1369,154 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── LIST VIEW (FUP-focused) ── */}
+      {view === 'list' && (
+        (() => {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const endOfWeek = new Date(today);
+          endOfWeek.setDate(endOfWeek.getDate() + 7);
+          const endOfMonth = new Date(today);
+          endOfMonth.setDate(endOfMonth.getDate() + 30);
+
+          const stageById = new Map(stages.map(s => [s.id, s]));
+          const baseFiltered = cards.filter(c => {
+            if (filterSearch) {
+              const q = filterSearch.toLowerCase();
+              const matchName = (c.company_name || c.client_name || '').toLowerCase().includes(q);
+              const matchEmail = (c.client_email || '').toLowerCase().includes(q);
+              if (!matchName && !matchEmail) return false;
+            }
+            if (filterStage && c.stage_id !== filterStage) return false;
+            if (filterCS && (c.cs_name || '').toLowerCase() !== filterCS.toLowerCase()) return false;
+            if (filterSDR && (c.sdr_name || '').toLowerCase() !== filterSDR.toLowerCase()) return false;
+            return true;
+          });
+
+          const inFup = (c: Card) => {
+            if (fupFilter === 'all') return true;
+            if (!c.next_contact_date) return fupFilter === 'no_date';
+            const d = new Date(c.next_contact_date + 'T00:00:00');
+            if (fupFilter === 'overdue') return d < today;
+            if (fupFilter === 'today') return d.getTime() === today.getTime();
+            if (fupFilter === 'week') return d >= today && d <= endOfWeek;
+            if (fupFilter === 'month') return d >= today && d <= endOfMonth;
+            if (fupFilter === 'no_date') return false;
+            return true;
+          };
+
+          const list = baseFiltered.filter(inFup).sort((a, b) => {
+            const da = a.next_contact_date ? new Date(a.next_contact_date + 'T00:00:00').getTime() : Number.POSITIVE_INFINITY;
+            const db = b.next_contact_date ? new Date(b.next_contact_date + 'T00:00:00').getTime() : Number.POSITIVE_INFINITY;
+            return da - db;
+          });
+
+          const FUP_TABS: { value: typeof fupFilter; label: string; count: number }[] = [
+            { value: 'overdue', label: 'Atrasados', count: baseFiltered.filter(c => c.next_contact_date && new Date(c.next_contact_date + 'T00:00:00') < today).length },
+            { value: 'today', label: 'Hoje', count: baseFiltered.filter(c => c.next_contact_date && new Date(c.next_contact_date + 'T00:00:00').getTime() === today.getTime()).length },
+            { value: 'week', label: 'Próx. 7 dias', count: baseFiltered.filter(c => { if (!c.next_contact_date) return false; const d = new Date(c.next_contact_date + 'T00:00:00'); return d >= today && d <= endOfWeek; }).length },
+            { value: 'month', label: 'Próx. 30 dias', count: baseFiltered.filter(c => { if (!c.next_contact_date) return false; const d = new Date(c.next_contact_date + 'T00:00:00'); return d >= today && d <= endOfMonth; }).length },
+            { value: 'no_date', label: 'Sem FUP', count: baseFiltered.filter(c => !c.next_contact_date).length },
+            { value: 'all', label: 'Todos', count: baseFiltered.length },
+          ];
+
+          return (
+            <div className={`${t.surface} rounded-2xl border ${t.border} overflow-hidden`}>
+              <div className={`flex items-center gap-1 px-3 py-2 border-b ${t.border} overflow-x-auto`}>
+                {FUP_TABS.map(tab => (
+                  <button
+                    key={tab.value}
+                    onClick={() => setFupFilter(tab.value)}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${fupFilter === tab.value ? 'bg-emerald-600 text-white' : `${t.textSub} hover:bg-emerald-500/10`}`}
+                  >
+                    {tab.label}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${fupFilter === tab.value ? 'bg-white/20' : isDark ? 'bg-gray-800' : 'bg-slate-200'}`}>
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {list.length === 0 ? (
+                <div className={`p-8 text-center text-sm ${t.textSub}`}>Nenhum card neste filtro.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className={`text-xs uppercase ${t.thead}`}>
+                      <tr className={`border-b ${t.border}`}>
+                        <th className="text-left font-medium px-4 py-2.5">Cliente</th>
+                        <th className="text-left font-medium px-3 py-2.5">Etapa</th>
+                        <th className="text-left font-medium px-3 py-2.5">Próx. FUP</th>
+                        <th className="text-left font-medium px-3 py-2.5">Quando</th>
+                        <th className="text-left font-medium px-3 py-2.5">CS</th>
+                        <th className="text-left font-medium px-3 py-2.5">SDR</th>
+                        <th className="text-left font-medium px-3 py-2.5">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${t.divider}`}>
+                      {list.map(card => {
+                        const stage = stageById.get(card.stage_id);
+                        const fupDate = card.next_contact_date ? new Date(card.next_contact_date + 'T00:00:00') : null;
+                        let whenLabel = '—';
+                        let whenColor = t.textSub;
+                        if (fupDate) {
+                          const diffDays = Math.round((fupDate.getTime() - today.getTime()) / 86400000);
+                          if (diffDays < 0) { whenLabel = `${Math.abs(diffDays)}d atrás`; whenColor = 'text-red-500 font-semibold'; }
+                          else if (diffDays === 0) { whenLabel = 'Hoje'; whenColor = 'text-amber-500 font-semibold'; }
+                          else if (diffDays === 1) { whenLabel = 'Amanhã'; whenColor = 'text-emerald-500 font-medium'; }
+                          else { whenLabel = `em ${diffDays}d`; whenColor = t.textSub; }
+                        }
+                        const eng = getEngagement(card.health_status);
+                        return (
+                          <tr
+                            key={card.id}
+                            className={`${t.cardHover} cursor-pointer transition-colors`}
+                            onClick={() => openCardDetail(card)}
+                          >
+                            <td className="px-4 py-2.5">
+                              <div className={`text-sm font-medium ${t.text} truncate max-w-[220px]`}>{card.company_name || card.client_name}</div>
+                              {card.client_email && (
+                                <div className={`text-xs ${t.textMuted} truncate max-w-[220px]`}>{card.client_email}</div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              {stage && (
+                                <span
+                                  className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
+                                  style={{ backgroundColor: stage.color + '22', color: stage.color }}
+                                >
+                                  {stage.emoji} {stage.name}
+                                </span>
+                              )}
+                            </td>
+                            <td className={`px-3 py-2.5 text-sm ${t.text}`}>
+                              {fupDate ? fupDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
+                            </td>
+                            <td className={`px-3 py-2.5 text-sm ${whenColor}`}>{whenLabel}</td>
+                            <td className={`px-3 py-2.5 text-xs ${t.textSub}`}>{card.cs_name || '—'}</td>
+                            <td className={`px-3 py-2.5 text-xs ${t.textSub}`}>{card.sdr_name || '—'}</td>
+                            <td className="px-3 py-2.5">
+                              {eng ? (
+                                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${eng.badge}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${eng.dot}`} />
+                                  {eng.label}
+                                </span>
+                              ) : (
+                                <span className={`text-xs ${t.textMuted}`}>—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })()
       )}
 
       {/* ── BOARD VIEW ── */}
