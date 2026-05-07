@@ -1943,14 +1943,14 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
 
       {/* ── CARD DETAIL / CS SIDEBAR ── */}
       {detailCard && (
-        <div className="fixed inset-0 z-50 flex">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Overlay */}
-          <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={() => { setDetailCard(null); setDetailContacts([]); setClientData(null); setClientExtraContacts([]); }} />
-          {/* Sidebar */}
-          <div className={`w-full max-w-lg ${t.surface} border-l ${t.border} shadow-2xl flex flex-col h-full animate-slide-in-right`}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setDetailCard(null); setDetailContacts([]); setClientData(null); setClientExtraContacts([]); }} />
+          {/* Modal centralizado */}
+          <div className={`relative w-full max-w-3xl ${t.surface} border ${t.border} shadow-2xl flex flex-col rounded-2xl overflow-hidden`} style={{ maxHeight: '90vh' }}>
 
             {/* Header — estilo colaboradores */}
-            <div className="px-5 pt-5 pb-4">
+            <div className="px-5 pt-5 pb-4 flex-shrink-0">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-lg font-bold flex-shrink-0"
@@ -2002,7 +2002,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b px-5" style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
+            <div className="flex border-b px-5 flex-shrink-0" style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
               {(['info', 'cs'] as const).map(tab => (
                 <button key={tab} onClick={() => setDetailTab(tab as any)}
                   className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
@@ -2018,7 +2018,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
             </div>
 
             {/* Etapa atual no fluxo */}
-            <div className={`px-5 py-2 flex items-center gap-2 text-xs ${t.textMuted} border-b`} style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
+            <div className={`px-5 py-2 flex items-center gap-2 text-xs ${t.textMuted} border-b flex-shrink-0`} style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
               <span>Fluxo:</span>
               <span className={`font-medium ${t.text}`}>{activeBoard?.name || 'Kanban'}</span>
               <span>→</span>
