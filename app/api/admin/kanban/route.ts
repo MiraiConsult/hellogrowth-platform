@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === 'unassigned') {
-      // Buscar todos os usuários owners que NÃO têm card ativo no kanban admin
+      // Buscar todos os usuários owners que NÃO têm card ativo nos boards admin
       const { data: allUsers, error: usersError } = await supabase
         .from('users')
         .select('id, name, email, company_name, plan, phone, city, state, niche')
@@ -69,12 +69,26 @@ export async function GET(req: NextRequest) {
         .order('name', { ascending: true });
       if (usersError) throw usersError;
 
-      // Buscar todos os cards ativos do admin (sem tenant_id)
+      // Buscar os board_ids dos boards admin (tenant_id IS NULL)
+      const { data: adminBoards } = await supabase
+        .from('kanban_boards')
+        .select('id')
+        .is('tenant_id', null);
+      const adminBoardIds = (adminBoards || []).map((b: any) => b.id);
+
+      // Buscar as etapas dos boards admin
+      const { data: adminStages } = await supabase
+        .from('kanban_stages')
+        .select('id')
+        .in('board_id', adminBoardIds);
+      const adminStageIds = (adminStages || []).map((s: any) => s.id);
+
+      // Buscar todos os cards ativos nessas etapas (independente do tenant_id do card)
       const { data: activeCards } = await supabase
         .from('kanban_cards')
         .select('client_email, user_id')
         .is('deleted_at', null)
-        .is('tenant_id', null);
+        .in('stage_id', adminStageIds);
 
       const cardEmails = new Set((activeCards || []).map((c: any) => (c.client_email || '').toLowerCase()));
       const cardUserIds = new Set((activeCards || []).map((c: any) => c.user_id).filter(Boolean));

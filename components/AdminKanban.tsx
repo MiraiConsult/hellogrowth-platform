@@ -922,7 +922,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       <div className="flex-shrink-0 pt-4 pb-0 space-y-2">
 
       {/* Header compacto — tudo em uma linha */}
-      <div className={`flex items-center gap-2 ${t.surface} rounded-2xl border ${t.border} px-3 py-2 mx-4`}>
+      <div className={`flex items-center gap-2 ${t.surface} rounded-2xl border ${t.border} px-3 py-2 mx-4 min-w-0 overflow-hidden`}>
         {/* Logo + título */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow">
@@ -953,7 +953,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         )}
 
         {/* Botões de ação — compactos */}
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1 flex-shrink-0 overflow-x-auto max-w-full">
           {/* Filtros avançados (só no board view) */}
           {view === 'board' && (
             <button
