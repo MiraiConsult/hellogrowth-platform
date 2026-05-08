@@ -6,7 +6,7 @@ import {
   Phone, MessageCircle, Video, Mail, Calendar, Clock,
   ArrowRightCircle, Bell, HeartHandshake, ChevronRight,
   Building2, User, Activity, Copy, ExternalLink,
-  LayoutList, LayoutGrid, AlarmClock, MapPin, Users2, Stethoscope,
+  LayoutList, LayoutGrid, AlarmClock, MapPin, Users2, Stethoscope, Users, Send,
 } from 'lucide-react';
 
 interface Board {
@@ -207,6 +207,13 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   const [fupFilter, setFupFilter] = useState<'all' | 'overdue' | 'today' | 'week' | 'month'>('all');
   const [listSortCol, setListSortCol] = useState<'client' | 'stage' | 'cs' | 'health' | 'fup' | 'next_contact' | null>(null);
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc');
+  // Unassigned clients (sem card no kanban)
+  const [unassignedUsers, setUnassignedUsers] = useState<any[]>([]);
+  const [unassignedSearch, setUnassignedSearch] = useState('');
+  const [showUnassigned, setShowUnassigned] = useState(false);
+  const [assigningUser, setAssigningUser] = useState<any | null>(null);
+  const [assignStageId, setAssignStageId] = useState('');
+  const [savingAssign, setSavingAssign] = useState(false);
 
   const activeFilterCount = [filterStage, filterCS, filterSDR, filterPlan].filter(Boolean).length;
 
@@ -278,7 +285,20 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Fetch unassigned users (clientes sem card no kanban)
+  const fetchUnassigned = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/kanban?action=unassigned');
+      const data = await res.json();
+      setUnassignedUsers(data.users || []);
+    } catch { /* silencioso */ }
+  }, []);
+  useEffect(() => { fetchUnassigned(); }, [fetchUnassigned]);
+
+  // Refetch unassigned quando cards mudam (alguém foi adicionado)
+  useEffect(() => { fetchUnassigned(); }, [cards.length, fetchUnassigned]);
 
   // Fetch colaboradores once on mount
   useEffect(() => {
@@ -978,6 +998,22 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
             </button>
           )}
 
+          {/* Sem Funil */}
+          {view === 'board' && (
+            <button
+              onClick={() => setShowUnassigned(v => !v)}
+              title="Clientes sem funil"
+              className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${showUnassigned ? 'bg-amber-500 text-white border-amber-500' : `${t.border} ${t.textSub} hover:text-amber-500`}`}
+            >
+              <Users size={13} />
+              <span className="hidden sm:inline">Sem Funil</span>
+              {unassignedUsers.length > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center leading-none px-0.5">
+                  {unassignedUsers.length}
+                </span>
+              )}
+            </button>
+          )}
           {/* Fluxos */}
           <button
             onClick={() => setView(view === 'boards' ? 'board' : 'boards')}
@@ -1070,6 +1106,161 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── PAINEL SEM FUNIL ── */}
+      {view === 'board' && showUnassigned && (
+        <div className={`mb-4 ${t.surface} rounded-2xl border border-amber-300 p-4 mx-4`}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className={`text-sm font-bold ${t.text} flex items-center gap-2`}>
+              <Users size={14} className="text-amber-500" />
+              Clientes sem funil
+              <span className="text-xs font-normal text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
+                {unassignedUsers.filter(u => !unassignedSearch || (u.name + ' ' + (u.company_name || '') + ' ' + u.email).toLowerCase().includes(unassignedSearch.toLowerCase())).length} clientes
+              </span>
+            </h3>
+            <button onClick={() => setShowUnassigned(false)} className={`p-1 rounded ${t.surfaceHover} ${t.textMuted}`}><X size={14} /></button>
+          </div>
+          {/* Busca */}
+          <div className="relative mb-3">
+            <Search size={13} className={`absolute left-3 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
+            <input
+              type="text"
+              value={unassignedSearch}
+              onChange={e => setUnassignedSearch(e.target.value)}
+              placeholder="Buscar cliente..."
+              className={`w-full pl-8 pr-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-amber-400`}
+            />
+          </div>
+          {/* Lista de clientes */}
+          <div className="space-y-1 max-h-72 overflow-y-auto">
+            {unassignedUsers
+              .filter(u => !unassignedSearch || (u.name + ' ' + (u.company_name || '') + ' ' + u.email).toLowerCase().includes(unassignedSearch.toLowerCase()))
+              .map(user => (
+                <div key={user.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${t.border} ${t.surface} hover:border-amber-300 transition-colors`}>
+                  <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                    {(user.company_name || user.name || '?').charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold ${t.text} truncate`}>{user.company_name || user.name}</p>
+                    <p className={`text-xs ${t.textMuted} truncate`}>{user.email} {user.plan ? `· ${user.plan}` : ''}</p>
+                  </div>
+                  <button
+                    onClick={() => { setAssigningUser(user); setAssignStageId(stages.length > 0 ? stages[0].id : ''); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition-colors flex-shrink-0"
+                  >
+                    <Plus size={12} />
+                    Adicionar ao funil
+                  </button>
+                </div>
+              ))
+            }
+            {unassignedUsers.filter(u => !unassignedSearch || (u.name + ' ' + (u.company_name || '') + ' ' + u.email).toLowerCase().includes(unassignedSearch.toLowerCase())).length === 0 && (
+              <p className={`text-sm text-center py-4 ${t.textMuted}`}>Nenhum cliente encontrado</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Adicionar ao funil */}
+      {assigningUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className={`${t.surface} rounded-2xl border ${t.border} p-6 w-full max-w-md shadow-2xl`}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className={`text-base font-bold ${t.text}`}>Adicionar ao funil</h3>
+              <button onClick={() => { setAssigningUser(null); setAssignStageId(''); }} className={`p-1 rounded ${t.surfaceHover} ${t.textMuted}`}><X size={16} /></button>
+            </div>
+            <div className="mb-4">
+              <div className={`flex items-center gap-3 p-3 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-amber-50'} border border-amber-200`}>
+                <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-base font-bold">
+                  {(assigningUser.company_name || assigningUser.name || '?').charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className={`font-semibold ${t.text}`}>{assigningUser.company_name || assigningUser.name}</p>
+                  <p className={`text-xs ${t.textMuted}`}>{assigningUser.email}</p>
+                </div>
+              </div>
+            </div>
+            {/* Seletor de fluxo */}
+            {boards.length > 1 && (
+              <div className="mb-3">
+                <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Fluxo</label>
+                <select
+                  value={activeBoardId || ''}
+                  onChange={e => {
+                    const bid = e.target.value;
+                    setActiveBoardId(bid);
+                    const firstStage = stages.find(s => s.board_id === bid);
+                    setAssignStageId(firstStage?.id || '');
+                  }}
+                  className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-amber-400`}
+                >
+                  {boards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+            )}
+            {/* Seletor de etapa */}
+            <div className="mb-5">
+              <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Etapa</label>
+              <select
+                value={assignStageId}
+                onChange={e => setAssignStageId(e.target.value)}
+                className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-amber-400`}
+              >
+                <option value="">Selecione uma etapa...</option>
+                {stages.filter(s => !activeBoardId || s.board_id === activeBoardId).map(s => (
+                  <option key={s.id} value={s.id}>{s.emoji} {s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setAssigningUser(null); setAssignStageId(''); }}
+                className={`flex-1 px-4 py-2.5 rounded-xl border text-sm font-medium ${t.border} ${t.textSub} hover:${t.surfaceHover} transition-colors`}
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={!assignStageId || savingAssign}
+                onClick={async () => {
+                  if (!assignStageId || !assigningUser) return;
+                  setSavingAssign(true);
+                  try {
+                    const res = await fetch('/api/admin/kanban', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        type: 'card',
+                        stage_id: assignStageId,
+                        board_id: activeBoardId,
+                        client_name: assigningUser.name,
+                        company_name: assigningUser.company_name || assigningUser.name,
+                        client_email: assigningUser.email,
+                        client_phone: assigningUser.phone || '',
+                        user_id: assigningUser.id,
+                        notes: assigningUser.plan ? `Plano: ${assigningUser.plan}` : '',
+                      }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Erro ao criar card');
+                    setCards(prev => [...prev, data.data]);
+                    setAssigningUser(null);
+                    setAssignStageId('');
+                    showToast('success', `${assigningUser.company_name || assigningUser.name} adicionado ao funil!`);
+                  } catch (e: any) {
+                    showToast('error', e.message || 'Erro ao adicionar ao funil');
+                  } finally {
+                    setSavingAssign(false);
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+              >
+                {savingAssign ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                {savingAssign ? 'Adicionando...' : 'Adicionar ao funil'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

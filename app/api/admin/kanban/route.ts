@@ -60,6 +60,32 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data });
     }
 
+    if (action === 'unassigned') {
+      // Buscar todos os usuários owners que NÃO têm card ativo no kanban admin
+      const { data: allUsers, error: usersError } = await supabase
+        .from('users')
+        .select('id, name, email, company_name, plan, phone, city, state, niche')
+        .eq('is_owner', true)
+        .order('name', { ascending: true });
+      if (usersError) throw usersError;
+
+      // Buscar todos os cards ativos do admin (sem tenant_id)
+      const { data: activeCards } = await supabase
+        .from('kanban_cards')
+        .select('client_email, user_id')
+        .is('deleted_at', null)
+        .is('tenant_id', null);
+
+      const cardEmails = new Set((activeCards || []).map((c: any) => (c.client_email || '').toLowerCase()));
+      const cardUserIds = new Set((activeCards || []).map((c: any) => c.user_id).filter(Boolean));
+
+      const unassigned = (allUsers || []).filter((u: any) =>
+        !cardEmails.has((u.email || '').toLowerCase()) && !cardUserIds.has(u.id)
+      );
+
+      return NextResponse.json({ users: unassigned });
+    }
+
     if (action === 'alerts') {
       const today = new Date().toISOString().split('T')[0];
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
