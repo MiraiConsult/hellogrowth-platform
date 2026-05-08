@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
-import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle, Settings, GripVertical, AlertTriangle } from 'lucide-react';
+import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle, Settings, GripVertical, AlertTriangle, Check, AlertCircle } from 'lucide-react';
 import { callGeminiAPI } from '@/lib/gemini-client';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
@@ -112,6 +112,11 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts
   // Lead Detail Panel State
   const [detailSection, setDetailSection] = useState<'suggestions' | 'answers' | 'ai' | 'negotiation' | null>(null);
   const [detailContent, setDetailContent] = useState<{ type: 'whatsapp' | 'email'; message?: any } | null>(null);
+
+  // Reenvio de e-mail de análise
+  const [isResendingEmail, setIsResendingEmail] = useState(false);
+  const [resendEmailResult, setResendEmailResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [resendCustomEmail, setResendCustomEmail] = useState('');
 
   // Negotiation Notes State
   const [negotiationNoteText, setNegotiationNoteText] = useState('');
@@ -393,6 +398,8 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts
     const aiProducts = lead.answers?._ai_analysis?.recommended_products || [];
     setEditProducts(lead.suggested_products || aiProducts.map((p: any) => ({ name: p.name, value: p.value || 0 })));
     setDetailSection(null);
+    setResendEmailResult(null);
+    setResendCustomEmail('');
   };
 
   const handleAddNote = async () => {
@@ -480,6 +487,38 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts
       alert('Erro ao salvar.');
     } finally {
       setIsSavingProducts(false);
+    }
+  };
+
+  // Reenvio de e-mail de análise da IA
+  const handleResendAnalysisEmail = async (customEmail?: string) => {
+    if (!selectedLead) return;
+    setIsResendingEmail(true);
+    setResendEmailResult(null);
+    try {
+      const customRecipients = customEmail?.trim()
+        ? customEmail.split(',').map(e => e.trim()).filter(Boolean)
+        : [];
+      const res = await fetch('/api/admin/resend-analysis-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: selectedLead.id, customRecipients }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.noRecipients) {
+          setResendEmailResult({ ok: false, message: 'Nenhum destinatário configurado no formulário. Informe um e-mail abaixo.' });
+        } else {
+          setResendEmailResult({ ok: false, message: data.error || 'Erro ao enviar e-mail.' });
+        }
+      } else {
+        setResendEmailResult({ ok: true, message: `E-mail enviado para: ${data.recipients.join(', ')}` });
+        setResendCustomEmail('');
+      }
+    } catch (e: any) {
+      setResendEmailResult({ ok: false, message: e.message || 'Erro inesperado.' });
+    } finally {
+      setIsResendingEmail(false);
     }
   };
 
@@ -1509,6 +1548,46 @@ Agora escreva a mensagem para ${firstName}:`;
                         <div className="bg-white rounded-lg border border-gray-200 p-4">
                           <span className="text-xs text-gray-500 font-semibold uppercase">Script de Vendas</span>
                           <p className="text-sm text-gray-700 mt-1 leading-relaxed whitespace-pre-wrap">{selectedLead.answers._ai_analysis.sales_script}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bloco de reenvio de e-mail */}
+                    <div className="mt-6 border-t border-gray-200 pt-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Mail size={15} className="text-blue-500" />
+                        <span className="text-sm font-semibold text-gray-700">Reenviar análise por e-mail</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mb-3">
+                        Envia o e-mail com a análise da IA para os destinatários configurados no formulário, ou informe um e-mail alternativo.
+                      </p>
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={resendCustomEmail}
+                          onChange={e => setResendCustomEmail(e.target.value)}
+                          placeholder="E-mail alternativo (opcional)"
+                          className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        />
+                        <button
+                          onClick={() => handleResendAnalysisEmail(resendCustomEmail || undefined)}
+                          disabled={isResendingEmail}
+                          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                        >
+                          {isResendingEmail ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                          {isResendingEmail ? 'Enviando...' : 'Enviar'}
+                        </button>
+                      </div>
+                      {resendEmailResult && (
+                        <div className={`flex items-start gap-2 text-xs rounded-lg px-3 py-2 mt-1 ${
+                          resendEmailResult.ok
+                            ? 'bg-green-50 text-green-700 border border-green-200'
+                            : 'bg-red-50 text-red-700 border border-red-200'
+                        }`}>
+                          {resendEmailResult.ok
+                            ? <Check size={13} className="mt-0.5 flex-shrink-0" />
+                            : <AlertCircle size={13} className="mt-0.5 flex-shrink-0" />}
+                          <span>{resendEmailResult.message}</span>
                         </div>
                       )}
                     </div>

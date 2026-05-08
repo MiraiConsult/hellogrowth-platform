@@ -65,6 +65,9 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
   const [editedWhatsapp, setEditedWhatsapp] = useState('');
   const [editedEmailSubject, setEditedEmailSubject] = useState('');
   const [editedEmailBody, setEditedEmailBody] = useState('');
+  // Reenvio de e-mail de análise da IA
+  const [isResendingAnalysis, setIsResendingAnalysis] = useState(false);
+  const [resendAnalysisResult, setResendAnalysisResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   useEffect(() => {
     async function loadContextAndInit() {
@@ -311,6 +314,34 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
     }
   };
 
+  // Reenvio de e-mail de análise da IA
+  const handleResendAnalysisEmail = async () => {
+    if (!client.id) return;
+    setIsResendingAnalysis(true);
+    setResendAnalysisResult(null);
+    try {
+      const res = await fetch('/api/admin/resend-analysis-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: client.id, customRecipients: [] }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.noRecipients) {
+          setResendAnalysisResult({ ok: false, message: 'Nenhum destinatário configurado. Configure os destinatários no formulário.' });
+        } else {
+          setResendAnalysisResult({ ok: false, message: data.error || 'Erro ao enviar e-mail.' });
+        }
+      } else {
+        setResendAnalysisResult({ ok: true, message: `Análise enviada para: ${data.recipients.join(', ')}` });
+      }
+    } catch (e: any) {
+      setResendAnalysisResult({ ok: false, message: e.message || 'Erro inesperado.' });
+    } finally {
+      setIsResendingAnalysis(false);
+    }
+  };
+
   const getToneColor = (tone: string) => {
     switch (tone) {
       case 'formal': return 'text-gray-700 bg-gray-100';
@@ -362,14 +393,22 @@ export const MessageSuggestionsPanel: React.FC<MessageSuggestionsPanelProps> = (
             </button>
             <div className="flex flex-col gap-1">
               <button
-                disabled={true}
-                className="px-4 py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors bg-gray-100 text-gray-400 cursor-not-allowed relative"
+                onClick={handleResendAnalysisEmail}
+                disabled={isResendingAnalysis || !client.answers?._ai_analysis}
+                title={!client.answers?._ai_analysis ? 'Este lead não possui análise da IA' : 'Reenviar análise da IA por e-mail'}
+                className="px-4 py-3 rounded-lg flex items-center justify-center gap-2 font-medium transition-colors bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
-                <Mail size={18} />
-                Enviar Email
-                <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">Em Breve</span>
+                {isResendingAnalysis ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
+                {isResendingAnalysis ? 'Enviando...' : 'Enviar Análise IA'}
               </button>
-              <p className="text-[10px] text-gray-500 text-center">Funcionalidade em desenvolvimento</p>
+              {resendAnalysisResult && (
+                <p className={`text-[10px] text-center font-medium ${
+                  resendAnalysisResult.ok ? 'text-green-600' : 'text-red-500'
+                }`}>{resendAnalysisResult.message}</p>
+              )}
+              {!resendAnalysisResult && !client.answers?._ai_analysis && (
+                <p className="text-[10px] text-gray-400 text-center">Sem análise de IA disponível</p>
+              )}
             </div>
           </div>
         </div>
