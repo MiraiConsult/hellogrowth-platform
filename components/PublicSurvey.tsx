@@ -230,12 +230,13 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
     const placeId = getPlaceId();
     const redirectEnabled = isGoogleRedirectEnabled();
     const hasGame = gameData && (campaign as any).game_id;
+    const minScore: number = (campaign as any).redirect_min_score ?? 9;
     
-    // Se tem game configurado e é promotor (score >= 9), vai para o jogo
-    if (hasGame && finalScore >= 9) {
+    // Se tem game configurado e atinge a nota mínima, vai para o jogo
+    if (hasGame && finalScore >= minScore) {
         setStep('game');
-    } else if (redirectEnabled && finalScore >= 9 && placeId) {
-        // Se não tem game mas tem redirect e é promotor, vai direto para redirecting
+    } else if (redirectEnabled && finalScore >= minScore && placeId) {
+        // Se não tem game mas tem redirect e atinge a nota mínima, vai direto para redirecting
         setStep('redirecting');
         setTimeout(() => {
             const googleUrl = `https://search.google.com/local/writereview?placeid=${placeId}`;

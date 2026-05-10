@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
-import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle, Settings, GripVertical, AlertTriangle, Check, AlertCircle } from 'lucide-react';
+import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle, Settings, GripVertical, AlertTriangle, Check, AlertCircle, Search } from 'lucide-react';
 import { callGeminiAPI } from '@/lib/gemini-client';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
@@ -699,6 +699,22 @@ Agora escreva a mensagem para ${firstName}:`;
         <div className="flex items-center gap-4 flex-wrap">
           <h1 className="text-2xl font-bold text-gray-900">Quadro de Oportunidades</h1>
           <div className="flex gap-3 relative items-center flex-wrap">
+          {/* Barra de busca rápida por nome */}
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={filters.name}
+              onChange={(e) => setFilters({...filters, name: e.target.value})}
+              placeholder="Buscar cliente..."
+              className="pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:ring-primary-500 focus:border-primary-500 w-48"
+            />
+            {filters.name && (
+              <button onClick={() => setFilters({...filters, name: ''})} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <X size={14} />
+              </button>
+            )}
+          </div>
           <button 
             onClick={() => setShowDashboard(!showDashboard)}
             className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${showDashboard ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
