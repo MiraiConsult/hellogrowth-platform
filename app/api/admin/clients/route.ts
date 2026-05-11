@@ -120,6 +120,22 @@ export async function GET(request: NextRequest) {
     const { data: users, error: usersError } = await usersQuery;
     if (usersError) throw usersError;
 
+    // Buscar CS/SDR dos kanban_cards em lote (fallback para quem não tem na tabela users)
+    const userEmails = (users || []).map((u: any) => u.email).filter(Boolean);
+    let kanbanCsMap: Record<string, { cs_name: string | null; sdr_name: string | null }> = {};
+    if (userEmails.length > 0) {
+      const { data: kanbanCardsBatch } = await supabase
+        .from('kanban_cards')
+        .select('client_email, cs_name, sdr_name')
+        .in('client_email', userEmails)
+        .is('deleted_at', null);
+      for (const kc of (kanbanCardsBatch || [])) {
+        if (kc.client_email && (kc.cs_name || kc.sdr_name)) {
+          kanbanCsMap[kc.client_email.toLowerCase()] = { cs_name: kc.cs_name, sdr_name: kc.sdr_name };
+        }
+      }
+    }
+
     // Para cada usuário, buscar as empresas vinculadas
     const enrichedUsers = await Promise.all(
       (users || []).map(async (user) => {
@@ -204,8 +220,8 @@ export async function GET(request: NextRequest) {
           lastLogin: (user as any).last_login || null,
           settings: user.settings,
           tenantId: (user as any).tenant_id || null,
-          sdrName: (user as any).sdr_name || null,
-          csName: (user as any).cs_name || null,
+          sdrName: (user as any).sdr_name || kanbanCsMap[(user.email || '').toLowerCase()]?.sdr_name || null,
+          csName: (user as any).cs_name || kanbanCsMap[(user.email || '').toLowerCase()]?.cs_name || null,
           internalNotes: (user as any).internal_notes || null,
           city: (user as any).city || null,
           state: (user as any).state || null,
