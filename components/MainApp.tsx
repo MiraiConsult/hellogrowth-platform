@@ -427,7 +427,9 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
            setForms(dbForms.map(f => ({
                ...f,
                questions: Array.isArray(f.questions) ? f.questions : [],
-               initialFields: f.initial_fields || []
+               initialFields: f.initial_fields || [],
+               whatsapp_analysis_enabled: (f as any).whatsapp_analysis_enabled || false,
+               whatsapp_analysis_recipients: (f as any).whatsapp_analysis_recipients || ''
            })));
          }
 
@@ -824,7 +826,9 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       game_id: form.game_id || null,
       show_logo: (form as any).show_logo || false,
       email_analysis_enabled: form.email_analysis_enabled || false,
-      email_analysis_recipients: form.email_analysis_recipients || ''
+      email_analysis_recipients: form.email_analysis_recipients || '',
+      whatsapp_analysis_enabled: (form as any).whatsapp_analysis_enabled || false,
+      whatsapp_analysis_recipients: (form as any).whatsapp_analysis_recipients || ''
       // product_ids: requer migração 004 no Supabase antes de habilitar
       // product_ids: (form as any).product_ids || null
     };
@@ -1223,6 +1227,38 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }
     }
     
+    // Disparar WhatsApp de análise se o formulário tiver esse recurso ativado
+    if (insertedLead && formTenantId && (publicForm as any).whatsapp_analysis_enabled) {
+      const rawWaRecipients = (publicForm as any).whatsapp_analysis_recipients || '';
+      const waNumbers = typeof rawWaRecipients === 'string'
+        ? rawWaRecipients.split(',').map((n: string) => n.trim()).filter(Boolean)
+        : [];
+      if (waNumbers.length > 0) {
+        // Montar mensagem resumida para WhatsApp
+        const formLink = `${window.location.origin}/f/${publicForm.id}`;
+        const waMessage = [
+          `🔔 *Novo Lead — ${publicForm.name}*`,
+          ``,
+          `👤 *Nome:* ${data.patient?.name || 'Não informado'}`,
+          data.patient?.phone ? `📞 *Telefone:* ${data.patient.phone}` : null,
+          data.patient?.email ? `📧 *E-mail:* ${data.patient.email}` : null,
+          ``,
+          `📋 *Formulário:* ${publicForm.name}`,
+          `🔗 *Link do formulário:* ${formLink}`,
+          ``,
+          `_A análise completa da IA será processada em instantes._`,
+        ].filter(Boolean).join('\n');
+
+        for (const phone of waNumbers) {
+          fetch('/api/send-whatsapp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, message: waMessage }),
+          }).catch(err => console.error('[whatsapp-analysis] Erro ao disparar WhatsApp:', err));
+        }
+      }
+    }
+
     // Disparar e-mail de análise direto (sem depender da IA) se o formulário tiver esse recurso ativado
     if (insertedLead && formTenantId && publicForm.email_analysis_enabled) {
       const rawRecipients = publicForm.email_analysis_recipients || '';

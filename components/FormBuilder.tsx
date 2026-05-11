@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift, Send, BookOpen, Search, Star, ChevronDown, ChevronUp, HelpCircle, Mail, PlusCircle } from 'lucide-react';
+import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift, Send, BookOpen, Search, Star, ChevronDown, ChevronUp, HelpCircle, Mail, PlusCircle, MessageCircle } from 'lucide-react';
 import FormConsultant from '@/components/FormConsultant';
 import FormMassDispatchModal from '@/components/FormMassDispatchModal';
 import { supabase } from '@/lib/supabase';
@@ -169,6 +169,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [emailAnalysisEnabled, setEmailAnalysisEnabled] = useState(false);
   const [emailAnalysisRecipients, setEmailAnalysisRecipients] = useState<string[]>([]);
   const [emailAnalysisNewRecipient, setEmailAnalysisNewRecipient] = useState('');
+  const [whatsappAnalysisEnabled, setWhatsappAnalysisEnabled] = useState(false);
+  const [whatsappAnalysisRecipients, setWhatsappAnalysisRecipients] = useState('');
   const [isMassFormSendOpen, setIsMassFormSendOpen] = useState(false);
   const [generatingScriptId, setGeneratingScriptId] = useState<string | null>(null); 
 
@@ -260,6 +262,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setEmailAnalysisEnabled((form as any).email_analysis_enabled || false);
     setEmailAnalysisRecipients((form as any).email_analysis_recipients || []);
     setEmailAnalysisNewRecipient('');
+    setWhatsappAnalysisEnabled((form as any).whatsapp_analysis_enabled || false);
+    setWhatsappAnalysisRecipients((form as any).whatsapp_analysis_recipients || '');
     setView('editor');
     setMenuOpenId(null);
   };
@@ -522,6 +526,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         product_ids: selectedProductIds.length > 0 ? selectedProductIds : undefined,
         email_analysis_enabled: emailAnalysisEnabled,
         email_analysis_recipients: emailAnalysisRecipients,
+        whatsapp_analysis_enabled: whatsappAnalysisEnabled,
+        whatsapp_analysis_recipients: whatsappAnalysisRecipients,
     };
 
     // Trigger Parent Handler for DB Save
@@ -1061,6 +1067,52 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                     <span className="text-xs text-amber-700">⚠️ Adicione pelo menos um e-mail destinatário para ativar o envio.</span>
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* WhatsApp Analysis Configuration */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-50 rounded-lg">
+                  <MessageCircle size={18} className="text-green-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700">Enviar Análise por WhatsApp</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Ao receber uma resposta, a IA envia um resumo com produtos sugeridos e link do formulário via WhatsApp</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWhatsappAnalysisEnabled(!whatsappAnalysisEnabled)}
+                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
+                  whatsappAnalysisEnabled ? 'bg-green-500' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    whatsappAnalysisEnabled ? 'translate-x-9' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            {whatsappAnalysisEnabled && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Números de WhatsApp</label>
+                  <p className="text-xs text-gray-500 mb-2">Números que receberão a análise automaticamente. Separe por vírgula.</p>
+                  <input
+                    type="text"
+                    value={whatsappAnalysisRecipients}
+                    onChange={e => setWhatsappAnalysisRecipients(e.target.value)}
+                    placeholder="(11) 99999-9999, (21) 98888-8888"
+                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 border bg-white text-gray-900 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <span className="text-xs text-green-700"><strong>O que será enviado:</strong> Produtos sugeridos pela IA, análise resumida do lead e link para o formulário completo.</span>
+                </div>
               </div>
             )}
           </div>

@@ -33,7 +33,7 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
-  ArrowUp, ArrowDown, Mail} from 'lucide-react';
+  ArrowUp, ArrowDown, Mail, MessageCircle} from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 
@@ -158,6 +158,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [emailAnalysisEnabled, setEmailAnalysisEnabled] = useState(false);
   const [emailAnalysisRecipients, setEmailAnalysisRecipients] = useState('');
+  const [whatsappAnalysisEnabled, setWhatsappAnalysisEnabled] = useState(false);
+  const [whatsappAnalysisRecipients, setWhatsappAnalysisRecipients] = useState('');
   const [availableGames, setAvailableGames] = useState<any[]>([]);
   
   // Estados para o Chat de Ajuste na tela de revisão
@@ -229,6 +231,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       setSelectedGameId(stableExistingForm.game_id || null);
       setEmailAnalysisEnabled(stableExistingForm.email_analysis_enabled || false);
       setEmailAnalysisRecipients(stableExistingForm.email_analysis_recipients || '');
+      setWhatsappAnalysisEnabled((stableExistingForm as any).whatsapp_analysis_enabled || false);
+      setWhatsappAnalysisRecipients((stableExistingForm as any).whatsapp_analysis_recipients || '');
       
       // Carregar campos de identificação salvos
       // IMPORTANTE: O banco salva como initial_fields, e o MainApp mapeia para initialFields
@@ -615,17 +619,19 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
           
           if (!error && fetchedProducts && fetchedProducts.length > 0) {
             setProducts(fetchedProducts);
-            console.log('[FormConsultant] Produtos disponíveis:', fetchedProducts.length, fetchedProducts);
-            setCurrentStep('products');
+            setBusinessContext(prev => ({ ...prev, productSelection: 'auto', selectedProducts: [] }));
+            setCurrentStep('custom_objective_detail');
             setTimeout(() => {
               addAssistantMessage(
-                "📦 **Perfeito! Agora vamos focar nos produtos/serviços.**\n\n" +
-                "Você quer que o formulário seja focado em **produtos específicos** ou deixo a IA escolher automaticamente?\n\n" +
-                "💡 **Dica:** Se você tem uma clínica com fisioterapia E odontologia, mas quer um formulário só para fisioterapia, selecione manualmente!",
-                [
-                  { label: "🎯 Selecionar Produtos Manualmente", value: "products_manual" },
-                  { label: "✨ Deixar a IA Escolher Automaticamente", value: "products_auto" }
-                ]
+                "🎯 **Agora a parte mais importante para criar um formulário realmente inteligente!**\n\n" +
+                "Para que este formulário seja perfeito, quais informações são **indispensáveis** para você decidir se este é um bom cliente?\n\n" +
+                "💡 **Exemplos:**\n" +
+                "• Poder aquisitório (quanto pode gastar)\n" +
+                "• Urgência (quando precisa do serviço)\n" +
+                "• Problema específico que quer resolver\n" +
+                "• Experiência anterior com produtos similares\n" +
+                "• Expectativas de resultado\n\n" +
+                "Quanto mais específico você for, mais assertivas serão as perguntas! 🚀"
               );
             }, 500);
           } else {
@@ -1175,6 +1181,8 @@ Responda APENAS com JSON válido neste formato:
       show_logo: showLogo,
       email_analysis_enabled: emailAnalysisEnabled,
       email_analysis_recipients: emailAnalysisRecipients,
+      whatsapp_analysis_enabled: whatsappAnalysisEnabled,
+      whatsapp_analysis_recipients: whatsappAnalysisRecipients,
       status: 'active'
     };
 
@@ -2169,6 +2177,52 @@ Retorne APENAS este JSON (sem markdown, sem texto fora do JSON):
               <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-xs text-blue-700">
                   <strong>O que será enviado:</strong> Respostas do formulário, produtos sugeridos pela IA e script de vendas personalizado.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* WhatsApp de Análise */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <MessageCircle size={20} className="text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-slate-800">Enviar Análise por WhatsApp</h3>
+                <p className="text-sm text-slate-500 mt-0.5">Receba um resumo da IA com produtos sugeridos e link do formulário via WhatsApp</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setWhatsappAnalysisEnabled(!whatsappAnalysisEnabled)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                whatsappAnalysisEnabled ? 'bg-green-500' : 'bg-gray-300'
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                whatsappAnalysisEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
+          {whatsappAnalysisEnabled && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Números de WhatsApp</label>
+                <input
+                  type="text"
+                  value={whatsappAnalysisRecipients}
+                  onChange={(e) => setWhatsappAnalysisRecipients(e.target.value)}
+                  placeholder="(11) 99999-9999, (21) 98888-8888"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                />
+                <p className="text-xs text-slate-400 mt-1">Separe múltiplos números por vírgula</p>
+              </div>
+              <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                <p className="text-xs text-green-700">
+                  <strong>O que será enviado:</strong> Produtos sugeridos pela IA, análise resumida do lead e link para o formulário completo.
                 </p>
               </div>
             </div>
