@@ -332,6 +332,16 @@ const Navigation: React.FC<NavigationProps> = ({
     },
     { id: 'games', label: 'Game', icon: Gift, requiredPlan: 'rating' },
     {
+      id: 'health-group',
+      label: 'Saúde',
+      icon: Heart,
+      type: 'group',
+      color: 'rose',
+      children: [
+        { id: 'forms', label: 'Formulários de Anamnese', icon: CheckSquare, requiredPlan: 'all' },
+      ],
+    },
+    {
       id: 'settings-group',
       label: 'Configurações',
       icon: Settings,
@@ -347,6 +357,16 @@ const Navigation: React.FC<NavigationProps> = ({
       ]
     },
   ];
+
+  // Verificar se o addon de saúde está ativo
+  const healthAddon = (() => {
+    try {
+      const a = typeof activeCompany?.plan_addons === 'string'
+        ? JSON.parse(activeCompany?.plan_addons || '{}')
+        : (activeCompany?.plan_addons || {});
+      return a.health || false;
+    } catch { return false; }
+  })();
 
   // Verificar se o addon de ações está ativo
   const actionsAddon = (() => {
@@ -479,6 +499,11 @@ const Navigation: React.FC<NavigationProps> = ({
         text: 'text-emerald-600', 
         icon: 'text-emerald-500' 
       },
+      rose: { 
+        bg: isExpanded ? 'bg-rose-50' : 'bg-transparent hover:bg-rose-50', 
+        text: 'text-rose-600', 
+        icon: 'text-rose-500' 
+      },
     };
     return colors[color] || colors.blue;
   };
@@ -547,6 +572,8 @@ const Navigation: React.FC<NavigationProps> = ({
           if ('type' in item && item.type === 'group') {
             // Ocultar grupo de Ações se o addon não estiver ativo
             if (item.id === 'action-group' && actionsAddon === 'none') return null;
+            // Ocultar grupo de Saúde se o addon não estiver ativo
+            if (item.id === 'health-group' && !healthAddon) return null;
             const hasAnyChildPermission = item.children.some(child => hasPlanPermission(child.requiredPlan) && hasRolePermission(child.id));
             if (!hasAnyChildPermission) return null;
 

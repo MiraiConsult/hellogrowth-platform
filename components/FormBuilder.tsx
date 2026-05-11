@@ -18,7 +18,7 @@ interface FormBuilderProps {
   onViewReport?: (id: string) => void;
   setForms?: any;
   userId?: string;
-  activeCompany?: { id: string; name: string };
+  activeCompany?: { id: string; name: string; plan_addons?: any } | null;
   isAnalyzingAll?: boolean;
   analysisProgress?: { current: number; total: number };
   pendingAnalysisCount?: number;
@@ -46,6 +46,17 @@ const normalizeQuestionType = (type: string): 'text' | 'single' | 'multiple' => 
 
 const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm, onDeleteForm, onPreview, onViewReport, userId, activeCompany, isAnalyzingAll = false, analysisProgress = { current: 0, total: 0 }, pendingAnalysisCount = 0, onAnalyzeAllLeads, onboardingOpenTemplates, onboardingOpenAI, onboardingOpenManual, businessProfile }) => {
   const tenantId = useTenantId();
+
+  // Verificar se o addon de saúde está ativo
+  const hasHealthAddon = (() => {
+    try {
+      const a = typeof activeCompany?.plan_addons === 'string'
+        ? JSON.parse(activeCompany?.plan_addons || '{}')
+        : (activeCompany?.plan_addons || {});
+      return a.health || false;
+    } catch { return false; }
+  })();
+
   const [view, setView] = useState<'list' | 'editor' | 'consultant'>('list');
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
   const [showConsultant, setShowConsultant] = useState(false);
@@ -1122,8 +1133,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
             )}
           </div>
 
-          {/* Assinatura Eletrônica */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+          {/* Assinatura Eletrônica - só aparece com addon health */}
+          {hasHealthAddon && <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2"><ShieldCheck size={16} className="text-violet-500" /> Assinatura Eletrônica (Termo de Consentimento)</h3>
@@ -1169,7 +1180,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                 </div>
               </div>
             )}
-          </div>
+          </div>}
 
           <div className="flex justify-between items-center">
              <h2 className="text-lg font-bold text-gray-800">Perguntas</h2>

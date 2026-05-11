@@ -1765,6 +1765,7 @@ Responda APENAS com JSON válido (sem markdown):
                 onboardingOpenAI={onboardingOpenFormAI}
                 onboardingOpenManual={onboardingOpenFormManual}
                 businessProfile={businessProfile}
+                activeCompany={activeCompany}
             />
         )}
         
