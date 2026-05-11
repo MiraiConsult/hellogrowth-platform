@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift, Send, BookOpen, Search, Star, ChevronDown, ChevronUp, HelpCircle, Mail, PlusCircle, MessageCircle } from 'lucide-react';
+import { Plus, GripVertical, Trash2, ArrowLeft, Eye, CheckSquare, Edit3, DollarSign, Package, MessageSquare, Share2, Check, Sparkles, Loader2, Wand2, BarChart3, MoreVertical, Pause, Play, Edit, TrendingUp, Users, QrCode, X, Download, ArrowUp, ArrowDown, Bot, Zap, Gift, Send, BookOpen, Search, Star, ChevronDown, ChevronUp, HelpCircle, Mail, PlusCircle, MessageCircle, PenLine, FileText, ShieldCheck } from 'lucide-react';
 import FormConsultant from '@/components/FormConsultant';
 import FormMassDispatchModal from '@/components/FormMassDispatchModal';
 import { supabase } from '@/lib/supabase';
@@ -171,6 +171,10 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   const [emailAnalysisNewRecipient, setEmailAnalysisNewRecipient] = useState('');
   const [whatsappAnalysisEnabled, setWhatsappAnalysisEnabled] = useState(false);
   const [whatsappAnalysisRecipients, setWhatsappAnalysisRecipients] = useState('');
+  // Assinatura eletrônica
+  const [signatureEnabled, setSignatureEnabled] = useState(false);
+  const [signatureAutoEmail, setSignatureAutoEmail] = useState(false);
+  const [consentText, setConsentText] = useState('');
   const [isMassFormSendOpen, setIsMassFormSendOpen] = useState(false);
   const [generatingScriptId, setGeneratingScriptId] = useState<string | null>(null); 
 
@@ -246,6 +250,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setEmailAnalysisEnabled(false);
     setEmailAnalysisRecipients([]);
     setEmailAnalysisNewRecipient('');
+    setSignatureEnabled(false);
+    setSignatureAutoEmail(false);
+    setConsentText('');
     setView('editor');
   };
 
@@ -264,6 +271,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setEmailAnalysisNewRecipient('');
     setWhatsappAnalysisEnabled((form as any).whatsapp_analysis_enabled || false);
     setWhatsappAnalysisRecipients((form as any).whatsapp_analysis_recipients || '');
+    setSignatureEnabled((form as any).signature_enabled || false);
+    setSignatureAutoEmail((form as any).signature_auto_email || false);
+    setConsentText((form as any).consent_text || '');
     setView('editor');
     setMenuOpenId(null);
   };
@@ -528,6 +538,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         email_analysis_recipients: emailAnalysisRecipients,
         whatsapp_analysis_enabled: whatsappAnalysisEnabled,
         whatsapp_analysis_recipients: whatsappAnalysisRecipients,
+        signature_enabled: signatureEnabled,
+        signature_auto_email: signatureAutoEmail,
+        consent_text: consentText,
     };
 
     // Trigger Parent Handler for DB Save
@@ -1104,6 +1117,55 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                 </div>
                 <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
                   <span className="text-xs text-green-700"><strong>O que será enviado:</strong> Produtos sugeridos pela IA, análise resumida do lead e link para o formulário completo.</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Assinatura Eletrônica */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2"><ShieldCheck size={16} className="text-violet-500" /> Assinatura Eletrônica (Termo de Consentimento)</h3>
+                <p className="text-xs text-gray-500 mt-1">O paciente assina digitalmente ao final do formulário, gerando prova jurídica válida pela legislação brasileira (Lei 14.063/2020)</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSignatureEnabled(!signatureEnabled)}
+                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${signatureEnabled ? 'bg-violet-500' : 'bg-slate-300'}`}
+              >
+                <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${signatureEnabled ? 'translate-x-9' : 'translate-x-1'}`} />
+              </button>
+            </div>
+            {signatureEnabled && (
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center justify-between p-3 bg-violet-50 rounded-lg border border-violet-200">
+                  <div>
+                    <p className="text-xs font-medium text-violet-800">Enviar termo por email automaticamente</p>
+                    <p className="text-xs text-violet-600 mt-0.5">O paciente recebe o comprovante de assinatura assim que enviar o formulário</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSignatureAutoEmail(!signatureAutoEmail)}
+                    className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors flex-shrink-0 ${signatureAutoEmail ? 'bg-violet-500' : 'bg-slate-300'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${signatureAutoEmail ? 'translate-x-7' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5 flex items-center gap-1"><FileText size={12} /> Texto do Termo de Consentimento</label>
+                  <textarea
+                    value={consentText}
+                    onChange={e => setConsentText(e.target.value)}
+                    rows={5}
+                    placeholder={`Exemplo:\n\nEu, [NOME], declaro que as informações prestadas neste formulário são verdadeiras e autorizo o uso dos meus dados para fins de atendimento clínico, conforme a LGPD (Lei 13.709/2018).`}
+                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 p-3 border bg-white text-gray-900 text-sm"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Deixe em branco para usar o texto padrão do sistema. Use [NOME] para inserir o nome do paciente automaticamente.</p>
+                </div>
+                <div className="flex items-center gap-2 p-3 bg-violet-50 border border-violet-200 rounded-lg">
+                  <ShieldCheck size={14} className="text-violet-600 flex-shrink-0" />
+                  <span className="text-xs text-violet-700"><strong>O que é coletado:</strong> Assinatura digital desenhada, nome, email, telefone, IP e data/hora — válido como assinatura eletrônica simples pela Lei 14.063/2020.</span>
                 </div>
               </div>
             )}

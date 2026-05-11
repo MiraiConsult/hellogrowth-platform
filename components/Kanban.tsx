@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
-import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle, Settings, GripVertical, AlertTriangle, Check, AlertCircle, Search } from 'lucide-react';
+import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle, Settings, GripVertical, AlertTriangle, Bot, Check, AlertCircle, Search, ShieldCheck, PenLine } from 'lucide-react';
 import { callGeminiAPI } from '@/lib/gemini-client';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
@@ -110,7 +110,9 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts
   const [isDeleting, setIsDeleting] = useState(false);
   
   // Lead Detail Panel State
-  const [detailSection, setDetailSection] = useState<'suggestions' | 'answers' | 'ai' | 'negotiation' | null>(null);
+  const [detailSection, setDetailSection] = useState<'suggestions' | 'answers' | 'ai' | 'negotiation' | 'signature' | null>(null);
+  const [isSendingSignatureEmail, setIsSendingSignatureEmail] = useState(false);
+  const [signatureEmailResult, setSignatureEmailResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [detailContent, setDetailContent] = useState<{ type: 'whatsapp' | 'email'; message?: any } | null>(null);
 
   // Reenvio de e-mail de análise
@@ -400,6 +402,7 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts
     setDetailSection(null);
     setResendEmailResult(null);
     setResendCustomEmail('');
+    setSignatureEmailResult(null);
   };
 
   const handleAddNote = async () => {
@@ -491,6 +494,29 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts
   };
 
   // Reenvio de e-mail de análise da IA
+  const handleSendSignatureEmail = async () => {
+    if (!selectedLead || !tenantId) return;
+    setIsSendingSignatureEmail(true);
+    setSignatureEmailResult(null);
+    try {
+      const res = await fetch('/api/health/send-signature-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: selectedLead.id, tenantId }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setSignatureEmailResult({ ok: false, message: data.error || 'Erro ao enviar email.' });
+      } else {
+        setSignatureEmailResult({ ok: true, message: `Comprovante enviado para: ${data.sentTo}` });
+      }
+    } catch (e: any) {
+      setSignatureEmailResult({ ok: false, message: e.message || 'Erro inesperado.' });
+    } finally {
+      setIsSendingSignatureEmail(false);
+    }
+  };
+
   const handleResendAnalysisEmail = async (customEmail?: string) => {
     if (!selectedLead) return;
     setIsResendingEmail(true);
@@ -1217,6 +1243,34 @@ Agora escreva a mensagem para ${firstName}:`;
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    if (!selectedLead?.phone) {
+                      alert('Lead não tem telefone cadastrado');
+                      return;
+                    }
+                    try {
+                      const res = await fetch('/api/triggers/presale-action', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tenantId, leadId: selectedLead.id }),
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        alert('IA Comercial acionada! Acompanhe na Fila de Ações.');
+                      } else {
+                        alert(data.error || 'Erro ao acionar IA');
+                      }
+                    } catch (e) {
+                      alert('Erro de conexão');
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-50 flex items-center gap-1"
+                  title="Iniciar IA Comercial para este lead"
+                >
+                  <Bot size={14} />
+                  IA Comercial
+                </button>
                 <button 
                   onClick={() => handleDeleteLead(selectedLead.id)}
                   disabled={isDeleting}
@@ -1459,6 +1513,24 @@ Agora escreva a mensagem para ${firstName}:`;
                   <ArrowRight size={16} className="text-gray-400" />
                 </button>
 
+                {/* Assinatura Eletrônica - Botão seletor */}
+                {forms?.some(f => (f as any).signature_enabled && f.id === selectedLead.form_id) && (
+                  <button
+                    onClick={() => setDetailSection(prev => prev === 'signature' ? null : 'signature')}
+                    className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                      detailSection === 'signature'
+                        ? 'border-violet-300 bg-violet-50 text-violet-700'
+                        : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck size={16} className={detailSection === 'signature' ? 'text-violet-600' : 'text-gray-400'} />
+                      <span className="text-xs font-bold uppercase">Assinatura Eletrônica</span>
+                    </div>
+                    <ArrowRight size={16} className="text-gray-400" />
+                  </button>
+                )}
+
               </div>
 
               {/* COLUNA DIREITA - Área de conteúdo dinâmico */}
@@ -1665,6 +1737,56 @@ Agora escreva a mensagem para ${firstName}:`;
                         </button>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Conteúdo: Assinatura Eletrônica */}
+                {detailSection === 'signature' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <ShieldCheck size={18} className="text-violet-600" />
+                      <h3 className="font-bold text-gray-900">Assinatura Eletrônica</h3>
+                    </div>
+                    <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
+                      <p className="text-xs text-violet-700 leading-relaxed">
+                        <strong>Comprovante de assinatura eletrônica simples</strong> — válida pela Lei 14.063/2020.
+                        O comprovante inclui a imagem da assinatura, nome, email, IP e data/hora do envio.
+                      </p>
+                    </div>
+                    {selectedLead.email ? (
+                      <div className="space-y-3">
+                        <div className="bg-white rounded-lg border border-gray-200 p-3">
+                          <p className="text-xs text-gray-500">Email do paciente</p>
+                          <p className="text-sm font-medium text-gray-800">{selectedLead.email}</p>
+                        </div>
+                        <button
+                          onClick={handleSendSignatureEmail}
+                          disabled={isSendingSignatureEmail}
+                          className="w-full flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-3 rounded-xl transition-colors"
+                        >
+                          {isSendingSignatureEmail ? <Loader2 size={16} className="animate-spin" /> : <PenLine size={16} />}
+                          {isSendingSignatureEmail ? 'Enviando...' : 'Enviar Comprovante por Email'}
+                        </button>
+                        {signatureEmailResult && (
+                          <div className={`flex items-start gap-2 text-xs rounded-lg px-3 py-2 ${
+                            signatureEmailResult.ok
+                              ? 'bg-green-50 text-green-700 border border-green-200'
+                              : 'bg-red-50 text-red-700 border border-red-200'
+                          }`}>
+                            {signatureEmailResult.ok
+                              ? <Check size={13} className="mt-0.5 flex-shrink-0" />
+                              : <AlertCircle size={13} className="mt-0.5 flex-shrink-0" />}
+                            <span>{signatureEmailResult.message}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center text-gray-400 py-6">
+                        <Mail size={32} className="mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">Este lead não possui email cadastrado</p>
+                        <p className="text-xs mt-1">O email é necessário para enviar o comprovante</p>
+                      </div>
+                    )}
                   </div>
                 )}
 

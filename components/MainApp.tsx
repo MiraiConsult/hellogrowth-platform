@@ -29,8 +29,24 @@ import TeamManagement from '@/components/TeamManagement';
 import IntelligenceCenter from '@/components/IntelligenceCenter';
 import GameConfig from '@/components/GameConfig';
 import GameParticipations from '@/components/GameParticipations';
+import Game from '@/components/Game';
 import ReportSettings from '@/components/ReportSettings';
 import AlertSettings from '@/components/AlertSettings';
+import ActionInbox from '@/components/ActionInbox';
+import ActionMetrics from '@/components/ActionMetrics';
+import ReferralRewards from '@/components/ReferralRewards';
+import WhatsAppSetup from '@/components/WhatsAppSetup';
+import CSVImport from '@/components/CSVImport';
+import PromptManager from '@/components/PromptManager';
+import PilotChecklist from '@/components/PilotChecklist';
+import PilotReport from '@/components/PilotReport';
+import OptOutManager from '@/components/OptOutManager';
+import GoLiveGuide from '@/components/GoLiveGuide';
+import NotificationSettings from '@/components/NotificationSettings';
+import ReportHistory from '@/components/ReportHistory';
+import SystemHealth from '@/components/SystemHealth';
+import ConversationExport from '@/components/ConversationExport';
+import Dispatches from '@/components/Dispatches';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
@@ -304,6 +320,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [publicSettings, setPublicSettings] = useState<AccountSettings | undefined>(undefined);
   const [publicCompanyName, setPublicCompanyName] = useState<string>('');
   const [publicLogoUrl, setPublicLogoUrl] = useState<string>('');
+  const [publicReferralCode, setPublicReferralCode] = useState<string | null>(null);
 
   // --- INITIAL DATA FETCH ---
   const fetchData = async () => {
@@ -546,6 +563,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         const params = new URLSearchParams(window.location.search);
         const surveyId = params.get('survey');
         const formId = params.get('form');
+        const refCode = params.get('ref');
+        if (refCode) setPublicReferralCode(refCode);
 
         if (surveyId) {
           setPreviewCampaignId(surveyId);
@@ -938,6 +957,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     };
 
     if (campaign.id && campaigns.find(c => c.id === campaign.id)) {
+      // Campanha existente no estado local → atualizar no banco
       const { error: updateError } = await supabase.from('campaigns').update(campaignData).eq('id', campaign.id);
       if (updateError) {
         console.error('Erro ao atualizar campanha:', updateError);
@@ -947,7 +967,31 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }
       setCampaigns(prev => prev.map(c => c.id === campaign.id ? { ...c, ...campaign } : c));
       logActivity({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, action: 'update', entity_type: 'campaign', entity_id: campaign.id, entity_name: campaign.name });
+    } else if (campaign.id) {
+      // Campanha tem ID mas não está no estado local → foi criada pela API (ex: template)
+      // Apenas adicionar ao estado local sem inserir novamente no banco
+      const normalizedCampaign = {
+        ...campaign,
+        npsScore: (campaign as any).nps_score ?? 0,
+        responses: (campaign as any).response_count ?? 0,
+        questions: Array.isArray(campaign.questions) ? campaign.questions : [],
+        initialFields: (campaign as any).initial_fields ?? campaign.initialFields ?? [],
+        enableRedirection: (campaign as any).enable_redirection ?? campaign.enableRedirection ?? false,
+        google_redirect: (campaign as any).google_redirect ?? false,
+        google_place_id: (campaign as any).google_place_id ?? '',
+        offer_prize: (campaign as any).offer_prize ?? false,
+        game_id: (campaign as any).game_id ?? null,
+        before_google_message: (campaign as any).before_google_message ?? '',
+        after_game_message: (campaign as any).after_game_message ?? '',
+        objective: (campaign as any).objective ?? '',
+        tone: (campaign as any).tone ?? '',
+        evaluation_points: (campaign as any).evaluation_points ?? [],
+      };
+      setCampaigns(prev => [...prev, normalizedCampaign]);
+      if (showOnboardingWizard || onboardingInProgress) setNpsCreatedSignal(prev => prev + 1);
+      logActivity({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, action: 'create', entity_type: 'campaign', entity_id: campaign.id, entity_name: campaign.name });
     } else {
+      // Campanha nova sem ID → inserir no banco
       const { data, error: insertError } = await supabase.from('campaigns').insert([campaignData]).select().single();
       if (insertError) {
         console.error('Erro ao inserir campanha:', insertError);
@@ -1117,6 +1161,23 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'any_nps_response', companyId: campaignTenantId, data: npsAlertData }),
         }).catch(() => {});
+
+        // Trigger: Criar ação na fila para aprovação de disparo WhatsApp
+        if (data.customer_phone) {
+          fetch('/api/triggers/create-action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantId: campaignTenantId,
+              contactName: data.customer_name || 'Cliente',
+              contactPhone: data.customer_phone,
+              flowType: data.score <= 6 ? 'detractor' : data.score >= 9 ? 'promoter' : 'passive',
+              npsScore: data.score,
+              npsComment: data.comment || '',
+              triggeredBy: 'nps_form',
+            }),
+          }).catch((err) => console.error('[NPS→Action] Erro:', err));
+        }
       }
     }
 
@@ -1191,7 +1252,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         tenant_id: formTenantId,
         name: data.patient.name,
         email: data.patient.email,
-        phone: data.patient.phone,
+        phone: (data.patient.phone || '').replace(/\D/g, ''),
         status: status,
         value: opportunityValue,
         form_source: publicForm.name,
@@ -1203,6 +1264,39 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       return false;
     }
     
+    // Vincular lead ao referral se veio de um link de indicação
+    if (insertedLead && publicReferralCode) {
+      fetch('/api/engagement/referrals', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-tenant-id': formTenantId },
+        body: JSON.stringify({
+          referral_code: publicReferralCode,
+          referred_lead_id: insertedLead.id,
+          referred_name: insertedLead.name,
+          referred_phone: insertedLead.phone,
+          status: 'closed',
+        }),
+      }).catch((err) => console.error('[Referral→Link] Erro:', err));
+    }
+
+    // Trigger: Criar ação na fila para aprovação de disparo WhatsApp (pré-venda)
+    if (insertedLead && formTenantId && insertedLead.phone) {
+      fetch('/api/triggers/create-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: formTenantId,
+          contactName: insertedLead.name || 'Lead',
+          contactPhone: insertedLead.phone,
+          flowType: 'pre_sale',
+          formResponses: enrichedAnswers,
+          interestedServices: data.patient?.interested_services || [],
+          leadId: insertedLead.id,
+          triggeredBy: 'presale_form',
+        }),
+      }).catch((err) => console.error('[PreSale→Action] Erro:', err));
+    }
+
     // Disparar alertas de novo lead e lead de alto valor (fire-and-forget)
     if (insertedLead && formTenantId) {
       const alertData = {
@@ -1283,6 +1377,25 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           }),
         }).catch(err => console.error('[email-analysis] Erro ao disparar e-mail:', err));
       }
+    }
+
+    // Salvar assinatura eletrônica se o formulário tiver esse recurso ativado
+    if (insertedLead && data.signatureData && (publicForm as any).signature_enabled) {
+      fetch('/api/health/save-signature', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: formTenantId,
+          formId: publicForm.id,
+          leadId: insertedLead.id,
+          patientName: data.patient?.name || '',
+          patientEmail: data.patient?.email || '',
+          patientPhone: data.patient?.phone || '',
+          signatureImage: data.signatureData,
+          consentText: (publicForm as any).consent_text || '',
+          signatureAutoEmail: (publicForm as any).signature_auto_email || false,
+        }),
+      }).catch(err => console.error('[signature] Erro ao salvar assinatura:', err));
     }
 
     return true;
@@ -1679,9 +1792,7 @@ Responda APENAS com JSON válido (sem markdown):
         />}
         
         {currentView === 'games' && (
-            <div className="p-6">
-                <GameConfig tenantId={getActiveTenant()!} />
-            </div>
+            <Game tenantId={getActiveTenant()!} campaigns={campaigns} businessProfile={businessProfile} />
         )}
         
         {currentView === 'game-participations' && (
@@ -1824,6 +1935,77 @@ Responda APENAS com JSON válido (sem markdown):
             </div>
         )}
 
+        {currentView === 'action-inbox' && (
+          <ActionInbox
+            isDark={false}
+            tenantId={getActiveTenant() || ''}
+            actionsModule={(() => { try { const a = typeof activeCompany?.plan_addons === 'string' ? JSON.parse(activeCompany?.plan_addons || '{}') : (activeCompany?.plan_addons || {}); return a.actions || 'none'; } catch { return 'none'; } })()}
+          />
+        )}
+
+        {currentView === 'whatsapp-setup' && (
+          <div className="p-6">
+            <WhatsAppSetup
+              isDark={false}
+              tenantId={getActiveTenant() || ''}
+              companyName={settings.companyName || 'Minha Empresa'}
+              actionsModule={(() => { try { const a = typeof activeCompany?.plan_addons === 'string' ? JSON.parse(activeCompany?.plan_addons || '{}') : (activeCompany?.plan_addons || {}); return a.actions || 'none'; } catch { return 'none'; } })()}
+            />
+          </div>
+        )}
+
+        {currentView === 'dispatches' && (
+          <Dispatches
+            tenantId={getActiveTenant() || ''}
+            actionsModule={(() => { try { const a = typeof activeCompany?.plan_addons === 'string' ? JSON.parse(activeCompany?.plan_addons || '{}') : (activeCompany?.plan_addons || {}); return a.actions || 'none'; } catch { return 'none'; } })()}
+            npsCampaignsList={campaigns}
+          />
+        )}
+        {currentView === 'action-metrics' && (
+          <ActionMetrics
+            isDark={false}
+            tenantId={getActiveTenant() || ''}
+          />
+        )}
+
+        {currentView === 'referral-rewards' && (
+          <ReferralRewards
+            isDark={false}
+            tenantId={getActiveTenant() || ''}
+          />
+        )}
+
+        {currentView === 'prompt-manager' && (
+          <PromptManager
+            isDark={false}
+            tenantId={getActiveTenant() || ''}
+          />
+        )}
+
+        {currentView === 'pilot-checklist' && (
+          <PilotChecklist />
+        )}
+        {currentView === 'pilot-report' && (
+          <PilotReport isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'opt-out-manager' && (
+          <OptOutManager isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'go-live-guide' && (
+          <GoLiveGuide isDark={false} />
+        )}
+        {currentView === 'notification-settings' && (
+          <NotificationSettings isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'report-history' && (
+          <ReportHistory isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'system-health' && (
+          <SystemHealth isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'conversation-export' && (
+          <ConversationExport isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
         {/* Banner flutuante de onboarding em andamento — aparece quando o usuário navega para módulos durante o onboarding */}
         {!showOnboardingWizard && onboardingInProgress && ['nps','forms','products'].includes(currentView) && (
           <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl border border-emerald-500">

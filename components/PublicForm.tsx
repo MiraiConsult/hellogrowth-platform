@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Form, InitialField } from '@/types';
-import { CheckCircle, ArrowRight, ArrowLeft, Check, ShieldCheck, X, Sparkles } from 'lucide-react';
+import { CheckCircle, ArrowRight, ArrowLeft, Check, ShieldCheck, X, Sparkles, PenLine, FileText } from 'lucide-react';
 import SpinWheel from './SpinWheel';
+import SignaturePad from './SignaturePad';
 
 interface PublicFormProps {
   form: Form;
@@ -53,6 +54,10 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
 
   const [patientData, setPatientData] = useState({ name: '', email: '', phone: '' });
   const [showIntro, setShowIntro] = useState(true);
+  // Assinatura eletrônica
+  const [showSignatureStep, setShowSignatureStep] = useState(false);
+  const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [signatureError, setSignatureError] = useState(false);
 
   // Persistência de progresso via localStorage
   const STORAGE_KEY = `hg_form_progress_${form.id}`;
@@ -239,11 +244,14 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
     }
     if (currentStep < form.questions.length - 1) {
       setCurrentStep(prev => prev + 1);
+    } else if ((form as any).signature_enabled && !showSignatureStep) {
+      // Mostrar etapa de assinatura antes de enviar
+      setShowSignatureStep(true);
     } else {
       // Aguardar salvamento antes de mostrar sucesso
       setIsSubmitting(true);
       try {
-        const success = await onSubmit({ patient: patientData, answers });
+        const success = await onSubmit({ patient: patientData, answers, signatureData });
         if (success) {
           // Limpar progresso salvo após envio bem-sucedido
           clearProgress();
@@ -277,7 +285,9 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   };
 
   const currentQuestion = form.questions[currentStep];
-  const progress = ((currentStep + 1) / form.questions.length) * 100;
+  const totalSteps = (form as any).signature_enabled ? form.questions.length + 1 : form.questions.length;
+  const effectiveStep = showSignatureStep ? form.questions.length : currentStep;
+  const progress = ((effectiveStep + 1) / totalSteps) * 100;
 
   // Tela de carregamento/análise de 5 segundos
   if (showAnalyzingScreen) {
@@ -410,7 +420,92 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-2xl">
           
-          {showIntro ? (
+          {showSignatureStep ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ backgroundColor: '#ffffff', color: '#111827' }}>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center">
+                  <PenLine size={20} className="text-violet-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Assinatura Eletrônica</h2>
+                  <p className="text-xs text-gray-500">Etapa final — Leia e assine o termo abaixo</p>
+                </div>
+              </div>
+
+              <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200 text-sm text-gray-700 leading-relaxed max-h-48 overflow-y-auto">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText size={14} className="text-violet-500" />
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Termo de Consentimento</span>
+                </div>
+                <p className="whitespace-pre-wrap">
+                  {((form as any).consent_text || `Eu, ${patientData.name || '[NOME]'}, declaro que as informações prestadas neste formulário são verdadeiras e autorizo o uso dos meus dados para fins de atendimento, conforme a LGPD (Lei 13.709/2018) e a Lei de Assinatura Eletrônica (Lei 14.063/2020).\n\nData e hora: ${new Date().toLocaleString('pt-BR')}\nIP registrado para fins de prova jurídica.`).replace('[NOME]', patientData.name || '[NOME]')}
+                </p>
+              </div>
+
+              <div className="mt-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-3">Assine abaixo para confirmar:</label>
+                <SignaturePad onSignatureChange={setSignatureData} />
+                {signatureError && (
+                  <p className="text-red-500 text-xs mt-2">Por favor, assine antes de enviar.</p>
+                )}
+              </div>
+
+              <div className="mt-8 flex justify-between items-center pt-6 border-t border-gray-100">
+                <button
+                  onClick={() => setShowSignatureStep(false)}
+                  className="px-4 py-2 text-gray-500 hover:text-gray-800 transition-opacity flex items-center gap-2"
+                >
+                  <ArrowLeft size={18} /> Anterior
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!signatureData) {
+                      setSignatureError(true);
+                      return;
+                    }
+                    setSignatureError(false);
+                    setIsSubmitting(true);
+                    try {
+                      const success = await onSubmit({ patient: patientData, answers, signatureData });
+                      if (success) {
+                        clearProgress();
+                        setShowAnalyzingScreen(true);
+                        setTimeout(() => {
+                          setShowAnalyzingScreen(false);
+                          if (form.game_enabled) {
+                            setShowGame(true);
+                          } else {
+                            setIsCompleted(true);
+                          }
+                        }, 5000);
+                      } else {
+                        alert('Erro ao enviar formulário. Por favor, tente novamente.');
+                      }
+                    } catch (error) {
+                      console.error('Erro ao enviar:', error);
+                      alert('Erro ao enviar formulário. Por favor, tente novamente.');
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  disabled={isSubmitting}
+                  className="px-8 py-3 bg-violet-600 text-white rounded-xl font-bold hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-violet-200 flex items-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Enviando...
+                    </>
+                  ) : (
+                    <><PenLine size={18} /> Assinar e Enviar</>
+                  )}
+                </button>
+              </div>
+            </div>
+          ) : showIntro ? (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ backgroundColor: '#ffffff', color: '#111827' }}>
               {/* Banner de retomada de progresso */}
               {showResumePrompt && savedProgress && (
@@ -449,6 +544,25 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
                 {enabledFields.map((field) => {
                   const inputType = field.field === 'email' ? 'email' : field.field === 'phone' ? 'tel' : 'text';
                   
+                  // Máscara de telefone: (XX)XXXXX-XXXX
+                  const handlePhoneChange = (value: string) => {
+                    // Remove tudo que não é número
+                    const digits = value.replace(/\D/g, '');
+                    // Limitar a 11 dígitos
+                    const limited = digits.substring(0, 11);
+                    // Aplicar máscara
+                    let formatted = limited;
+                    if (limited.length > 2) {
+                      formatted = `(${limited.substring(0, 2)})${limited.substring(2)}`;
+                    } else if (limited.length > 0) {
+                      formatted = `(${limited}`;
+                    }
+                    if (limited.length > 7) {
+                      formatted = `(${limited.substring(0, 2)})${limited.substring(2, 7)}-${limited.substring(7)}`;
+                    }
+                    setPatientData({...patientData, [field.field]: formatted});
+                  };
+
                   return (
                     <div key={field.field}>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -457,10 +571,10 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
                       <input 
                         type={inputType}
                         value={patientData[field.field]}
-                        onChange={(e) => setPatientData({...patientData, [field.field]: e.target.value})}
+                        onChange={(e) => field.field === 'phone' ? handlePhoneChange(e.target.value) : setPatientData({...patientData, [field.field]: e.target.value})}
                         className="w-full rounded-lg border-gray-300 shadow-sm focus:ring-primary-500 focus:border-primary-500 p-3 border bg-white text-gray-900 placeholder-gray-500"
                         style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                        placeholder={field.placeholder}
+                        placeholder={field.field === 'phone' ? '(51)99999-9999' : field.placeholder}
                         required={field.required}
                       />
                     </div>
