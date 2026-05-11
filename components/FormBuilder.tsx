@@ -50,10 +50,12 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   // Verificar se o addon de saúde está ativo
   const hasHealthAddon = (() => {
     try {
-      const a = typeof activeCompany?.plan_addons === 'string'
-        ? JSON.parse(activeCompany?.plan_addons || '{}')
-        : (activeCompany?.plan_addons || {});
-      return a.health || false;
+      const raw = activeCompany?.plan_addons;
+      // Suporta: string JSON, objeto ou array (legado)
+      const a = typeof raw === 'string'
+        ? JSON.parse(raw || '{}')
+        : (Array.isArray(raw) ? {} : (raw || {}));
+      return a.health === true;
     } catch { return false; }
   })();
 
