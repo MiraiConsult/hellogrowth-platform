@@ -1379,6 +1379,25 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }
     }
 
+    // Salvar assinatura eletrônica se o formulário tiver esse recurso ativado
+    if (insertedLead && data.signatureData && (publicForm as any).signature_enabled) {
+      fetch('/api/health/save-signature', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: formTenantId,
+          formId: publicForm.id,
+          leadId: insertedLead.id,
+          patientName: data.patient?.name || '',
+          patientEmail: data.patient?.email || '',
+          patientPhone: data.patient?.phone || '',
+          signatureImage: data.signatureData,
+          consentText: (publicForm as any).consent_text || '',
+          signatureAutoEmail: (publicForm as any).signature_auto_email || false,
+        }),
+      }).catch(err => console.error('[signature] Erro ao salvar assinatura:', err));
+    }
+
     return true;
   };
   
