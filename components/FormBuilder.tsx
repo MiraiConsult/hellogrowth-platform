@@ -551,15 +551,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
             <p className="text-gray-500">Gerencie seus questionários de pré-venda</p>
           </div>
           <div className="flex gap-3">
-            {/* Botão Disparo em Massa */}
-            <button
-              disabled
-              title="Em breve disponível"
-              className="px-4 py-2 bg-gray-100 border border-gray-200 text-gray-400 rounded-lg flex items-center gap-2 font-medium cursor-not-allowed opacity-70"
-            >
-              <Send size={18} /> Disparo em Massa
-              <span className="text-xs bg-gray-500 text-white px-1.5 py-0.5 rounded-full font-semibold">EM BREVE</span>
-            </button>
+            {/* Botão Disparo em Massa - oculto */}
             {/* Botão Analisar com IA */}
             <button 
               onClick={onAnalyzeAllLeads}
