@@ -98,6 +98,7 @@ export default function NPSConsultant({
   ]);
   const [googleRedirect, setGoogleRedirect] = useState(false);
   const [googlePlaceId, setGooglePlaceId] = useState('');
+  const [redirectMinScore, setRedirectMinScore] = useState(9);
   const [offerPrize, setOfferPrize] = useState(false);
   const [showLogo, setShowLogo] = useState(false);
   const [selectedGameId, setSelectedGameId] = useState<string>('');
@@ -222,6 +223,7 @@ export default function NPSConsultant({
       setTone(existingCampaign.tone || 'friendly');
       setGoogleRedirect(existingCampaign.google_redirect || existingCampaign.enableRedirection || false);
       setGooglePlaceId(existingCampaign.google_place_id || '');
+      setRedirectMinScore((existingCampaign as any).redirect_min_score ?? 9);
       setOfferPrize(existingCampaign.offer_prize || false);
       setSelectedGameId((existingCampaign as any).game_id || '');
       setShowLogo((existingCampaign as any).show_logo || false);
@@ -993,6 +995,7 @@ Retorne APENAS o JSON:`;
         initial_fields: initialFields,
         google_redirect: googleRedirect,
         google_place_id: googlePlaceId,
+        redirect_min_score: redirectMinScore,
         offer_prize: offerPrize,
         show_logo: showLogo,
         game_id: selectedGameId || null,
@@ -1693,6 +1696,32 @@ Retorne APENAS o JSON:`;
             </label>
             {googleRedirect && googlePlaceId && (
               <p className="mt-2 text-sm text-slate-500">Place ID: {googlePlaceId}</p>
+            )}
+            {googleRedirect && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-slate-600 mb-2">
+                  Nota mínima para redirecionar ao Google
+                </label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[7, 8, 9, 10].map(score => (
+                    <button
+                      key={score}
+                      type="button"
+                      onClick={() => setRedirectMinScore(score)}
+                      className={`px-4 py-2 rounded-lg border text-sm font-semibold transition-colors ${
+                        redirectMinScore === score
+                          ? 'bg-emerald-500 text-white border-emerald-500'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'
+                      }`}
+                    >
+                      {score === 10 ? 'Só 10' : `≥ ${score}`}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  Clientes com nota {redirectMinScore === 10 ? 'igual a 10' : `${redirectMinScore} ou mais`} serão redirecionados para avaliar no Google.
+                </p>
+              </div>
             )}
           </div>
 

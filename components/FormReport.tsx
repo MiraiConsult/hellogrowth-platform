@@ -57,6 +57,11 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
   const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [pendingUpdate, setPendingUpdate] = useState<any>(null);
 
+  // Estados para reenvio de e-mail de análise
+  const [isResendingEmail, setIsResendingEmail] = useState(false);
+  const [resendEmailResult, setResendEmailResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [resendCustomEmail, setResendCustomEmail] = useState('');
+
   // Filter & Sort State
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
@@ -214,6 +219,8 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
       setChatMessages([]);
       setChatInput('');
       setIsEditingProducts(false);
+      setResendEmailResult(null);
+      setResendCustomEmail('');
     }
   }, [selectedLead?.id]);
 
@@ -413,6 +420,38 @@ Retorne APENAS um JSON válido (sem markdown) com:
   const handleRejectPendingUpdate = () => {
     setPendingUpdate(null);
     setChatMessages(prev => [...prev, { role: 'ai', content: 'Ok, descartei a alteração. O que gostaria de ajustar?' }]);
+  };
+
+  // Função de reenvio de e-mail de análise
+  const handleResendAnalysisEmail = async (customEmail?: string) => {
+    if (!selectedLead) return;
+    setIsResendingEmail(true);
+    setResendEmailResult(null);
+    try {
+      const customRecipients = customEmail?.trim()
+        ? customEmail.split(',').map(e => e.trim()).filter(Boolean)
+        : [];
+      const res = await fetch('/api/admin/resend-analysis-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: selectedLead.id, customRecipients }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.noRecipients) {
+          setResendEmailResult({ ok: false, message: 'Nenhum destinatário configurado no formulário. Informe um e-mail abaixo.' });
+        } else {
+          setResendEmailResult({ ok: false, message: data.error || 'Erro ao enviar e-mail.' });
+        }
+      } else {
+        setResendEmailResult({ ok: true, message: `E-mail enviado para: ${data.recipients.join(', ')}` });
+        setResendCustomEmail('');
+      }
+    } catch (e: any) {
+      setResendEmailResult({ ok: false, message: e.message || 'Erro inesperado.' });
+    } finally {
+      setIsResendingEmail(false);
+    }
   };
 
   // Função de chat com IA
@@ -1285,6 +1324,47 @@ Seja ESPECIFICO e baseie TUDO nos dados reais.
                         <p className="text-xs mt-1">Use o botão "Analisar com IA" no Kanban para gerar a análise</p>
                       </div>
                     )}
+
+                    {/* Bloco de reenvio de e-mail */}
+                    <div className="mt-6 border-t border-gray-200 pt-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Mail size={15} className="text-blue-500" />
+                        <span className="text-sm font-semibold text-gray-700">Reenviar análise por e-mail</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mb-3">
+                        Envia (ou reenvia) o e-mail com a análise da IA para os destinatários configurados no formulário.
+                        Você também pode informar um e-mail alternativo abaixo.
+                      </p>
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={resendCustomEmail}
+                          onChange={e => setResendCustomEmail(e.target.value)}
+                          placeholder="E-mail alternativo (opcional, separe por vírgula)"
+                          className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        />
+                        <button
+                          onClick={() => handleResendAnalysisEmail(resendCustomEmail || undefined)}
+                          disabled={isResendingEmail}
+                          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                        >
+                          {isResendingEmail ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                          {isResendingEmail ? 'Enviando...' : 'Enviar'}
+                        </button>
+                      </div>
+                      {resendEmailResult && (
+                        <div className={`flex items-start gap-2 text-xs rounded-lg px-3 py-2 mt-1 ${
+                          resendEmailResult.ok
+                            ? 'bg-green-50 text-green-700 border border-green-200'
+                            : 'bg-red-50 text-red-700 border border-red-200'
+                        }`}>
+                          {resendEmailResult.ok
+                            ? <Check size={13} className="mt-0.5 flex-shrink-0" />
+                            : <AlertCircle size={13} className="mt-0.5 flex-shrink-0" />}
+                          <span>{resendEmailResult.message}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
       const { data, error } = await supabase
         .from('kanban_boards')
         .select('*')
+        .is('tenant_id', null)
         .order('position', { ascending: true });
       if (error) throw error;
       return NextResponse.json({ data });
@@ -59,6 +60,46 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data });
     }
 
+    if (action === 'unassigned') {
+      // Buscar todos os usuários owners que NÃO têm card ativo nos boards admin
+      const { data: allUsers, error: usersError } = await supabase
+        .from('users')
+        .select('id, name, email, company_name, plan, phone, city, state, niche')
+        .eq('is_owner', true)
+        .order('name', { ascending: true });
+      if (usersError) throw usersError;
+
+      // Buscar os board_ids dos boards admin (tenant_id IS NULL)
+      const { data: adminBoards } = await supabase
+        .from('kanban_boards')
+        .select('id')
+        .is('tenant_id', null);
+      const adminBoardIds = (adminBoards || []).map((b: any) => b.id);
+
+      // Buscar as etapas dos boards admin
+      const { data: adminStages } = await supabase
+        .from('kanban_stages')
+        .select('id')
+        .in('board_id', adminBoardIds);
+      const adminStageIds = (adminStages || []).map((s: any) => s.id);
+
+      // Buscar todos os cards ativos nessas etapas (independente do tenant_id do card)
+      const { data: activeCards } = await supabase
+        .from('kanban_cards')
+        .select('client_email, user_id')
+        .is('deleted_at', null)
+        .in('stage_id', adminStageIds);
+
+      const cardEmails = new Set((activeCards || []).map((c: any) => (c.client_email || '').toLowerCase()));
+      const cardUserIds = new Set((activeCards || []).map((c: any) => c.user_id).filter(Boolean));
+
+      const unassigned = (allUsers || []).filter((u: any) =>
+        !cardEmails.has((u.email || '').toLowerCase()) && !cardUserIds.has(u.id)
+      );
+
+      return NextResponse.json({ users: unassigned });
+    }
+
     if (action === 'alerts') {
       const today = new Date().toISOString().split('T')[0];
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -79,9 +120,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ overdue: overdue || [], dueToday: dueToday || [] });
     }
 
-    // all — boards + stages + cards together
+    // all — boards + stages + cards together (admin only: tenant_id IS NULL)
     const [boardsRes, stagesRes, cardsRes] = await Promise.all([
-      supabase.from('kanban_boards').select('*').order('position', { ascending: true }),
+      supabase.from('kanban_boards').select('*').is('tenant_id', null).order('position', { ascending: true }),
       boardId
         ? supabase.from('kanban_stages').select('*').eq('board_id', boardId).order('position', { ascending: true })
         : supabase.from('kanban_stages').select('*').order('position', { ascending: true }),
@@ -209,6 +250,22 @@ export async function PATCH(req: NextRequest) {
         .select()
         .single();
       if (error) throw error;
+
+      // Sincronizar CS/SDR com a tabela users (tela Clientes)
+      const hasCSorSDR = 'cs_name' in updates || 'sdr_name' in updates;
+      if (hasCSorSDR && data) {
+        const syncPayload: Record<string, any> = {};
+        if ('cs_name' in updates) syncPayload.cs_name = updates.cs_name;
+        if ('sdr_name' in updates) syncPayload.sdr_name = updates.sdr_name;
+
+        // Tentar sincronizar por user_id primeiro, depois por client_email
+        if (data.user_id) {
+          await supabase.from('users').update(syncPayload).eq('id', data.user_id);
+        } else if (data.client_email) {
+          await supabase.from('users').update(syncPayload).eq('email', data.client_email);
+        }
+      }
+
       return NextResponse.json({ data });
     }
 

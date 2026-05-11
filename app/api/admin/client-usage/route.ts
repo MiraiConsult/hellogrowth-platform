@@ -186,6 +186,35 @@ export async function PATCH(request: NextRequest) {
 
     if (error) throw error;
 
+    // Sincronizar CS/SDR com o kanban_cards correspondente
+    const syncPayload: Record<string, any> = {};
+    if (sdr_name !== undefined) syncPayload.sdr_name = sdr_name;
+    if (cs_name !== undefined) syncPayload.cs_name = cs_name;
+
+    if (Object.keys(syncPayload).length > 0) {
+      // Buscar o e-mail do user para encontrar o card
+      const { data: userData } = await supabase
+        .from('users')
+        .select('email')
+        .eq('id', user_id)
+        .single();
+
+      if (userData?.email) {
+        // Atualizar cards que tenham user_id ou client_email correspondente
+        await supabase
+          .from('kanban_cards')
+          .update({ ...syncPayload, updated_at: new Date().toISOString() })
+          .eq('user_id', user_id)
+          .is('deleted_at', null);
+
+        await supabase
+          .from('kanban_cards')
+          .update({ ...syncPayload, updated_at: new Date().toISOString() })
+          .eq('client_email', userData.email)
+          .is('deleted_at', null);
+      }
+    }
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

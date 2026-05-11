@@ -94,10 +94,6 @@ const GameConfig: React.FC<GameConfigProps> = ({ tenantId }) => {
       newErrors.push('Nome da roleta é obrigatório');
     }
 
-    if (game.prizes.length < 3) {
-      newErrors.push('Mínimo de 3 prêmios');
-    }
-
     if (game.prizes.length > 8) {
       newErrors.push('Máximo de 8 prêmios');
     }
@@ -143,10 +139,6 @@ const GameConfig: React.FC<GameConfigProps> = ({ tenantId }) => {
   };
 
   const handleRemovePrize = (index: number) => {
-    if (game.prizes.length <= 3) {
-      setErrors(['Mínimo de 3 prêmios']);
-      return;
-    }
     setGame({ ...game, prizes: game.prizes.filter((_, i) => i !== index) });
   };
 
@@ -530,7 +522,7 @@ const GameConfig: React.FC<GameConfigProps> = ({ tenantId }) => {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">%</span>
-                {game.prizes.length > 3 && (
+                {game.prizes.length > 1 && (
                   <button
                     onClick={() => handleRemovePrize(index)}
                     className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
