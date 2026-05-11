@@ -250,6 +250,22 @@ export async function PATCH(req: NextRequest) {
         .select()
         .single();
       if (error) throw error;
+
+      // Sincronizar CS/SDR com a tabela users (tela Clientes)
+      const hasCSorSDR = 'cs_name' in updates || 'sdr_name' in updates;
+      if (hasCSorSDR && data) {
+        const syncPayload: Record<string, any> = {};
+        if ('cs_name' in updates) syncPayload.cs_name = updates.cs_name;
+        if ('sdr_name' in updates) syncPayload.sdr_name = updates.sdr_name;
+
+        // Tentar sincronizar por user_id primeiro, depois por client_email
+        if (data.user_id) {
+          await supabase.from('users').update(syncPayload).eq('id', data.user_id);
+        } else if (data.client_email) {
+          await supabase.from('users').update(syncPayload).eq('email', data.client_email);
+        }
+      }
+
       return NextResponse.json({ data });
     }
 
