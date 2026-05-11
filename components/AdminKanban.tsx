@@ -2559,7 +2559,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                   <div>
                     <textarea value={infoForm.notes}
                       onChange={e => setInfoForm(p => ({ ...p, notes: e.target.value }))}
-                      rows={2}
+                      rows={6}
                       className={`w-full px-3 py-2 rounded-2xl border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none`}
                       placeholder="Observações sobre este cliente..." />
                   </div>
