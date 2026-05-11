@@ -1890,36 +1890,29 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
               ))}
               <span className={`ml-auto text-xs ${t.textMuted}`}>{sortedCards.length} cliente{sortedCards.length !== 1 ? 's' : ''}</span>
               <button
-                onClick={() => {
-                  // Exportar lista como XLSX
-                  const rows = [
-                    ['Cliente', 'Empresa', 'Email', 'Telefone', 'Etapa', 'CS', 'SDR', 'Saúde', 'FUP', 'Próx. Contato', 'Observações'],
-                    ...sortedCards.map(card => {
-                      const stage = stages.find(s => s.id === card.stage_id);
-                      return [
-                        card.client_name || '',
-                        card.company_name || '',
-                        card.client_email || '',
-                        card.client_phone || '',
-                        stage?.name || '',
-                        card.cs_name || '',
-                        card.sdr_name || '',
-                        card.health_status || '',
-                        card.fup_date || '',
-                        card.next_contact_date || '',
-                        card.notes || '',
-                      ];
-                    }),
-                  ];
-                  // Criar CSV com BOM para Excel reconhecer UTF-8
-                  const csv = '\uFEFF' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `kanban-cs-${new Date().toISOString().split('T')[0]}.csv`;
-                  a.click();
-                  URL.revokeObjectURL(url);
+                onClick={async () => {
+                  // Exportar lista como XLSX usando SheetJS
+                  const XLSX = await import('xlsx');
+                  const rows = sortedCards.map(card => {
+                    const stage = stages.find(s => s.id === card.stage_id);
+                    return {
+                      'Cliente': card.client_name || '',
+                      'Empresa': card.company_name || '',
+                      'Email': card.client_email || '',
+                      'Telefone': card.client_phone || '',
+                      'Etapa': stage?.name || '',
+                      'CS': card.cs_name || '',
+                      'SDR': card.sdr_name || '',
+                      'Saúde': card.health_status || '',
+                      'FUP': card.fup_date || '',
+                      'Próx. Contato': card.next_contact_date || '',
+                      'Observações': card.notes || '',
+                    };
+                  });
+                  const ws = XLSX.utils.json_to_sheet(rows);
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, 'Kanban CS');
+                  XLSX.writeFile(wb, `kanban-cs-${new Date().toISOString().split('T')[0]}.xlsx`);
                 }}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${t.border} ${t.textSub} hover:text-violet-600 hover:border-violet-500 transition-colors`}
               >
