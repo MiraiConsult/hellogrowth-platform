@@ -522,7 +522,7 @@ const GameConfig: React.FC<GameConfigProps> = ({ tenantId }) => {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">%</span>
-                {game.prizes.length > 3 && (
+                {game.prizes.length > 1 && (
                   <button
                     onClick={() => handleRemovePrize(index)}
                     className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
