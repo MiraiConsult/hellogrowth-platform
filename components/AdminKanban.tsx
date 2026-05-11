@@ -6,7 +6,7 @@ import {
   Phone, MessageCircle, Video, Mail, Calendar, Clock,
   ArrowRightCircle, Bell, HeartHandshake, ChevronRight,
   Building2, User, Activity, Copy, ExternalLink,
-  LayoutList, LayoutGrid, AlarmClock, MapPin, Users2, Stethoscope, Users, Send,
+  LayoutList, LayoutGrid, AlarmClock, MapPin, Users2, Stethoscope, Users, Send, Download,
 } from 'lucide-react';
 
 interface Board {
@@ -1889,6 +1889,43 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                 </button>
               ))}
               <span className={`ml-auto text-xs ${t.textMuted}`}>{sortedCards.length} cliente{sortedCards.length !== 1 ? 's' : ''}</span>
+              <button
+                onClick={() => {
+                  // Exportar lista como XLSX
+                  const rows = [
+                    ['Cliente', 'Empresa', 'Email', 'Telefone', 'Etapa', 'CS', 'SDR', 'Saúde', 'FUP', 'Próx. Contato', 'Observações'],
+                    ...sortedCards.map(card => {
+                      const stage = stages.find(s => s.id === card.stage_id);
+                      return [
+                        card.client_name || '',
+                        card.company_name || '',
+                        card.client_email || '',
+                        card.client_phone || '',
+                        stage?.name || '',
+                        card.cs_name || '',
+                        card.sdr_name || '',
+                        card.health_status || '',
+                        card.fup_date || '',
+                        card.next_contact_date || '',
+                        card.notes || '',
+                      ];
+                    }),
+                  ];
+                  // Criar CSV com BOM para Excel reconhecer UTF-8
+                  const csv = '\uFEFF' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `kanban-cs-${new Date().toISOString().split('T')[0]}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${t.border} ${t.textSub} hover:text-violet-600 hover:border-violet-500 transition-colors`}
+              >
+                <Download size={12} />
+                Exportar
+              </button>
             </div>
 
             {/* Tabela */}

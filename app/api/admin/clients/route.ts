@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+// Client com service_role para contornar RLS nas operações admin
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 // GET /api/admin/clients — lista todos os usuários com suas empresas e dados de trial
 export async function GET(request: NextRequest) {
@@ -124,7 +131,7 @@ export async function GET(request: NextRequest) {
     const userEmails = (users || []).map((u: any) => u.email).filter(Boolean);
     let kanbanCsMap: Record<string, { cs_name: string | null; sdr_name: string | null }> = {};
     if (userEmails.length > 0) {
-      const { data: kanbanCardsBatch } = await supabase
+      const { data: kanbanCardsBatch } = await supabaseAdmin
         .from('kanban_cards')
         .select('client_email, cs_name, sdr_name')
         .in('client_email', userEmails)
