@@ -47,6 +47,7 @@ import ReportHistory from '@/components/ReportHistory';
 import SystemHealth from '@/components/SystemHealth';
 import ConversationExport from '@/components/ConversationExport';
 import Dispatches from '@/components/Dispatches';
+import HealthSignatures from '@/components/HealthSignatures';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
@@ -2006,6 +2007,10 @@ Responda APENAS com JSON válido (sem markdown):
         )}
         {currentView === 'conversation-export' && (
           <ConversationExport isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+
+        {currentView === 'health-signatures' && (
+          <HealthSignatures tenantId={getActiveTenant() || ''} />
         )}
         {/* Banner flutuante de onboarding em andamento — aparece quando o usuário navega para módulos durante o onboarding */}
         {!showOnboardingWizard && onboardingInProgress && ['nps','forms','products'].includes(currentView) && (
