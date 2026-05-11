@@ -1514,7 +1514,7 @@ Agora escreva a mensagem para ${firstName}:`;
                 </button>
 
                 {/* Assinatura Eletrônica - Botão seletor */}
-                {forms?.some(f => (f as any).signature_enabled && f.id === selectedLead.form_id) && (
+                {forms?.some(f => (f as any).signature_enabled && (f.id === selectedLead.formId || f.id === (selectedLead as any).form_id)) && (
                   <button
                     onClick={() => setDetailSection(prev => prev === 'signature' ? null : 'signature')}
                     className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
