@@ -1198,6 +1198,13 @@ Responda APENAS com JSON válido neste formato:
       status: 'active'
     };
 
+    console.log('[DEBUG FormConsultant] formData to save:', JSON.stringify({
+      name: formData.name,
+      signature_enabled: formData.signature_enabled,
+      signature_auto_email: formData.signature_auto_email,
+      signature_auto_whatsapp: formData.signature_auto_whatsapp,
+      term_color: formData.term_color,
+    }));
     onSaveForm(formData);
     setCurrentStep('complete');
     addAssistantMessage(

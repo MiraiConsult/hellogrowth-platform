@@ -834,6 +834,14 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   // --- CRUD HANDLERS ---
   const handleSaveForm = async (form: Form) => {
     if (!supabase) return;
+    console.log('[DEBUG handleSaveForm] form received:', JSON.stringify({
+      id: form.id,
+      name: form.name,
+      signature_enabled: form.signature_enabled,
+      signature_auto_email: form.signature_auto_email,
+      signature_auto_whatsapp: form.signature_auto_whatsapp,
+      term_color: form.term_color,
+    }));
     const formData = {
       name: form.name,
       description: form.description,
