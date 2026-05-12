@@ -848,7 +848,9 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       email_analysis_enabled: form.email_analysis_enabled || false,
       email_analysis_recipients: form.email_analysis_recipients || '',
       whatsapp_analysis_enabled: (form as any).whatsapp_analysis_enabled || false,
-      whatsapp_analysis_recipients: (form as any).whatsapp_analysis_recipients || ''
+      whatsapp_analysis_recipients: (form as any).whatsapp_analysis_recipients || '',
+      signature_enabled: (form as any).signature_enabled || false,
+      consent_text: (form as any).consent_text || null
       // product_ids: requer migração 004 no Supabase antes de habilitar
       // product_ids: (form as any).product_ids || null
     };
