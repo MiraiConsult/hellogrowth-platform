@@ -1,9 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Megaphone, Gamepad2, Users, BarChart2 } from 'lucide-react';
-import GameConfig from '@/components/GameConfig';
-import GameParticipations from '@/components/GameParticipations';
+import { Megaphone, BarChart2 } from 'lucide-react';
 import EngagementCampaigns from '@/components/EngagementCampaigns';
 import EngagementResults from '@/components/EngagementResults';
 
@@ -13,15 +11,13 @@ interface GameProps {
   businessProfile?: any;
 }
 
-type Tab = 'campaigns' | 'wheel' | 'participants' | 'results';
+type Tab = 'campaigns' | 'results';
 
 export default function Game({ tenantId, campaigns, businessProfile }: GameProps) {
   const [activeTab, setActiveTab] = useState<Tab>('campaigns');
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'campaigns', label: 'Campanhas', icon: <Megaphone className="w-4 h-4" /> },
-    { id: 'wheel', label: 'Roleta', icon: <Gamepad2 className="w-4 h-4" /> },
-    { id: 'participants', label: 'Participantes', icon: <Users className="w-4 h-4" /> },
     { id: 'results', label: 'Resultados', icon: <BarChart2 className="w-4 h-4" /> },
   ];
 
@@ -53,12 +49,6 @@ export default function Game({ tenantId, campaigns, businessProfile }: GameProps
         <div className="p-6">
           {activeTab === 'campaigns' && (
             <EngagementCampaigns tenantId={tenantId} googlePlaceId={businessProfile?.google_place_id || ''} />
-          )}
-          {activeTab === 'wheel' && (
-            <GameConfig tenantId={tenantId} />
-          )}
-          {activeTab === 'participants' && (
-            <GameParticipations tenantId={tenantId} campaigns={campaigns} />
           )}
           {activeTab === 'results' && (
             <EngagementResults tenantId={tenantId} />
