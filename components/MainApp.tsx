@@ -865,6 +865,12 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       // product_ids: requer migração 004 no Supabase antes de habilitar
       // product_ids: (form as any).product_ids || null
     };
+    console.log('[DEBUG handleSaveForm] formData to send to Supabase:', JSON.stringify({
+      signature_auto_email: formData.signature_auto_email,
+      signature_auto_whatsapp: formData.signature_auto_whatsapp,
+      term_color: formData.term_color,
+      signature_enabled: formData.signature_enabled,
+    }));
     
     // Verificar se o ID é um UUID válido (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
     // IDs temporários gerados com Date.now() não são UUIDs válidos
@@ -873,7 +879,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     
     if (isValidUUID) {
       // UPDATE: ID é UUID válido, formulário já existe no banco
-      const { error: updateError } = await supabase.from('forms').update(formData).eq('id', form.id);
+      const { data: updateData, error: updateError } = await supabase.from('forms').update(formData).eq('id', form.id).select('id, signature_auto_email, signature_auto_whatsapp, term_color').single();
+      console.log('[DEBUG handleSaveForm] UPDATE result:', JSON.stringify({ updateData, updateError: updateError?.message }));
       if (updateError) {
         console.error('Erro ao atualizar formulário:', updateError);
         logError({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, entity_type: 'form', entity_id: form.id, entity_name: form.name, error_message: updateError.message, details: { action_attempted: 'update_form' } });
@@ -885,6 +892,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     } else {
       // INSERT: ID ausente ou temporário (Date.now()) - deixar banco gerar UUID
       const { data, error: insertError } = await supabase.from('forms').insert([formData]).select().single();
+      console.log('[DEBUG handleSaveForm] INSERT result:', JSON.stringify({ data: data ? { id: data.id, signature_auto_email: data.signature_auto_email, signature_auto_whatsapp: data.signature_auto_whatsapp, term_color: data.term_color } : null, insertError: insertError?.message }));
       if (insertError) {
         console.error('Erro ao inserir formulário:', insertError);
         logError({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, entity_type: 'form', entity_name: form.name, error_message: insertError.message, details: { action_attempted: 'create_form' } });
