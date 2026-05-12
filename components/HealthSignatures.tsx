@@ -70,18 +70,43 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
     setLoading(true);
     setError(null);
     try {
-      const { data, error: fetchError } = await supabase
+      // Buscar assinaturas sem join (FK pode não estar no schema cache)
+      const { data: sigsData, error: fetchError } = await supabase
         .from('health_signatures')
-        .select(`
-          *,
-          lead:leads(id, name, answers, form_source),
-          form:forms(id, name)
-        `)
+        .select('*')
         .eq('tenant_id', tenantId)
         .order('signed_at', { ascending: false });
 
       if (fetchError) throw fetchError;
-      setSignatures(data || []);
+
+      const sigs = sigsData || [];
+
+      // Enriquecer com dados de leads e forms separadamente
+      const leadIds = [...new Set(sigs.map((s: any) => s.lead_id).filter(Boolean))];
+      const formIds = [...new Set(sigs.map((s: any) => s.form_id).filter(Boolean))];
+
+      const [leadsRes, formsRes] = await Promise.all([
+        leadIds.length > 0
+          ? supabase.from('leads').select('id, name, answers, form_source').in('id', leadIds)
+          : Promise.resolve({ data: [] }),
+        formIds.length > 0
+          ? supabase.from('forms').select('id, name').in('id', formIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const leadsMap: Record<string, any> = {};
+      (leadsRes.data || []).forEach((l: any) => { leadsMap[l.id] = l; });
+
+      const formsMap: Record<string, any> = {};
+      (formsRes.data || []).forEach((f: any) => { formsMap[f.id] = f; });
+
+      const enriched = sigs.map((s: any) => ({
+        ...s,
+        lead: s.lead_id ? leadsMap[s.lead_id] || null : null,
+        form: s.form_id ? formsMap[s.form_id] || null : null,
+      }));
+
+      setSignatures(enriched);
     } catch (err: any) {
       console.error('[HealthSignatures] Erro ao buscar assinaturas:', err);
       setError('Não foi possível carregar as assinaturas. Tente novamente.');
