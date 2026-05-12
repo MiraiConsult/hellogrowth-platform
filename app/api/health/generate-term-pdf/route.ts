@@ -28,12 +28,36 @@ export async function POST(request: NextRequest) {
 
     const sig = signatures[0];
 
+    // Buscar perfil do negócio (logo, nome da empresa, cor do termo)
+    const { data: businessProfile } = await supabaseAdmin
+      .from('business_profile')
+      .select('company_name, logo_url')
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    // Buscar cor do termo no formulário
+    let termColor = '#10b981'; // Verde HelloGrowth padrão
+    if (sig.form_id) {
+      const { data: form } = await supabaseAdmin
+        .from('forms')
+        .select('term_color, name')
+        .eq('id', sig.form_id)
+        .maybeSingle();
+      if (form?.term_color) termColor = form.term_color;
+    }
+
+    const companyName = businessProfile?.company_name || 'HelloGrowth';
+    const logoUrl = businessProfile?.logo_url || null;
+
+    // Calcular cor mais escura para texto (derivada da cor principal)
+    const termColorDark = termColor; // Usamos a mesma cor para bordas e títulos
+
     const signedDate = new Date(sig.signed_at).toLocaleString('pt-BR', {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
     });
 
-    // Gerar HTML do termo para conversão em PDF
+    // Gerar HTML do termo
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -52,18 +76,30 @@ export async function POST(request: NextRequest) {
       margin: 0 auto;
     }
     .header {
-      text-align: center;
-      border-bottom: 3px solid #7c3aed;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 3px solid ${termColor};
       padding-bottom: 20px;
       margin-bottom: 28px;
     }
-    .header h1 {
-      font-size: 20px;
-      font-weight: 700;
-      color: #7c3aed;
-      margin-bottom: 4px;
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
     }
-    .header p {
+    .header-logo {
+      max-height: 56px;
+      max-width: 160px;
+      object-fit: contain;
+    }
+    .header-title h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: ${termColor};
+      margin-bottom: 2px;
+    }
+    .header-title p {
       font-size: 12px;
       color: #6b7280;
     }
@@ -75,7 +111,7 @@ export async function POST(request: NextRequest) {
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      color: #7c3aed;
+      color: ${termColor};
       border-bottom: 1px solid #e5e7eb;
       padding-bottom: 6px;
       margin-bottom: 12px;
@@ -99,9 +135,10 @@ export async function POST(request: NextRequest) {
       color: #1f2937;
     }
     .consent-box {
-      background: #f5f3ff;
-      border: 1px solid #ddd6fe;
-      border-radius: 8px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-left: 4px solid ${termColor};
+      border-radius: 4px;
       padding: 16px;
       font-size: 13px;
       line-height: 1.7;
@@ -150,8 +187,13 @@ export async function POST(request: NextRequest) {
 </head>
 <body>
   <div class="header">
-    <h1>Termo de Assinatura Eletrônica</h1>
-    <p>HelloGrowth — Sistema de Gestão de Saúde</p>
+    <div class="header-left">
+      ${logoUrl ? `<img src="${logoUrl}" alt="${companyName}" class="header-logo" />` : ''}
+      <div class="header-title">
+        <h1>Termo de Assinatura Eletrônica</h1>
+        <p>${companyName}</p>
+      </div>
+    </div>
   </div>
 
   <div style="text-align:center; margin-bottom: 20px;">
@@ -206,15 +248,14 @@ export async function POST(request: NextRequest) {
   ` : ''}
 
   <div class="footer">
-    <p>Este documento é um registro oficial de assinatura eletrônica gerado pelo sistema HelloGrowth.</p>
+    <p>Este documento é um registro oficial de assinatura eletrônica gerado pelo sistema ${companyName}.</p>
     <p>A assinatura eletrônica simples tem validade jurídica conforme a <strong>Lei nº 14.063/2020</strong>.</p>
-    <p style="margin-top: 8px; color: #d1d5db;">Gerado em: ${new Date().toLocaleString('pt-BR')} · Powered by <strong style="color: #7c3aed;">HelloGrowth</strong></p>
+    <p style="margin-top: 8px; color: #d1d5db;">Gerado em: ${new Date().toLocaleString('pt-BR')} · Powered by <strong style="color: ${termColor};">HelloGrowth</strong></p>
   </div>
 </body>
 </html>`;
 
-    // Usar puppeteer ou html-pdf se disponível, caso contrário retornar HTML como fallback
-    // Tentativa com puppeteer
+    // Tentar gerar PDF com puppeteer/chromium
     try {
       const puppeteer = require('puppeteer-core');
       const chromium = require('@sparticuz/chromium');
@@ -238,42 +279,15 @@ export async function POST(request: NextRequest) {
       return new NextResponse(pdf, {
         headers: {
           'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="termo-assinatura-${sig.patient_name?.replace(/\s+/g, '-').toLowerCase() || sig.id}.pdf"`,
+          'Content-Disposition': `attachment; filename="termo-${sig.patient_name?.replace(/\s+/g, '-').toLowerCase() || sig.id}.pdf"`,
         },
       });
-    } catch (puppeteerError) {
-      // Fallback: retornar HTML para download (o browser pode imprimir como PDF)
-      console.log('[generate-term-pdf] Puppeteer não disponível, retornando HTML:', puppeteerError);
-
-      // Usar a API externa de geração de PDF
-      try {
-        const pdfRes = await fetch('https://api.html2pdf.app/v1/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            html,
-            apiKey: process.env.HTML2PDF_API_KEY || 'demo',
-          }),
-        });
-
-        if (pdfRes.ok) {
-          const pdfBuffer = await pdfRes.arrayBuffer();
-          return new NextResponse(pdfBuffer, {
-            headers: {
-              'Content-Type': 'application/pdf',
-              'Content-Disposition': `attachment; filename="termo-assinatura-${sig.patient_name?.replace(/\s+/g, '-').toLowerCase() || sig.id}.pdf"`,
-            },
-          });
-        }
-      } catch (apiError) {
-        console.log('[generate-term-pdf] html2pdf.app falhou:', apiError);
-      }
-
-      // Último fallback: retornar HTML
+    } catch {
+      // Fallback: retornar HTML (o browser pode imprimir como PDF)
       return new NextResponse(html, {
         headers: {
           'Content-Type': 'text/html; charset=utf-8',
-          'Content-Disposition': `attachment; filename="termo-assinatura-${sig.patient_name?.replace(/\s+/g, '-').toLowerCase() || sig.id}.html"`,
+          'Content-Disposition': `inline; filename="termo-${sig.patient_name?.replace(/\s+/g, '-').toLowerCase() || sig.id}.html"`,
         },
       });
     }

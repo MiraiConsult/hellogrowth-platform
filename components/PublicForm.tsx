@@ -133,10 +133,15 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
     { field: 'email', label: 'Email', placeholder: 'seu@email.com', required: true, enabled: true },
     { field: 'phone', label: 'Telefone / WhatsApp', placeholder: '(00) 00000-0000', required: true, enabled: true }
   ];
-  // Se o game estiver ativo, forçar campo phone como obrigatório e habilitado
-  const initialFields: InitialField[] = hasGame
-    ? rawInitialFields.map((f: InitialField) => f.field === 'phone' ? { ...f, required: true, enabled: true } : f)
-    : rawInitialFields;
+  // Forçar campos obrigatórios com base nas configurações do formulário
+  const signatureAutoEmail = !!(form as any).signature_auto_email;
+  const signatureAutoWhatsapp = !!(form as any).signature_auto_whatsapp;
+  const initialFields: InitialField[] = rawInitialFields.map((f: InitialField) => {
+    if (hasGame && f.field === 'phone') return { ...f, required: true, enabled: true };
+    if (signatureAutoEmail && f.field === 'email') return { ...f, required: true, enabled: true };
+    if (signatureAutoWhatsapp && f.field === 'phone') return { ...f, required: true, enabled: true };
+    return f;
+  });
 
   const enabledFields = initialFields.filter(f => f.enabled);
 

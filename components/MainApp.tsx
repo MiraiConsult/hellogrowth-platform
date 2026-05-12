@@ -851,6 +851,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       whatsapp_analysis_recipients: (form as any).whatsapp_analysis_recipients || '',
       signature_enabled: (form as any).signature_enabled || false,
       signature_auto_email: (form as any).signature_auto_email || false,
+      signature_auto_whatsapp: (form as any).signature_auto_whatsapp || false,
+      term_color: (form as any).term_color || '#10b981',
       consent_text: (form as any).consent_text || null
       // product_ids: requer migração 004 no Supabase antes de habilitar
       // product_ids: (form as any).product_ids || null
@@ -1353,6 +1355,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
     // Salvar assinatura eletrônica se o formulário tiver esse recurso ativado
     if (insertedLead && data.signatureData && (publicForm as any).signature_enabled) {
+      const signatureAutoWhatsapp = (publicForm as any).signature_auto_whatsapp || false;
       fetch('/api/health/save-signature', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1369,6 +1372,19 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           formName: publicForm.name || '',
           companyName: publicCompanyName || '',
         }),
+      }).then(async (res) => {
+        if (res.ok && signatureAutoWhatsapp) {
+          const saveResult = await res.json().catch(() => null);
+          const signatureId = saveResult?.signatureId;
+          if (signatureId && data.patient?.phone) {
+            // Disparar WhatsApp automaticamente
+            fetch('/api/health/send-signature-whatsapp', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ signatureId, tenantId: formTenantId }),
+            }).catch(err => console.error('[signature-whatsapp] Erro ao enviar WhatsApp:', err));
+          }
+        }
       }).catch(err => console.error('[signature] Erro ao salvar assinatura:', err));
     }
 

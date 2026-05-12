@@ -40,34 +40,46 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Credenciais WhatsApp não configuradas no servidor' }, { status: 500 });
     }
 
+    // Buscar nome da empresa
+    const { data: businessProfile } = await supabaseAdmin
+      .from('business_profile')
+      .select('company_name')
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    const companyName = businessProfile?.company_name || 'HelloGrowth';
+
     // Normalizar telefone
     let phone = sig.patient_phone.replace(/\D/g, '');
     if (!phone.startsWith('55')) {
       phone = `55${phone}`;
     }
 
-    // Montar mensagem com o termo
     const signedDate = new Date(sig.signed_at).toLocaleString('pt-BR', {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
     });
 
-    const consentText = sig.consent_text
+    // Montar mensagem com o termo completo
+    const consentSection = sig.consent_text
       ? `\n\n📄 *Termo de Consentimento:*\n${sig.consent_text}`
       : '';
 
-    const message = `✅ *Confirmação de Assinatura Eletrônica*
+    const message = `✅ *Termo de Assinatura Eletrônica*
+*${companyName}*
 
 Olá, *${sig.patient_name}*!
 
-Sua assinatura eletrônica foi registrada com sucesso.
+Sua assinatura eletrônica foi registrada com sucesso.${consentSection}
 
+---
 📅 *Data/Hora:* ${signedDate}
-🌐 *IP registrado:* ${sig.ip_address || 'Registrado'}${consentText}
+🌐 *IP registrado:* ${sig.ip_address || 'Registrado'}
+🔑 *ID do registro:* ${sig.id}
 
 ---
 _Esta assinatura é válida como prova jurídica conforme a Lei 14.063/2020._
-_HelloGrowth — Sistema de Gestão de Saúde_`;
+_${companyName} — Powered by HelloGrowth_`;
 
     // Enviar via Evolution API
     const url = `${EVOLUTION_API_URL}/message/sendText/${encodeURIComponent(EVOLUTION_INSTANCE)}`;
