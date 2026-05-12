@@ -1161,9 +1161,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
             {signatureEnabled && (
               <div className="space-y-4 pt-2">
                 <div className="flex items-center justify-between p-3 bg-violet-50 rounded-lg border border-violet-200">
-                  <div>
-                    <p className="text-xs font-medium text-violet-800">Enviar termo por e-mail automaticamente</p>
-                    <p className="text-xs text-violet-600 mt-0.5">O paciente recebe o termo de assinatura por e-mail assim que enviar o formulário. <strong>E-mail será obrigatório.</strong></p>
+                  <div className="flex-1 mr-3">
+                    <p className="text-xs font-medium text-violet-800">📧 Enviar termo por e-mail automaticamente</p>
+                    <p className="text-xs text-violet-600 mt-0.5">O paciente recebe o termo assinado por e-mail ao enviar o formulário. <strong>Campo e-mail será obrigatório.</strong></p>
                   </div>
                   <button
                     type="button"
@@ -1174,9 +1174,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                   </button>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-                  <div>
-                    <p className="text-xs font-medium text-green-800">Enviar termo por WhatsApp automaticamente</p>
-                    <p className="text-xs text-green-600 mt-0.5">O paciente recebe o termo de assinatura por WhatsApp assim que enviar o formulário. <strong>Telefone será obrigatório.</strong></p>
+                  <div className="flex-1 mr-3">
+                    <p className="text-xs font-medium text-green-800">💬 Enviar termo por WhatsApp automaticamente</p>
+                    <p className="text-xs text-green-600 mt-0.5">O paciente recebe o termo assinado por WhatsApp ao enviar o formulário. <strong>Campo telefone será obrigatório.</strong></p>
                   </div>
                   <button
                     type="button"
