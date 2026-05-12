@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
@@ -140,9 +141,12 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
+    const signatureId = randomUUID();
+
     const { data: savedSignature, error: saveError } = await supabaseAdmin
       .from('health_signatures')
       .insert([{
+        id: signatureId,
         tenant_id: tenantId,
         form_id: formId,
         lead_id: leadId || null,
