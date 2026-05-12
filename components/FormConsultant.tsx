@@ -33,7 +33,7 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
-  ArrowUp, ArrowDown, Mail, MessageCircle} from 'lucide-react';
+  ArrowUp, ArrowDown, Mail, MessageCircle, ShieldCheck} from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 
@@ -161,6 +161,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [whatsappAnalysisEnabled, setWhatsappAnalysisEnabled] = useState(false);
   const [whatsappAnalysisRecipients, setWhatsappAnalysisRecipients] = useState('');
   const [availableGames, setAvailableGames] = useState<any[]>([]);
+  const [signatureEnabled, setSignatureEnabled] = useState(false);
+  const [consentText, setConsentText] = useState('Eu autorizo a coleta e o uso dos meus dados pessoais e de saúde para fins de avaliação, diagnóstico e tratamento, conforme a Lei Geral de Proteção de Dados (LGPD - Lei 13.709/2018).');
   
   // Estados para o Chat de Ajuste na tela de revisão
   const [reviewChatMessages, setReviewChatMessages] = useState<ChatMessage[]>([]);
@@ -233,6 +235,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       setEmailAnalysisRecipients(stableExistingForm.email_analysis_recipients || '');
       setWhatsappAnalysisEnabled((stableExistingForm as any).whatsapp_analysis_enabled || false);
       setWhatsappAnalysisRecipients((stableExistingForm as any).whatsapp_analysis_recipients || '');
+      setSignatureEnabled(stableExistingForm.signature_enabled || false);
+      if (stableExistingForm.consent_text) setConsentText(stableExistingForm.consent_text);
       
       // Carregar campos de identificação salvos
       // IMPORTANTE: O banco salva como initial_fields, e o MainApp mapeia para initialFields
@@ -1183,6 +1187,8 @@ Responda APENAS com JSON válido neste formato:
       email_analysis_recipients: emailAnalysisRecipients,
       whatsapp_analysis_enabled: whatsappAnalysisEnabled,
       whatsapp_analysis_recipients: whatsappAnalysisRecipients,
+      signature_enabled: signatureEnabled,
+      consent_text: consentText,
       status: 'active'
     };
 
@@ -2223,6 +2229,45 @@ Retorne APENAS este JSON (sem markdown, sem texto fora do JSON):
               <div className="p-3 bg-green-50 rounded-lg border border-green-200">
                 <p className="text-xs text-green-700">
                   <strong>O que será enviado:</strong> Produtos sugeridos pela IA, análise resumida do lead e link para o formulário completo.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Assinatura Eletrônica */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <ShieldCheck size={20} className="text-violet-500" />
+                Assinatura Eletrônica (Termo de Consentimento)
+              </h3>
+              <p className="text-sm text-slate-500 mt-1">O paciente assina digitalmente ao final do formulário</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSignatureEnabled(!signatureEnabled)}
+              className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${signatureEnabled ? 'bg-violet-500' : 'bg-slate-300'}`}
+            >
+              <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${signatureEnabled ? 'translate-x-9' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          {signatureEnabled && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-600 mb-2">Texto do Termo de Consentimento</label>
+                <textarea
+                  value={consentText}
+                  onChange={(e) => setConsentText(e.target.value)}
+                  rows={4}
+                  className="w-full rounded-lg border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 p-3 text-sm"
+                  placeholder="Digite o texto do termo de consentimento..."
+                />
+              </div>
+              <div className="p-3 bg-violet-50 rounded-lg border border-violet-200">
+                <p className="text-xs text-violet-700">
+                  <strong>O que é coletado:</strong> Assinatura digital desenhada, nome, email, telefone, IP e data/hora — válido como assinatura eletrônica simples pela Lei 14.063/2020.
                 </p>
               </div>
             </div>
