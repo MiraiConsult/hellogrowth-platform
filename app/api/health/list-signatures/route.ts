@@ -39,7 +39,8 @@ export async function GET(request: NextRequest) {
         ? supabaseAdmin.from('leads').select('id, name, answers, form_source').in('id', leadIds)
         : Promise.resolve({ data: [] as any[] }),
       formIds.length > 0
-        ? supabaseAdmin.from('forms').select('id, name').in('id', formIds)
+        // Incluir questions para poder mapear id → texto da pergunta
+        ? supabaseAdmin.from('forms').select('id, name, questions').in('id', formIds)
         : Promise.resolve({ data: [] as any[] }),
     ]);
 

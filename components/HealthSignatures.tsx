@@ -1,4 +1,3 @@
-// HealthSignatures.tsx — Tela de Assinaturas Eletrônicas (Módulo Saúde)
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -8,13 +7,11 @@ import {
   X,
   Mail,
   CheckCircle,
-  Clock,
   User,
   Phone,
   Calendar,
   Globe,
   FileText,
-  Send,
   ChevronDown,
   ChevronUp,
   AlertCircle,
@@ -46,18 +43,59 @@ interface HealthSignature {
   form?: {
     id: string;
     name: string;
+    questions?: Array<{ id: string; text: string; type: string }>;
   };
 }
 
 interface HealthSignaturesProps {
   tenantId: string;
+  companyName?: string;
+  logoUrl?: string;
   isDark?: boolean;
 }
 
-const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = false }) => {
+// Extrai o valor legível de uma resposta do formulário
+function extractAnswerValue(value: any): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'string') return value || '—';
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'object') {
+    // Formato padrão das respostas do HelloGrowth: { value, optionSelected, followUps }
+    if (value.value !== undefined && value.value !== null && value.value !== '') {
+      return String(value.value);
+    }
+    if (value.optionSelected?.label) {
+      return String(value.optionSelected.label);
+    }
+    if (value.label) return String(value.label);
+    if (value.text) return String(value.text);
+    // Array de valores (múltipla escolha)
+    if (Array.isArray(value)) {
+      return value.map(v => extractAnswerValue(v)).filter(Boolean).join(', ') || '—';
+    }
+  }
+  return '—';
+}
+
+// Mapeia o ID da pergunta para o texto da pergunta
+function buildQuestionMap(form?: HealthSignature['form']): Record<string, string> {
+  if (!form?.questions) return {};
+  const map: Record<string, string> = {};
+  form.questions.forEach(q => {
+    if (q.id && q.text) map[q.id] = q.text;
+  });
+  return map;
+}
+
+const HealthSignatures: React.FC<HealthSignaturesProps> = ({
+  tenantId,
+  companyName = 'HelloGrowth',
+  logoUrl,
+  isDark = false,
+}) => {
   const [signatures, setSignatures] = useState<HealthSignature[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectedSignature, setSelectedSignature] = useState<HealthSignature | null>(null);
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
   const [sendingWhatsapp, setSendingWhatsapp] = useState<string | null>(null);
@@ -66,6 +104,7 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
   const [showAnswers, setShowAnswers] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchSignatures = useCallback(async () => {
     if (!tenantId) return;
@@ -100,10 +139,7 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
       const res = await fetch('/api/health/send-signature-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          signatureId: sig.id,
-          tenantId: tenantId,
-        }),
+        body: JSON.stringify({ signatureId: sig.id, tenantId }),
       });
       if (res.ok) {
         setEmailSuccess(sig.id);
@@ -116,7 +152,7 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
         const errData = await res.json().catch(() => ({}));
         alert(`Erro ao enviar e-mail: ${errData.error || 'Verifique as configurações de e-mail.'}`);
       }
-    } catch (err) {
+    } catch {
       alert('Erro ao enviar e-mail.');
     } finally {
       setSendingEmail(null);
@@ -132,10 +168,7 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
       const res = await fetch('/api/health/send-signature-whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          signatureId: sig.id,
-          tenantId: tenantId,
-        }),
+        body: JSON.stringify({ signatureId: sig.id, tenantId }),
       });
       if (res.ok) {
         setWhatsappSuccess(sig.id);
@@ -148,7 +181,7 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
         const errData = await res.json().catch(() => ({}));
         alert(`Erro ao enviar WhatsApp: ${errData.error || 'Verifique as configurações de WhatsApp.'}`);
       }
-    } catch (err) {
+    } catch {
       alert('Erro ao enviar WhatsApp.');
     } finally {
       setSendingWhatsapp(null);
@@ -166,18 +199,39 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
         hour: '2-digit', minute: '2-digit', second: '2-digit',
       });
 
+      // Usar a cor do formulário se disponível, senão verde padrão
+      const termColor = '#10b981';
+      const company = companyName || 'HelloGrowth';
+
+      // Construir seção de respostas formatadas para o PDF
+      const questionMap = buildQuestionMap(sig.form);
+      const answerEntries = getAnswerEntries(sig, questionMap);
+      const answersHtml = answerEntries.length > 0 ? `
+        <div style="margin-bottom:22px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${termColor};border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Respostas do Formulário</div>
+          ${answerEntries.map(([label, val]) => `
+            <div style="margin-bottom:8px;padding:8px 12px;background:#f9fafb;border-radius:6px;border-left:3px solid ${termColor};">
+              <div style="font-size:10px;color:#9ca3af;margin-bottom:2px;">${label}</div>
+              <div style="font-size:13px;color:#374151;font-weight:500;">${val}</div>
+            </div>
+          `).join('')}
+        </div>` : '';
+
       const element = document.createElement('div');
       element.innerHTML = `
         <div style="font-family:Arial,sans-serif;font-size:13px;color:#1f2937;padding:40px;max-width:800px;margin:0 auto;">
-          <div style="text-align:center;border-bottom:3px solid #10b981;padding-bottom:20px;margin-bottom:28px;">
-            <h1 style="font-size:20px;font-weight:700;color:#10b981;margin:0 0 4px;">Termo de Assinatura Eletrônica</h1>
-            <p style="font-size:12px;color:#6b7280;margin:0;">HelloGrowth — Sistema de Gestão de Saúde</p>
+          <div style="display:flex;align-items:center;gap:16px;border-bottom:3px solid ${termColor};padding-bottom:20px;margin-bottom:28px;">
+            ${logoUrl ? `<img src="${logoUrl}" alt="${company}" style="max-height:56px;max-width:160px;object-fit:contain;" />` : ''}
+            <div>
+              <h1 style="font-size:18px;font-weight:700;color:${termColor};margin:0 0 2px;">Termo de Assinatura Eletrônica</h1>
+              <p style="font-size:12px;color:#6b7280;margin:0;">${company}</p>
+            </div>
           </div>
           <div style="text-align:center;margin-bottom:20px;">
             <span style="display:inline-block;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;">✓ Documento com validade jurídica — Lei 14.063/2020</span>
           </div>
           <div style="margin-bottom:22px;">
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#10b981;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Dados do Signatário</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${termColor};border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Dados do Signatário</div>
             <table style="width:100%;border-collapse:collapse;font-size:13px;">
               <tr><td style="padding:4px 8px 4px 0;color:#9ca3af;font-size:11px;width:140px;">Nome completo</td><td style="padding:4px 0;font-weight:600;">${sig.patient_name || '—'}</td></tr>
               <tr><td style="padding:4px 8px 4px 0;color:#9ca3af;font-size:11px;">E-mail</td><td style="padding:4px 0;font-weight:600;">${sig.patient_email || '—'}</td></tr>
@@ -189,21 +243,22 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
           </div>
           ${sig.consent_text ? `
           <div style="margin-bottom:22px;">
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#10b981;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Termo de Consentimento</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${termColor};border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Termo de Consentimento</div>
             <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;font-size:13px;line-height:1.7;color:#374151;white-space:pre-wrap;">${sig.consent_text}</div>
           </div>` : ''}
           ${sig.signature_image ? `
           <div style="margin-bottom:22px;">
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#10b981;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Assinatura Digital</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${termColor};border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Assinatura Digital</div>
             <div style="border:2px solid #e5e7eb;border-radius:8px;padding:12px;background:#fafafa;text-align:center;">
               <img src="${sig.signature_image}" alt="Assinatura" style="max-width:100%;max-height:140px;object-fit:contain;" />
             </div>
             <p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:8px;">Assinatura eletrônica simples — Lei 14.063/2020</p>
           </div>` : ''}
+          ${answersHtml}
           <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:11px;color:#9ca3af;line-height:1.6;">
-            <p>Este documento é um registro oficial de assinatura eletrônica gerado pelo sistema HelloGrowth.</p>
+            <p>Este documento é um registro oficial de assinatura eletrônica gerado pelo sistema ${company}.</p>
             <p>A assinatura eletrônica simples tem validade jurídica conforme a <strong>Lei nº 14.063/2020</strong>.</p>
-            <p style="margin-top:8px;color:#d1d5db;">Gerado em: ${new Date().toLocaleString('pt-BR')} · Powered by <strong style="color:#10b981;">HelloGrowth</strong></p>
+            <p style="margin-top:8px;color:#d1d5db;">Gerado em: ${new Date().toLocaleString('pt-BR')} · Powered by <strong style="color:${termColor};">HelloGrowth</strong></p>
           </div>
         </div>
       `;
@@ -234,6 +289,21 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
     });
   };
 
+  // Retorna as entradas de respostas formatadas: [label, value]
+  const getAnswerEntries = (sig: HealthSignature, questionMap?: Record<string, string>): [string, string][] => {
+    if (!sig.lead?.answers) return [];
+    const qMap = questionMap || buildQuestionMap(sig.form);
+    return Object.entries(sig.lead.answers)
+      .filter(([key]) => !key.startsWith('_') && key !== 'name' && key !== 'email' && key !== 'phone')
+      .map(([key, value]): [string, string] => {
+        // Tentar obter o texto da pergunta pelo ID
+        const label = qMap[key] || key;
+        const displayValue = extractAnswerValue(value);
+        return [label, displayValue];
+      })
+      .filter(([, val]) => val !== '—');
+  };
+
   const filteredSignatures = signatures.filter(sig => {
     const term = searchTerm.toLowerCase();
     return (
@@ -243,13 +313,6 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
       sig.form?.name?.toLowerCase().includes(term)
     );
   });
-
-  const getAnswerEntries = (sig: HealthSignature) => {
-    if (!sig.lead?.answers) return [];
-    return Object.entries(sig.lead.answers).filter(
-      ([key]) => !key.startsWith('_') && key !== 'name' && key !== 'email' && key !== 'phone'
-    );
-  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -480,7 +543,7 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
                     <p className="font-medium text-slate-700">{selectedSignature.patient_name || '—'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-400 mb-0.5">E-mail</p>
+                    <p className="text-xs text-slate-400 mb-0.5 flex items-center gap-1"><Mail size={11} /> E-mail</p>
                     {selectedSignature.patient_email
                       ? <p className="font-medium text-slate-700">{selectedSignature.patient_email}</p>
                       : <p className="text-xs text-slate-300 italic">Não informado</p>}
@@ -504,11 +567,11 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
 
               {/* Termo de consentimento */}
               {selectedSignature.consent_text && (
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                  <h3 className="text-sm font-semibold text-blue-800 flex items-center gap-2 mb-2">
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+                  <h3 className="text-sm font-semibold text-emerald-800 flex items-center gap-2 mb-2">
                     <FileText size={14} /> Termo de Consentimento
                   </h3>
-                  <p className="text-sm text-blue-700 whitespace-pre-wrap leading-relaxed">
+                  <p className="text-sm text-emerald-700 whitespace-pre-wrap leading-relaxed">
                     {selectedSignature.consent_text}
                   </p>
                 </div>
@@ -533,41 +596,50 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
                 </div>
               )}
 
-              {/* Respostas do formulário */}
-              {getAnswerEntries(selectedSignature).length > 0 && (
-                <div>
-                  <button
-                    onClick={() => setShowAnswers(v => !v)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 rounded-xl text-sm font-semibold text-slate-700 transition-colors"
-                  >
-                    <span className="flex items-center gap-2">
-                      <FileText size={14} className="text-slate-500" />
-                      Respostas do Formulário ({getAnswerEntries(selectedSignature).length})
-                    </span>
-                    {showAnswers ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </button>
-                  {showAnswers && (
-                    <div className="mt-2 space-y-2">
-                      {getAnswerEntries(selectedSignature).map(([key, value]) => (
-                        <div key={key} className="bg-slate-50 rounded-lg px-4 py-2.5">
-                          <p className="text-xs text-slate-400 mb-0.5">{key}</p>
-                          <p className="text-sm text-slate-700">
-                            {typeof value === 'object' ? JSON.stringify(value) : String(value || '—')}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Respostas do formulário — formatadas */}
+              {(() => {
+                const questionMap = buildQuestionMap(selectedSignature.form);
+                const entries = getAnswerEntries(selectedSignature, questionMap);
+                if (entries.length === 0) return null;
+                return (
+                  <div>
+                    <button
+                      onClick={() => setShowAnswers(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 rounded-xl text-sm font-semibold text-slate-700 transition-colors"
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileText size={14} className="text-slate-500" />
+                        Respostas do Formulário ({entries.length})
+                      </span>
+                      {showAnswers ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
+                    {showAnswers && (
+                      <div className="mt-2 space-y-2">
+                        {entries.map(([label, value], idx) => (
+                          <div key={idx} className="bg-slate-50 rounded-lg px-4 py-2.5 border-l-2 border-emerald-200">
+                            <p className="text-xs text-slate-400 mb-0.5">{label}</p>
+                            <p className="text-sm text-slate-700 font-medium">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
-              {/* User agent */}
-              {selectedSignature.user_agent && (
-                <div className="bg-slate-50 rounded-xl p-3">
-                  <p className="text-xs text-slate-400 mb-1">Dispositivo / Navegador</p>
-                  <p className="text-xs text-slate-500 font-mono break-all">{selectedSignature.user_agent}</p>
-                </div>
-              )}
+              {/* Status de envio */}
+              <div className="flex items-center gap-3 flex-wrap">
+                {selectedSignature.email_sent && (
+                  <span className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full">
+                    <CheckCircle size={12} /> E-mail enviado
+                  </span>
+                )}
+                {selectedSignature.whatsapp_sent && (
+                  <span className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full">
+                    <CheckCircle size={12} /> WhatsApp enviado
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Modal Footer */}

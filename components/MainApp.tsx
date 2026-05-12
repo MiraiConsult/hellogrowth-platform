@@ -2064,7 +2064,11 @@ Responda APENAS com JSON válido (sem markdown):
         )}
 
         {currentView === 'health-signatures' && (
-          <HealthSignatures tenantId={getActiveTenant() || ''} />
+          <HealthSignatures
+            tenantId={getActiveTenant() || ''}
+            companyName={publicCompanyName || undefined}
+            logoUrl={publicLogoUrl || undefined}
+          />
         )}
         {/* Banner flutuante de onboarding em andamento — aparece quando o usuário navega para módulos durante o onboarding */}
         {!showOnboardingWizard && onboardingInProgress && ['nps','forms','products'].includes(currentView) && (
