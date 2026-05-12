@@ -66,47 +66,18 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
   const [error, setError] = useState<string | null>(null);
 
   const fetchSignatures = useCallback(async () => {
-    if (!supabase || !tenantId) return;
+    if (!tenantId) return;
     setLoading(true);
     setError(null);
     try {
-      // Buscar assinaturas sem join (FK pode não estar no schema cache)
-      const { data: sigsData, error: fetchError } = await supabase
-        .from('health_signatures')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('signed_at', { ascending: false });
-
-      if (fetchError) throw fetchError;
-
-      const sigs = sigsData || [];
-
-      // Enriquecer com dados de leads e forms separadamente
-      const leadIds = [...new Set(sigs.map((s: any) => s.lead_id).filter(Boolean))];
-      const formIds = [...new Set(sigs.map((s: any) => s.form_id).filter(Boolean))];
-
-      const [leadsRes, formsRes] = await Promise.all([
-        leadIds.length > 0
-          ? supabase.from('leads').select('id, name, answers, form_source').in('id', leadIds)
-          : Promise.resolve({ data: [] }),
-        formIds.length > 0
-          ? supabase.from('forms').select('id, name').in('id', formIds)
-          : Promise.resolve({ data: [] }),
-      ]);
-
-      const leadsMap: Record<string, any> = {};
-      (leadsRes.data || []).forEach((l: any) => { leadsMap[l.id] = l; });
-
-      const formsMap: Record<string, any> = {};
-      (formsRes.data || []).forEach((f: any) => { formsMap[f.id] = f; });
-
-      const enriched = sigs.map((s: any) => ({
-        ...s,
-        lead: s.lead_id ? leadsMap[s.lead_id] || null : null,
-        form: s.form_id ? formsMap[s.form_id] || null : null,
-      }));
-
-      setSignatures(enriched);
+      // Buscar via API server-side (usa service_role key, bypassa RLS)
+      const res = await fetch(`/api/health/list-signatures?tenantId=${encodeURIComponent(tenantId)}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Erro ${res.status}`);
+      }
+      const { signatures: enriched } = await res.json();
+      setSignatures(enriched || []);
     } catch (err: any) {
       console.error('[HealthSignatures] Erro ao buscar assinaturas:', err);
       setError('Não foi possível carregar as assinaturas. Tente novamente.');
