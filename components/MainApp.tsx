@@ -850,6 +850,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       whatsapp_analysis_enabled: (form as any).whatsapp_analysis_enabled || false,
       whatsapp_analysis_recipients: (form as any).whatsapp_analysis_recipients || '',
       signature_enabled: (form as any).signature_enabled || false,
+      signature_auto_email: (form as any).signature_auto_email || false,
       consent_text: (form as any).consent_text || null
       // product_ids: requer migração 004 no Supabase antes de habilitar
       // product_ids: (form as any).product_ids || null
@@ -1365,6 +1366,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           signatureImage: data.signatureData,
           consentText: (publicForm as any).consent_text || '',
           signatureAutoEmail: (publicForm as any).signature_auto_email || false,
+          formName: publicForm.name || '',
+          companyName: publicCompanyName || '',
         }),
       }).catch(err => console.error('[signature] Erro ao salvar assinatura:', err));
     }
