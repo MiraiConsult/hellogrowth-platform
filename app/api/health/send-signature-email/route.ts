@@ -235,11 +235,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: resData?.message || `Status ${res.status}` }, { status: 500 });
     }
 
-    // Atualizar registro de email enviado
-    await supabaseAdmin
-      .from('health_signatures')
-      .update({ email_sent: true, email_sent_at: new Date().toISOString() })
-      .eq('id', sig.id);
+    // Atualizar registro de email enviado (tolerante a falhas)
+    try {
+      await supabaseAdmin
+        .from('health_signatures')
+        .update({ email_sent: true, email_sent_at: new Date().toISOString() })
+        .eq('id', sig.id);
+    } catch (updateErr) {
+      console.warn('[send-signature-email] Não foi possível atualizar email_sent:', updateErr);
+    }
 
     return NextResponse.json({ success: true, sentTo: sig.patient_email });
 

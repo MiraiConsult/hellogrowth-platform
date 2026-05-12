@@ -108,11 +108,15 @@ _${companyName} — Powered by HelloGrowth_`;
       return NextResponse.json({ error: data?.message || `Status ${response.status}` }, { status: 500 });
     }
 
-    // Atualizar registro
-    await supabaseAdmin
-      .from('health_signatures')
-      .update({ whatsapp_sent: true, whatsapp_sent_at: new Date().toISOString() })
-      .eq('id', sig.id);
+    // Atualizar registro (tolerante a falhas — coluna pode não existir em todos os ambientes)
+    try {
+      await supabaseAdmin
+        .from('health_signatures')
+        .update({ whatsapp_sent: true, whatsapp_sent_at: new Date().toISOString() })
+        .eq('id', sig.id);
+    } catch (updateErr) {
+      console.warn('[send-signature-whatsapp] Não foi possível atualizar whatsapp_sent:', updateErr);
+    }
 
     return NextResponse.json({ success: true, sentTo: phone });
 
