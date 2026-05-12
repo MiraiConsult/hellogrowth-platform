@@ -1371,6 +1371,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           signatureAutoEmail: (publicForm as any).signature_auto_email || false,
           formName: publicForm.name || '',
           companyName: publicCompanyName || '',
+          logoUrl: publicLogoUrl || '',
+          termColor: (publicForm as any).term_color || '#10b981',
         }),
       }).then(async (res) => {
         if (res.ok && signatureAutoWhatsapp) {

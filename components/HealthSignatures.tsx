@@ -169,15 +169,15 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
       const element = document.createElement('div');
       element.innerHTML = `
         <div style="font-family:Arial,sans-serif;font-size:13px;color:#1f2937;padding:40px;max-width:800px;margin:0 auto;">
-          <div style="text-align:center;border-bottom:3px solid #7c3aed;padding-bottom:20px;margin-bottom:28px;">
-            <h1 style="font-size:20px;font-weight:700;color:#7c3aed;margin:0 0 4px;">Termo de Assinatura Eletrônica</h1>
+          <div style="text-align:center;border-bottom:3px solid #10b981;padding-bottom:20px;margin-bottom:28px;">
+            <h1 style="font-size:20px;font-weight:700;color:#10b981;margin:0 0 4px;">Termo de Assinatura Eletrônica</h1>
             <p style="font-size:12px;color:#6b7280;margin:0;">HelloGrowth — Sistema de Gestão de Saúde</p>
           </div>
           <div style="text-align:center;margin-bottom:20px;">
             <span style="display:inline-block;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;">✓ Documento com validade jurídica — Lei 14.063/2020</span>
           </div>
           <div style="margin-bottom:22px;">
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#7c3aed;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Dados do Signatário</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#10b981;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Dados do Signatário</div>
             <table style="width:100%;border-collapse:collapse;font-size:13px;">
               <tr><td style="padding:4px 8px 4px 0;color:#9ca3af;font-size:11px;width:140px;">Nome completo</td><td style="padding:4px 0;font-weight:600;">${sig.patient_name || '—'}</td></tr>
               <tr><td style="padding:4px 8px 4px 0;color:#9ca3af;font-size:11px;">E-mail</td><td style="padding:4px 0;font-weight:600;">${sig.patient_email || '—'}</td></tr>
@@ -189,12 +189,12 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
           </div>
           ${sig.consent_text ? `
           <div style="margin-bottom:22px;">
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#7c3aed;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Termo de Consentimento</div>
-            <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:16px;font-size:13px;line-height:1.7;color:#374151;white-space:pre-wrap;">${sig.consent_text}</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#10b981;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Termo de Consentimento</div>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;font-size:13px;line-height:1.7;color:#374151;white-space:pre-wrap;">${sig.consent_text}</div>
           </div>` : ''}
           ${sig.signature_image ? `
           <div style="margin-bottom:22px;">
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#7c3aed;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Assinatura Digital</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#10b981;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Assinatura Digital</div>
             <div style="border:2px solid #e5e7eb;border-radius:8px;padding:12px;background:#fafafa;text-align:center;">
               <img src="${sig.signature_image}" alt="Assinatura" style="max-width:100%;max-height:140px;object-fit:contain;" />
             </div>
@@ -203,7 +203,7 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
           <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:11px;color:#9ca3af;line-height:1.6;">
             <p>Este documento é um registro oficial de assinatura eletrônica gerado pelo sistema HelloGrowth.</p>
             <p>A assinatura eletrônica simples tem validade jurídica conforme a <strong>Lei nº 14.063/2020</strong>.</p>
-            <p style="margin-top:8px;color:#d1d5db;">Gerado em: ${new Date().toLocaleString('pt-BR')} · Powered by HelloGrowth</p>
+            <p style="margin-top:8px;color:#d1d5db;">Gerado em: ${new Date().toLocaleString('pt-BR')} · Powered by <strong style="color:#10b981;">HelloGrowth</strong></p>
           </div>
         </div>
       `;

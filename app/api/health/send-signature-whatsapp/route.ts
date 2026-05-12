@@ -55,12 +55,16 @@ export async function POST(request: NextRequest) {
       phone = `55${phone}`;
     }
 
-    const signedDate = new Date(sig.signed_at).toLocaleString('pt-BR', {
+    const signedDate = new Date(sig.signed_at || sig.created_at).toLocaleString('pt-BR', {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
     });
 
-    // Montar mensagem com o termo completo
+    // Gerar link de visualização do termo
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://system.hellogrowth.online';
+    const termLink = `${baseUrl}/api/health/view-term?id=${sig.id}&tenant=${tenantId}`;
+
+    // Montar mensagem com o termo e link
     const consentSection = sig.consent_text
       ? `\n\n📄 *Termo de Consentimento:*\n${sig.consent_text}`
       : '';
@@ -76,6 +80,12 @@ Sua assinatura eletrônica foi registrada com sucesso.${consentSection}
 📅 *Data/Hora:* ${signedDate}
 🌐 *IP registrado:* ${sig.ip_address || 'Registrado'}
 🔑 *ID do registro:* ${sig.id}
+
+---
+📎 *Visualizar e salvar seu termo:*
+${termLink}
+
+_Acesse o link acima para visualizar o documento completo e salvá-lo como PDF (use a opção "Imprimir > Salvar como PDF" no seu navegador)._
 
 ---
 _Esta assinatura é válida como prova jurídica conforme a Lei 14.063/2020._
