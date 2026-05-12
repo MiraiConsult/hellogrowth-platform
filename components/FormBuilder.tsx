@@ -1135,8 +1135,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
             )}
           </div>
 
-          {/* Assinatura Eletrônica - só aparece com addon health */}
-          {hasHealthAddon && <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+          {/* Assinatura Eletrônica */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2"><ShieldCheck size={16} className="text-violet-500" /> Assinatura Eletrônica (Termo de Consentimento)</h3>
@@ -1182,7 +1182,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                 </div>
               </div>
             )}
-          </div>}
+          </div>
 
           <div className="flex justify-between items-center">
              <h2 className="text-lg font-bold text-gray-800">Perguntas</h2>
