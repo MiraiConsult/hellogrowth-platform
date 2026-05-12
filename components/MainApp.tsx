@@ -442,6 +442,13 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
           // Forms (CRITICAL: Strict array check to prevent white screen)
           if (dbForms) {
+           console.log('[DEBUG loadForms] Raw dbForms signature fields:', dbForms.map((f: any) => ({
+             id: f.id?.substring(0, 8),
+             name: f.name,
+             signature_auto_email: f.signature_auto_email,
+             signature_auto_whatsapp: f.signature_auto_whatsapp,
+             term_color: f.term_color,
+           })));
            setForms(dbForms.map(f => ({
                ...f,
                questions: Array.isArray(f.questions) ? f.questions : [],

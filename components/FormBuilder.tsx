@@ -274,6 +274,14 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   };
 
   const handleEdit = (form: Form) => {
+    console.log('[DEBUG handleEdit] form from state:', JSON.stringify({
+      id: form.id?.substring(0, 8),
+      name: form.name,
+      signature_enabled: (form as any).signature_enabled,
+      signature_auto_email: (form as any).signature_auto_email,
+      signature_auto_whatsapp: (form as any).signature_auto_whatsapp,
+      term_color: (form as any).term_color,
+    }));
     setEditingFormId(form.id);
     setCurrentFormName(form.name);
     setCurrentFormDescription(form.description || '');
