@@ -1324,38 +1324,6 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }
     }
     
-    // Disparar WhatsApp de análise se o formulário tiver esse recurso ativado
-    if (insertedLead && formTenantId && (publicForm as any).whatsapp_analysis_enabled) {
-      const rawWaRecipients = (publicForm as any).whatsapp_analysis_recipients || '';
-      const waNumbers = typeof rawWaRecipients === 'string'
-        ? rawWaRecipients.split(',').map((n: string) => n.trim()).filter(Boolean)
-        : [];
-      if (waNumbers.length > 0) {
-        // Montar mensagem resumida para WhatsApp
-        const formLink = `${window.location.origin}/f/${publicForm.id}`;
-        const waMessage = [
-          `🔔 *Novo Lead — ${publicForm.name}*`,
-          ``,
-          `👤 *Nome:* ${data.patient?.name || 'Não informado'}`,
-          data.patient?.phone ? `📞 *Telefone:* ${data.patient.phone}` : null,
-          data.patient?.email ? `📧 *E-mail:* ${data.patient.email}` : null,
-          ``,
-          `📋 *Formulário:* ${publicForm.name}`,
-          `🔗 *Link do formulário:* ${formLink}`,
-          ``,
-          `_A análise completa da IA será processada em instantes._`,
-        ].filter(Boolean).join('\n');
-
-        for (const phone of waNumbers) {
-          fetch('/api/send-whatsapp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, message: waMessage }),
-          }).catch(err => console.error('[whatsapp-analysis] Erro ao disparar WhatsApp:', err));
-        }
-      }
-    }
-
     // Disparar e-mail de análise direto (sem depender da IA) se o formulário tiver esse recurso ativado
     if (insertedLead && formTenantId && publicForm.email_analysis_enabled) {
       const rawRecipients = publicForm.email_analysis_recipients || '';
@@ -1401,6 +1369,24 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }).catch(err => console.error('[signature] Erro ao salvar assinatura:', err));
     }
 
+    // Disparar análise de IA em background (fire-and-forget)
+    // O WhatsApp de análise será disparado DENTRO desta função, após a análise concluir
+    if (insertedLead) {
+      const whatsappAnalysisConfig = {
+        enabled: !!(publicForm as any).whatsapp_analysis_enabled,
+        recipients: (publicForm as any).whatsapp_analysis_recipients || '',
+        formName: publicForm.name,
+        patientData: data.patient || {},
+      };
+      processAIAnalysisInBackground(
+        insertedLead.id,
+        { answers: enrichedAnswers },
+        publicForm,
+        formTenantId,
+        whatsappAnalysisConfig
+      ).catch(err => console.error('[ai-analysis] Erro na análise de IA em background:', err));
+    }
+
     return true;
   };
   
@@ -1409,7 +1395,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     leadId: string,
     data: any,
     form: Form,
-    formTenantId: string
+    formTenantId: string,
+    whatsappConfig?: { enabled: boolean; recipients: string; formName: string; patientData: any }
   ) => {
     if (!supabase) return;
     
@@ -1587,6 +1574,50 @@ Responda APENAS com JSON válido (sem markdown):
         })
         .eq('id', leadId);
 
+      // Disparar WhatsApp de análise APÓS a análise de IA estar concluída
+      if (whatsappConfig?.enabled && whatsappConfig.recipients) {
+        const waNumbers = whatsappConfig.recipients
+          .split(',')
+          .map((n: string) => n.trim())
+          .filter(Boolean);
+        if (waNumbers.length > 0) {
+          const panelLink = typeof window !== 'undefined'
+            ? `${window.location.origin}/#kanban`
+            : 'https://system.hellogrowth.online/#kanban';
+          const patient = whatsappConfig.patientData || {};
+          // Montar resumo dos produtos recomendados pela IA
+          const productsLine = aiAnalysis.recommended_products && aiAnalysis.recommended_products.length > 0
+            ? `\n💊 *Produtos recomendados:* ${aiAnalysis.recommended_products.map((p: any) => p.name).join(', ')}`
+            : '';
+          const valueLine = updatedValue > 0
+            ? `\n💰 *Valor estimado:* R$ ${updatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+            : '';
+          const waMessage = [
+            `🔔 *Novo Lead Analisado — ${whatsappConfig.formName}*`,
+            ``,
+            `👤 *Nome:* ${patient.name || 'Não informado'}`,
+            patient.phone ? `📞 *Telefone:* ${patient.phone}` : null,
+            patient.email ? `📧 *E-mail:* ${patient.email}` : null,
+            ``,
+            `🤖 *Análise de IA:* ${aiAnalysis.classification === 'opportunity' ? '🟢 Oportunidade' : aiAnalysis.classification === 'risk' ? '🔴 Risco' : '🟡 Monitoramento'}`,
+            productsLine || null,
+            valueLine || null,
+            ``,
+            `📋 *Formulário:* ${whatsappConfig.formName}`,
+            `🔗 *Ver no painel:* ${panelLink}`,
+            ``,
+            `_HelloGrowth — Análise automática de IA_`,
+          ].filter(Boolean).join('\n');
+
+          for (const phone of waNumbers) {
+            fetch('/api/send-whatsapp', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone, message: waMessage }),
+            }).catch(err => console.error('[whatsapp-analysis] Erro ao disparar WhatsApp pós-IA:', err));
+          }
+        }
+      }
     }
   };
 
