@@ -1462,7 +1462,11 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       game_id: formData.game_id || null,
       show_logo: formData.show_logo || false,
       email_analysis_enabled: formData.email_analysis_enabled || false,
-      email_analysis_recipients: formData.email_analysis_recipients || ''
+      email_analysis_recipients: formData.email_analysis_recipients || '',
+      whatsapp_analysis_enabled: formData.whatsapp_analysis_enabled || false,
+      whatsapp_analysis_recipients: formData.whatsapp_analysis_recipients || '',
+      signature_enabled: formData.signature_enabled || false,
+      consent_text: formData.consent_text || null
     } as any;
     onSaveForm(newForm);
   };
