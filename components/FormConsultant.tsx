@@ -162,6 +162,9 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [whatsappAnalysisRecipients, setWhatsappAnalysisRecipients] = useState('');
   const [availableGames, setAvailableGames] = useState<any[]>([]);
   const [signatureEnabled, setSignatureEnabled] = useState(false);
+  const [signatureAutoEmail, setSignatureAutoEmail] = useState(false);
+  const [signatureAutoWhatsapp, setSignatureAutoWhatsapp] = useState(false);
+  const [termColor, setTermColor] = useState('#10b981');
   const [consentText, setConsentText] = useState('Eu autorizo a coleta e o uso dos meus dados pessoais e de saúde para fins de avaliação, diagnóstico e tratamento, conforme a Lei Geral de Proteção de Dados (LGPD - Lei 13.709/2018).');
   
   // Estados para o Chat de Ajuste na tela de revisão
@@ -1188,6 +1191,9 @@ Responda APENAS com JSON válido neste formato:
       whatsapp_analysis_enabled: whatsappAnalysisEnabled,
       whatsapp_analysis_recipients: whatsappAnalysisRecipients,
       signature_enabled: signatureEnabled,
+      signature_auto_email: signatureAutoEmail,
+      signature_auto_whatsapp: signatureAutoWhatsapp,
+      term_color: termColor,
       consent_text: consentText,
       status: 'active'
     };
@@ -2265,6 +2271,52 @@ Retorne APENAS este JSON (sem markdown, sem texto fora do JSON):
                   placeholder="Digite o texto do termo de consentimento..."
                 />
               </div>
+
+              {/* Toggle: Enviar por e-mail automaticamente */}
+              <div className="flex items-center justify-between p-3 bg-violet-50 rounded-lg border border-violet-200">
+                <div className="flex-1 mr-3">
+                  <p className="text-xs font-medium text-violet-800">📧 Enviar termo por e-mail automaticamente</p>
+                  <p className="text-xs text-violet-600 mt-0.5">O paciente recebe o termo assinado por e-mail ao enviar o formulário. <strong>Campo e-mail será obrigatório.</strong></p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSignatureAutoEmail(!signatureAutoEmail)}
+                  className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors flex-shrink-0 ${signatureAutoEmail ? 'bg-violet-500' : 'bg-slate-300'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${signatureAutoEmail ? 'translate-x-7' : 'translate-x-1'}`} />
+                </button>
+              </div>
+
+              {/* Toggle: Enviar por WhatsApp automaticamente */}
+              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                <div className="flex-1 mr-3">
+                  <p className="text-xs font-medium text-green-800">💬 Enviar termo por WhatsApp automaticamente</p>
+                  <p className="text-xs text-green-600 mt-0.5">O paciente recebe o termo assinado por WhatsApp ao enviar o formulário. <strong>Campo telefone será obrigatório.</strong></p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSignatureAutoWhatsapp(!signatureAutoWhatsapp)}
+                  className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors flex-shrink-0 ${signatureAutoWhatsapp ? 'bg-green-500' : 'bg-slate-300'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${signatureAutoWhatsapp ? 'translate-x-7' : 'translate-x-1'}`} />
+                </button>
+              </div>
+
+              {/* Seletor de cor do termo */}
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div>
+                  <p className="text-xs font-medium text-gray-700">🎨 Cor do Termo de Consentimento</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Cor das linhas e destaques no PDF do termo</p>
+                </div>
+                <input
+                  type="color"
+                  value={termColor}
+                  onChange={(e) => setTermColor(e.target.value)}
+                  className="w-10 h-8 rounded cursor-pointer border border-gray-300"
+                  title="Escolher cor do termo"
+                />
+              </div>
+
               <div className="p-3 bg-violet-50 rounded-lg border border-violet-200">
                 <p className="text-xs text-violet-700">
                   <strong>O que é coletado:</strong> Assinatura digital desenhada, nome, email, telefone, IP e data/hora — válido como assinatura eletrônica simples pela Lei 14.063/2020.
