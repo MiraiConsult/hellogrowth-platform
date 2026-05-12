@@ -134,10 +134,10 @@ export async function POST(request: NextRequest) {
 
     const signedAt = new Date().toISOString();
 
-    // Salvar no banco de dados usando service_role key
+    // Salvar no banco de dados usando service_role key (ou anon key como fallback para staging)
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
     const { data: savedSignature, error: saveError } = await supabaseAdmin
