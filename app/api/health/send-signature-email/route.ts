@@ -54,13 +54,13 @@ export async function POST(request: NextRequest) {
       <body style="margin:0;padding:0;background:#f9fafb;font-family:Arial,sans-serif;">
         <div style="max-width:600px;margin:0 auto;padding:24px;">
           <div style="background:linear-gradient(135deg,#7c3aed,#6d28d9);padding:28px 32px;border-radius:12px 12px 0 0;text-align:center;">
-            <h1 style="color:white;margin:0;font-size:22px;font-weight:700;">Comprovante de Assinatura Eletrônica</h1>
+            <h1 style="color:white;margin:0;font-size:22px;font-weight:700;">Termo de Assinatura Eletrônica</h1>
           </div>
           <div style="background:#ffffff;padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
             <p style="color:#374151;font-size:15px;margin:0 0 16px;">Olá, <strong>${sig.patient_name}</strong>!</p>
             <p style="color:#374151;font-size:14px;line-height:1.6;margin:0 0 24px;">
-              Este é o comprovante da sua assinatura eletrônica realizada em <strong>${new Date(sig.signed_at).toLocaleString('pt-BR')}</strong>.
-              Esta assinatura é válida como prova jurídica conforme a <strong>Lei 14.063/2020</strong>.
+              Sua assinatura eletrônica foi registrada com sucesso em <strong>${new Date(sig.signed_at).toLocaleString('pt-BR')}</strong>.
+              Este documento é o seu Termo de Assinatura Eletrônica com validade jurídica conforme a <strong>Lei 14.063/2020</strong>.
             </p>
             <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:20px;margin-bottom:24px;">
               <p style="color:#5b21b6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 12px;">Termo de Consentimento</p>
@@ -82,8 +82,8 @@ export async function POST(request: NextRequest) {
             </div>
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
             <p style="color:#9ca3af;font-size:11px;text-align:center;margin:0;">
-              Comprovante gerado automaticamente pelo sistema HelloGrowth.<br/>
-              Guarde este documento para fins de comprovação jurídica.
+              Termo gerado automaticamente pelo sistema HelloGrowth.<br/>
+              Guarde este documento como prova jurídica da sua assinatura eletrônica.
             </p>
           </div>
           <div style="text-align:center;padding:16px;">
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         from: 'HelloGrowth <noreply@hellogrowth.com.br>',
         to: [sig.patient_email],
-        subject: 'Comprovante de Assinatura Eletrônica — HelloGrowth',
+        subject: 'Termo de Assinatura Eletrônica — HelloGrowth',
         html: htmlBody,
       }),
     });
