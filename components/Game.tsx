@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Megaphone, BarChart2 } from 'lucide-react';
-import EngagementCampaigns from '@/components/EngagementCampaigns';
-import EngagementResults from '@/components/EngagementResults';
+import { Gamepad2, Users } from 'lucide-react';
+import GameConfig from '@/components/GameConfig';
+import GameParticipations from '@/components/GameParticipations';
 
 interface GameProps {
   tenantId: string;
@@ -11,14 +11,14 @@ interface GameProps {
   businessProfile?: any;
 }
 
-type Tab = 'campaigns' | 'results';
+type Tab = 'wheel' | 'participants';
 
 export default function Game({ tenantId, campaigns, businessProfile }: GameProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('campaigns');
+  const [activeTab, setActiveTab] = useState<Tab>('wheel');
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'campaigns', label: 'Campanhas', icon: <Megaphone className="w-4 h-4" /> },
-    { id: 'results', label: 'Resultados', icon: <BarChart2 className="w-4 h-4" /> },
+    { id: 'wheel', label: 'Roleta', icon: <Gamepad2 className="w-4 h-4" /> },
+    { id: 'participants', label: 'Participantes', icon: <Users className="w-4 h-4" /> },
   ];
 
   return (
@@ -47,11 +47,11 @@ export default function Game({ tenantId, campaigns, businessProfile }: GameProps
       {/* Conteúdo das abas */}
       <div className="flex-1 overflow-auto">
         <div className="p-6">
-          {activeTab === 'campaigns' && (
-            <EngagementCampaigns tenantId={tenantId} googlePlaceId={businessProfile?.google_place_id || ''} />
+          {activeTab === 'wheel' && (
+            <GameConfig tenantId={tenantId} />
           )}
-          {activeTab === 'results' && (
-            <EngagementResults tenantId={tenantId} />
+          {activeTab === 'participants' && (
+            <GameParticipations tenantId={tenantId} campaigns={campaigns} />
           )}
         </div>
       </div>
