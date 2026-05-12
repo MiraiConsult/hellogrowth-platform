@@ -844,16 +844,16 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       tenant_id: getActiveTenant(),
       game_enabled: form.game_enabled || false,
       game_id: form.game_id || null,
-      show_logo: (form as any).show_logo || false,
+      show_logo: form.show_logo || false,
       email_analysis_enabled: form.email_analysis_enabled || false,
       email_analysis_recipients: form.email_analysis_recipients || '',
-      whatsapp_analysis_enabled: (form as any).whatsapp_analysis_enabled || false,
-      whatsapp_analysis_recipients: (form as any).whatsapp_analysis_recipients || '',
-      signature_enabled: (form as any).signature_enabled || false,
-      signature_auto_email: (form as any).signature_auto_email || false,
-      signature_auto_whatsapp: (form as any).signature_auto_whatsapp || false,
-      term_color: (form as any).term_color || '#10b981',
-      consent_text: (form as any).consent_text || null
+      whatsapp_analysis_enabled: form.whatsapp_analysis_enabled || false,
+      whatsapp_analysis_recipients: form.whatsapp_analysis_recipients || '',
+      signature_enabled: form.signature_enabled || false,
+      signature_auto_email: form.signature_auto_email || false,
+      signature_auto_whatsapp: form.signature_auto_whatsapp || false,
+      term_color: form.term_color || '#10b981',
+      consent_text: form.consent_text || null
       // product_ids: requer migração 004 no Supabase antes de habilitar
       // product_ids: (form as any).product_ids || null
     };
