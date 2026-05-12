@@ -1507,6 +1507,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       whatsapp_analysis_enabled: formData.whatsapp_analysis_enabled || false,
       whatsapp_analysis_recipients: formData.whatsapp_analysis_recipients || '',
       signature_enabled: formData.signature_enabled || false,
+      signature_auto_email: formData.signature_auto_email || false,
+      signature_auto_whatsapp: formData.signature_auto_whatsapp || false,
+      term_color: formData.term_color || '#10b981',
       consent_text: formData.consent_text || null
     } as any;
     onSaveForm(newForm);
