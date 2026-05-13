@@ -1724,6 +1724,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
           }}
           onSaveForm={handleConsultantSave}
           existingForm={editingFormId ? forms.find(f => f.id === editingFormId) : undefined}
+          hasHealthAddon={hasHealthAddon}
         />
       )}
     </>

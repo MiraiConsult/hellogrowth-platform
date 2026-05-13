@@ -74,6 +74,7 @@ interface FormConsultantProps {
   onClose: () => void;
   onSaveForm: (formData: any) => void;
   existingForm?: any;
+  hasHealthAddon?: boolean;
 }
 
 type ConsultantStep = 
@@ -124,7 +125,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   userId, 
   onClose, 
   onSaveForm,
-  existingForm 
+  existingForm,
+  hasHealthAddon = false
 }) => {
   const tenantId = useTenantId();
 
@@ -2245,8 +2247,8 @@ Retorne APENAS este JSON (sem markdown, sem texto fora do JSON):
           )}
         </div>
 
-        {/* Assinatura Eletrônica */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+        {/* Assinatura Eletrônica — só aparece se o módulo Saúde estiver ativo */}
+        {hasHealthAddon && <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
@@ -2326,10 +2328,9 @@ Retorne APENAS este JSON (sem markdown, sem texto fora do JSON):
                   <strong>O que é coletado:</strong> Assinatura digital desenhada, nome, email, telefone, IP e data/hora — válido como assinatura eletrônica simples pela Lei 14.063/2020.
                 </p>
               </div>
-            </div>
+             </div>
           )}
-        </div>
-
+        </div>}
         {/* Save Button */}
         <button
           onClick={handleSaveForm}
