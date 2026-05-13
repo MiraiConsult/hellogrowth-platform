@@ -1389,8 +1389,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }).catch(err => console.error('[signature] Erro ao salvar assinatura:', err));
     }
 
-    // Disparar análise de IA em background (fire-and-forget)
-    // O WhatsApp de análise será disparado DENTRO desta função, após a análise concluir
+    // Disparar análise de IA no SERVIDOR (server-side) — independente do browser do lead
+    // O lead pode fechar a aba imediatamente após enviar o formulário
     if (insertedLead) {
       const whatsappAnalysisConfig = {
         enabled: !!(publicForm as any).whatsapp_analysis_enabled,
@@ -1398,13 +1398,17 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         formName: publicForm.name,
         patientData: data.patient || {},
       };
-      processAIAnalysisInBackground(
-        insertedLead.id,
-        { answers: enrichedAnswers },
-        publicForm,
-        formTenantId,
-        whatsappAnalysisConfig
-      ).catch(err => console.error('[ai-analysis] Erro na análise de IA em background:', err));
+      fetch('/api/analyze-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leadId: insertedLead.id,
+          tenantId: formTenantId,
+          form: publicForm,
+          answers: enrichedAnswers,
+          whatsappConfig: whatsappAnalysisConfig,
+        }),
+      }).catch(err => console.error('[ai-analysis] Erro ao chamar API de análise:', err));
     }
 
     return true;
