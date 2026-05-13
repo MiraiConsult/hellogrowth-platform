@@ -1439,7 +1439,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       if (products && products.length > 0) {
         // 3. Preparar contexto para análise da IA
         const answersText = Object.entries(data.answers).map(([qId, ans]: [string, any]) => {
-          const question = publicForm.questions.find((q: any) => q.id === qId);
+          const question = form.questions.find((q: any) => q.id === qId);
           const answerValue = Array.isArray(ans.value) ? ans.value.join(', ') : ans.value;
           return `Pergunta: ${question?.text || qId}\nResposta: ${answerValue}`;
         }).join('\n\n');
@@ -1473,7 +1473,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         }
 
         // Verificar se o formulário tem produtos selecionados
-        const formSelectedProducts = (publicForm as any).selected_products || [];
+        const formSelectedProducts = (form as any).selected_products || [];
         let focusedProductsContext = '';
         if (formSelectedProducts.length > 0) {
           const focusedProducts = products.filter(p => formSelectedProducts.includes(p.id));
