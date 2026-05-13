@@ -585,31 +585,7 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
             <p className="text-gray-500">Gerencie seus questionários de pré-venda</p>
           </div>
           <div className="flex gap-3">
-            {/* Botão Disparo em Massa - oculto */}
-            {/* Botão Analisar com IA */}
-            <button 
-              onClick={onAnalyzeAllLeads}
-              disabled={isAnalyzingAll || pendingAnalysisCount === 0}
-              className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
-                isAnalyzingAll 
-                  ? 'bg-amber-50 border-amber-300 text-amber-700 cursor-wait'
-                  : pendingAnalysisCount > 0 
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-amber-500 hover:shadow-lg hover:shadow-amber-500/30 shadow-sm'
-                    : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {isAnalyzingAll ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  Analisando {analysisProgress.current}/{analysisProgress.total}...
-                </>
-              ) : (
-                <>
-                  <Zap size={18} />
-                  Analisar com IA {pendingAnalysisCount > 0 && <span className="bg-white/30 text-xs px-1.5 py-0.5 rounded-full">{pendingAnalysisCount}</span>}
-                </>
-              )}
-            </button>
+            {/* Botão Analisar com IA removido - análise é feita automaticamente ao receber o lead */}
             <button
               onClick={openFormTemplateModal}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg flex items-center gap-2 transition-all font-medium shadow-sm"
