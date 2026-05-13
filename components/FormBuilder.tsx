@@ -187,6 +187,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   // Assinatura eletrônica
   const [signatureEnabled, setSignatureEnabled] = useState(false);
   const [signatureAutoEmail, setSignatureAutoEmail] = useState(false);
+  const [signatureAutoWhatsapp, setSignatureAutoWhatsapp] = useState(false);
+  const [termColor, setTermColor] = useState('#10b981');
   const [consentText, setConsentText] = useState('');
   const [isMassFormSendOpen, setIsMassFormSendOpen] = useState(false);
   const [generatingScriptId, setGeneratingScriptId] = useState<string | null>(null); 
@@ -265,6 +267,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setEmailAnalysisNewRecipient('');
     setSignatureEnabled(false);
     setSignatureAutoEmail(false);
+    setSignatureAutoWhatsapp(false);
+    setTermColor('#10b981');
     setConsentText('');
     setView('editor');
   };
@@ -286,6 +290,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     setWhatsappAnalysisRecipients((form as any).whatsapp_analysis_recipients || '');
     setSignatureEnabled((form as any).signature_enabled || false);
     setSignatureAutoEmail((form as any).signature_auto_email || false);
+    setSignatureAutoWhatsapp((form as any).signature_auto_whatsapp || false);
+    setTermColor((form as any).term_color || '#10b981');
     setConsentText((form as any).consent_text || '');
     setView('editor');
     setMenuOpenId(null);
@@ -553,6 +559,8 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
         whatsapp_analysis_recipients: whatsappAnalysisRecipients,
         signature_enabled: signatureEnabled,
         signature_auto_email: signatureAutoEmail,
+        signature_auto_whatsapp: signatureAutoWhatsapp,
+        term_color: termColor,
         consent_text: consentText,
     };
 
@@ -1153,9 +1161,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
             {signatureEnabled && (
               <div className="space-y-4 pt-2">
                 <div className="flex items-center justify-between p-3 bg-violet-50 rounded-lg border border-violet-200">
-                  <div>
-                    <p className="text-xs font-medium text-violet-800">Enviar termo por email automaticamente</p>
-                    <p className="text-xs text-violet-600 mt-0.5">O paciente recebe o comprovante de assinatura assim que enviar o formulário</p>
+                  <div className="flex-1 mr-3">
+                    <p className="text-xs font-medium text-violet-800">📧 Enviar termo por e-mail automaticamente</p>
+                    <p className="text-xs text-violet-600 mt-0.5">O paciente recebe o termo assinado por e-mail ao enviar o formulário. <strong>Campo e-mail será obrigatório.</strong></p>
                   </div>
                   <button
                     type="button"
@@ -1164,6 +1172,39 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
                   >
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${signatureAutoEmail ? 'translate-x-7' : 'translate-x-1'}`} />
                   </button>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex-1 mr-3">
+                    <p className="text-xs font-medium text-green-800">💬 Enviar termo por WhatsApp automaticamente</p>
+                    <p className="text-xs text-green-600 mt-0.5">O paciente recebe o termo assinado por WhatsApp ao enviar o formulário. <strong>Campo telefone será obrigatório.</strong></p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSignatureAutoWhatsapp(!signatureAutoWhatsapp)}
+                    className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors flex-shrink-0 ${signatureAutoWhatsapp ? 'bg-green-500' : 'bg-slate-300'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${signatureAutoWhatsapp ? 'translate-x-7' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div>
+                    <p className="text-xs font-medium text-gray-700">Cor do Termo</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Cor usada no cabeçalho e títulos do termo de assinatura. Padrão: verde HelloGrowth.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={termColor}
+                      onChange={e => setTermColor(e.target.value)}
+                      className="h-8 w-12 rounded cursor-pointer border border-gray-300"
+                      title="Escolher cor do termo"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setTermColor('#10b981')}
+                      className="text-xs text-gray-500 hover:text-gray-700 underline"
+                    >Padrão</button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1.5 flex items-center gap-1"><FileText size={12} /> Texto do Termo de Consentimento</label>
@@ -1466,6 +1507,9 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       whatsapp_analysis_enabled: formData.whatsapp_analysis_enabled || false,
       whatsapp_analysis_recipients: formData.whatsapp_analysis_recipients || '',
       signature_enabled: formData.signature_enabled || false,
+      signature_auto_email: formData.signature_auto_email || false,
+      signature_auto_whatsapp: formData.signature_auto_whatsapp || false,
+      term_color: formData.term_color || '#10b981',
       consent_text: formData.consent_text || null
     } as any;
     onSaveForm(newForm);

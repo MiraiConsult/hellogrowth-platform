@@ -844,17 +844,19 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       tenant_id: getActiveTenant(),
       game_enabled: form.game_enabled || false,
       game_id: form.game_id || null,
-      show_logo: (form as any).show_logo || false,
+      show_logo: form.show_logo || false,
       email_analysis_enabled: form.email_analysis_enabled || false,
       email_analysis_recipients: form.email_analysis_recipients || '',
-      whatsapp_analysis_enabled: (form as any).whatsapp_analysis_enabled || false,
-      whatsapp_analysis_recipients: (form as any).whatsapp_analysis_recipients || '',
-      signature_enabled: (form as any).signature_enabled || false,
-      consent_text: (form as any).consent_text || null
+      whatsapp_analysis_enabled: form.whatsapp_analysis_enabled || false,
+      whatsapp_analysis_recipients: form.whatsapp_analysis_recipients || '',
+      signature_enabled: form.signature_enabled || false,
+      signature_auto_email: form.signature_auto_email || false,
+      signature_auto_whatsapp: form.signature_auto_whatsapp || false,
+      term_color: form.term_color || '#10b981',
+      consent_text: form.consent_text || null
       // product_ids: requer migração 004 no Supabase antes de habilitar
       // product_ids: (form as any).product_ids || null
     };
-    
     // Verificar se o ID é um UUID válido (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
     // IDs temporários gerados com Date.now() não são UUIDs válidos
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1352,6 +1354,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
     // Salvar assinatura eletrônica se o formulário tiver esse recurso ativado
     if (insertedLead && data.signatureData && (publicForm as any).signature_enabled) {
+      const signatureAutoWhatsapp = (publicForm as any).signature_auto_whatsapp || false;
       fetch('/api/health/save-signature', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1365,7 +1368,24 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           signatureImage: data.signatureData,
           consentText: (publicForm as any).consent_text || '',
           signatureAutoEmail: (publicForm as any).signature_auto_email || false,
+          formName: publicForm.name || '',
+          companyName: publicCompanyName || '',
+          logoUrl: publicLogoUrl || '',
+          termColor: (publicForm as any).term_color || '#10b981',
         }),
+      }).then(async (res) => {
+        if (res.ok && signatureAutoWhatsapp) {
+          const saveResult = await res.json().catch(() => null);
+          const signatureId = saveResult?.signatureId;
+          if (signatureId && data.patient?.phone) {
+            // Disparar WhatsApp automaticamente
+            fetch('/api/health/send-signature-whatsapp', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ signatureId, tenantId: formTenantId }),
+            }).catch(err => console.error('[signature-whatsapp] Erro ao enviar WhatsApp:', err));
+          }
+        }
       }).catch(err => console.error('[signature] Erro ao salvar assinatura:', err));
     }
 
@@ -2043,7 +2063,11 @@ Responda APENAS com JSON válido (sem markdown):
         )}
 
         {currentView === 'health-signatures' && (
-          <HealthSignatures tenantId={getActiveTenant() || ''} />
+          <HealthSignatures
+            tenantId={getActiveTenant() || ''}
+            companyName={publicCompanyName || undefined}
+            logoUrl={publicLogoUrl || undefined}
+          />
         )}
         {/* Banner flutuante de onboarding em andamento — aparece quando o usuário navega para módulos durante o onboarding */}
         {!showOnboardingWizard && onboardingInProgress && ['nps','forms','products'].includes(currentView) && (

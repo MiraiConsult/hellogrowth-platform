@@ -1,4 +1,3 @@
-// HealthSignatures.tsx — Tela de Assinaturas Eletrônicas (Módulo Saúde)
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -8,19 +7,17 @@ import {
   X,
   Mail,
   CheckCircle,
-  Clock,
   User,
   Phone,
   Calendar,
   Globe,
   FileText,
-  Send,
   ChevronDown,
   ChevronUp,
   AlertCircle,
   Download,
+  MessageCircle,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 
 interface HealthSignature {
   id: string;
@@ -36,52 +33,91 @@ interface HealthSignature {
   signature_image: string;
   consent_text: string;
   email_sent: boolean;
-  // join com leads
+  whatsapp_sent?: boolean;
   lead?: {
     id: string;
     name: string;
     answers: Record<string, any>;
     form_source: string;
   };
-  // join com forms
   form?: {
     id: string;
     name: string;
+    questions?: Array<{ id: string; text: string; type: string }>;
   };
 }
 
 interface HealthSignaturesProps {
   tenantId: string;
+  companyName?: string;
+  logoUrl?: string;
   isDark?: boolean;
 }
 
-const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = false }) => {
+// Extrai o valor legível de uma resposta do formulário
+function extractAnswerValue(value: any): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'string') return value || '—';
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'object') {
+    // Formato padrão das respostas do HelloGrowth: { value, optionSelected, followUps }
+    if (value.value !== undefined && value.value !== null && value.value !== '') {
+      return String(value.value);
+    }
+    if (value.optionSelected?.label) {
+      return String(value.optionSelected.label);
+    }
+    if (value.label) return String(value.label);
+    if (value.text) return String(value.text);
+    // Array de valores (múltipla escolha)
+    if (Array.isArray(value)) {
+      return value.map(v => extractAnswerValue(v)).filter(Boolean).join(', ') || '—';
+    }
+  }
+  return '—';
+}
+
+// Mapeia o ID da pergunta para o texto da pergunta
+function buildQuestionMap(form?: HealthSignature['form']): Record<string, string> {
+  if (!form?.questions) return {};
+  const map: Record<string, string> = {};
+  form.questions.forEach(q => {
+    if (q.id && q.text) map[q.id] = q.text;
+  });
+  return map;
+}
+
+const HealthSignatures: React.FC<HealthSignaturesProps> = ({
+  tenantId,
+  companyName = 'HelloGrowth',
+  logoUrl,
+  isDark = false,
+}) => {
   const [signatures, setSignatures] = useState<HealthSignature[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectedSignature, setSelectedSignature] = useState<HealthSignature | null>(null);
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
+  const [sendingWhatsapp, setSendingWhatsapp] = useState<string | null>(null);
   const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
+  const [whatsappSuccess, setWhatsappSuccess] = useState<string | null>(null);
   const [showAnswers, setShowAnswers] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchSignatures = useCallback(async () => {
-    if (!supabase || !tenantId) return;
+    if (!tenantId) return;
     setLoading(true);
     setError(null);
     try {
-      const { data, error: fetchError } = await supabase
-        .from('health_signatures')
-        .select(`
-          *,
-          lead:leads(id, name, answers, form_source),
-          form:forms(id, name)
-        `)
-        .eq('tenant_id', tenantId)
-        .order('signed_at', { ascending: false });
-
-      if (fetchError) throw fetchError;
-      setSignatures(data || []);
+      const res = await fetch(`/api/health/list-signatures?tenantId=${encodeURIComponent(tenantId)}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Erro ${res.status}`);
+      }
+      const { signatures: enriched } = await res.json();
+      setSignatures(enriched || []);
     } catch (err: any) {
       console.error('[HealthSignatures] Erro ao buscar assinaturas:', err);
       setError('Não foi possível carregar as assinaturas. Tente novamente.');
@@ -94,54 +130,178 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
     fetchSignatures();
   }, [fetchSignatures]);
 
+  // Enviar TERMO por e-mail
   const handleSendEmail = async (sig: HealthSignature) => {
+    if (!sig.patient_email) return;
     setSendingEmail(sig.id);
     setEmailSuccess(null);
     try {
       const res = await fetch('/api/health/send-signature-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          signatureId: sig.id,
-          tenantId: tenantId,
-          patientName: sig.patient_name,
-          patientEmail: sig.patient_email,
-          signatureImage: sig.signature_image,
-          consentText: sig.consent_text,
-          signedAt: sig.signed_at,
-          formName: sig.form?.name || 'Formulário',
-        }),
+        body: JSON.stringify({ signatureId: sig.id, tenantId }),
       });
       if (res.ok) {
         setEmailSuccess(sig.id);
-        // Atualizar localmente
-        setSignatures(prev =>
-          prev.map(s => s.id === sig.id ? { ...s, email_sent: true } : s)
-        );
+        setSignatures(prev => prev.map(s => s.id === sig.id ? { ...s, email_sent: true } : s));
         if (selectedSignature?.id === sig.id) {
           setSelectedSignature(prev => prev ? { ...prev, email_sent: true } : null);
         }
         setTimeout(() => setEmailSuccess(null), 3000);
       } else {
-        alert('Erro ao enviar e-mail. Verifique as configurações de e-mail.');
+        const errData = await res.json().catch(() => ({}));
+        alert(`Erro ao enviar e-mail: ${errData.error || 'Verifique as configurações de e-mail.'}`);
       }
-    } catch (err) {
-      console.error('[HealthSignatures] Erro ao enviar e-mail:', err);
+    } catch {
       alert('Erro ao enviar e-mail.');
     } finally {
       setSendingEmail(null);
     }
   };
 
+  // Enviar TERMO por WhatsApp
+  const handleSendWhatsapp = async (sig: HealthSignature) => {
+    if (!sig.patient_phone) return;
+    setSendingWhatsapp(sig.id);
+    setWhatsappSuccess(null);
+    try {
+      const res = await fetch('/api/health/send-signature-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signatureId: sig.id, tenantId }),
+      });
+      if (res.ok) {
+        setWhatsappSuccess(sig.id);
+        setSignatures(prev => prev.map(s => s.id === sig.id ? { ...s, whatsapp_sent: true } : s));
+        if (selectedSignature?.id === sig.id) {
+          setSelectedSignature(prev => prev ? { ...prev, whatsapp_sent: true } : null);
+        }
+        setTimeout(() => setWhatsappSuccess(null), 3000);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(`Erro ao enviar WhatsApp: ${errData.error || 'Verifique as configurações de WhatsApp.'}`);
+      }
+    } catch {
+      alert('Erro ao enviar WhatsApp.');
+    } finally {
+      setSendingWhatsapp(null);
+    }
+  };
+
+  // Download do TERMO em PDF (client-side com html2pdf.js)
+  const handleDownloadPdf = async (sig: HealthSignature) => {
+    setDownloadingPdf(sig.id);
+    try {
+      const html2pdf = (await import('html2pdf.js')).default;
+
+      const signedDate = new Date(sig.signed_at).toLocaleString('pt-BR', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+
+      // Usar a cor do formulário se disponível, senão verde padrão
+      const termColor = '#10b981';
+      const company = companyName || 'HelloGrowth';
+
+      // Construir seção de respostas formatadas para o PDF
+      const questionMap = buildQuestionMap(sig.form);
+      const answerEntries = getAnswerEntries(sig, questionMap);
+      const answersHtml = answerEntries.length > 0 ? `
+        <div style="margin-bottom:22px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${termColor};border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Respostas do Formulário</div>
+          ${answerEntries.map(([label, val]) => `
+            <div style="margin-bottom:8px;padding:8px 12px;background:#f9fafb;border-radius:6px;border-left:3px solid ${termColor};">
+              <div style="font-size:10px;color:#9ca3af;margin-bottom:2px;">${label}</div>
+              <div style="font-size:13px;color:#374151;font-weight:500;">${val}</div>
+            </div>
+          `).join('')}
+        </div>` : '';
+
+      const element = document.createElement('div');
+      element.innerHTML = `
+        <div style="font-family:Arial,sans-serif;font-size:13px;color:#1f2937;padding:40px;max-width:800px;margin:0 auto;">
+          <div style="display:flex;align-items:center;gap:16px;border-bottom:3px solid ${termColor};padding-bottom:20px;margin-bottom:28px;">
+            ${logoUrl ? `<img src="${logoUrl}" alt="${company}" style="max-height:56px;max-width:160px;object-fit:contain;" />` : ''}
+            <div>
+              <h1 style="font-size:18px;font-weight:700;color:${termColor};margin:0 0 2px;">Termo de Assinatura Eletrônica</h1>
+              <p style="font-size:12px;color:#6b7280;margin:0;">${company}</p>
+            </div>
+          </div>
+          <div style="text-align:center;margin-bottom:20px;">
+            <span style="display:inline-block;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;">✓ Documento com validade jurídica — Lei 14.063/2020</span>
+          </div>
+          <div style="margin-bottom:22px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${termColor};border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Dados do Signatário</div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <tr><td style="padding:4px 8px 4px 0;color:#9ca3af;font-size:11px;width:140px;">Nome completo</td><td style="padding:4px 0;font-weight:600;">${sig.patient_name || '—'}</td></tr>
+              <tr><td style="padding:4px 8px 4px 0;color:#9ca3af;font-size:11px;">E-mail</td><td style="padding:4px 0;font-weight:600;">${sig.patient_email || '—'}</td></tr>
+              <tr><td style="padding:4px 8px 4px 0;color:#9ca3af;font-size:11px;">Telefone</td><td style="padding:4px 0;font-weight:600;">${sig.patient_phone || '—'}</td></tr>
+              <tr><td style="padding:4px 8px 4px 0;color:#9ca3af;font-size:11px;">Data/Hora</td><td style="padding:4px 0;font-weight:600;">${signedDate}</td></tr>
+              <tr><td style="padding:4px 8px 4px 0;color:#9ca3af;font-size:11px;">IP</td><td style="padding:4px 0;font-family:monospace;font-size:12px;">${sig.ip_address || '—'}</td></tr>
+              <tr><td style="padding:4px 8px 4px 0;color:#9ca3af;font-size:11px;">ID do Registro</td><td style="padding:4px 0;font-family:monospace;font-size:11px;">${sig.id}</td></tr>
+            </table>
+          </div>
+          ${sig.consent_text ? `
+          <div style="margin-bottom:22px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${termColor};border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Termo de Consentimento</div>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;font-size:13px;line-height:1.7;color:#374151;white-space:pre-wrap;">${sig.consent_text}</div>
+          </div>` : ''}
+          ${sig.signature_image ? `
+          <div style="margin-bottom:22px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${termColor};border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:12px;">Assinatura Digital</div>
+            <div style="border:2px solid #e5e7eb;border-radius:8px;padding:12px;background:#fafafa;text-align:center;">
+              <img src="${sig.signature_image}" alt="Assinatura" style="max-width:100%;max-height:140px;object-fit:contain;" />
+            </div>
+            <p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:8px;">Assinatura eletrônica simples — Lei 14.063/2020</p>
+          </div>` : ''}
+          ${answersHtml}
+          <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:11px;color:#9ca3af;line-height:1.6;">
+            <p>Este documento é um registro oficial de assinatura eletrônica gerado pelo sistema ${company}.</p>
+            <p>A assinatura eletrônica simples tem validade jurídica conforme a <strong>Lei nº 14.063/2020</strong>.</p>
+            <p style="margin-top:8px;color:#d1d5db;">Gerado em: ${new Date().toLocaleString('pt-BR')} · Powered by <strong style="color:${termColor};">HelloGrowth</strong></p>
+          </div>
+        </div>
+      `;
+
+      const filename = `termo-assinatura-${(sig.patient_name || sig.id).replace(/\s+/g, '-').toLowerCase()}.pdf`;
+
+      await html2pdf().set({
+        margin: 0,
+        filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      }).from(element).save();
+
+    } catch (err) {
+      console.error('[handleDownloadPdf] Erro:', err);
+      alert('Erro ao gerar PDF. Tente novamente.');
+    } finally {
+      setDownloadingPdf(null);
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '—';
     return new Date(dateStr).toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
     });
+  };
+
+  // Retorna as entradas de respostas formatadas: [label, value]
+  const getAnswerEntries = (sig: HealthSignature, questionMap?: Record<string, string>): [string, string][] => {
+    if (!sig.lead?.answers) return [];
+    const qMap = questionMap || buildQuestionMap(sig.form);
+    return Object.entries(sig.lead.answers)
+      .filter(([key]) => !key.startsWith('_') && key !== 'name' && key !== 'email' && key !== 'phone')
+      .map(([key, value]): [string, string] => {
+        // Tentar obter o texto da pergunta pelo ID
+        const label = qMap[key] || key;
+        const displayValue = extractAnswerValue(value);
+        return [label, displayValue];
+      })
+      .filter(([, val]) => val !== '—');
   };
 
   const filteredSignatures = signatures.filter(sig => {
@@ -153,13 +313,6 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
       sig.form?.name?.toLowerCase().includes(term)
     );
   });
-
-  const getAnswerEntries = (sig: HealthSignature) => {
-    if (!sig.lead?.answers) return [];
-    return Object.entries(sig.lead.answers).filter(
-      ([key]) => !key.startsWith('_') && key !== 'name' && key !== 'email' && key !== 'phone'
-    );
-  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -243,7 +396,6 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">Contato</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">Formulário</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">Data/Hora</th>
-                <th className="text-left px-5 py-3 font-semibold text-slate-600">E-mail</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">Ações</th>
               </tr>
             </thead>
@@ -265,8 +417,16 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
                     </div>
                   </td>
                   <td className="px-5 py-3.5 text-slate-500">
-                    <div>{sig.patient_email || '—'}</div>
-                    <div className="text-xs text-slate-400">{sig.patient_phone || ''}</div>
+                    <div className="flex items-center gap-1">
+                      {sig.patient_email
+                        ? <span className="text-slate-600">{sig.patient_email}</span>
+                        : <span className="text-slate-300 text-xs italic">sem e-mail</span>}
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      {sig.patient_phone
+                        ? sig.patient_phone
+                        : <span className="italic text-slate-300">sem telefone</span>}
+                    </div>
                   </td>
                   <td className="px-5 py-3.5">
                     <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-medium">
@@ -276,33 +436,67 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
                   <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">
                     {formatDate(sig.signed_at)}
                   </td>
-                  <td className="px-5 py-3.5">
-                    {sig.email_sent ? (
-                      <span className="flex items-center gap-1 text-emerald-600 text-xs font-medium">
-                        <CheckCircle size={13} /> Enviado
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-slate-400 text-xs">
-                        <Clock size={13} /> Pendente
-                      </span>
-                    )}
-                  </td>
                   <td className="px-5 py-3.5" onClick={e => e.stopPropagation()}>
-                    <button
-                      onClick={() => handleSendEmail(sig)}
-                      disabled={sendingEmail === sig.id}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-                      title="Enviar comprovante por e-mail"
-                    >
-                      {sendingEmail === sig.id ? (
-                        <RefreshCw size={12} className="animate-spin" />
-                      ) : emailSuccess === sig.id ? (
-                        <CheckCircle size={12} />
-                      ) : (
-                        <Send size={12} />
-                      )}
-                      {emailSuccess === sig.id ? 'Enviado!' : 'Enviar e-mail'}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {/* Botão E-mail */}
+                      <button
+                        onClick={() => handleSendEmail(sig)}
+                        disabled={!sig.patient_email || sendingEmail === sig.id}
+                        title={!sig.patient_email ? 'Paciente sem e-mail cadastrado' : 'Enviar termo por e-mail'}
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          !sig.patient_email
+                            ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                            : emailSuccess === sig.id
+                            ? 'bg-emerald-50 text-emerald-600'
+                            : 'bg-rose-50 hover:bg-rose-100 text-rose-600'
+                        }`}
+                      >
+                        {sendingEmail === sig.id
+                          ? <RefreshCw size={12} className="animate-spin" />
+                          : emailSuccess === sig.id
+                          ? <CheckCircle size={12} />
+                          : <Mail size={12} />}
+                        <span className="hidden lg:inline">
+                          {emailSuccess === sig.id ? 'Enviado!' : 'E-mail'}
+                        </span>
+                      </button>
+
+                      {/* Botão WhatsApp */}
+                      <button
+                        onClick={() => handleSendWhatsapp(sig)}
+                        disabled={!sig.patient_phone || sendingWhatsapp === sig.id}
+                        title={!sig.patient_phone ? 'Paciente sem telefone cadastrado' : 'Enviar termo por WhatsApp'}
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          !sig.patient_phone
+                            ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                            : whatsappSuccess === sig.id
+                            ? 'bg-emerald-50 text-emerald-600'
+                            : 'bg-green-50 hover:bg-green-100 text-green-600'
+                        }`}
+                      >
+                        {sendingWhatsapp === sig.id
+                          ? <RefreshCw size={12} className="animate-spin" />
+                          : whatsappSuccess === sig.id
+                          ? <CheckCircle size={12} />
+                          : <MessageCircle size={12} />}
+                        <span className="hidden lg:inline">
+                          {whatsappSuccess === sig.id ? 'Enviado!' : 'WhatsApp'}
+                        </span>
+                      </button>
+
+                      {/* Botão PDF */}
+                      <button
+                        onClick={() => handleDownloadPdf(sig)}
+                        disabled={downloadingPdf === sig.id}
+                        title="Baixar termo em PDF"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        {downloadingPdf === sig.id
+                          ? <RefreshCw size={12} className="animate-spin" />
+                          : <Download size={12} />}
+                        <span className="hidden lg:inline">PDF</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -349,12 +543,16 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
                     <p className="font-medium text-slate-700">{selectedSignature.patient_name || '—'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-400 mb-0.5">E-mail</p>
-                    <p className="font-medium text-slate-700">{selectedSignature.patient_email || '—'}</p>
+                    <p className="text-xs text-slate-400 mb-0.5 flex items-center gap-1"><Mail size={11} /> E-mail</p>
+                    {selectedSignature.patient_email
+                      ? <p className="font-medium text-slate-700">{selectedSignature.patient_email}</p>
+                      : <p className="text-xs text-slate-300 italic">Não informado</p>}
                   </div>
                   <div>
                     <p className="text-xs text-slate-400 mb-0.5 flex items-center gap-1"><Phone size={11} /> Telefone</p>
-                    <p className="font-medium text-slate-700">{selectedSignature.patient_phone || '—'}</p>
+                    {selectedSignature.patient_phone
+                      ? <p className="font-medium text-slate-700">{selectedSignature.patient_phone}</p>
+                      : <p className="text-xs text-slate-300 italic">Não informado</p>}
                   </div>
                   <div>
                     <p className="text-xs text-slate-400 mb-0.5 flex items-center gap-1"><Calendar size={11} /> Data/Hora</p>
@@ -364,28 +562,16 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
                     <p className="text-xs text-slate-400 mb-0.5 flex items-center gap-1"><Globe size={11} /> IP</p>
                     <p className="font-medium text-slate-700 font-mono text-xs">{selectedSignature.ip_address || '—'}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-slate-400 mb-0.5">Status E-mail</p>
-                    {selectedSignature.email_sent ? (
-                      <span className="flex items-center gap-1 text-emerald-600 text-xs font-medium">
-                        <CheckCircle size={12} /> Enviado
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-slate-400 text-xs">
-                        <Clock size={12} /> Pendente
-                      </span>
-                    )}
-                  </div>
                 </div>
               </div>
 
               {/* Termo de consentimento */}
               {selectedSignature.consent_text && (
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                  <h3 className="text-sm font-semibold text-blue-800 flex items-center gap-2 mb-2">
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+                  <h3 className="text-sm font-semibold text-emerald-800 flex items-center gap-2 mb-2">
                     <FileText size={14} /> Termo de Consentimento
                   </h3>
-                  <p className="text-sm text-blue-700 whitespace-pre-wrap leading-relaxed">
+                  <p className="text-sm text-emerald-700 whitespace-pre-wrap leading-relaxed">
                     {selectedSignature.consent_text}
                   </p>
                 </div>
@@ -410,69 +596,115 @@ const HealthSignatures: React.FC<HealthSignaturesProps> = ({ tenantId, isDark = 
                 </div>
               )}
 
-              {/* Respostas do formulário */}
-              {getAnswerEntries(selectedSignature).length > 0 && (
-                <div>
-                  <button
-                    onClick={() => setShowAnswers(v => !v)}
-                    className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 rounded-xl text-sm font-semibold text-slate-700 transition-colors"
-                  >
-                    <span className="flex items-center gap-2">
-                      <FileText size={14} className="text-slate-500" />
-                      Respostas do Formulário ({getAnswerEntries(selectedSignature).length})
-                    </span>
-                    {showAnswers ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </button>
-                  {showAnswers && (
-                    <div className="mt-2 space-y-2">
-                      {getAnswerEntries(selectedSignature).map(([key, value]) => (
-                        <div key={key} className="bg-slate-50 rounded-lg px-4 py-2.5">
-                          <p className="text-xs text-slate-400 mb-0.5">{key}</p>
-                          <p className="text-sm text-slate-700">
-                            {typeof value === 'object' ? JSON.stringify(value) : String(value || '—')}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Respostas do formulário — formatadas */}
+              {(() => {
+                const questionMap = buildQuestionMap(selectedSignature.form);
+                const entries = getAnswerEntries(selectedSignature, questionMap);
+                if (entries.length === 0) return null;
+                return (
+                  <div>
+                    <button
+                      onClick={() => setShowAnswers(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 rounded-xl text-sm font-semibold text-slate-700 transition-colors"
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileText size={14} className="text-slate-500" />
+                        Respostas do Formulário ({entries.length})
+                      </span>
+                      {showAnswers ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
+                    {showAnswers && (
+                      <div className="mt-2 space-y-2">
+                        {entries.map(([label, value], idx) => (
+                          <div key={idx} className="bg-slate-50 rounded-lg px-4 py-2.5 border-l-2 border-emerald-200">
+                            <p className="text-xs text-slate-400 mb-0.5">{label}</p>
+                            <p className="text-sm text-slate-700 font-medium">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
-              {/* User agent */}
-              {selectedSignature.user_agent && (
-                <div className="bg-slate-50 rounded-xl p-3">
-                  <p className="text-xs text-slate-400 mb-1">Dispositivo / Navegador</p>
-                  <p className="text-xs text-slate-500 font-mono break-all">{selectedSignature.user_agent}</p>
-                </div>
-              )}
+              {/* Status de envio */}
+              <div className="flex items-center gap-3 flex-wrap">
+                {selectedSignature.email_sent && (
+                  <span className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full">
+                    <CheckCircle size={12} /> E-mail enviado
+                  </span>
+                )}
+                {selectedSignature.whatsapp_sent && (
+                  <span className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full">
+                    <CheckCircle size={12} /> WhatsApp enviado
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-100 flex justify-between items-center bg-white sticky bottom-0">
+            <div className="px-6 py-4 border-t border-slate-100 flex flex-wrap justify-between items-center gap-3 bg-white sticky bottom-0">
               <button
                 onClick={() => setSelectedSignature(null)}
                 className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 transition-colors"
               >
                 Fechar
               </button>
-              <button
-                onClick={() => handleSendEmail(selectedSignature)}
-                disabled={sendingEmail === selectedSignature.id}
-                className="flex items-center gap-2 px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
-              >
-                {sendingEmail === selectedSignature.id ? (
-                  <RefreshCw size={14} className="animate-spin" />
-                ) : emailSuccess === selectedSignature.id ? (
-                  <CheckCircle size={14} />
-                ) : (
-                  <Mail size={14} />
-                )}
-                {emailSuccess === selectedSignature.id
-                  ? 'E-mail enviado!'
-                  : selectedSignature.email_sent
-                  ? 'Reenviar comprovante'
-                  : 'Enviar comprovante por e-mail'}
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* PDF */}
+                <button
+                  onClick={() => handleDownloadPdf(selectedSignature)}
+                  disabled={downloadingPdf === selectedSignature.id}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  {downloadingPdf === selectedSignature.id
+                    ? <RefreshCw size={14} className="animate-spin" />
+                    : <Download size={14} />}
+                  Baixar PDF
+                </button>
+
+                {/* WhatsApp */}
+                <button
+                  onClick={() => handleSendWhatsapp(selectedSignature)}
+                  disabled={!selectedSignature.patient_phone || sendingWhatsapp === selectedSignature.id}
+                  title={!selectedSignature.patient_phone ? 'Paciente sem telefone cadastrado' : 'Enviar termo por WhatsApp'}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                    !selectedSignature.patient_phone
+                      ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700 text-white disabled:opacity-50'
+                  }`}
+                >
+                  {sendingWhatsapp === selectedSignature.id
+                    ? <RefreshCw size={14} className="animate-spin" />
+                    : whatsappSuccess === selectedSignature.id
+                    ? <CheckCircle size={14} />
+                    : <MessageCircle size={14} />}
+                  {whatsappSuccess === selectedSignature.id ? 'Enviado!' : 'Enviar por WhatsApp'}
+                </button>
+
+                {/* E-mail */}
+                <button
+                  onClick={() => handleSendEmail(selectedSignature)}
+                  disabled={!selectedSignature.patient_email || sendingEmail === selectedSignature.id}
+                  title={!selectedSignature.patient_email ? 'Paciente sem e-mail cadastrado' : 'Enviar termo por e-mail'}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                    !selectedSignature.patient_email
+                      ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                      : 'bg-rose-600 hover:bg-rose-700 text-white disabled:opacity-50'
+                  }`}
+                >
+                  {sendingEmail === selectedSignature.id
+                    ? <RefreshCw size={14} className="animate-spin" />
+                    : emailSuccess === selectedSignature.id
+                    ? <CheckCircle size={14} />
+                    : <Mail size={14} />}
+                  {emailSuccess === selectedSignature.id
+                    ? 'E-mail enviado!'
+                    : selectedSignature.email_sent
+                    ? 'Reenviar por E-mail'
+                    : 'Enviar por E-mail'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
