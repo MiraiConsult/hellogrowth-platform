@@ -1578,9 +1578,23 @@ Responda APENAS com JSON válido (sem markdown):
       }
     } catch (error) {
       console.error('Erro na análise de IA em background:', error);
+      // Garantir análise básica mesmo em caso de erro
+      if (!aiAnalysis) {
+        aiAnalysis = {
+          recommended_products: [],
+          suggested_product: 'Análise indisponível',
+          suggested_value: 0,
+          classification: 'monitoring',
+          confidence: 0.3,
+          reasoning: 'Erro ao processar análise de IA.',
+          client_insights: ['Lead capturado'],
+          sales_script: 'Entre em contato para qualificar o lead.',
+          next_steps: ['Fazer contato inicial']
+        };
+      }
     }
     
-    // Atualizar lead com análise de IA
+    // Atualizar lead com análise de IA (se disponível)
     if (aiAnalysis) {
       await supabase
         .from('leads')
@@ -1589,53 +1603,56 @@ Responda APENAS com JSON válido (sem markdown):
           answers: {
             ...data.answers,
             _ai_analysis: aiAnalysis,
-            _analyzing: false  // Remove flag de análise
+            _analyzing: false
           }
         })
         .eq('id', leadId);
+    }
 
-      // Disparar WhatsApp de análise APÓS a análise de IA estar concluída
-      if (whatsappConfig?.enabled && whatsappConfig.recipients) {
-        const waNumbers = whatsappConfig.recipients
-          .split(',')
-          .map((n: string) => n.trim())
-          .filter(Boolean);
-        if (waNumbers.length > 0) {
-          const panelLink = typeof window !== 'undefined'
-            ? `${window.location.origin}/#kanban`
-            : 'https://system.hellogrowth.online/#kanban';
-          const patient = whatsappConfig.patientData || {};
-          // Montar resumo dos produtos recomendados pela IA
-          const productsLine = aiAnalysis.recommended_products && aiAnalysis.recommended_products.length > 0
-            ? `\n💊 *Produtos recomendados:* ${aiAnalysis.recommended_products.map((p: any) => p.name).join(', ')}`
-            : '';
-          const valueLine = updatedValue > 0
-            ? `\n💰 *Valor estimado:* R$ ${updatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-            : '';
-          const waMessage = [
-            `🔔 *Novo Lead Analisado — ${whatsappConfig.formName}*`,
-            ``,
-            `👤 *Nome:* ${patient.name || 'Não informado'}`,
-            patient.phone ? `📞 *Telefone:* ${patient.phone}` : null,
-            patient.email ? `📧 *E-mail:* ${patient.email}` : null,
-            ``,
-            `🤖 *Análise de IA:* ${aiAnalysis.classification === 'opportunity' ? '🟢 Oportunidade' : aiAnalysis.classification === 'risk' ? '🔴 Risco' : '🟡 Monitoramento'}`,
-            productsLine || null,
-            valueLine || null,
-            ``,
-            `📋 *Formulário:* ${whatsappConfig.formName}`,
-            `🔗 *Ver no painel:* ${panelLink}`,
-            ``,
-            `_HelloGrowth — Análise automática de IA_`,
-          ].filter(Boolean).join('\n');
+    // Disparar WhatsApp de análise — sempre que configurado, independente da análise de IA
+    if (whatsappConfig?.enabled && whatsappConfig.recipients) {
+      const waNumbers = whatsappConfig.recipients
+        .split(',')
+        .map((n: string) => n.trim())
+        .filter(Boolean);
+      if (waNumbers.length > 0) {
+        const panelLink = typeof window !== 'undefined'
+          ? `${window.location.origin}/#kanban`
+          : 'https://system.hellogrowth.online/#kanban';
+        const patient = whatsappConfig.patientData || {};
+        const productsLine = aiAnalysis?.recommended_products && aiAnalysis.recommended_products.length > 0
+          ? `\n💊 *Produtos recomendados:* ${aiAnalysis.recommended_products.map((p: any) => p.name).join(', ')}`
+          : '';
+        const valueLine = updatedValue > 0
+          ? `\n💰 *Valor estimado:* R$ ${updatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+          : '';
+        const classification = aiAnalysis?.classification;
+        const classificationLine = classification
+          ? `🤖 *Análise de IA:* ${classification === 'opportunity' ? '🟢 Oportunidade' : classification === 'risk' ? '🔴 Risco' : '🟡 Monitoramento'}`
+          : `🤖 *Análise de IA:* 🟡 Processando...`;
+        const waMessage = [
+          `🔔 *Novo Lead Analisado — ${whatsappConfig.formName}*`,
+          ``,
+          `👤 *Nome:* ${patient.name || 'Não informado'}`,
+          patient.phone ? `📞 *Telefone:* ${patient.phone}` : null,
+          patient.email ? `📧 *E-mail:* ${patient.email}` : null,
+          ``,
+          classificationLine,
+          productsLine || null,
+          valueLine || null,
+          ``,
+          `📋 *Formulário:* ${whatsappConfig.formName}`,
+          `🔗 *Ver no painel:* ${panelLink}`,
+          ``,
+          `_HelloGrowth — Análise automática de IA_`,
+        ].filter(Boolean).join('\n');
 
-          for (const phone of waNumbers) {
-            fetch('/api/send-whatsapp', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ phone, message: waMessage }),
-            }).catch(err => console.error('[whatsapp-analysis] Erro ao disparar WhatsApp pós-IA:', err));
-          }
+        for (const phone of waNumbers) {
+          fetch('/api/send-whatsapp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, message: waMessage }),
+          }).catch(err => console.error('[whatsapp-analysis] Erro ao disparar WhatsApp pós-IA:', err));
         }
       }
     }
