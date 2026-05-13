@@ -274,14 +274,6 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
   };
 
   const handleEdit = (form: Form) => {
-    console.log('[DEBUG handleEdit] form from state:', JSON.stringify({
-      id: form.id?.substring(0, 8),
-      name: form.name,
-      signature_enabled: (form as any).signature_enabled,
-      signature_auto_email: (form as any).signature_auto_email,
-      signature_auto_whatsapp: (form as any).signature_auto_whatsapp,
-      term_color: (form as any).term_color,
-    }));
     setEditingFormId(form.id);
     setCurrentFormName(form.name);
     setCurrentFormDescription(form.description || '');
@@ -573,14 +565,6 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     };
 
     // Trigger Parent Handler for DB Save
-    console.log('[DEBUG handleSave] formToSave:', JSON.stringify({
-      id: formToSave.id,
-      name: formToSave.name,
-      signature_enabled: formToSave.signature_enabled,
-      signature_auto_email: formToSave.signature_auto_email,
-      signature_auto_whatsapp: formToSave.signature_auto_whatsapp,
-      term_color: formToSave.term_color,
-    }));
     onSaveForm(formToSave);
     setView('list');
   };
@@ -1528,14 +1512,6 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
       term_color: formData.term_color || '#10b981',
       consent_text: formData.consent_text || null
     } as any;
-    console.log('[DEBUG handleConsultantSave] newForm:', JSON.stringify({
-      id: newForm.id,
-      name: newForm.name,
-      signature_enabled: (newForm as any).signature_enabled,
-      signature_auto_email: (newForm as any).signature_auto_email,
-      signature_auto_whatsapp: (newForm as any).signature_auto_whatsapp,
-      term_color: (newForm as any).term_color,
-    }));
     onSaveForm(newForm);
   };
 

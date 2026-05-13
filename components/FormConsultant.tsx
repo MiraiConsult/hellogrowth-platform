@@ -239,6 +239,10 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       setWhatsappAnalysisEnabled((stableExistingForm as any).whatsapp_analysis_enabled || false);
       setWhatsappAnalysisRecipients((stableExistingForm as any).whatsapp_analysis_recipients || '');
       setSignatureEnabled(stableExistingForm.signature_enabled || false);
+      setSignatureAutoEmail(stableExistingForm.signature_auto_email || false);
+      setSignatureAutoWhatsapp(stableExistingForm.signature_auto_whatsapp || false);
+      setTermColor(stableExistingForm.term_color || '#10b981');
+      setShowLogo(stableExistingForm.show_logo || false);
       if (stableExistingForm.consent_text) setConsentText(stableExistingForm.consent_text);
       
       // Carregar campos de identificação salvos
@@ -1198,13 +1202,6 @@ Responda APENAS com JSON válido neste formato:
       status: 'active'
     };
 
-    console.log('[DEBUG FormConsultant] formData to save:', JSON.stringify({
-      name: formData.name,
-      signature_enabled: formData.signature_enabled,
-      signature_auto_email: formData.signature_auto_email,
-      signature_auto_whatsapp: formData.signature_auto_whatsapp,
-      term_color: formData.term_color,
-    }));
     onSaveForm(formData);
     setCurrentStep('complete');
     addAssistantMessage(
