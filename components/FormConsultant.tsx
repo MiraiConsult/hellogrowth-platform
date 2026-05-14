@@ -36,6 +36,8 @@ import {
   ArrowUp, ArrowDown, Mail, MessageCircle, ShieldCheck} from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
+import InitialFieldsConfig from '@/components/InitialFieldsConfig';
+import { InitialField } from '@/types';
 
 interface Product {
   id: string;
@@ -175,6 +177,13 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [isReviewChatProcessing, setIsReviewChatProcessing] = useState(false);
   const [showReviewChat, setShowReviewChat] = useState(true);
   const strategyExplanationGenerated = useRef(false);
+
+  // Estado separado para campos de identificação (formato InitialField compatível com InitialFieldsConfig)
+  const [formInitialFields, setFormInitialFields] = useState<InitialField[]>([
+    { field: 'name', label: 'Nome', placeholder: 'Digite seu nome', required: true, enabled: true },
+    { field: 'email', label: 'Email', placeholder: 'Digite seu email', required: true, enabled: true },
+    { field: 'phone', label: 'Telefone', placeholder: 'Digite seu telefone', required: false, enabled: true },
+  ]);
   
   // Estabilizar existingForm para evitar re-renders
   const stableExistingForm = useMemo(() => existingForm, [existingForm?.id]);
@@ -260,6 +269,17 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
           required: field.required !== undefined ? field.required : false,
           placeholder: field.placeholder || `Digite seu ${(field.label || '').toLowerCase()}`
         }));
+
+        // Carregar no formato InitialField para o InitialFieldsConfig
+        const loadedInitialFields: InitialField[] = savedFields.map((field: any) => ({
+          field: field.field || field.id || 'unknown',
+          label: field.label || field.name || '',
+          placeholder: field.placeholder || `Digite seu ${(field.label || '').toLowerCase()}`,
+          required: field.required !== undefined ? field.required : false,
+          enabled: field.enabled !== undefined ? field.enabled : true,
+          inputType: field.inputType,
+        }));
+        setFormInitialFields(loadedInitialFields);
         
         // Carregar contexto se existir (mas preservar identificationFields do banco)
         if (stableExistingForm.ai_context?.businessContext) {
@@ -1166,12 +1186,14 @@ Responda APENAS com JSON válido neste formato:
       name: formName || `Formulário ${new Date().toLocaleDateString('pt-BR')}`,
       description: businessContext.customObjective || businessContext.businessDescription || 'Formulário de qualificação de leads',
       // Enviar todos os campos (incluindo desabilitados) para preservar configuração
-      identification_fields: businessContext.identificationFields.map(f => ({
-        field: f.id,
+      // Usa formInitialFields (formato InitialField) que suporta campos extras como CPF, cidade, etc.
+      identification_fields: formInitialFields.map(f => ({
+        field: f.field,
         label: f.label,
         placeholder: f.placeholder || '',
         required: f.required,
-        enabled: f.enabled
+        enabled: f.enabled,
+        inputType: f.inputType,
       })),
       questions: generatedQuestions.map(q => ({
         id: q.id,
@@ -1713,57 +1735,10 @@ Retorne APENAS este JSON (sem markdown, sem texto fora do JSON):
             Campos de Identificação
           </h3>
           <p className="text-sm text-slate-500 mb-4">Defina quais informações coletar do cliente no início do formulário</p>
-          <div className="space-y-4">
-            {businessContext.identificationFields.map(field => (
-              <div key={field.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                <div className="flex items-center gap-4 mb-3">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={field.enabled}
-                      onChange={() => handleToggleIdentificationField(field.id)}
-                      className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
-                    />
-                    <span className="text-sm font-medium text-slate-700">Ativo</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={field.required}
-                      onChange={() => handleToggleFieldRequired(field.id)}
-                      disabled={!field.enabled}
-                      className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500 disabled:opacity-50"
-                    />
-                    <span className="text-sm font-medium text-slate-700">Obrigatório</span>
-                  </label>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Título do campo</label>
-                    <input
-                      type="text"
-                      value={field.label}
-                      onChange={(e) => handleUpdateIdentificationField(field.id, 'label', e.target.value)}
-                      disabled={!field.enabled}
-                      placeholder="Ex: Nome"
-                      className="w-full rounded-lg border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Placeholder (exemplo)</label>
-                    <input
-                      type="text"
-                      value={field.placeholder || ''}
-                      onChange={(e) => handleUpdateIdentificationField(field.id, 'placeholder', e.target.value)}
-                      disabled={!field.enabled}
-                      placeholder="Ex: Digite seu nome"
-                      className="w-full rounded-lg border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <InitialFieldsConfig
+            initialFields={formInitialFields}
+            onChange={setFormInitialFields}
+          />
         </div>
 
         {/* Questions Section */}

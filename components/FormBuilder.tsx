@@ -1412,14 +1412,26 @@ const FormBuilder: React.FC<FormBuilderProps> = ({ forms, leads = [], onSaveForm
     
     if (formData.identification_fields && Array.isArray(formData.identification_fields)) {
       initialFieldsFormatted = formData.identification_fields.map((f: any) => {
-        // Se já é um objeto com a estrutura correta
+        // Se já é um objeto com campo 'field' (formato InitialField - novo formato)
+        if (typeof f === 'object' && f.field) {
+          return {
+            field: f.field,
+            label: f.label || f.field,
+            placeholder: f.placeholder || '',
+            required: f.required !== false,
+            enabled: f.enabled !== false,
+            ...(f.inputType ? { inputType: f.inputType } : {})
+          };
+        }
+        // Formato antigo com 'id' ao invés de 'field'
         if (typeof f === 'object' && f.id) {
           return {
             field: f.id,
             label: f.label || f.id,
             placeholder: f.placeholder || '',
             required: f.required !== false,
-            enabled: f.enabled !== false
+            enabled: f.enabled !== false,
+            ...(f.inputType ? { inputType: f.inputType } : {})
           };
         }
         // Se é uma string simples
