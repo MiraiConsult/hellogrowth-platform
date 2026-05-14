@@ -8,7 +8,18 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    // Usar cache: 'no-store' para evitar ERR_QUIC_PROTOCOL_ERROR em tablets/redes instáveis
+    fetch: (url: RequestInfo | URL, options?: RequestInit) => {
+      return fetch(url, { ...options, cache: 'no-store' });
+    },
+  },
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+});
 
 export const isDbConnected = () => {
   return !!supabase;

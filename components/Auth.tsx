@@ -58,16 +58,31 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         }
         // -------------------------
         
-        // Check if user exists in 'users' table
-        const { data, error: dbError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('email', email)
-          .maybeSingle(); 
+        // Check if user exists in 'users' table — retry up to 3x on network errors
+        let data: any = null;
+        let dbError: any = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          const result = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', email)
+            .maybeSingle();
+          data = result.data;
+          dbError = result.error;
+          if (!dbError) break;
+          const isNetworkError = dbError.message?.includes('fetch') ||
+            dbError.message?.includes('network') ||
+            dbError.message?.includes('Failed') ||
+            dbError.code === 'NETWORK_ERROR' ||
+            String(dbError).includes('ERR_');
+          if (!isNetworkError || attempt === 3) break;
+          console.warn(`[Auth] Tentativa ${attempt} falhou, tentando novamente...`, dbError.message);
+          await new Promise(r => setTimeout(r, 1000 * attempt));
+        }
 
         if (dbError) {
           console.error("Supabase Login Error:", JSON.stringify(dbError, null, 2));
-          throw new Error('Erro ao conectar com o banco de dados. Tente novamente mais tarde.');
+          throw new Error('Erro ao conectar com o banco de dados. Verifique sua conexão e tente novamente.');
         }
         
         // SECURITY FIX: Validate user exists AND password matches
