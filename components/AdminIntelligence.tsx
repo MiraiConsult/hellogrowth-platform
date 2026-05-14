@@ -5,8 +5,9 @@ import {
   Loader2, RefreshCw, ChevronDown, ChevronUp, Zap, AlertTriangle,
   CheckCircle, Star, Target, Lightbulb, ArrowUp, ArrowDown,
   ThumbsUp, ThumbsDown, Activity, Users, DollarSign, Award, Minus,
-  Calendar, FileText, Package, Search, Eye, Tag, ShoppingBag, Download
+  Calendar, FileText, Package, Search, Eye, Tag, ShoppingBag, Download, Globe
 } from 'lucide-react';
+import AdminMarketIntelligence from './AdminMarketIntelligence';
 
 interface AdminIntelligenceProps {
   isDark: boolean;
@@ -87,7 +88,7 @@ function QuestionTypeBadge({ type }: { type: string }) {
 export default function AdminIntelligence({ isDark, tenants, globalStats, sectorAnalytics = [] }: AdminIntelligenceProps) {
   const t = isDark ? DARK : LIGHT;
 
-  const [activeSection, setActiveSection] = useState<'overview' | 'usage' | 'sectors' | 'trends' | 'products' | 'clients' | 'surveys' | 'ai_costs'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'usage' | 'sectors' | 'trends' | 'products' | 'clients' | 'surveys' | 'ai_costs' | 'mercado'>('overview');
 
   // Custos de IA
   const [aiUsageData, setAiUsageData] = useState<any>(null);
@@ -280,6 +281,7 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
             { id: 'products', label: 'Produtos & Preços', icon: <Package size={14} /> },
             { id: 'clients', label: 'Análise por Cliente', icon: <Users size={14} /> },
             { id: 'ai_costs', label: 'Custos IA', icon: <Zap size={14} /> },
+            { id: 'mercado', label: 'Inteligência de Mercado', icon: <Globe size={14} /> },
           ].map(sec => (
             <button key={sec.id} onClick={() => setActiveSection(sec.id as any)} className={sectionBtnCls(activeSection === sec.id)}>
               <span className="flex items-center gap-1.5">{sec.icon} {sec.label}</span>
@@ -1707,6 +1709,10 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
               </>
             )}
           </div>
+        )}
+        {/* ── INTELIGÊNCIA DE MERCADO ── */}
+        {activeSection === 'mercado' && (
+          <AdminMarketIntelligence tenants={tenants} isDark={isDark} />
         )}
       </div>
     </div>

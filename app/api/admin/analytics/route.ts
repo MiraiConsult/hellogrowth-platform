@@ -76,7 +76,7 @@ async function getOverview() {
   // Buscar nomes das empresas (tenant_id = companies.id = users.id)
   const { data: companies } = await supabase
     .from('companies')
-    .select('id, name, plan, subscription_status, created_at');
+    .select('id, name, plan, subscription_status, created_at, city, state, niche, niche_data');
 
   // Buscar business_profile para obter nicho/setor de cada tenant
   const { data: businessProfiles } = await supabase
@@ -88,12 +88,20 @@ async function getOverview() {
   const companyPlanMap: Record<string, string> = {};
   const companyStatusMap: Record<string, string> = {};
   const companyCreatedMap: Record<string, string> = {};
+  const companyCityMap: Record<string, string> = {};
+  const companyStateMap: Record<string, string> = {};
+  const companyNicheMap: Record<string, string> = {};
+  const companyNicheDataMap: Record<string, any> = {};
   for (const c of companies || []) {
     if (c.id) {
       companyNameMap[c.id] = c.name || c.id.substring(0, 8);
       companyPlanMap[c.id] = c.plan || '';
       companyStatusMap[c.id] = c.subscription_status || '';
       companyCreatedMap[c.id] = c.created_at || '';
+      companyCityMap[c.id] = c.city || '';
+      companyStateMap[c.id] = c.state || '';
+      companyNicheMap[c.id] = c.niche || '';
+      companyNicheDataMap[c.id] = c.niche_data || {};
     }
   }
 
@@ -292,6 +300,10 @@ async function getOverview() {
       gameCount: t.gameCount,
       lastActivity: t.lastActivity,
       healthScore,
+      city: companyCityMap[t.tenantId] || null,
+      state: companyStateMap[t.tenantId] || null,
+      niche: companyNicheMap[t.tenantId] || null,
+      nicheData: companyNicheDataMap[t.tenantId] || {},
     };
   });
 
