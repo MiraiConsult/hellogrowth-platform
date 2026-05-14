@@ -258,13 +258,11 @@ Responda APENAS com JSON válido (sem markdown):
           }
         }
 
-        // Produtos recomendados com valor
+        // Produtos recomendados — apenas nome
         const productLines: string[] = [];
         if (aiAnalysis?.recommended_products?.length > 0) {
           for (const p of aiAnalysis.recommended_products) {
-            const val = p.value ? ` — R$ ${Number(p.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
-            const reason = p.reason ? `\n   _${p.reason}_` : '';
-            productLines.push(`• *${p.name}*${val}${reason}`);
+            productLines.push(`• ${p.name}`);
           }
         }
 
