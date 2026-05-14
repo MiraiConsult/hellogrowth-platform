@@ -10,19 +10,12 @@ export default function HomePage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [view, setView] = useState<'auth' | 'app'>('auth');
   const [isLoading, setIsLoading] = useState(true);
-  const [dbError, setDbError] = useState<string | null>(null);
 
   // Check for active session on load
   useEffect(() => {
     const init = async () => {
-      // Check DB connection first
-      if (supabase) {
-        const { error } = await supabase.from('users').select('id').limit(1);
-        if (error && error.code !== 'PGRST116') {
-          console.error('DB Check Error:', error);
-          setDbError('Erro ao conectar com o banco de dados.');
-        }
-      }
+      // DB connection check removed - don't block the app on network issues
+      // The login flow will naturally fail if DB is unreachable
 
       const savedUser = localStorage.getItem('hg_current_user');
       const params = new URLSearchParams(window.location.search);
@@ -167,13 +160,6 @@ export default function HomePage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         Carregando...
-      </div>
-    );
-
-  if (dbError)
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-red-50 p-4 text-red-700 font-bold border border-red-200 rounded">
-        {dbError}
       </div>
     );
 

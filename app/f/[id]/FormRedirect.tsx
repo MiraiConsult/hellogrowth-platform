@@ -1,15 +1,22 @@
 'use client';
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function FormRedirect({ id }: { id: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (id) {
-      router.replace(`/?form=${id}`);
+      // Preservar parâmetros de indicação ao redirecionar
+      const ref = searchParams.get('ref');
+      const referrer = searchParams.get('referrer');
+      let url = `/?form=${id}`;
+      if (ref) url += `&ref=${ref}`;
+      if (referrer) url += `&referrer=${encodeURIComponent(referrer)}`;
+      router.replace(url);
     }
-  }, [id, router]);
+  }, [id, router, searchParams]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">

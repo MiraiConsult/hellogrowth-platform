@@ -29,8 +29,25 @@ import TeamManagement from '@/components/TeamManagement';
 import IntelligenceCenter from '@/components/IntelligenceCenter';
 import GameConfig from '@/components/GameConfig';
 import GameParticipations from '@/components/GameParticipations';
+import Game from '@/components/Game';
 import ReportSettings from '@/components/ReportSettings';
 import AlertSettings from '@/components/AlertSettings';
+import ActionInbox from '@/components/ActionInbox';
+import ActionMetrics from '@/components/ActionMetrics';
+import ReferralRewards from '@/components/ReferralRewards';
+import WhatsAppSetup from '@/components/WhatsAppSetup';
+import CSVImport from '@/components/CSVImport';
+import PromptManager from '@/components/PromptManager';
+import PilotChecklist from '@/components/PilotChecklist';
+import PilotReport from '@/components/PilotReport';
+import OptOutManager from '@/components/OptOutManager';
+import GoLiveGuide from '@/components/GoLiveGuide';
+import NotificationSettings from '@/components/NotificationSettings';
+import ReportHistory from '@/components/ReportHistory';
+import SystemHealth from '@/components/SystemHealth';
+import ConversationExport from '@/components/ConversationExport';
+import Dispatches from '@/components/Dispatches';
+import HealthSignatures from '@/components/HealthSignatures';
 import { PlanType, Lead, NPSResponse, Campaign, Form, AccountSettings, User } from '@/types';
 import { setActiveTenantId } from '@/hooks/useTenantId';
 import { mockSettings } from '@/services/mockData';
@@ -304,6 +321,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
   const [publicSettings, setPublicSettings] = useState<AccountSettings | undefined>(undefined);
   const [publicCompanyName, setPublicCompanyName] = useState<string>('');
   const [publicLogoUrl, setPublicLogoUrl] = useState<string>('');
+  const [publicReferralCode, setPublicReferralCode] = useState<string | null>(null);
 
   // --- INITIAL DATA FETCH ---
   const fetchData = async () => {
@@ -427,7 +445,9 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
            setForms(dbForms.map(f => ({
                ...f,
                questions: Array.isArray(f.questions) ? f.questions : [],
-               initialFields: f.initial_fields || []
+               initialFields: f.initial_fields || [],
+               whatsapp_analysis_enabled: (f as any).whatsapp_analysis_enabled || false,
+               whatsapp_analysis_recipients: (f as any).whatsapp_analysis_recipients || ''
            })));
          }
 
@@ -544,6 +564,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         const params = new URLSearchParams(window.location.search);
         const surveyId = params.get('survey');
         const formId = params.get('form');
+        const refCode = params.get('ref');
+        if (refCode) setPublicReferralCode(refCode);
 
         if (surveyId) {
           setPreviewCampaignId(surveyId);
@@ -822,13 +844,19 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       tenant_id: getActiveTenant(),
       game_enabled: form.game_enabled || false,
       game_id: form.game_id || null,
-      show_logo: (form as any).show_logo || false,
+      show_logo: form.show_logo || false,
       email_analysis_enabled: form.email_analysis_enabled || false,
-      email_analysis_recipients: form.email_analysis_recipients || ''
+      email_analysis_recipients: form.email_analysis_recipients || '',
+      whatsapp_analysis_enabled: form.whatsapp_analysis_enabled || false,
+      whatsapp_analysis_recipients: form.whatsapp_analysis_recipients || '',
+      signature_enabled: form.signature_enabled || false,
+      signature_auto_email: form.signature_auto_email || false,
+      signature_auto_whatsapp: form.signature_auto_whatsapp || false,
+      term_color: form.term_color || '#10b981',
+      consent_text: form.consent_text || null
       // product_ids: requer migração 004 no Supabase antes de habilitar
       // product_ids: (form as any).product_ids || null
     };
-    
     // Verificar se o ID é um UUID válido (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
     // IDs temporários gerados com Date.now() não são UUIDs válidos
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -920,6 +948,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       initial_fields: (campaign as any).initial_fields ?? campaign.initialFields ?? [],
       google_redirect: (campaign as any).google_redirect ?? campaign.enableRedirection ?? false,
       google_place_id: (campaign as any).google_place_id ?? (campaign as any).googlePlaceId ?? '',
+      redirect_min_score: (campaign as any).redirect_min_score ?? 9,
       offer_prize: (campaign as any).offer_prize ?? (campaign as any).offerPrize ?? false,
       game_id: (campaign as any).game_id ?? null,
       before_google_message: (campaign as any).before_google_message ?? (campaign as any).beforeGoogleMessage ?? '',
@@ -933,6 +962,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     };
 
     if (campaign.id && campaigns.find(c => c.id === campaign.id)) {
+      // Campanha existente no estado local → atualizar no banco
       const { error: updateError } = await supabase.from('campaigns').update(campaignData).eq('id', campaign.id);
       if (updateError) {
         console.error('Erro ao atualizar campanha:', updateError);
@@ -942,7 +972,31 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }
       setCampaigns(prev => prev.map(c => c.id === campaign.id ? { ...c, ...campaign } : c));
       logActivity({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, action: 'update', entity_type: 'campaign', entity_id: campaign.id, entity_name: campaign.name });
+    } else if (campaign.id) {
+      // Campanha tem ID mas não está no estado local → foi criada pela API (ex: template)
+      // Apenas adicionar ao estado local sem inserir novamente no banco
+      const normalizedCampaign = {
+        ...campaign,
+        npsScore: (campaign as any).nps_score ?? 0,
+        responses: (campaign as any).response_count ?? 0,
+        questions: Array.isArray(campaign.questions) ? campaign.questions : [],
+        initialFields: (campaign as any).initial_fields ?? campaign.initialFields ?? [],
+        enableRedirection: (campaign as any).enable_redirection ?? campaign.enableRedirection ?? false,
+        google_redirect: (campaign as any).google_redirect ?? false,
+        google_place_id: (campaign as any).google_place_id ?? '',
+        offer_prize: (campaign as any).offer_prize ?? false,
+        game_id: (campaign as any).game_id ?? null,
+        before_google_message: (campaign as any).before_google_message ?? '',
+        after_game_message: (campaign as any).after_game_message ?? '',
+        objective: (campaign as any).objective ?? '',
+        tone: (campaign as any).tone ?? '',
+        evaluation_points: (campaign as any).evaluation_points ?? [],
+      };
+      setCampaigns(prev => [...prev, normalizedCampaign]);
+      if (showOnboardingWizard || onboardingInProgress) setNpsCreatedSignal(prev => prev + 1);
+      logActivity({ tenant_id: getActiveTenant(), user_email: currentUser.email, user_name: currentUser.name, action: 'create', entity_type: 'campaign', entity_id: campaign.id, entity_name: campaign.name });
     } else {
+      // Campanha nova sem ID → inserir no banco
       const { data, error: insertError } = await supabase.from('campaigns').insert([campaignData]).select().single();
       if (insertError) {
         console.error('Erro ao inserir campanha:', insertError);
@@ -1112,6 +1166,23 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'any_nps_response', companyId: campaignTenantId, data: npsAlertData }),
         }).catch(() => {});
+
+        // Trigger: Criar ação na fila para aprovação de disparo WhatsApp
+        if (data.customer_phone) {
+          fetch('/api/triggers/create-action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantId: campaignTenantId,
+              contactName: data.customer_name || 'Cliente',
+              contactPhone: data.customer_phone,
+              flowType: data.score <= 6 ? 'detractor' : data.score >= 9 ? 'promoter' : 'passive',
+              npsScore: data.score,
+              npsComment: data.comment || '',
+              triggeredBy: 'nps_form',
+            }),
+          }).catch((err) => console.error('[NPS→Action] Erro:', err));
+        }
       }
     }
 
@@ -1180,17 +1251,27 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     // 2. OTIMIZAÇÃO: Salvar IMEDIATAMENTE sem aguardar análise de IA
     const status = 'Novo';
     
+    // Extrair campos extras de identificação (além de name, email, phone)
+    const extraPatientFields: Record<string, string> = {};
+    Object.entries(data.patient || {}).forEach(([key, val]) => {
+      if (!['name', 'email', 'phone'].includes(key) && val) {
+        extraPatientFields[key] = val as string;
+      }
+    });
+
     const { data: insertedLead, error: insertError } = await supabase.from('leads').insert([{
         form_id: publicForm.id,
         user_id: formUserId,
         tenant_id: formTenantId,
         name: data.patient.name,
         email: data.patient.email,
-        phone: data.patient.phone,
+        phone: (data.patient.phone || '').replace(/\D/g, ''),
         status: status,
         value: opportunityValue,
         form_source: publicForm.name,
-        answers: enrichedAnswers
+        answers: Object.keys(extraPatientFields).length > 0
+          ? { ...enrichedAnswers, _extra_fields: extraPatientFields }
+          : enrichedAnswers
     }]).select().single();
     
     if (insertError) {
@@ -1198,6 +1279,39 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       return false;
     }
     
+    // Vincular lead ao referral se veio de um link de indicação
+    if (insertedLead && publicReferralCode) {
+      fetch('/api/engagement/referrals', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-tenant-id': formTenantId },
+        body: JSON.stringify({
+          referral_code: publicReferralCode,
+          referred_lead_id: insertedLead.id,
+          referred_name: insertedLead.name,
+          referred_phone: insertedLead.phone,
+          status: 'closed',
+        }),
+      }).catch((err) => console.error('[Referral→Link] Erro:', err));
+    }
+
+    // Trigger: Criar ação na fila para aprovação de disparo WhatsApp (pré-venda)
+    if (insertedLead && formTenantId && insertedLead.phone) {
+      fetch('/api/triggers/create-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: formTenantId,
+          contactName: insertedLead.name || 'Lead',
+          contactPhone: insertedLead.phone,
+          flowType: 'pre_sale',
+          formResponses: enrichedAnswers,
+          interestedServices: data.patient?.interested_services || [],
+          leadId: insertedLead.id,
+          triggeredBy: 'presale_form',
+        }),
+      }).catch((err) => console.error('[PreSale→Action] Erro:', err));
+    }
+
     // Disparar alertas de novo lead e lead de alto valor (fire-and-forget)
     if (insertedLead && formTenantId) {
       const alertData = {
@@ -1248,6 +1362,65 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }
     }
 
+    // Salvar assinatura eletrônica se o formulário tiver esse recurso ativado
+    if (insertedLead && data.signatureData && (publicForm as any).signature_enabled) {
+      const signatureAutoWhatsapp = (publicForm as any).signature_auto_whatsapp || false;
+      fetch('/api/health/save-signature', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: formTenantId,
+          formId: publicForm.id,
+          leadId: insertedLead.id,
+          patientName: data.patient?.name || '',
+          patientEmail: data.patient?.email || '',
+          patientPhone: data.patient?.phone || '',
+          signatureImage: data.signatureData,
+          consentText: (publicForm as any).consent_text || '',
+          signatureAutoEmail: (publicForm as any).signature_auto_email || false,
+          formName: publicForm.name || '',
+          companyName: publicCompanyName || '',
+          logoUrl: publicLogoUrl || '',
+          termColor: (publicForm as any).term_color || '#10b981',
+        }),
+      }).then(async (res) => {
+        if (res.ok && signatureAutoWhatsapp) {
+          const saveResult = await res.json().catch(() => null);
+          const signatureId = saveResult?.signatureId;
+          if (signatureId && data.patient?.phone) {
+            // Disparar WhatsApp automaticamente
+            fetch('/api/health/send-signature-whatsapp', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ signatureId, tenantId: formTenantId }),
+            }).catch(err => console.error('[signature-whatsapp] Erro ao enviar WhatsApp:', err));
+          }
+        }
+      }).catch(err => console.error('[signature] Erro ao salvar assinatura:', err));
+    }
+
+    // Disparar análise de IA no SERVIDOR (server-side) — independente do browser do lead
+    // O lead pode fechar a aba imediatamente após enviar o formulário
+    if (insertedLead) {
+      const whatsappAnalysisConfig = {
+        enabled: !!(publicForm as any).whatsapp_analysis_enabled,
+        recipients: (publicForm as any).whatsapp_analysis_recipients || '',
+        formName: publicForm.name,
+        patientData: data.patient || {},
+      };
+      fetch('/api/analyze-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leadId: insertedLead.id,
+          tenantId: formTenantId,
+          form: publicForm,
+          answers: enrichedAnswers,
+          whatsappConfig: whatsappAnalysisConfig,
+        }),
+      }).catch(err => console.error('[ai-analysis] Erro ao chamar API de análise:', err));
+    }
+
     return true;
   };
   
@@ -1256,7 +1429,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     leadId: string,
     data: any,
     form: Form,
-    formTenantId: string
+    formTenantId: string,
+    whatsappConfig?: { enabled: boolean; recipients: string; formName: string; patientData: any }
   ) => {
     if (!supabase) return;
     
@@ -1279,7 +1453,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       if (products && products.length > 0) {
         // 3. Preparar contexto para análise da IA
         const answersText = Object.entries(data.answers).map(([qId, ans]: [string, any]) => {
-          const question = publicForm.questions.find((q: any) => q.id === qId);
+          const question = form.questions.find((q: any) => q.id === qId);
           const answerValue = Array.isArray(ans.value) ? ans.value.join(', ') : ans.value;
           return `Pergunta: ${question?.text || qId}\nResposta: ${answerValue}`;
         }).join('\n\n');
@@ -1313,7 +1487,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         }
 
         // Verificar se o formulário tem produtos selecionados
-        const formSelectedProducts = (publicForm as any).selected_products || [];
+        const formSelectedProducts = (form as any).selected_products || [];
         let focusedProductsContext = '';
         if (formSelectedProducts.length > 0) {
           const focusedProducts = products.filter(p => formSelectedProducts.includes(p.id));
@@ -1418,9 +1592,23 @@ Responda APENAS com JSON válido (sem markdown):
       }
     } catch (error) {
       console.error('Erro na análise de IA em background:', error);
+      // Garantir análise básica mesmo em caso de erro
+      if (!aiAnalysis) {
+        aiAnalysis = {
+          recommended_products: [],
+          suggested_product: 'Análise indisponível',
+          suggested_value: 0,
+          classification: 'monitoring',
+          confidence: 0.3,
+          reasoning: 'Erro ao processar análise de IA.',
+          client_insights: ['Lead capturado'],
+          sales_script: 'Entre em contato para qualificar o lead.',
+          next_steps: ['Fazer contato inicial']
+        };
+      }
     }
     
-    // Atualizar lead com análise de IA
+    // Atualizar lead com análise de IA (se disponível)
     if (aiAnalysis) {
       await supabase
         .from('leads')
@@ -1429,11 +1617,58 @@ Responda APENAS com JSON válido (sem markdown):
           answers: {
             ...data.answers,
             _ai_analysis: aiAnalysis,
-            _analyzing: false  // Remove flag de análise
+            _analyzing: false
           }
         })
         .eq('id', leadId);
+    }
 
+    // Disparar WhatsApp de análise — sempre que configurado, independente da análise de IA
+    if (whatsappConfig?.enabled && whatsappConfig.recipients) {
+      const waNumbers = whatsappConfig.recipients
+        .split(',')
+        .map((n: string) => n.trim())
+        .filter(Boolean);
+      if (waNumbers.length > 0) {
+        const panelLink = typeof window !== 'undefined'
+          ? `${window.location.origin}/#kanban`
+          : 'https://system.hellogrowth.online/#kanban';
+        const patient = whatsappConfig.patientData || {};
+        const productsLine = aiAnalysis?.recommended_products && aiAnalysis.recommended_products.length > 0
+          ? `\n💊 *Produtos recomendados:* ${aiAnalysis.recommended_products.map((p: any) => p.name).join(', ')}`
+          : '';
+        const valueLine = updatedValue > 0
+          ? `\n💰 *Valor estimado:* R$ ${updatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+          : '';
+        const classification = aiAnalysis?.classification;
+        const classificationLine = classification
+          ? `🤖 *Análise de IA:* ${classification === 'opportunity' ? '🟢 Oportunidade' : classification === 'risk' ? '🔴 Risco' : '🟡 Monitoramento'}`
+          : `🤖 *Análise de IA:* 🟡 Processando...`;
+        const waMessage = [
+          `🔔 *Novo Lead Analisado — ${whatsappConfig.formName}*`,
+          ``,
+          `👤 *Nome:* ${patient.name || 'Não informado'}`,
+          patient.phone ? `📞 *Telefone:* ${patient.phone}` : null,
+          patient.email ? `📧 *E-mail:* ${patient.email}` : null,
+          ``,
+          classificationLine,
+          productsLine || null,
+          valueLine || null,
+          ``,
+          `📋 *Formulário:* ${whatsappConfig.formName}`,
+          `🔗 *Ver no painel:* ${panelLink}`,
+          ``,
+          `_HelloGrowth — Análise automática de IA_`,
+        ].filter(Boolean).join('\n');
+
+        for (const phone of waNumbers) {
+          fetch('/api/send-whatsapp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, message: waMessage }),
+          }).catch(err => console.error('[whatsapp-analysis] Erro ao disparar WhatsApp pós-IA:', err));
+        }
+      }
     }
   };
 
@@ -1615,6 +1850,7 @@ Responda APENAS com JSON válido (sem markdown):
                 onboardingOpenAI={onboardingOpenFormAI}
                 onboardingOpenManual={onboardingOpenFormManual}
                 businessProfile={businessProfile}
+                activeCompany={activeCompany}
             />
         )}
         
@@ -1642,9 +1878,7 @@ Responda APENAS com JSON válido (sem markdown):
         />}
         
         {currentView === 'games' && (
-            <div className="p-6">
-                <GameConfig tenantId={getActiveTenant()!} />
-            </div>
+            <Game tenantId={getActiveTenant()!} campaigns={campaigns} businessProfile={businessProfile} />
         )}
         
         {currentView === 'game-participations' && (
@@ -1787,6 +2021,85 @@ Responda APENAS com JSON válido (sem markdown):
             </div>
         )}
 
+        {currentView === 'action-inbox' && (
+          <ActionInbox
+            isDark={false}
+            tenantId={getActiveTenant() || ''}
+            actionsModule={(() => { try { const a = typeof activeCompany?.plan_addons === 'string' ? JSON.parse(activeCompany?.plan_addons || '{}') : (activeCompany?.plan_addons || {}); return a.actions || 'none'; } catch { return 'none'; } })()}
+          />
+        )}
+
+        {currentView === 'whatsapp-setup' && (
+          <div className="p-6">
+            <WhatsAppSetup
+              isDark={false}
+              tenantId={getActiveTenant() || ''}
+              companyName={settings.companyName || 'Minha Empresa'}
+              actionsModule={(() => { try { const a = typeof activeCompany?.plan_addons === 'string' ? JSON.parse(activeCompany?.plan_addons || '{}') : (activeCompany?.plan_addons || {}); return a.actions || 'none'; } catch { return 'none'; } })()}
+            />
+          </div>
+        )}
+
+        {currentView === 'dispatches' && (
+          <Dispatches
+            tenantId={getActiveTenant() || ''}
+            actionsModule={(() => { try { const a = typeof activeCompany?.plan_addons === 'string' ? JSON.parse(activeCompany?.plan_addons || '{}') : (activeCompany?.plan_addons || {}); return a.actions || 'none'; } catch { return 'none'; } })()}
+            npsCampaignsList={campaigns}
+          />
+        )}
+        {currentView === 'action-metrics' && (
+          <ActionMetrics
+            isDark={false}
+            tenantId={getActiveTenant() || ''}
+          />
+        )}
+
+        {currentView === 'referral-rewards' && (
+          <ReferralRewards
+            isDark={false}
+            tenantId={getActiveTenant() || ''}
+          />
+        )}
+
+        {currentView === 'prompt-manager' && (
+          <PromptManager
+            isDark={false}
+            tenantId={getActiveTenant() || ''}
+          />
+        )}
+
+        {currentView === 'pilot-checklist' && (
+          <PilotChecklist />
+        )}
+        {currentView === 'pilot-report' && (
+          <PilotReport isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'opt-out-manager' && (
+          <OptOutManager isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'go-live-guide' && (
+          <GoLiveGuide isDark={false} />
+        )}
+        {currentView === 'notification-settings' && (
+          <NotificationSettings isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'report-history' && (
+          <ReportHistory isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'system-health' && (
+          <SystemHealth isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+        {currentView === 'conversation-export' && (
+          <ConversationExport isDark={false} tenantId={getActiveTenant() || ''} />
+        )}
+
+        {currentView === 'health-signatures' && (
+          <HealthSignatures
+            tenantId={getActiveTenant() || ''}
+            companyName={publicCompanyName || undefined}
+            logoUrl={publicLogoUrl || undefined}
+          />
+        )}
         {/* Banner flutuante de onboarding em andamento — aparece quando o usuário navega para módulos durante o onboarding */}
         {!showOnboardingWizard && onboardingInProgress && ['nps','forms','products'].includes(currentView) && (
           <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl border border-emerald-500">

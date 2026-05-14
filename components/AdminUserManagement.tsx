@@ -337,14 +337,14 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
   const [companyForm, setCompanyForm] = useState({
     name: '', plan: 'hello_growth', subscriptionStatus: 'trialing',
     trialModel: 'model_b', trialEndAt: '', maxUsers: 1,
-    addons: { game: false, mpd: false },
+    addons: { game: false, mpd: false, health: false, actions: 'none' as 'none' | 'simplified' | 'complete' },
     stripeCustomerId: '', stripeSubscriptionId: '',
   });
   const [newClientTrialModel, setNewClientTrialModel] = useState<'none' | 'model_a' | 'model_b'>('none');
   const [newClientTrialPlan, setNewClientTrialPlan] = useState('hello_growth');
   const [newClientTrialDays, setNewClientTrialDays] = useState(30);
   const [paymentLinkForm, setPaymentLinkForm] = useState({
-    plan: 'hello_growth', userCount: 1, addons: { game: false, mpd: false }, customNote: '',
+    plan: 'hello_growth', userCount: 1, addons: { game: false, mpd: false, health: false, actions: 'none' as 'none' | 'simplified' | 'complete' }, customNote: '',
   });
 
   // ── Fetch Colaboradores ──
@@ -480,7 +480,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             companies: [clientForm.companyName || clientForm.name],
             plan: newClientTrialPlan,
             userCount: 1,
-            addons: { game: false, mpd: false },
+            addons: { game: false, mpd: false, actions: 'none' },
             trial_model: 'model_b',
             trial_end_at: trialEndAt,
             userName: clientForm.name,
@@ -545,7 +545,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             id: companyId,
             name: clientForm.companyName || clientForm.name,
             plan: companyPlan,
-            plan_addons: JSON.stringify({ game: false, mpd: false }),
+            plan_addons: JSON.stringify({ game: false, mpd: false, actions: 'none' }),
             subscription_status: subscriptionStatus,
             ...(isTrialModelA ? {
               trial_start_at: new Date().toISOString(),
@@ -559,6 +559,16 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             user_id: createdUser.id, company_id: companyId, role: 'owner', is_default: true, status: 'active', accepted_at: new Date().toISOString()
           }]);
           // Nota: a tabela users não tem coluna company_id; o vínculo é feito via user_companies
+          // Salvar contatos extras
+          if (clientContacts.length > 0) {
+            try {
+              await fetch('/api/admin/clients', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: createdUser.id, action: 'save_contacts', contacts: clientContacts }),
+              });
+            } catch (e) { console.error('Erro ao salvar contatos:', e); }
+          }
           // Criar card no Kanban
           if (newClientStageId) {
             try {
@@ -587,6 +597,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
       setNewClientTrialModel('none');
       setNewClientBoardId('');
       setNewClientStageId('');
+      setClientContacts([]);
       fetchClients();
     } catch (err: any) {
       showToast('error', err.message || 'Erro ao criar cliente.');
@@ -628,6 +639,14 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
+      // Salvar contatos extras
+      if (clientContacts.length > 0 || selectedClient.id) {
+        await fetch('/api/admin/clients', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: selectedClient.id, action: 'save_contacts', contacts: clientContacts }),
+        });
+      }
       showToast('success', 'Cliente atualizado!');
       setEditModal(null);
       // Atualiza localmente sem recarregar
@@ -816,7 +835,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
   };
 
   // ── Open Modals ──
-  const openEditClient = (client: Client) => {
+  const openEditClient = async (client: Client) => {
     setSelectedClient(client);
     setClientForm({
       name: client.name,
@@ -833,6 +852,13 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
       has_secretary: Boolean(client.nicheData?.has_secretary),
     });
     setEditModal('client');
+    // Buscar contatos extras
+    setLoadingContacts(true);
+    try {
+      const res = await fetch(`/api/admin/clients?action=contacts&userId=${client.id}`);
+      const data = await res.json();
+      setClientContacts(data.contacts || []);
+    } catch { setClientContacts([]); } finally { setLoadingContacts(false); }
   };
 
   const openEditCompany = (client: Client, company: Company) => {
@@ -846,7 +872,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
       trialModel: company.trial_model || '',
       trialEndAt: company.trial_end_at ? company.trial_end_at.split('T')[0] : '',
       maxUsers: company.max_users || 1,
-      addons: { game: addons.game || false, mpd: addons.mpd || false },
+      addons: { game: addons.game || false, mpd: addons.mpd || false, health: addons.health || false, actions: (addons.actions || 'none') as 'none' | 'simplified' | 'complete' },
       stripeCustomerId: company.stripe_customer_id || '',
       stripeSubscriptionId: company.stripe_subscription_id || '',
     });
@@ -855,7 +881,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
 
   const openAddCompany = (client: Client) => {
     setSelectedClient(client);
-    setCompanyForm({ name: '', plan: 'hello_growth', subscriptionStatus: 'trialing', trialModel: 'model_b', trialEndAt: '', maxUsers: 1, addons: { game: false, mpd: false }, stripeCustomerId: '', stripeSubscriptionId: '' });
+    setCompanyForm({ name: '', plan: 'hello_growth', subscriptionStatus: 'trialing', trialModel: 'model_b', trialEndAt: '', maxUsers: 1, addons: { game: false, mpd: false, health: false, actions: 'none' as 'none' | 'simplified' | 'complete' }, stripeCustomerId: '', stripeSubscriptionId: '' });
     setEditModal('new_company');
   };
 
@@ -864,7 +890,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
     setEditingCompany(company);
     let plan = company.plan;
     if (!plan.startsWith('hello_')) plan = `hello_${plan}`;
-    setPaymentLinkForm({ plan, userCount: company.max_users || 1, addons: { game: false, mpd: false }, customNote: '' });
+    const compAddons = typeof company.plan_addons === 'string' ? JSON.parse(company.plan_addons || '{}') : (company.plan_addons || {});
+    setPaymentLinkForm({ plan, userCount: company.max_users || 1, addons: { game: compAddons.game || false, mpd: compAddons.mpd || false, health: compAddons.health || false, actions: (compAddons.actions || 'none') as 'none' | 'simplified' | 'complete' }, customNote: '' });
     setPaymentLinkResult(null);
     setEditModal('payment_link');
   };
@@ -1550,6 +1577,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
                                           {company.trial_model && <ModelBadge model={company.trial_model} />}
                                           {addons.game && <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded border border-purple-200">Game</span>}
                                           {addons.mpd && <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded border border-blue-200">MPD</span>}
+                                          {addons.health && <span className="px-1.5 py-0.5 bg-rose-100 text-rose-700 text-xs rounded border border-rose-200">Saúde</span>}
+                                          {addons.actions === 'simplified' && <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 text-xs rounded border border-orange-200">Ações Simpl.</span>}
+                                          {addons.actions === 'complete' && <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded border border-emerald-200">Ações Compl.</span>}
                                         </div>
                                         <div className="flex items-center gap-4 mt-1 flex-wrap">
                                           {company.trial_end_at && <span className={`text-xs ${t.textMuted}`}>Vence: {new Date(company.trial_end_at).toLocaleDateString('pt-BR')}</span>}
@@ -1760,6 +1790,82 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
                 )}
               </>
             )}
+            {/* Localização */}
+            <div className={`border rounded-xl p-4 space-y-3 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>Localização</div>
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="Cidade" t={t}><input type="text" value={clientForm.city} onChange={e => setClientForm(f => ({ ...f, city: e.target.value }))} className={inputCls} placeholder="São Paulo" /></FormField>
+                <FormField label="Estado" t={t}>
+                  <select value={clientForm.state} onChange={e => setClientForm(f => ({ ...f, state: e.target.value }))} className={inputCls}>
+                    <option value="">— UF —</option>
+                    {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                  </select>
+                </FormField>
+              </div>
+            </div>
+            {/* Nicho */}
+            <div className={`border rounded-xl p-4 space-y-3 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>Nicho</div>
+              <FormField label="Nicho de Atuação" t={t}>
+                <select value={clientForm.niche} onChange={e => setClientForm(f => ({ ...f, niche: e.target.value, nicheData: {} }))} className={inputCls}>
+                  <option value="">— Selecione —</option>
+                  <option value="clinica_odontologica">Clínica Odontológica</option>
+                  <option value="clinica_estetica">Clínica Estética</option>
+                  <option value="clinica_medica">Clínica Médica</option>
+                  <option value="pet_shop">Pet Shop / Veterinária</option>
+                  <option value="academia">Academia / Fitness</option>
+                  <option value="restaurante">Restaurante / Food</option>
+                  <option value="ecommerce">E-commerce</option>
+                  <option value="servicos">Serviços Gerais</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </FormField>
+              {clientForm.niche === 'clinica_odontologica' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField label="Qtd. de Cadeiras" t={t}><input type="number" min={1} value={clientForm.nicheData.cadeiras || ''} onChange={e => setClientForm(f => ({ ...f, nicheData: { ...f.nicheData, cadeiras: parseInt(e.target.value) || '' } }))} className={inputCls} placeholder="Ex: 4" /></FormField>
+                    <FormField label="Qtd. de Dentistas" t={t}><input type="number" min={1} value={clientForm.nicheData.dentistas || ''} onChange={e => setClientForm(f => ({ ...f, nicheData: { ...f.nicheData, dentistas: parseInt(e.target.value) || '' } }))} className={inputCls} placeholder="Ex: 2" /></FormField>
+                  </div>
+                  <FormField label="Tem Secretária?" t={t}>
+                    <div className="flex gap-3 mt-1">
+                      {[['sim', 'Sim'], ['nao', 'Não']].map(([v, l]) => (
+                        <label key={v} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="secretaria_new" value={v} checked={clientForm.nicheData.secretaria === v} onChange={() => setClientForm(f => ({ ...f, nicheData: { ...f.nicheData, secretaria: v } }))} className="accent-emerald-500" />
+                          <span className={`text-sm ${t.textSub}`}>{l}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </FormField>
+                </div>
+              )}
+            </div>
+            {/* Contatos Extras */}
+            <div className={`border rounded-xl p-4 space-y-3 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`flex items-center justify-between`}>
+                <div className={`text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>Contatos da Empresa</div>
+                <button type="button" onClick={() => setClientContacts(c => [...c, { name: '', role: '', phone: '', email: '' }])} className={`text-xs flex items-center gap-1 text-emerald-600 hover:text-emerald-500 font-medium`}><Plus size={12} /> Adicionar</button>
+              </div>
+              {clientContacts.length === 0 ? (
+                <p className={`text-xs ${t.textMuted}`}>Nenhum contato extra. Clique em Adicionar para incluir.</p>
+              ) : (
+                <div className="space-y-3">
+                  {clientContacts.map((c, idx) => (
+                    <div key={idx} className={`border rounded-lg p-3 space-y-2 ${isDark ? 'border-gray-700 bg-gray-900' : 'border-slate-200 bg-white'}`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-medium ${t.textSub}`}>Contato {idx + 1}</span>
+                        <button type="button" onClick={() => setClientContacts(cs => cs.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-300"><X size={14} /></button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="text" placeholder="Nome" value={c.name} onChange={e => setClientContacts(cs => cs.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))} className={`${inputCls} text-xs`} />
+                        <input type="text" placeholder="Cargo/Função" value={c.role} onChange={e => setClientContacts(cs => cs.map((x, i) => i === idx ? { ...x, role: e.target.value } : x))} className={`${inputCls} text-xs`} />
+                        <input type="tel" placeholder="WhatsApp" value={c.phone} onChange={e => setClientContacts(cs => cs.map((x, i) => i === idx ? { ...x, phone: e.target.value } : x))} className={`${inputCls} text-xs`} />
+                        <input type="email" placeholder="E-mail" value={c.email} onChange={e => setClientContacts(cs => cs.map((x, i) => i === idx ? { ...x, email: e.target.value } : x))} className={`${inputCls} text-xs`} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             {/* Kanban Selection */}
             <div className={`border rounded-xl p-4 space-y-3 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-slate-200 bg-slate-50'}`}>
               <div className={`text-xs font-semibold uppercase tracking-wide flex items-center gap-2 ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>
@@ -1856,6 +1962,84 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
                 <option value="growth_lifetime">Lifetime</option>
               </select>
             </FormField>
+            {/* Localização */}
+            <div className={`border rounded-xl p-4 space-y-3 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>Localização</div>
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="Cidade" t={t}><input type="text" value={clientForm.city} onChange={e => setClientForm(f => ({ ...f, city: e.target.value }))} className={inputCls} placeholder="São Paulo" /></FormField>
+                <FormField label="Estado" t={t}>
+                  <select value={clientForm.state} onChange={e => setClientForm(f => ({ ...f, state: e.target.value }))} className={inputCls}>
+                    <option value="">— UF —</option>
+                    {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                  </select>
+                </FormField>
+              </div>
+            </div>
+            {/* Nicho */}
+            <div className={`border rounded-xl p-4 space-y-3 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>Nicho</div>
+              <FormField label="Nicho de Atuação" t={t}>
+                <select value={clientForm.niche} onChange={e => setClientForm(f => ({ ...f, niche: e.target.value, nicheData: {} }))} className={inputCls}>
+                  <option value="">— Selecione —</option>
+                  <option value="clinica_odontologica">Clínica Odontológica</option>
+                  <option value="clinica_estetica">Clínica Estética</option>
+                  <option value="clinica_medica">Clínica Médica</option>
+                  <option value="pet_shop">Pet Shop / Veterinária</option>
+                  <option value="academia">Academia / Fitness</option>
+                  <option value="restaurante">Restaurante / Food</option>
+                  <option value="ecommerce">E-commerce</option>
+                  <option value="servicos">Serviços Gerais</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </FormField>
+              {clientForm.niche === 'clinica_odontologica' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField label="Qtd. de Cadeiras" t={t}><input type="number" min={1} value={clientForm.nicheData.cadeiras || ''} onChange={e => setClientForm(f => ({ ...f, nicheData: { ...f.nicheData, cadeiras: parseInt(e.target.value) || '' } }))} className={inputCls} placeholder="Ex: 4" /></FormField>
+                    <FormField label="Qtd. de Dentistas" t={t}><input type="number" min={1} value={clientForm.nicheData.dentistas || ''} onChange={e => setClientForm(f => ({ ...f, nicheData: { ...f.nicheData, dentistas: parseInt(e.target.value) || '' } }))} className={inputCls} placeholder="Ex: 2" /></FormField>
+                  </div>
+                  <FormField label="Tem Secretária?" t={t}>
+                    <div className="flex gap-3 mt-1">
+                      {[['sim', 'Sim'], ['nao', 'Não']].map(([v, l]) => (
+                        <label key={v} className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="secretaria" value={v} checked={clientForm.nicheData.secretaria === v} onChange={() => setClientForm(f => ({ ...f, nicheData: { ...f.nicheData, secretaria: v } }))} className="accent-emerald-500" />
+                          <span className={`text-sm ${t.textSub}`}>{l}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </FormField>
+                </div>
+              )}
+            </div>
+            {/* Contatos Extras */}
+            <div className={`border rounded-xl p-4 space-y-3 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`flex items-center justify-between`}>
+                <div className={`text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-gray-400' : 'text-slate-500'}`}>Contatos Extras</div>
+                <button type="button" onClick={() => setClientContacts(c => [...c, { name: '', role: '', phone: '', email: '' }])} className={`text-xs flex items-center gap-1 text-emerald-600 hover:text-emerald-500 font-medium`}><Plus size={12} /> Adicionar</button>
+              </div>
+              {loadingContacts ? (
+                <div className="flex items-center gap-2 text-sm text-gray-400"><Loader2 size={14} className="animate-spin" /> Carregando...</div>
+              ) : clientContacts.length === 0 ? (
+                <p className={`text-xs ${t.textMuted}`}>Nenhum contato extra cadastrado.</p>
+              ) : (
+                <div className="space-y-3">
+                  {clientContacts.map((c, idx) => (
+                    <div key={idx} className={`border rounded-lg p-3 space-y-2 ${isDark ? 'border-gray-700 bg-gray-900' : 'border-slate-200 bg-white'}`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-medium ${t.textSub}`}>Contato {idx + 1}</span>
+                        <button type="button" onClick={() => setClientContacts(cs => cs.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-300"><X size={14} /></button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="text" placeholder="Nome" value={c.name} onChange={e => setClientContacts(cs => cs.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))} className={`${inputCls} text-xs`} />
+                        <input type="text" placeholder="Cargo/Função" value={c.role} onChange={e => setClientContacts(cs => cs.map((x, i) => i === idx ? { ...x, role: e.target.value } : x))} className={`${inputCls} text-xs`} />
+                        <input type="tel" placeholder="WhatsApp" value={c.phone} onChange={e => setClientContacts(cs => cs.map((x, i) => i === idx ? { ...x, phone: e.target.value } : x))} className={`${inputCls} text-xs`} />
+                        <input type="email" placeholder="E-mail" value={c.email} onChange={e => setClientContacts(cs => cs.map((x, i) => i === idx ? { ...x, email: e.target.value } : x))} className={`${inputCls} text-xs`} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className={`${t.securityBox} border rounded-lg p-3`}>
               <p className={`text-xs ${t.securityText} mb-2 flex items-center gap-1.5`}><Key size={12} /> Nova Senha (deixe vazio para não alterar)</p>
               <input type="text" value={clientForm.password} onChange={e => setClientForm(f => ({ ...f, password: e.target.value }))} className={inputCls} placeholder="Nova senha..." />
@@ -1881,14 +2065,21 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             <FormField label="Vencimento do Trial" t={t}><input type="date" value={companyForm.trialEndAt} onChange={e => setCompanyForm(f => ({ ...f, trialEndAt: e.target.value }))} className={inputCls} /></FormField>
             <FormField label="Máx. Usuários" t={t}><input type="number" min={1} max={50} value={companyForm.maxUsers} onChange={e => setCompanyForm(f => ({ ...f, maxUsers: parseInt(e.target.value) || 1 }))} className={inputCls} /></FormField>
             <FormField label="Add-ons" t={t}>
-              <div className="flex gap-3 mt-1">
-                {[['game', 'Game'], ['mpd', 'MPD']].map(([k, l]) => (
+              <div className="flex gap-3 mt-1 flex-wrap">
+                {[['game', 'Game'], ['mpd', 'MPD'], ['health', 'Saúde']].map(([k, l]) => (
                   <label key={k} className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={(companyForm.addons as any)[k]} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, [k]: e.target.checked } }))} className="w-4 h-4 rounded accent-emerald-500" />
                     <span className={`text-sm ${t.textSub}`}>{l}</span>
                   </label>
                 ))}
               </div>
+            </FormField>
+            <FormField label="Módulo de Ações" t={t}>
+              <select value={(companyForm.addons as any).actions || 'none'} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, actions: e.target.value as 'none' | 'simplified' | 'complete' } }))} className={inputCls}>
+                <option value="none">Nenhum</option>
+                <option value="simplified">Simplificado</option>
+                <option value="complete">Completo</option>
+              </select>
             </FormField>
             <FormField label="Stripe Customer ID" t={t} className="col-span-2"><input type="text" value={companyForm.stripeCustomerId} onChange={e => setCompanyForm(f => ({ ...f, stripeCustomerId: e.target.value }))} className={inputCls} placeholder="cus_..." /></FormField>
             <FormField label="Stripe Subscription ID" t={t} className="col-span-2"><input type="text" value={companyForm.stripeSubscriptionId} onChange={e => setCompanyForm(f => ({ ...f, stripeSubscriptionId: e.target.value }))} className={inputCls} placeholder="sub_..." /></FormField>
@@ -1913,14 +2104,21 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             <FormField label="Vencimento do Trial" t={t}><input type="date" value={companyForm.trialEndAt} onChange={e => setCompanyForm(f => ({ ...f, trialEndAt: e.target.value }))} className={inputCls} /></FormField>
             <FormField label="Máx. Usuários" t={t}><input type="number" min={1} max={50} value={companyForm.maxUsers} onChange={e => setCompanyForm(f => ({ ...f, maxUsers: parseInt(e.target.value) || 1 }))} className={inputCls} /></FormField>
             <FormField label="Add-ons" t={t}>
-              <div className="flex gap-3 mt-1">
-                {[['game', 'Game'], ['mpd', 'MPD']].map(([k, l]) => (
+              <div className="flex gap-3 mt-1 flex-wrap">
+                {[['game', 'Game'], ['mpd', 'MPD'], ['health', 'Saúde']].map(([k, l]) => (
                   <label key={k} className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={(companyForm.addons as any)[k]} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, [k]: e.target.checked } }))} className="w-4 h-4 rounded accent-emerald-500" />
                     <span className={`text-sm ${t.textSub}`}>{l}</span>
                   </label>
                 ))}
               </div>
+            </FormField>
+            <FormField label="Módulo de Ações" t={t}>
+              <select value={(companyForm.addons as any).actions || 'none'} onChange={e => setCompanyForm(f => ({ ...f, addons: { ...f.addons, actions: e.target.value as 'none' | 'simplified' | 'complete' } }))} className={inputCls}>
+                <option value="none">Nenhum</option>
+                <option value="simplified">Simplificado</option>
+                <option value="complete">Completo</option>
+              </select>
             </FormField>
           </div>
           <div className={`flex gap-3 pt-4 mt-2 border-t ${t.modalHeader}`}>
@@ -1969,14 +2167,21 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
                 <input type="number" min={1} max={10} value={paymentLinkForm.userCount} onChange={e => setPaymentLinkForm(f => ({ ...f, userCount: parseInt(e.target.value) || 1 }))} className={inputCls} />
               </FormField>
               <FormField label="Add-ons" t={t}>
-                <div className="flex gap-4 mt-1">
-                  {[['game', 'Game'], ['mpd', 'MPD']].map(([k, l]) => (
+                <div className="flex gap-4 mt-1 flex-wrap">
+                  {[['game', 'Game'], ['mpd', 'MPD'], ['health', 'Saúde']].map(([k, l]) => (
                     <label key={k} className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={(paymentLinkForm.addons as any)[k]} onChange={e => setPaymentLinkForm(f => ({ ...f, addons: { ...f.addons, [k]: e.target.checked } }))} className="w-4 h-4 rounded accent-emerald-500" />
+                      <input type="checkbox" checked={(paymentLinkForm.addons as any)[k] || false} onChange={e => setPaymentLinkForm(f => ({ ...f, addons: { ...f.addons, [k]: e.target.checked } }))} className="w-4 h-4 rounded accent-emerald-500" />
                       <span className={`text-sm ${t.textSub}`}>{l}</span>
                     </label>
                   ))}
                 </div>
+              </FormField>
+              <FormField label="Módulo de Ações" t={t}>
+                <select value={(paymentLinkForm.addons as any).actions || 'none'} onChange={e => setPaymentLinkForm(f => ({ ...f, addons: { ...f.addons, actions: e.target.value as 'none' | 'simplified' | 'complete' } }))} className={inputCls}>
+                  <option value="none">Nenhum</option>
+                  <option value="simplified">Simplificado</option>
+                  <option value="complete">Completo</option>
+                </select>
               </FormField>
               <div className={`${t.paymentBox} border rounded-lg p-3 flex items-center justify-between`}>
                 <span className={`text-sm ${t.textSub}`}>Valor mensal total:</span>

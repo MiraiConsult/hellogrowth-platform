@@ -27,7 +27,15 @@ import {
   DollarSign,
   Heart,
   Target,
-  Bell
+  Bell,
+  Zap,
+  Bot,
+  Smartphone,
+  BellOff,
+  Rocket,
+  FileText,
+  Download,
+  SendHorizonal
 } from 'lucide-react';
 import { PlanType, Company, UserCompany } from '@/types';
 import CompanySwitcher from '@/components/CompanySwitcher';
@@ -261,7 +269,8 @@ const Navigation: React.FC<NavigationProps> = ({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     'helloclient': true,
     'hellorating': true,
-    'intelligence': true
+    'intelligence': true,
+    'action-group': true
   });
 
   const toggleGroup = (groupId: string) => {
@@ -270,6 +279,17 @@ const Navigation: React.FC<NavigationProps> = ({
       [groupId]: !prev[groupId]
     }));
   };
+
+  // Verificar se o addon de saúde está ativo (antes do navStructure)
+  const healthAddon = (() => {
+    try {
+      const raw = activeCompany?.plan_addons;
+      const a = typeof raw === 'string'
+        ? JSON.parse(raw || '{}')
+        : (Array.isArray(raw) ? {} : (raw || {}));
+      return a.health === true;
+    } catch { return false; }
+  })();
 
   const navStructure: NavigationItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, requiredPlan: 'all' },
@@ -283,6 +303,7 @@ const Navigation: React.FC<NavigationProps> = ({
         { id: 'kanban', label: 'Oportunidades', icon: Users, requiredPlan: 'client' },
         { id: 'forms', label: 'Formulários', icon: CheckSquare, requiredPlan: 'client' },
         { id: 'products', label: 'Produtos', icon: Package, requiredPlan: 'client' },
+        ...(healthAddon ? [{ id: 'health-signatures', label: 'Saúde', icon: Heart, requiredPlan: 'all' as const }] : []),
       ]
     },
     {
@@ -309,16 +330,19 @@ const Navigation: React.FC<NavigationProps> = ({
       ]
     },
     {
-      id: 'game-group',
-      label: 'Game',
-      icon: Gift,
+      id: 'action-group',
+      label: 'Ações',
+      icon: Zap,
       type: 'group',
-      color: 'amber',
+      color: 'emerald',
       children: [
-        { id: 'games', label: 'Roleta da Sorte', icon: Gift, requiredPlan: 'rating' },
-        { id: 'game-participations', label: 'Participantes', icon: Users, requiredPlan: 'rating' },
-      ]
+        { id: 'whatsapp-setup', label: 'WhatsApp IA', icon: Smartphone, requiredPlan: 'all' },
+        { id: 'action-inbox', label: 'Fila de Ações', icon: Zap, requiredPlan: 'all' },
+        { id: 'dispatches', label: 'Disparos', icon: SendHorizonal, requiredPlan: 'all' },
+        { id: 'action-metrics', label: 'Métricas IA', icon: BarChart3, requiredPlan: 'all' },
+      ],
     },
+    { id: 'games', label: 'Game', icon: Gift, requiredPlan: 'rating' },
     {
       id: 'settings-group',
       label: 'Configurações',
@@ -335,6 +359,17 @@ const Navigation: React.FC<NavigationProps> = ({
       ]
     },
   ];
+
+  // Verificar se o addon de ações está ativo
+  const actionsAddon = (() => {
+    try {
+      const raw = activeCompany?.plan_addons;
+      const a = typeof raw === 'string'
+        ? JSON.parse(raw || '{}')
+        : (Array.isArray(raw) ? {} : (raw || {}));
+      return a.actions || 'none';
+    } catch { return 'none'; }
+  })();
 
   const hasPlanPermission = (requiredPlan: string) => {
     if (activePlan === 'growth' || activePlan === 'growth_lifetime') return true;
@@ -452,6 +487,16 @@ const Navigation: React.FC<NavigationProps> = ({
         text: 'text-slate-600', 
         icon: 'text-slate-500' 
       },
+      emerald: { 
+        bg: isExpanded ? 'bg-emerald-50' : 'bg-transparent hover:bg-emerald-50', 
+        text: 'text-emerald-600', 
+        icon: 'text-emerald-500' 
+      },
+      rose: { 
+        bg: isExpanded ? 'bg-rose-50' : 'bg-transparent hover:bg-rose-50', 
+        text: 'text-rose-600', 
+        icon: 'text-rose-500' 
+      },
     };
     return colors[color] || colors.blue;
   };
@@ -518,6 +563,9 @@ const Navigation: React.FC<NavigationProps> = ({
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
         {navStructure.map((item) => {
           if ('type' in item && item.type === 'group') {
+            // Ocultar grupo de Ações se o addon não estiver ativo
+            if (item.id === 'action-group' && actionsAddon === 'none') return null;
+
             const hasAnyChildPermission = item.children.some(child => hasPlanPermission(child.requiredPlan) && hasRolePermission(child.id));
             if (!hasAnyChildPermission) return null;
 
@@ -559,7 +607,7 @@ const Navigation: React.FC<NavigationProps> = ({
                 
                 <div className={`
                   overflow-hidden transition-all duration-300 ease-in-out
-                  ${isExpanded ? 'max-h-96 opacity-100 mt-1' : 'max-h-0 opacity-0'}
+                  ${isExpanded ? 'max-h-[800px] opacity-100 mt-1' : 'max-h-0 opacity-0'}
                 `}>
                   {item.children.map(child => renderItem(child, true))}
                 </div>

@@ -6,6 +6,7 @@ import {
   Phone, MessageCircle, Video, Mail, Calendar, Clock,
   ArrowRightCircle, Bell, HeartHandshake, ChevronRight,
   Building2, User, Activity, Copy, ExternalLink,
+  LayoutList, LayoutGrid, AlarmClock, MapPin, Users2, Stethoscope, Users, Send, Download,
 } from 'lucide-react';
 
 interface Board {
@@ -45,6 +46,7 @@ interface Card {
   next_contact_date?: string;
   contact_frequency?: string;
   health_status?: string;
+  fup_date?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -186,7 +188,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
 
   // Info form (aba Informações do modal CS)
-  const [infoForm, setInfoForm] = useState({ cs_name: '', sdr_name: '', client_phone: '', notes: '', health_status: '' as EngagementValue });
+  const [infoForm, setInfoForm] = useState({ cs_name: '', sdr_name: '', client_phone: '', notes: '', health_status: '' as EngagementValue, fup_date: '' });
   const [savingInfo, setSavingInfo] = useState(false);
 
   // Client search for add card
@@ -201,6 +203,19 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   const [filterSDR, setFilterSDR] = useState('');
   const [filterPlan, setFilterPlan] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+
+  // ── VIEW MODE ─────────────────────────────────────────────────────────────────
+  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  const [fupFilter, setFupFilter] = useState<'all' | 'overdue' | 'today' | 'week' | 'month'>('all');
+  const [listSortCol, setListSortCol] = useState<'client' | 'stage' | 'cs' | 'health' | 'fup' | 'next_contact' | null>(null);
+  const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc');
+  // Unassigned clients (sem card no kanban)
+  const [unassignedUsers, setUnassignedUsers] = useState<any[]>([]);
+  const [unassignedSearch, setUnassignedSearch] = useState('');
+  const [showUnassigned, setShowUnassigned] = useState(false);
+  const [assigningUser, setAssigningUser] = useState<any | null>(null);
+  const [assignStageId, setAssignStageId] = useState('');
+  const [savingAssign, setSavingAssign] = useState(false);
 
   const activeFilterCount = [filterStage, filterCS, filterSDR, filterPlan].filter(Boolean).length;
 
@@ -237,6 +252,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
   // Dados reais do cliente (buscados ao abrir o modal)
   const [clientData, setClientData] = useState<any>(null);
   const [loadingClientData, setLoadingClientData] = useState(false);
+  const [clientExtraContacts, setClientExtraContacts] = useState<any[]>([]);
 
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
@@ -275,7 +291,20 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Fetch unassigned users (clientes sem card no kanban)
+  const fetchUnassigned = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/kanban?action=unassigned');
+      const data = await res.json();
+      setUnassignedUsers(data.users || []);
+    } catch { /* silencioso */ }
+  }, []);
+  useEffect(() => { fetchUnassigned(); }, [fetchUnassigned]);
+
+  // Refetch unassigned quando cards mudam (alguém foi adicionado)
+  useEffect(() => { fetchUnassigned(); }, [cards.length, fetchUnassigned]);
 
   // Fetch colaboradores once on mount
   useEffect(() => {
@@ -526,6 +555,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
     setDetailCard(card);
     setDetailTab('info'); // Abrir direto na aba de informações
     setClientData(null);
+    setClientExtraContacts([]);
     const freq = card.contact_frequency || 'weekly';
     const nextDate = card.next_contact_date || calcNextContactDate(freq);
     setCsConfig({ next_contact_date: nextDate, contact_frequency: freq });
@@ -542,6 +572,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       client_phone: card.client_phone || '',
       notes: card.notes || '',
       health_status: (card.health_status || '') as EngagementValue,
+      fup_date: card.fup_date || '',
     });
     setLoadingContacts(true);
     setDetailContacts([]);
@@ -552,14 +583,15 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       try {
         const res = await fetch(`/api/admin/clients?search=${encodeURIComponent(searchTerm)}`);
         const data = await res.json();
+        const clientList = data.clients || data.users || [];
         // Tentar match exato por email primeiro, depois por nome
         let found = card.client_email
-          ? (data.users || []).find((u: any) => u.email?.toLowerCase() === card.client_email?.toLowerCase())
+          ? clientList.find((u: any) => u.email?.toLowerCase() === card.client_email?.toLowerCase())
           : null;
         // Fallback: match por nome da empresa ou nome do cliente
-        if (!found && (data.users || []).length > 0) {
+        if (!found && clientList.length > 0) {
           const companyLower = (card.company_name || card.client_name || '').toLowerCase();
-          found = (data.users || []).find((u: any) =>
+          found = clientList.find((u: any) =>
             (u.companyName || '').toLowerCase() === companyLower ||
             (u.name || '').toLowerCase() === companyLower
           );
@@ -572,6 +604,12 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
             sdr_name: card.sdr_name || found.sdrName || '',
             client_phone: card.client_phone || found.phone || '',
           }));
+          // Buscar contatos extras do cliente
+          try {
+            const cr = await fetch(`/api/admin/clients?action=contacts&userId=${found.id}`);
+            const cd = await cr.json();
+            setClientExtraContacts(cd.contacts || []);
+          } catch { setClientExtraContacts([]); }
         }
       } catch { /* silent */ }
       finally { setLoadingClientData(false); }
@@ -617,10 +655,11 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         body: JSON.stringify({ type: 'contact', card_id: detailCard.id, ...contactForm }),
       });
       const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Erro ao registrar contato');
       setDetailContacts(prev => [data.data, ...prev]);
       setContactForm(p => ({ ...p, notes: '' }));
       showToast('success', 'Contato registrado!');
-    } catch { showToast('error', 'Erro ao registrar contato'); }
+    } catch (e: any) { showToast('error', e.message || 'Erro ao registrar contato'); }
     finally { setSavingContact(false); }
   };
 
@@ -639,11 +678,12 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
           client_phone: infoForm.client_phone || null,
           notes: infoForm.notes || null,
           health_status: infoForm.health_status || null,
+          fup_date: infoForm.fup_date || null,
         }),
       });
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error || 'Erro desconhecido');
-      const updated: Card = { ...detailCard, cs_name: infoForm.cs_name || undefined, sdr_name: infoForm.sdr_name || undefined, client_phone: infoForm.client_phone || undefined, notes: infoForm.notes || undefined, health_status: infoForm.health_status || undefined, ...(json.data || {}) };
+      const updated: Card = { ...detailCard, cs_name: infoForm.cs_name || undefined, sdr_name: infoForm.sdr_name || undefined, client_phone: infoForm.client_phone || undefined, notes: infoForm.notes || undefined, health_status: infoForm.health_status || undefined, fup_date: infoForm.fup_date || null, ...(json.data || {}) };
       setDetailCard(updated);
       setCards(prev => prev.map(c => c.id === detailCard.id ? updated : c));
       showToast('success', 'Informações salvas!');
@@ -889,7 +929,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       <div className="flex-shrink-0 pt-4 pb-0 space-y-2">
 
       {/* Header compacto — tudo em uma linha */}
-      <div className={`flex items-center gap-2 ${t.surface} rounded-2xl border ${t.border} px-3 py-2 mx-4`}>
+      <div className={`flex items-center gap-2 ${t.surface} rounded-2xl border ${t.border} px-3 py-2 mx-4 min-w-0 overflow-hidden`}>
         {/* Logo + título */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow">
@@ -920,7 +960,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         )}
 
         {/* Botões de ação — compactos */}
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1 flex-shrink-0 overflow-x-auto max-w-full">
           {/* Filtros avançados (só no board view) */}
           {(view === 'board' || view === 'list') && (
             <button
@@ -1004,6 +1044,26 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
             <SlidersHorizontal size={13} />
             <span className="hidden sm:inline">Etapas</span>
           </button>
+
+          {/* Visualização Kanban / Lista */}
+          {view === 'board' && (
+            <div className={`flex items-center rounded-lg border ${t.border} overflow-hidden`}>
+              <button
+                onClick={() => setViewMode('kanban')}
+                title="Visualização Kanban"
+                className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${viewMode === 'kanban' ? 'bg-violet-600 text-white' : `${t.textSub} hover:text-violet-600`}`}
+              >
+                <LayoutGrid size={13} />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                title="Visualização Lista"
+                className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${viewMode === 'list' ? 'bg-violet-600 text-white' : `${t.textSub} hover:text-violet-600`}`}
+              >
+                <LayoutList size={13} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1060,6 +1120,161 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         </div>
       )}
 
+      {/* ── PAINEL SEM FUNIL ── */}
+      {view === 'board' && showUnassigned && (
+        <div className={`mb-4 ${t.surface} rounded-2xl border border-amber-300 p-4 mx-4`}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className={`text-sm font-bold ${t.text} flex items-center gap-2`}>
+              <Users size={14} className="text-amber-500" />
+              Clientes sem funil
+              <span className="text-xs font-normal text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
+                {unassignedUsers.filter(u => !unassignedSearch || (u.name + ' ' + (u.company_name || '') + ' ' + u.email).toLowerCase().includes(unassignedSearch.toLowerCase())).length} clientes
+              </span>
+            </h3>
+            <button onClick={() => setShowUnassigned(false)} className={`p-1 rounded ${t.surfaceHover} ${t.textMuted}`}><X size={14} /></button>
+          </div>
+          {/* Busca */}
+          <div className="relative mb-3">
+            <Search size={13} className={`absolute left-3 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
+            <input
+              type="text"
+              value={unassignedSearch}
+              onChange={e => setUnassignedSearch(e.target.value)}
+              placeholder="Buscar cliente..."
+              className={`w-full pl-8 pr-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-amber-400`}
+            />
+          </div>
+          {/* Lista de clientes */}
+          <div className="space-y-1 max-h-72 overflow-y-auto">
+            {unassignedUsers
+              .filter(u => !unassignedSearch || (u.name + ' ' + (u.company_name || '') + ' ' + u.email).toLowerCase().includes(unassignedSearch.toLowerCase()))
+              .map(user => (
+                <div key={user.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${t.border} ${t.surface} hover:border-amber-300 transition-colors`}>
+                  <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                    {(user.company_name || user.name || '?').charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold ${t.text} truncate`}>{user.company_name || user.name}</p>
+                    <p className={`text-xs ${t.textMuted} truncate`}>{user.email} {user.plan ? `· ${user.plan}` : ''}</p>
+                  </div>
+                  <button
+                    onClick={() => { setAssigningUser(user); setAssignStageId(stages.length > 0 ? stages[0].id : ''); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition-colors flex-shrink-0"
+                  >
+                    <Plus size={12} />
+                    Adicionar ao funil
+                  </button>
+                </div>
+              ))
+            }
+            {unassignedUsers.filter(u => !unassignedSearch || (u.name + ' ' + (u.company_name || '') + ' ' + u.email).toLowerCase().includes(unassignedSearch.toLowerCase())).length === 0 && (
+              <p className={`text-sm text-center py-4 ${t.textMuted}`}>Nenhum cliente encontrado</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Adicionar ao funil */}
+      {assigningUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className={`${t.surface} rounded-2xl border ${t.border} p-6 w-full max-w-md shadow-2xl`}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className={`text-base font-bold ${t.text}`}>Adicionar ao funil</h3>
+              <button onClick={() => { setAssigningUser(null); setAssignStageId(''); }} className={`p-1 rounded ${t.surfaceHover} ${t.textMuted}`}><X size={16} /></button>
+            </div>
+            <div className="mb-4">
+              <div className={`flex items-center gap-3 p-3 rounded-xl ${isDark ? 'bg-gray-800' : 'bg-amber-50'} border border-amber-200`}>
+                <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-base font-bold">
+                  {(assigningUser.company_name || assigningUser.name || '?').charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className={`font-semibold ${t.text}`}>{assigningUser.company_name || assigningUser.name}</p>
+                  <p className={`text-xs ${t.textMuted}`}>{assigningUser.email}</p>
+                </div>
+              </div>
+            </div>
+            {/* Seletor de fluxo */}
+            {boards.length > 1 && (
+              <div className="mb-3">
+                <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Fluxo</label>
+                <select
+                  value={activeBoardId || ''}
+                  onChange={e => {
+                    const bid = e.target.value;
+                    setActiveBoardId(bid);
+                    const firstStage = stages.find(s => s.board_id === bid);
+                    setAssignStageId(firstStage?.id || '');
+                  }}
+                  className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-amber-400`}
+                >
+                  {boards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+            )}
+            {/* Seletor de etapa */}
+            <div className="mb-5">
+              <label className={`text-xs font-medium ${t.textSub} mb-1 block`}>Etapa</label>
+              <select
+                value={assignStageId}
+                onChange={e => setAssignStageId(e.target.value)}
+                className={`w-full px-3 py-2 rounded-lg border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-amber-400`}
+              >
+                <option value="">Selecione uma etapa...</option>
+                {stages.filter(s => !activeBoardId || s.board_id === activeBoardId).map(s => (
+                  <option key={s.id} value={s.id}>{s.emoji} {s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setAssigningUser(null); setAssignStageId(''); }}
+                className={`flex-1 px-4 py-2.5 rounded-xl border text-sm font-medium ${t.border} ${t.textSub} hover:${t.surfaceHover} transition-colors`}
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={!assignStageId || savingAssign}
+                onClick={async () => {
+                  if (!assignStageId || !assigningUser) return;
+                  setSavingAssign(true);
+                  try {
+                    const res = await fetch('/api/admin/kanban', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        type: 'card',
+                        stage_id: assignStageId,
+                        board_id: activeBoardId,
+                        client_name: assigningUser.name,
+                        company_name: assigningUser.company_name || assigningUser.name,
+                        client_email: assigningUser.email,
+                        client_phone: assigningUser.phone || '',
+                        user_id: assigningUser.id,
+                        notes: assigningUser.plan ? `Plano: ${assigningUser.plan}` : '',
+                      }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Erro ao criar card');
+                    setCards(prev => [...prev, data.data]);
+                    setAssigningUser(null);
+                    setAssignStageId('');
+                    showToast('success', `${assigningUser.company_name || assigningUser.name} adicionado ao funil!`);
+                  } catch (e: any) {
+                    showToast('error', e.message || 'Erro ao adicionar ao funil');
+                  } finally {
+                    setSavingAssign(false);
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+              >
+                {savingAssign ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                {savingAssign ? 'Adicionando...' : 'Adicionar ao funil'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Painel de filtros avançados — expansível abaixo do header */}
       {(view === 'board' || view === 'list') && showFilters && (
         <div className={`${t.surface} rounded-2xl border ${t.border} p-3 mx-4`}>
@@ -1090,18 +1305,28 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
       {(view === 'board' || view === 'list') && boards.length > 1 && (
         <div className="flex items-center gap-2 px-4 pb-2 overflow-x-auto flex-shrink-0">
           {boards.map(board => (
-            <button
-              key={board.id}
-              onClick={() => switchBoard(board.id)}
-              className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${activeBoardId === board.id
-                ? 'text-white border-transparent shadow-md'
-                : `${t.border} ${t.textSub} hover:border-violet-400`
-              }`}
-              style={activeBoardId === board.id ? { backgroundColor: board.color } : {}}
-            >
-              {board.name}
-              {board.is_default && <span className="text-xs opacity-70">(padrão)</span>}
-            </button>
+            <div key={board.id} className="flex-shrink-0 flex items-center gap-0.5">
+              <button
+                onClick={() => switchBoard(board.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${activeBoardId === board.id
+                  ? 'text-white border-transparent shadow-md'
+                  : `${t.border} ${t.textSub} hover:border-violet-400`
+                } ${!board.is_default ? 'rounded-r-none border-r-0' : ''}`}
+                style={activeBoardId === board.id ? { backgroundColor: board.color } : {}}
+              >
+                {board.name}
+                {board.is_default && <span className="text-xs opacity-70">(padrão)</span>}
+              </button>
+              {!board.is_default && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteBoard(board); }}
+                  title="Excluir fluxo"
+                  className={`flex items-center justify-center w-7 h-[38px] rounded-r-xl border ${t.border} ${t.surfaceHover} text-red-400 hover:text-red-500 hover:bg-red-500/10 transition-colors`}
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -1189,6 +1414,15 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                 <div className="flex gap-2 mt-5">
                   <button onClick={() => { setEditingBoard(null); setShowAddBoard(false); }}
                     className={`flex-1 py-2 rounded-lg border text-sm font-medium ${t.border} ${t.textSub}`}>Cancelar</button>
+                  {editingBoard && !editingBoard.is_default && (
+                    <button
+                      onClick={() => { setEditingBoard(null); setShowAddBoard(false); deleteBoard(editingBoard); }}
+                      className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors"
+                      title="Excluir este fluxo"
+                    >
+                      <Trash2 size={14} /> Excluir
+                    </button>
+                  )}
                   <button onClick={saveBoard} disabled={savingBoard}
                     className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60">
                     {savingBoard ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
@@ -1644,6 +1878,27 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                           </div>
                         )}
 
+                        {/* FUP indicator */}
+                        {card.fup_date && (() => {
+                          const today = new Date(); today.setHours(0,0,0,0);
+                          const fup = new Date(card.fup_date + 'T00:00:00');
+                          const diff = Math.floor((fup.getTime() - today.getTime()) / (1000*60*60*24));
+                          const isOverdue = diff < 0;
+                          const isToday = diff === 0;
+                          return (
+                            <div className={`flex items-center gap-1.5 mt-1.5 px-1.5 py-0.5 rounded-md ${
+                              isOverdue ? 'bg-red-500/10' : isToday ? 'bg-amber-500/10' : 'bg-slate-100/0'
+                            }`}>
+                              <AlarmClock size={10} className={isOverdue ? 'text-red-500' : isToday ? 'text-amber-500' : t.textMuted} />
+                              <span className={`text-xs font-medium ${
+                                isOverdue ? 'text-red-500' : isToday ? 'text-amber-600' : t.textMuted
+                              }`}>
+                                FUP: {isOverdue ? `Atrasado ${Math.abs(diff)}d` : isToday ? 'Hoje' : new Date(card.fup_date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                              </span>
+                            </div>
+                          );
+                        })()}
+
 
                       </div>
                     </div>
@@ -1679,6 +1934,296 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
           </div>
         </div>
       )}
+
+      {/* ── BOARD VIEW — LISTA ── */}
+      {view === 'board' && viewMode === 'list' && (() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+        const getFupStatus = (fup?: string | null): 'overdue' | 'today' | 'week' | 'month' | 'future' | 'none' => {
+          if (!fup) return 'none';
+          const d = new Date(fup + 'T00:00:00');
+          if (d < today) return 'overdue';
+          if (d.getTime() === today.getTime()) return 'today';
+          if (d >= startOfWeek && d <= endOfWeek) return 'week';
+          if (d >= startOfMonth && d <= endOfMonth) return 'month';
+          return 'future';
+        };
+
+        // Todos os cards filtrados (respeitando filtros de busca/CS/SDR)
+        const allFilteredCards = cards.filter(c => {
+          if (filterSearch) {
+            const q = filterSearch.toLowerCase();
+            if (!(c.company_name || c.client_name || '').toLowerCase().includes(q) &&
+                !(c.client_email || '').toLowerCase().includes(q)) return false;
+          }
+          if (filterCS && (c.cs_name || '').toLowerCase() !== filterCS.toLowerCase()) return false;
+          if (filterSDR && (c.sdr_name || '').toLowerCase() !== filterSDR.toLowerCase()) return false;
+          return true;
+        });
+
+        // Filtrar por FUP
+        const fupFilteredCards = allFilteredCards.filter(c => {
+          if (fupFilter === 'all') return true;
+          const status = getFupStatus(c.fup_date);
+          if (fupFilter === 'overdue') return status === 'overdue';
+          if (fupFilter === 'today') return status === 'today';
+          if (fupFilter === 'week') return status === 'week' || status === 'today' || status === 'overdue';
+          if (fupFilter === 'month') return status === 'month' || status === 'week' || status === 'today' || status === 'overdue';
+          return true;
+        });
+
+        // Ordenação da lista
+        const toggleSort = (col: typeof listSortCol) => {
+          if (listSortCol === col) setListSortDir(d => d === 'asc' ? 'desc' : 'asc');
+          else { setListSortCol(col); setListSortDir('asc'); }
+        };
+        const SortIcon = ({ col }: { col: typeof listSortCol }) => {
+          if (listSortCol !== col) return <span className="opacity-30">↕</span>;
+          return <span>{listSortDir === 'asc' ? '↑' : '↓'}</span>;
+        };
+        const sortedCards = [...fupFilteredCards].sort((a, b) => {
+          const dir = listSortDir === 'asc' ? 1 : -1;
+          if (listSortCol === 'client') {
+            return dir * (a.company_name || a.client_name || '').localeCompare(b.company_name || b.client_name || '');
+          }
+          if (listSortCol === 'stage') {
+            const sa = stages.find(s => s.id === a.stage_id)?.name || '';
+            const sb = stages.find(s => s.id === b.stage_id)?.name || '';
+            return dir * sa.localeCompare(sb);
+          }
+          if (listSortCol === 'cs') {
+            return dir * (a.cs_name || '').localeCompare(b.cs_name || '');
+          }
+          if (listSortCol === 'health') {
+            const hOrder: Record<string, number> = { engajado: 0, no_ritmo: 1, lento: 2, sem_resposta: 3, '': 4 };
+            return dir * ((hOrder[a.health_status || ''] ?? 4) - (hOrder[b.health_status || ''] ?? 4));
+          }
+          if (listSortCol === 'fup') {
+            if (!a.fup_date && !b.fup_date) return 0;
+            if (!a.fup_date) return dir;
+            if (!b.fup_date) return -dir;
+            return dir * a.fup_date.localeCompare(b.fup_date);
+          }
+          if (listSortCol === 'next_contact') {
+            if (!a.next_contact_date && !b.next_contact_date) return 0;
+            if (!a.next_contact_date) return dir;
+            if (!b.next_contact_date) return -dir;
+            return dir * a.next_contact_date.localeCompare(b.next_contact_date);
+          }
+          // default: FUP overdue first
+          const sa2 = getFupStatus(a.fup_date);
+          const sb2 = getFupStatus(b.fup_date);
+          const order = { overdue: 0, today: 1, week: 2, month: 3, future: 4, none: 5 };
+          if (order[sa2] !== order[sb2]) return order[sa2] - order[sb2];
+          if (a.fup_date && b.fup_date) return a.fup_date.localeCompare(b.fup_date);
+          return 0;
+        });
+
+        return (
+          <div className="flex-1 overflow-auto px-4 pb-4">
+            {/* Filtro FUP */}
+            <div className={`flex items-center gap-2 mb-3 flex-wrap`}>
+              <AlarmClock size={14} className={t.textSub} />
+              <span className={`text-xs font-medium ${t.textSub}`}>FUP:</span>
+              {(['all', 'overdue', 'today', 'week', 'month'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setFupFilter(f)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border ${
+                    fupFilter === f
+                      ? f === 'overdue' ? 'bg-red-500 text-white border-red-500'
+                        : f === 'today' ? 'bg-amber-500 text-white border-amber-500'
+                        : 'bg-violet-600 text-white border-violet-600'
+                      : `${t.border} ${t.textSub} hover:text-violet-600`
+                  }`}
+                >
+                  {f === 'all' ? 'Todos' : f === 'overdue' ? 'Atrasado' : f === 'today' ? 'Hoje' : f === 'week' ? 'Esta semana' : 'Este mês'}
+                </button>
+              ))}
+              <span className={`ml-auto text-xs ${t.textMuted}`}>{sortedCards.length} cliente{sortedCards.length !== 1 ? 's' : ''}</span>
+              <button
+                onClick={async () => {
+                  // Exportar lista como XLSX usando SheetJS
+                  const XLSX = await import('xlsx');
+                  const rows = sortedCards.map(card => {
+                    const stage = stages.find(s => s.id === card.stage_id);
+                    return {
+                      'Cliente': card.client_name || '',
+                      'Empresa': card.company_name || '',
+                      'Email': card.client_email || '',
+                      'Telefone': card.client_phone || '',
+                      'Etapa': stage?.name || '',
+                      'CS': card.cs_name || '',
+                      'SDR': card.sdr_name || '',
+                      'Saúde': card.health_status || '',
+                      'FUP': card.fup_date || '',
+                      'Próx. Contato': card.next_contact_date || '',
+                      'Observações': card.notes || '',
+                    };
+                  });
+                  const ws = XLSX.utils.json_to_sheet(rows);
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, 'Kanban CS');
+                  XLSX.writeFile(wb, `kanban-cs-${new Date().toISOString().split('T')[0]}.xlsx`);
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${t.border} ${t.textSub} hover:text-violet-600 hover:border-violet-500 transition-colors`}
+              >
+                <Download size={12} />
+                Exportar
+              </button>
+            </div>
+
+            {/* Tabela */}
+            <div className={`${t.surface} rounded-2xl border ${t.border} overflow-hidden`}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className={`border-b ${t.border}`}>
+                    {[
+                      { col: 'client' as const, label: 'Cliente', cls: '' },
+                      { col: 'stage' as const, label: 'Etapa', cls: 'hidden md:table-cell' },
+                      { col: 'cs' as const, label: 'CS / SDR', cls: 'hidden lg:table-cell' },
+                      { col: 'health' as const, label: 'Saúde', cls: 'hidden sm:table-cell' },
+                      { col: 'fup' as const, label: 'FUP', cls: '' },
+                      { col: 'next_contact' as const, label: 'Próx. Contato', cls: 'hidden xl:table-cell' },
+                    ].map(({ col, label, cls }) => (
+                      <th
+                        key={col}
+                        onClick={() => toggleSort(col)}
+                        className={`text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none transition-colors ${cls} ${
+                          listSortCol === col ? 'text-violet-500' : t.textSub
+                        } hover:text-violet-500`}
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          {label} <SortIcon col={col} />
+                        </span>
+                      </th>
+                    ))}
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${t.divider}`}>
+                  {sortedCards.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className={`text-center py-12 text-sm ${t.textMuted}`}>
+                        Nenhum cliente encontrado
+                      </td>
+                    </tr>
+                  ) : sortedCards.map(card => {
+                    const stage = stages.find(s => s.id === card.stage_id);
+                    const fupStatus = getFupStatus(card.fup_date);
+                    const eng = getEngagement(card.health_status);
+                    return (
+                      <tr
+                        key={card.id}
+                        onClick={() => openCardDetail(card)}
+                        className={`cursor-pointer transition-colors ${isDark ? 'hover:bg-gray-800/60' : 'hover:bg-slate-50'}`}
+                      >
+                        {/* Cliente */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2.5">
+                            <div
+                              className="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center text-white text-xs font-bold"
+                              style={{ backgroundColor: stage?.color || '#6366f1' }}
+                            >
+                              {(card.company_name || card.client_name).charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className={`font-semibold ${t.text} truncate`}>{card.company_name || card.client_name}</div>
+                              {card.client_email && <div className={`text-xs ${t.textMuted} truncate`}>{card.client_email}</div>}
+                            </div>
+                          </div>
+                        </td>
+                        {/* Etapa */}
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          {stage ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full font-medium" style={{ backgroundColor: stage.color + '22', color: stage.color }}>
+                              <span>{stage.emoji}</span>
+                              <span>{stage.name}</span>
+                            </span>
+                          ) : <span className={`text-xs ${t.textMuted}`}>-</span>}
+                        </td>
+                        {/* CS / SDR */}
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          <div className="flex flex-col gap-0.5">
+                            {card.cs_name && <span className={`text-xs px-1.5 py-0.5 rounded-full w-fit ${isDark ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>CS: {card.cs_name}</span>}
+                            {card.sdr_name && <span className={`text-xs px-1.5 py-0.5 rounded-full w-fit ${isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-50 text-blue-700'}`}>SDR: {card.sdr_name}</span>}
+                            {!card.cs_name && !card.sdr_name && <span className={`text-xs ${t.textMuted}`}>-</span>}
+                          </div>
+                        </td>
+                        {/* Saúde (engajamento) */}
+                        <td className="px-4 py-3 hidden sm:table-cell">
+                          {eng ? (
+                            <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${eng.badge}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${eng.dot}`} />
+                              {eng.label}
+                            </span>
+                          ) : <span className={`text-xs ${t.textMuted}`}>-</span>}
+                        </td>
+                        {/* FUP */}
+                        <td className="px-4 py-3">
+                          {card.fup_date ? (
+                            <div className="flex items-center gap-1.5">
+                              {fupStatus === 'overdue' && <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />}
+                              {fupStatus === 'today' && <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />}
+                              {(fupStatus === 'week' || fupStatus === 'month' || fupStatus === 'future') && <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />}
+                              <span className={`text-xs font-medium ${
+                                fupStatus === 'overdue' ? 'text-red-500' :
+                                fupStatus === 'today' ? 'text-amber-600' :
+                                t.textSub
+                              }`}>
+                                {new Date(card.fup_date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                              </span>
+                              {fupStatus === 'overdue' && <span className="text-xs text-red-500 font-semibold">Atrasado</span>}
+                              {fupStatus === 'today' && <span className="text-xs text-amber-600 font-semibold">Hoje</span>}
+                            </div>
+                          ) : <span className={`text-xs ${t.textMuted}`}>-</span>}
+                        </td>
+                        {/* Próx. Contato */}
+                        <td className="px-4 py-3 hidden xl:table-cell">
+                          {card.next_contact_date ? (
+                            <div className="flex items-center gap-1.5">
+                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${healthColors[getHealthStatus(card)]}`} />
+                              <span className={`text-xs ${t.textSub}`}>
+                                {new Date(card.next_contact_date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                              </span>
+                            </div>
+                          ) : <span className={`text-xs ${t.textMuted}`}>-</span>}
+                        </td>
+                        {/* Ações */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1 justify-end">
+                            <button
+                              onClick={e => { e.stopPropagation(); openEditCard(card); }}
+                              className={`p-1.5 rounded-lg ${t.surfaceHover} ${t.textSub} hover:text-violet-600`}
+                              title="Editar"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); deleteCard(card.id); }}
+                              className={`p-1.5 rounded-lg ${t.surfaceHover} ${t.textSub} hover:text-red-500`}
+                              title="Excluir"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── ADD/EDIT CARD MODAL ── */}
       {addCardStage && (
@@ -1778,14 +2323,14 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
 
       {/* ── CARD DETAIL / CS SIDEBAR ── */}
       {detailCard && (
-        <div className="fixed inset-0 z-50 flex">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Overlay */}
-          <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={() => { setDetailCard(null); setDetailContacts([]); setClientData(null); }} />
-          {/* Sidebar */}
-          <div className={`w-full max-w-lg ${t.surface} border-l ${t.border} shadow-2xl flex flex-col h-full animate-slide-in-right`}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setDetailCard(null); setDetailContacts([]); setClientData(null); setClientExtraContacts([]); }} />
+          {/* Modal centralizado */}
+          <div className={`relative w-full max-w-3xl ${t.surface} border ${t.border} shadow-2xl flex flex-col rounded-2xl overflow-hidden`} style={{ maxHeight: '90vh' }}>
 
             {/* Header — estilo colaboradores */}
-            <div className="px-5 pt-5 pb-4">
+            <div className="px-5 pt-5 pb-4 flex-shrink-0">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-lg font-bold flex-shrink-0"
@@ -1830,14 +2375,14 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                       Mover Fluxo
                     </button>
                   )}
-                  <button onClick={() => { setDetailCard(null); setDetailContacts([]); setClientData(null); }}
+                  <button onClick={() => { setDetailCard(null); setDetailContacts([]); setClientData(null); setClientExtraContacts([]); }}
                     className={`p-1.5 rounded-xl ${t.surfaceHover} ${t.textSub}`}><X size={16} /></button>
                 </div>
               </div>
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b px-5" style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
+            <div className="flex border-b px-5 flex-shrink-0" style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
               {(['info', 'cs'] as const).map(tab => (
                 <button key={tab} onClick={() => setDetailTab(tab as any)}
                   className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
@@ -1853,7 +2398,7 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
             </div>
 
             {/* Etapa atual no fluxo */}
-            <div className={`px-5 py-2 flex items-center gap-2 text-xs ${t.textMuted} border-b`} style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
+            <div className={`px-5 py-2 flex items-center gap-2 text-xs ${t.textMuted} border-b flex-shrink-0`} style={{ borderColor: isDark ? '#1f2937' : '#e2e8f0' }}>
               <span>Fluxo:</span>
               <span className={`font-medium ${t.text}`}>{activeBoard?.name || 'Kanban'}</span>
               <span>→</span>
@@ -2165,11 +2710,45 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
                     </div>
                   </div>
 
+                  {/* Contatos Extras */}
+                  {clientExtraContacts.length > 0 && (
+                    <div className={`rounded-2xl border ${t.border} overflow-hidden`}>
+                      <div className={`px-4 py-3 flex items-center gap-2 border-b ${t.border} ${isDark ? 'bg-gray-800/50' : 'bg-slate-50'}`}>
+                        <Users2 size={14} className="text-indigo-500" />
+                        <span className={`text-xs font-semibold ${t.text}`}>Contatos da Empresa</span>
+                        <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full ${isDark ? 'bg-indigo-900/40 text-indigo-400' : 'bg-indigo-100 text-indigo-600'} font-medium`}>{clientExtraContacts.length}</span>
+                      </div>
+                      <div className="px-4 py-3 space-y-3">
+                        {clientExtraContacts.map((c: any, idx: number) => (
+                          <div key={idx} className={`rounded-xl border ${t.border} p-3 space-y-1.5`}>
+                            <div className="flex items-center justify-between">
+                              <span className={`text-sm font-semibold ${t.text}`}>{c.name || 'Sem nome'}</span>
+                              {c.role && <span className={`text-xs px-2 py-0.5 rounded-full ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-slate-100 text-slate-600'}`}>{c.role}</span>}
+                            </div>
+                            {c.phone && (
+                              <div className="flex items-center gap-2">
+                                <Phone size={11} className={t.textMuted} />
+                                <a href={`https://wa.me/${c.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                                  className="text-xs text-emerald-500 hover:underline">{c.phone}</a>
+                              </div>
+                            )}
+                            {c.email && (
+                              <div className="flex items-center gap-2">
+                                <Mail size={11} className={t.textMuted} />
+                                <span className={`text-xs ${t.textSub}`}>{c.email}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Observações */}
                   <div>
                     <textarea value={infoForm.notes}
                       onChange={e => setInfoForm(p => ({ ...p, notes: e.target.value }))}
-                      rows={2}
+                      rows={6}
                       className={`w-full px-3 py-2 rounded-2xl border text-sm ${t.input} focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none`}
                       placeholder="Observações sobre este cliente..." />
                   </div>

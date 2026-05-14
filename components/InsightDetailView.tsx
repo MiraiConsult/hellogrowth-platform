@@ -7,7 +7,7 @@ import {
   ArrowLeft, AlertTriangle, TrendingUp, DollarSign, Heart,
   Phone, Mail, Calendar, MessageSquare, FileText, Sparkles,
   Copy, Check, ExternalLink, Clock, User, Star, CheckCircle, XCircle, Filter,
-  LayoutGrid, List, Save, History, ChevronDown, ChevronUp
+  LayoutGrid, List, Save, History, ChevronDown, ChevronUp, Pencil, X
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { MessageSuggestionsPanel } from '@/components/MessageSuggestionsPanel';
@@ -174,6 +174,14 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [forms, setForms] = useState<Form[]>([]);
   const [questionMap, setQuestionMap] = useState<Record<string, string>>({});
+
+  // Edição de nota NPS
+  const [editingScore, setEditingScore] = useState(false);
+  const [editScoreValue, setEditScoreValue] = useState<number | ''>('');
+  const [editScoreReason, setEditScoreReason] = useState('');
+  const [savingScore, setSavingScore] = useState(false);
+  const [scoreEditHistory, setScoreEditHistory] = useState<any[]>([]);
+  const [showScoreHistory, setShowScoreHistory] = useState(false);
 
   // Obter configuração e ícone - usando constantes estáticas
   const config = INSIGHT_CONFIGS[insightType] || INSIGHT_CONFIGS.risk;
@@ -811,6 +819,52 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
     }
   };
 
+  // Editar nota NPS
+  const handleEditScore = async () => {
+    if (!selectedClient || editScoreValue === '' || savingScore) return;
+    const newScore = Number(editScoreValue);
+    if (isNaN(newScore) || newScore < 0 || newScore > 10) return;
+
+    setSavingScore(true);
+    try {
+      const res = await fetch('/api/admin/nps-edit-score', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          responseId: selectedClient.id,
+          newScore,
+          reason: editScoreReason,
+          editedBy: 'admin',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao salvar');
+
+      // Atualizar estado local
+      const updatedClient = { ...selectedClient, score: newScore };
+      setSelectedClient(updatedClient);
+      setClients(prev => prev.map(c => c.id === selectedClient.id ? updatedClient : c));
+
+      // Adicionar ao histórico local
+      setScoreEditHistory(prev => [{
+        old_score: data.oldScore,
+        new_score: data.newScore,
+        old_status: data.oldStatus,
+        new_status: data.newStatus,
+        edited_at: data.editedAt,
+        reason: editScoreReason,
+      }, ...prev]);
+
+      setEditingScore(false);
+      setEditScoreValue('');
+      setEditScoreReason('');
+    } catch (err: any) {
+      alert(err.message || 'Erro ao salvar nota');
+    } finally {
+      setSavingScore(false);
+    }
+  };
+
   // Calculate total value for sales category
   const totalValue = useMemo(() => {
     if (insightType === 'sales') {
@@ -895,6 +949,11 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
               setSelectedClient(null);
               setShowHistory(false);
               setInteractionHistory([]);
+              setEditingScore(false);
+              setEditScoreValue('');
+              setEditScoreReason('');
+              setScoreEditHistory([]);
+              setShowScoreHistory(false);
             }}
             className="p-2 hover:bg-gray-100 rounded-lg"
           >
@@ -947,12 +1006,99 @@ const InsightDetailView: React.FC<InsightDetailViewProps> = ({
                 Respostas e Informações
               </h3>
               <div className="space-y-2">
-                {selectedClient.responses.map((r, i) => (
-                  <div key={i} className="border-l-4 border-primary-500 pl-3">
-                    <p className="text-xs font-medium text-gray-600">{r.question}</p>
-                    <p className="text-sm text-gray-900">{formatAnswer(r.answer)}</p>
-                  </div>
-                ))}
+                {selectedClient.responses.map((r, i) => {
+                  const isNPSScore = typeof r.question === 'string' && r.question === 'Nota NPS';
+                  return (
+                    <div key={i} className="border-l-4 border-primary-500 pl-3">
+                      <p className="text-xs font-medium text-gray-600">{r.question}</p>
+                      {isNPSScore && selectedClient.type !== 'lead' ? (
+                        <div className="mt-1">
+                          {editingScore ? (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={10}
+                                  value={editScoreValue}
+                                  onChange={e => setEditScoreValue(e.target.value === '' ? '' : Number(e.target.value))}
+                                  className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                  placeholder="0-10"
+                                />
+                                <span className="text-xs text-gray-500">(nota atual: {r.answer})</span>
+                              </div>
+                              <input
+                                type="text"
+                                value={editScoreReason}
+                                onChange={e => setEditScoreReason(e.target.value)}
+                                className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                placeholder="Motivo da alteração (opcional)"
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={handleEditScore}
+                                  disabled={savingScore || editScoreValue === ''}
+                                  className="flex items-center gap-1 px-3 py-1 bg-primary-600 text-white text-xs rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                                >
+                                  {savingScore ? (
+                                    <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <Save size={12} />
+                                  )}
+                                  Salvar
+                                </button>
+                                <button
+                                  onClick={() => { setEditingScore(false); setEditScoreValue(''); setEditScoreReason(''); }}
+                                  className="flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 text-xs rounded-lg hover:bg-gray-200"
+                                >
+                                  <X size={12} /> Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm text-gray-900">{formatAnswer(r.answer)}</p>
+                              <button
+                                onClick={() => { setEditingScore(true); setEditScoreValue(Number(r.answer)); }}
+                                className="p-1 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                                title="Editar nota NPS"
+                              >
+                                <Pencil size={12} />
+                              </button>
+                            </div>
+                          )}
+                          {/* Histórico de edições */}
+                          {scoreEditHistory.length > 0 && (
+                            <div className="mt-2">
+                              <button
+                                onClick={() => setShowScoreHistory(!showScoreHistory)}
+                                className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                              >
+                                <History size={11} />
+                                {scoreEditHistory.length} alteração{scoreEditHistory.length > 1 ? 'ões' : ''} registrada{scoreEditHistory.length > 1 ? 's' : ''}
+                                {showScoreHistory ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                              </button>
+                              {showScoreHistory && (
+                                <div className="mt-1 space-y-1">
+                                  {scoreEditHistory.map((edit, idx) => (
+                                    <div key={idx} className="text-xs text-gray-500 bg-gray-50 rounded px-2 py-1">
+                                      <span className="font-medium">{edit.old_score} → {edit.new_score}</span>
+                                      {' '}•{' '}
+                                      {new Date(edit.edited_at).toLocaleString('pt-BR')}
+                                      {edit.reason && <span className="italic"> — {edit.reason}</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-900">{formatAnswer(r.answer)}</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

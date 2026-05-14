@@ -33,9 +33,11 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
-  ArrowUp, ArrowDown, Mail} from 'lucide-react';
+  ArrowUp, ArrowDown, Mail, MessageCircle, ShieldCheck} from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
+import InitialFieldsConfig from '@/components/InitialFieldsConfig';
+import { InitialField } from '@/types';
 
 interface Product {
   id: string;
@@ -74,6 +76,7 @@ interface FormConsultantProps {
   onClose: () => void;
   onSaveForm: (formData: any) => void;
   existingForm?: any;
+  hasHealthAddon?: boolean;
 }
 
 type ConsultantStep = 
@@ -124,7 +127,8 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   userId, 
   onClose, 
   onSaveForm,
-  existingForm 
+  existingForm,
+  hasHealthAddon = false
 }) => {
   const tenantId = useTenantId();
 
@@ -158,7 +162,14 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [emailAnalysisEnabled, setEmailAnalysisEnabled] = useState(false);
   const [emailAnalysisRecipients, setEmailAnalysisRecipients] = useState('');
+  const [whatsappAnalysisEnabled, setWhatsappAnalysisEnabled] = useState(false);
+  const [whatsappAnalysisRecipients, setWhatsappAnalysisRecipients] = useState('');
   const [availableGames, setAvailableGames] = useState<any[]>([]);
+  const [signatureEnabled, setSignatureEnabled] = useState(false);
+  const [signatureAutoEmail, setSignatureAutoEmail] = useState(false);
+  const [signatureAutoWhatsapp, setSignatureAutoWhatsapp] = useState(false);
+  const [termColor, setTermColor] = useState('#10b981');
+  const [consentText, setConsentText] = useState('Eu autorizo a coleta e o uso dos meus dados pessoais e de saúde para fins de avaliação, diagnóstico e tratamento, conforme a Lei Geral de Proteção de Dados (LGPD - Lei 13.709/2018).');
   
   // Estados para o Chat de Ajuste na tela de revisão
   const [reviewChatMessages, setReviewChatMessages] = useState<ChatMessage[]>([]);
@@ -166,6 +177,13 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
   const [isReviewChatProcessing, setIsReviewChatProcessing] = useState(false);
   const [showReviewChat, setShowReviewChat] = useState(true);
   const strategyExplanationGenerated = useRef(false);
+
+  // Estado separado para campos de identificação (formato InitialField compatível com InitialFieldsConfig)
+  const [formInitialFields, setFormInitialFields] = useState<InitialField[]>([
+    { field: 'name', label: 'Nome', placeholder: 'Digite seu nome', required: true, enabled: true },
+    { field: 'email', label: 'Email', placeholder: 'Digite seu email', required: true, enabled: true },
+    { field: 'phone', label: 'Telefone', placeholder: 'Digite seu telefone', required: false, enabled: true },
+  ]);
   
   // Estabilizar existingForm para evitar re-renders
   const stableExistingForm = useMemo(() => existingForm, [existingForm?.id]);
@@ -229,6 +247,14 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
       setSelectedGameId(stableExistingForm.game_id || null);
       setEmailAnalysisEnabled(stableExistingForm.email_analysis_enabled || false);
       setEmailAnalysisRecipients(stableExistingForm.email_analysis_recipients || '');
+      setWhatsappAnalysisEnabled((stableExistingForm as any).whatsapp_analysis_enabled || false);
+      setWhatsappAnalysisRecipients((stableExistingForm as any).whatsapp_analysis_recipients || '');
+      setSignatureEnabled(stableExistingForm.signature_enabled || false);
+      setSignatureAutoEmail(stableExistingForm.signature_auto_email || false);
+      setSignatureAutoWhatsapp(stableExistingForm.signature_auto_whatsapp || false);
+      setTermColor(stableExistingForm.term_color || '#10b981');
+      setShowLogo(stableExistingForm.show_logo || false);
+      if (stableExistingForm.consent_text) setConsentText(stableExistingForm.consent_text);
       
       // Carregar campos de identificação salvos
       // IMPORTANTE: O banco salva como initial_fields, e o MainApp mapeia para initialFields
@@ -243,6 +269,17 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
           required: field.required !== undefined ? field.required : false,
           placeholder: field.placeholder || `Digite seu ${(field.label || '').toLowerCase()}`
         }));
+
+        // Carregar no formato InitialField para o InitialFieldsConfig
+        const loadedInitialFields: InitialField[] = savedFields.map((field: any) => ({
+          field: field.field || field.id || 'unknown',
+          label: field.label || field.name || '',
+          placeholder: field.placeholder || `Digite seu ${(field.label || '').toLowerCase()}`,
+          required: field.required !== undefined ? field.required : false,
+          enabled: field.enabled !== undefined ? field.enabled : true,
+          inputType: field.inputType,
+        }));
+        setFormInitialFields(loadedInitialFields);
         
         // Carregar contexto se existir (mas preservar identificationFields do banco)
         if (stableExistingForm.ai_context?.businessContext) {
@@ -615,17 +652,19 @@ const FormConsultant: React.FC<FormConsultantProps> = ({
           
           if (!error && fetchedProducts && fetchedProducts.length > 0) {
             setProducts(fetchedProducts);
-            console.log('[FormConsultant] Produtos disponíveis:', fetchedProducts.length, fetchedProducts);
-            setCurrentStep('products');
+            setBusinessContext(prev => ({ ...prev, productSelection: 'auto', selectedProducts: [] }));
+            setCurrentStep('custom_objective_detail');
             setTimeout(() => {
               addAssistantMessage(
-                "📦 **Perfeito! Agora vamos focar nos produtos/serviços.**\n\n" +
-                "Você quer que o formulário seja focado em **produtos específicos** ou deixo a IA escolher automaticamente?\n\n" +
-                "💡 **Dica:** Se você tem uma clínica com fisioterapia E odontologia, mas quer um formulário só para fisioterapia, selecione manualmente!",
-                [
-                  { label: "🎯 Selecionar Produtos Manualmente", value: "products_manual" },
-                  { label: "✨ Deixar a IA Escolher Automaticamente", value: "products_auto" }
-                ]
+                "🎯 **Agora a parte mais importante para criar um formulário realmente inteligente!**\n\n" +
+                "Para que este formulário seja perfeito, quais informações são **indispensáveis** para você decidir se este é um bom cliente?\n\n" +
+                "💡 **Exemplos:**\n" +
+                "• Poder aquisitório (quanto pode gastar)\n" +
+                "• Urgência (quando precisa do serviço)\n" +
+                "• Problema específico que quer resolver\n" +
+                "• Experiência anterior com produtos similares\n" +
+                "• Expectativas de resultado\n\n" +
+                "Quanto mais específico você for, mais assertivas serão as perguntas! 🚀"
               );
             }, 500);
           } else {
@@ -1147,12 +1186,14 @@ Responda APENAS com JSON válido neste formato:
       name: formName || `Formulário ${new Date().toLocaleDateString('pt-BR')}`,
       description: businessContext.customObjective || businessContext.businessDescription || 'Formulário de qualificação de leads',
       // Enviar todos os campos (incluindo desabilitados) para preservar configuração
-      identification_fields: businessContext.identificationFields.map(f => ({
-        field: f.id,
+      // Usa formInitialFields (formato InitialField) que suporta campos extras como CPF, cidade, etc.
+      identification_fields: formInitialFields.map(f => ({
+        field: f.field,
         label: f.label,
         placeholder: f.placeholder || '',
         required: f.required,
-        enabled: f.enabled
+        enabled: f.enabled,
+        inputType: f.inputType,
       })),
       questions: generatedQuestions.map(q => ({
         id: q.id,
@@ -1175,6 +1216,13 @@ Responda APENAS com JSON válido neste formato:
       show_logo: showLogo,
       email_analysis_enabled: emailAnalysisEnabled,
       email_analysis_recipients: emailAnalysisRecipients,
+      whatsapp_analysis_enabled: whatsappAnalysisEnabled,
+      whatsapp_analysis_recipients: whatsappAnalysisRecipients,
+      signature_enabled: signatureEnabled,
+      signature_auto_email: signatureAutoEmail,
+      signature_auto_whatsapp: signatureAutoWhatsapp,
+      term_color: termColor,
+      consent_text: consentText,
       status: 'active'
     };
 
@@ -1687,57 +1735,10 @@ Retorne APENAS este JSON (sem markdown, sem texto fora do JSON):
             Campos de Identificação
           </h3>
           <p className="text-sm text-slate-500 mb-4">Defina quais informações coletar do cliente no início do formulário</p>
-          <div className="space-y-4">
-            {businessContext.identificationFields.map(field => (
-              <div key={field.id} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                <div className="flex items-center gap-4 mb-3">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={field.enabled}
-                      onChange={() => handleToggleIdentificationField(field.id)}
-                      className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500"
-                    />
-                    <span className="text-sm font-medium text-slate-700">Ativo</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={field.required}
-                      onChange={() => handleToggleFieldRequired(field.id)}
-                      disabled={!field.enabled}
-                      className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500 disabled:opacity-50"
-                    />
-                    <span className="text-sm font-medium text-slate-700">Obrigatório</span>
-                  </label>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Título do campo</label>
-                    <input
-                      type="text"
-                      value={field.label}
-                      onChange={(e) => handleUpdateIdentificationField(field.id, 'label', e.target.value)}
-                      disabled={!field.enabled}
-                      placeholder="Ex: Nome"
-                      className="w-full rounded-lg border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Placeholder (exemplo)</label>
-                    <input
-                      type="text"
-                      value={field.placeholder || ''}
-                      onChange={(e) => handleUpdateIdentificationField(field.id, 'placeholder', e.target.value)}
-                      disabled={!field.enabled}
-                      placeholder="Ex: Digite seu nome"
-                      className="w-full rounded-lg border-slate-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <InitialFieldsConfig
+            initialFields={formInitialFields}
+            onChange={setFormInitialFields}
+          />
         </div>
 
         {/* Questions Section */}
@@ -2175,6 +2176,136 @@ Retorne APENAS este JSON (sem markdown, sem texto fora do JSON):
           )}
         </div>
 
+        {/* WhatsApp de Análise */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <MessageCircle size={20} className="text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-slate-800">Enviar Análise por WhatsApp</h3>
+                <p className="text-sm text-slate-500 mt-0.5">Receba um resumo da IA com produtos sugeridos e link do formulário via WhatsApp</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setWhatsappAnalysisEnabled(!whatsappAnalysisEnabled)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                whatsappAnalysisEnabled ? 'bg-green-500' : 'bg-gray-300'
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                whatsappAnalysisEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
+          {whatsappAnalysisEnabled && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-600 mb-1">Números de WhatsApp</label>
+                <input
+                  type="text"
+                  value={whatsappAnalysisRecipients}
+                  onChange={(e) => setWhatsappAnalysisRecipients(e.target.value)}
+                  placeholder="(11) 99999-9999, (21) 98888-8888"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                />
+                <p className="text-xs text-slate-400 mt-1">Separe múltiplos números por vírgula</p>
+              </div>
+              <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                <p className="text-xs text-green-700">
+                  <strong>O que será enviado:</strong> Produtos sugeridos pela IA, análise resumida do lead e link para o formulário completo.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Assinatura Eletrônica — só aparece se o módulo Saúde estiver ativo */}
+        {hasHealthAddon && <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <ShieldCheck size={20} className="text-violet-500" />
+                Assinatura Eletrônica (Termo de Consentimento)
+              </h3>
+              <p className="text-sm text-slate-500 mt-1">O paciente assina digitalmente ao final do formulário</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSignatureEnabled(!signatureEnabled)}
+              className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${signatureEnabled ? 'bg-violet-500' : 'bg-slate-300'}`}
+            >
+              <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${signatureEnabled ? 'translate-x-9' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          {signatureEnabled && (
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-600 mb-2">Texto do Termo de Consentimento</label>
+                <textarea
+                  value={consentText}
+                  onChange={(e) => setConsentText(e.target.value)}
+                  rows={4}
+                  className="w-full rounded-lg border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 p-3 text-sm"
+                  placeholder="Digite o texto do termo de consentimento..."
+                />
+              </div>
+
+              {/* Toggle: Enviar por e-mail automaticamente */}
+              <div className="flex items-center justify-between p-3 bg-violet-50 rounded-lg border border-violet-200">
+                <div className="flex-1 mr-3">
+                  <p className="text-xs font-medium text-violet-800">📧 Enviar termo por e-mail automaticamente</p>
+                  <p className="text-xs text-violet-600 mt-0.5">O paciente recebe o termo assinado por e-mail ao enviar o formulário. <strong>Campo e-mail será obrigatório.</strong></p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSignatureAutoEmail(!signatureAutoEmail)}
+                  className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors flex-shrink-0 ${signatureAutoEmail ? 'bg-violet-500' : 'bg-slate-300'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${signatureAutoEmail ? 'translate-x-7' : 'translate-x-1'}`} />
+                </button>
+              </div>
+
+              {/* Toggle: Enviar por WhatsApp automaticamente */}
+              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                <div className="flex-1 mr-3">
+                  <p className="text-xs font-medium text-green-800">💬 Enviar termo por WhatsApp automaticamente</p>
+                  <p className="text-xs text-green-600 mt-0.5">O paciente recebe o termo assinado por WhatsApp ao enviar o formulário. <strong>Campo telefone será obrigatório.</strong></p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSignatureAutoWhatsapp(!signatureAutoWhatsapp)}
+                  className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors flex-shrink-0 ${signatureAutoWhatsapp ? 'bg-green-500' : 'bg-slate-300'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${signatureAutoWhatsapp ? 'translate-x-7' : 'translate-x-1'}`} />
+                </button>
+              </div>
+
+              {/* Seletor de cor do termo */}
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div>
+                  <p className="text-xs font-medium text-gray-700">🎨 Cor do Termo de Consentimento</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Cor das linhas e destaques no PDF do termo</p>
+                </div>
+                <input
+                  type="color"
+                  value={termColor}
+                  onChange={(e) => setTermColor(e.target.value)}
+                  className="w-10 h-8 rounded cursor-pointer border border-gray-300"
+                  title="Escolher cor do termo"
+                />
+              </div>
+
+              <div className="p-3 bg-violet-50 rounded-lg border border-violet-200">
+                <p className="text-xs text-violet-700">
+                  <strong>O que é coletado:</strong> Assinatura digital desenhada, nome, email, telefone, IP e data/hora — válido como assinatura eletrônica simples pela Lei 14.063/2020.
+                </p>
+              </div>
+             </div>
+          )}
+        </div>}
         {/* Save Button */}
         <button
           onClick={handleSaveForm}

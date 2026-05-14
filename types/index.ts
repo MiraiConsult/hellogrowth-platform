@@ -83,12 +83,15 @@ export interface NPSResponse {
   notes?: string;
 }
 
+export type InitialFieldType = 'name' | 'email' | 'phone' | 'cpf' | 'birthdate' | 'city' | 'state' | 'neighborhood' | 'address' | 'custom';
+
 export interface InitialField {
-  field: 'name' | 'email' | 'phone';
+  field: InitialFieldType | string;
   label: string;
   placeholder: string;
   required: boolean;
   enabled: boolean;
+  inputType?: 'text' | 'email' | 'tel' | 'date' | 'number';
 }
 
 export interface CampaignQuestion {
@@ -155,6 +158,14 @@ export interface Form {
   game_id?: string; // ID of the game (nps_games) associated with this form
   email_analysis_enabled?: boolean;
   email_analysis_recipients?: string;
+  whatsapp_analysis_enabled?: boolean;
+  whatsapp_analysis_recipients?: string;
+  show_logo?: boolean;
+  signature_enabled?: boolean;
+  signature_auto_email?: boolean;
+  signature_auto_whatsapp?: boolean;
+  term_color?: string;
+  consent_text?: string;
 }
 
 export interface ChartData {

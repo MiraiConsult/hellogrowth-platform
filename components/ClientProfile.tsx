@@ -153,6 +153,8 @@ export default function ClientProfile({ client, isDark, onClose, adminName = 'Ad
   const [editContent, setEditContent] = useState('');
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'notes' | 'companies'>('info');
+  const [profileExtras, setProfileExtras] = useState<{ kanbanCard: any; nps: any } | null>(null);
+  const [loadingExtras, setLoadingExtras] = useState(false);
 
   // Niche catalog + cadastro fields
   const [niches, setNiches] = useState<Niche[]>([]);
@@ -910,6 +912,88 @@ export default function ClientProfile({ client, isDark, onClose, adminName = 'Ad
                   </div>
                 </div>
               )}
+
+              {/* Pipeline (Kanban) */}
+              {loadingExtras ? (
+                <div className={`${t.surface} rounded-xl p-4 border ${t.border} flex items-center gap-2`}>
+                  <Loader2 size={14} className="animate-spin text-violet-500" />
+                  <span className={`text-sm ${t.muted}`}>Carregando pipeline...</span>
+                </div>
+              ) : profileExtras?.kanbanCard ? (
+                <div className={`${t.surface} rounded-xl p-4 border ${t.border} space-y-3`}>
+                  <h3 className={`text-sm font-semibold ${t.text} flex items-center gap-2`}>
+                    <Kanban size={14} className="text-violet-500" /> Pipeline CS
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs ${t.muted}`}>Fluxo</span>
+                      <span className={`text-sm font-medium ${t.text}`}>{profileExtras.kanbanCard.boardName || '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs ${t.muted}`}>Etapa atual</span>
+                      <span className={`text-sm font-medium ${t.text}`}>{profileExtras.kanbanCard.stageName || '—'}</span>
+                    </div>
+                    {profileExtras.kanbanCard.cs_name && (
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs ${t.muted}`}>CS Responsável</span>
+                        <span className={`text-sm font-medium ${t.text}`}>{profileExtras.kanbanCard.cs_name}</span>
+                      </div>
+                    )}
+                    {profileExtras.kanbanCard.fup_date && (
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs ${t.muted} flex items-center gap-1`}><AlarmClock size={11} /> FUP</span>
+                        <span className={`text-sm font-medium ${t.text}`}>
+                          {new Date(profileExtras.kanbanCard.fup_date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+                    )}
+                    {profileExtras.kanbanCard.next_contact_date && (
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs ${t.muted}`}>Próx. contato</span>
+                        <span className={`text-sm font-medium ${t.text}`}>
+                          {new Date(profileExtras.kanbanCard.next_contact_date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* NPS dos pacientes */}
+              {profileExtras?.nps && profileExtras.nps.total > 0 ? (
+                <div className={`${t.surface} rounded-xl p-4 border ${t.border} space-y-3`}>
+                  <h3 className={`text-sm font-semibold ${t.text} flex items-center gap-2`}>
+                    <BarChart2 size={14} className="text-blue-500" /> NPS dos Pacientes
+                  </h3>
+                  <div className="flex items-center gap-4">
+                    <div className="text-center">
+                      <div className={`text-3xl font-bold ${
+                        profileExtras.nps.avg >= 8 ? 'text-emerald-500' :
+                        profileExtras.nps.avg >= 6 ? 'text-yellow-500' : 'text-red-500'
+                      }`}>{profileExtras.nps.avg ?? '—'}</div>
+                      <div className={`text-xs ${t.muted}`}>Média</div>
+                    </div>
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-emerald-500">Promotores</span>
+                        <span className={`text-sm font-semibold ${t.text}`}>{profileExtras.nps.promoters}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-yellow-500">Neutros</span>
+                        <span className={`text-sm font-semibold ${t.text}`}>{profileExtras.nps.neutrals}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-red-500">Detratores</span>
+                        <span className={`text-sm font-semibold ${t.text}`}>{profileExtras.nps.detractors}</span>
+                      </div>
+                      <div className={`flex items-center justify-between border-t ${t.border} pt-1`}>
+                        <span className={`text-xs ${t.muted}`}>Total respostas</span>
+                        <span className={`text-sm font-semibold ${t.text}`}>{profileExtras.nps.total}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               {/* Notas internas */}
               {client.internalNotes && (

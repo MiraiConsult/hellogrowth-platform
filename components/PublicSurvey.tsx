@@ -230,12 +230,13 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
     const placeId = getPlaceId();
     const redirectEnabled = isGoogleRedirectEnabled();
     const hasGame = gameData && (campaign as any).game_id;
+    const minScore: number = (campaign as any).redirect_min_score ?? 9;
     
-    // Se tem game configurado e é promotor (score >= 9), vai para o jogo
-    if (hasGame && finalScore >= 9) {
+    // Se tem game configurado e atinge a nota mínima, vai para o jogo
+    if (hasGame && finalScore >= minScore) {
         setStep('game');
-    } else if (redirectEnabled && finalScore >= 9 && placeId) {
-        // Se não tem game mas tem redirect e é promotor, vai direto para redirecting
+    } else if (redirectEnabled && finalScore >= minScore && placeId) {
+        // Se não tem game mas tem redirect e atinge a nota mínima, vai direto para redirecting
         setStep('redirecting');
         setTimeout(() => {
             const googleUrl = `https://search.google.com/local/writereview?placeid=${placeId}`;
@@ -251,6 +252,20 @@ const PublicSurvey: React.FC<PublicSurveyProps> = ({ campaign, onClose, onSubmit
   const handleGameComplete = (prizeCode: string, prizeName: string) => {
     const placeId = getPlaceId();
     const redirectEnabled = isGoogleRedirectEnabled();
+    const tenantId = (campaign as any).tenant_id || (campaign as any).user_id;
+
+    // Registrar engajamento via game (fire-and-forget, anti-duplicação na API)
+    if (tenantId && respondent.phone && score !== null && score >= 9) {
+      fetch('/api/engagement/game-register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-tenant-id': tenantId },
+        body: JSON.stringify({
+          name: respondent.name,
+          phone: respondent.phone,
+          score,
+        }),
+      }).catch(() => {});
+    }
     
     // Após o jogo, se tem redirect habilitado, vai para redirecting
     if (redirectEnabled && placeId) {
