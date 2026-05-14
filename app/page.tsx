@@ -23,6 +23,12 @@ export default function HomePage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [view, setView] = useState<'auth' | 'app'>('auth');
   const [isLoading, setIsLoading] = useState(true);
+  const [initialLeadId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('lead');
+    }
+    return null;
+  });
 
   // Impersonation: admin acessando conta de cliente
   const [impersonating, setImpersonating] = useState<{ adminUser: User; clientName: string } | null>(() => {
@@ -298,6 +304,7 @@ export default function HomePage() {
         onSwitchCompany={handleSwitchCompany}
         onImpersonate={handleImpersonate}
         daysLeft={daysLeft}
+        initialLeadId={initialLeadId || undefined}
       />
     </div>
   );

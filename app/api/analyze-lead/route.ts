@@ -227,35 +227,59 @@ Responda APENAS com JSON válido (sem markdown):
         .filter(Boolean);
 
       if (waNumbers.length > 0) {
-        const panelLink = 'https://system.hellogrowth.online/#kanban';
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://hellogrowth.online';
+        const panelLink = `${appUrl}?lead=${leadId}`;
         const patient = whatsappConfig.patientData || {};
-        const productsLine = aiAnalysis?.recommended_products?.length > 0
-          ? `\n💊 *Produtos recomendados:* ${aiAnalysis.recommended_products.map((p: any) => p.name).join(', ')}`
-          : '';
-        const valueLine = updatedValue > 0
-          ? `\n💰 *Valor estimado:* R$ ${updatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-          : '';
-        const classification = aiAnalysis?.classification;
-        const classificationLine = classification
-          ? `🤖 *Análise de IA:* ${classification === 'opportunity' ? '🟢 Oportunidade' : classification === 'risk' ? '🔴 Risco' : '🟡 Monitoramento'}`
-          : `🤖 *Análise de IA:* 🟡 Processando...`;
 
-        const waMessage = [
+        // Classificação
+        const classification = aiAnalysis?.classification;
+        const classificationEmoji = classification === 'opportunity' ? '🟢' : classification === 'risk' ? '🔴' : '🟡';
+        const classificationLabel = classification === 'opportunity' ? 'Oportunidade' : classification === 'risk' ? 'Risco' : 'Monitoramento';
+        const confidencePct = aiAnalysis?.confidence ? ` (${Math.round(aiAnalysis.confidence * 100)}%)` : '';
+
+        // Perguntas e respostas (excluindo campos internos)
+        const qaLines: string[] = [];
+        if (form?.questions && answers) {
+          for (const q of form.questions) {
+            const ans = answers[q.id];
+            if (!ans) continue;
+            const value = Array.isArray(ans.value) ? ans.value.join(', ') : (ans.value || '');
+            if (!value) continue;
+            qaLines.push(`• *${q.text || q.label || q.id}:* ${value}`);
+          }
+        }
+
+        // Produtos recomendados com valor
+        const productLines: string[] = [];
+        if (aiAnalysis?.recommended_products?.length > 0) {
+          for (const p of aiAnalysis.recommended_products) {
+            const val = p.value ? ` — R$ ${Number(p.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
+            const reason = p.reason ? `\n   _${p.reason}_` : '';
+            productLines.push(`• *${p.name}*${val}${reason}`);
+          }
+        }
+
+        const waMessageParts = [
           `🔔 *Novo Lead Analisado — ${whatsappConfig.formName}*`,
           ``,
           `👤 *Nome:* ${patient.name || 'Não informado'}`,
           patient.phone ? `📞 *Telefone:* ${patient.phone}` : null,
           patient.email ? `📧 *E-mail:* ${patient.email}` : null,
           ``,
-          classificationLine,
-          productsLine || null,
-          valueLine || null,
+          `🤖 *Análise de IA:* ${classificationEmoji} ${classificationLabel}${confidencePct}`,
+          updatedValue > 0 ? `💰 *Valor da Oportunidade:* R$ ${updatedValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : null,
           ``,
-          `📋 *Formulário:* ${whatsappConfig.formName}`,
-          `🔗 *Ver no painel:* ${panelLink}`,
+          qaLines.length > 0 ? `📝 *Respostas do Formulário:*` : null,
+          ...qaLines,
+          productLines.length > 0 ? `\n🎯 *Produtos a Oferecer:*` : null,
+          ...productLines,
+          ``,
+          `🔗 *Ver análise completa:* ${panelLink}`,
           ``,
           `_HelloGrowth — Análise automática de IA_`,
-        ].filter(Boolean).join('\n');
+        ].filter(line => line !== null);
+
+        const waMessage = waMessageParts.join('\n');
 
         for (const phone of waNumbers) {
           await sendWhatsApp(phone, waMessage);

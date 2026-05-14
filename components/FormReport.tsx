@@ -22,9 +22,10 @@ interface FormReportProps {
   userId?: string;
   onLeadUpdate?: (leadId: string, updatedData: any) => void;
   onLeadDelete?: (leadId: string) => void;
+  initialLeadId?: string;
 }
 
-const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, supabase, userId, onLeadUpdate, onLeadDelete }) => {
+const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, supabase, userId, onLeadUpdate, onLeadDelete, initialLeadId }) => {
   const tenantId = useTenantId()
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -37,6 +38,7 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
   const [wasManuallyEdited, setWasManuallyEdited] = useState(false);
   const [isSavingProducts, setIsSavingProducts] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [initialLeadOpened, setInitialLeadOpened] = useState(false);
   
   // Estados para o layout de duas colunas
   const [detailSection, setDetailSection] = useState<'products' | 'ai' | 'answers' | 'notes' | null>('products');
@@ -229,6 +231,17 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
       setResendCustomPhone('');
     }
   }, [selectedLead?.id]);
+
+  // Abrir lead inicial via URL param (?lead=ID)
+  useEffect(() => {
+    if (!initialLeadOpened && initialLeadId && leads.length > 0) {
+      const target = leads.find(l => l.id === initialLeadId);
+      if (target) {
+        setSelectedLead(target);
+        setInitialLeadOpened(true);
+      }
+    }
+  }, [initialLeadId, leads, initialLeadOpened]);
 
   // Scroll automático do chat
   useEffect(() => {

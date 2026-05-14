@@ -61,9 +61,10 @@ interface MainAppProps {
   onSwitchCompany?: (companyId: string) => void;
   onImpersonate?: (clientData: any) => void;
   daysLeft?: number;
+  initialLeadId?: string;
 }
 
-const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, onImpersonate, daysLeft }) => {
+const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, onImpersonate, daysLeft, initialLeadId }) => {
   // If Super Admin, show Admin Panel immediately
   if (currentUser.role === 'super_admin') {
       return <AdminUserManagement onLogout={onLogout} onImpersonate={onImpersonate} />;
@@ -720,6 +721,22 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     };
     fetchUserCompanies();
   }, [currentUser.id]);
+
+  // Navegar automaticamente para o lead quando initialLeadId está presente (link do WhatsApp)
+  useEffect(() => {
+    if (!initialLeadId || loading || leads.length === 0 || forms.length === 0) return;
+    const targetLead = leads.find(l => l.id === initialLeadId);
+    if (!targetLead) return;
+    // Encontrar o formulário desse lead
+    const targetForm = forms.find(f =>
+      (targetLead.formId && f.id === targetLead.formId) ||
+      f.name === targetLead.formSource
+    );
+    if (targetForm) {
+      setReportFormId(targetForm.id);
+      setCurrentView('form-report');
+    }
+  }, [initialLeadId, loading, leads, forms]);
 
   const handleSwitchCompany = async (companyId: string): Promise<void> => {
     // Salva a empresa selecionada no localStorage e recarrega a página inteira
@@ -1906,6 +1923,7 @@ Responda APENAS com JSON válido (sem markdown):
                 onBack={() => setCurrentView('forms')}
                 supabase={supabase || undefined}
                 userId={currentUser.id}
+                initialLeadId={initialLeadId || undefined}
                 onLeadUpdate={(leadId, updatedData) => {
                   setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updatedData } : l));
                 }}
