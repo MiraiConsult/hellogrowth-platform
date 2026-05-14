@@ -307,7 +307,7 @@ async function processSimplifiedFlow(params: {
         nextStep = "presale";
         // Usar form_id da dispatch_campaign (não do flow_config)
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://hellogrowth.online";
-        const formLink = campaignFormId ? `${baseUrl}/form/${campaignFormId}` : null;
+        const formLink = campaignFormId ? `${baseUrl}/f/${campaignFormId}` : null;
         replyMessage = formLink
           ? `Ótimo, ${firstName}! Consulta confirmada! 😊 Para nos preparar melhor para o seu atendimento, pedimos que preencha este formulário rápido antes da consulta: ${formLink}`
           : `Ótimo, ${firstName}! Consulta confirmada! 😊 Aguardamos você!`;

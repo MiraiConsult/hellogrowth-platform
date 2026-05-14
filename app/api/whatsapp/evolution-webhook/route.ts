@@ -526,7 +526,7 @@ async function processSimplifiedFlowEvolution(params: {
       if (config.step2_anamnese) {
         nextStep = "presale";
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://hellogrowth.online";
-        const formLink = campaignFormId ? `${baseUrl}/form/${campaignFormId}` : null;
+        const formLink = campaignFormId ? `${baseUrl}/f/${campaignFormId}` : null;
         replyMessage = formLink
           ? `Ótimo, ${firstName}! Consulta confirmada! 😊 Para nos preparar melhor para o seu atendimento, pedimos que preencha este formulário rápido antes da consulta: ${formLink}`
           : `Ótimo, ${firstName}! Consulta confirmada! 😊 Para nos preparar melhor, aguardamos o preenchimento do formulário de pré-venda.`;
