@@ -206,7 +206,6 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
 
   // ── VIEW MODE ─────────────────────────────────────────────────────────────────
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
-  const [fupFilter, setFupFilter] = useState<'all' | 'overdue' | 'today' | 'week' | 'month'>('all');
   const [listSortCol, setListSortCol] = useState<'client' | 'stage' | 'cs' | 'health' | 'fup' | 'next_contact' | null>(null);
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc');
   // Unassigned clients (sem card no kanban)
