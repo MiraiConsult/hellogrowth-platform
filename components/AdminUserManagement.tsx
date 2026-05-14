@@ -350,7 +350,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
   const [showIncompleteReport, setShowIncompleteReport] = useState(false);
 
   // ── Form states ──
-  const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '', city: '', state: '', niche: '', chairs: '' as string | number, dentists: '' as string | number, has_secretary: false });
+  const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '', city: '', state: '', niche: '', chairs: '' as string | number, dentists: '' as string | number, has_secretary: false, nicheData: {} as Record<string, any> });
+  const [clientContacts, setClientContacts] = useState<{ name: string; email: string; phone: string; role: string }[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
   const [niches, setNiches] = useState<{ id: string; name: string; slug: string; has_clinic_fields: boolean }[]>([]);
 
   // ── Kanban selection for new client ──
@@ -897,6 +899,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
       chairs: client.nicheData?.chairs ?? '',
       dentists: client.nicheData?.dentists ?? '',
       has_secretary: Boolean(client.nicheData?.has_secretary),
+      nicheData: client.nicheData || {},
     });
     setEditModal('client');
     // Buscar contatos extras
@@ -1728,7 +1731,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
                     </thead>
                     <tbody className={`divide-y ${t.divider}`}>
                       {incompleteClients.map(({ client, pct, missing }) => (
-                        <tr key={client.id} className={`${t.surfaceHover} transition-colors`}>
+                        <tr key={client.id} className={`${t.surfaceHover} transition-colors cursor-pointer`} onClick={() => { setShowIncompleteReport(false); openEditClient(client); }} title="Clique para editar o cadastro">
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2">
                               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border ${t.avatar}`}>

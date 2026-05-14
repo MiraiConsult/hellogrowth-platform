@@ -78,6 +78,19 @@ async function getOverview() {
     .from('companies')
     .select('id, name, plan, subscription_status, created_at, city, state, niche, niche_data');
 
+  // Buscar users para fallback de company_name (alguns tenants antigos podem ter companies.name vazio)
+  const { data: usersForNames } = await supabase
+    .from('users')
+    .select('tenant_id, company_name, name')
+    .neq('email', 'admin@hellogrowth.com');
+  // Mapa user.tenant_id -> company_name (para fallback)
+  const userCompanyNameMap: Record<string, string> = {};
+  for (const u of usersForNames || []) {
+    if (u.tenant_id && !userCompanyNameMap[u.tenant_id]) {
+      userCompanyNameMap[u.tenant_id] = u.company_name || u.name || '';
+    }
+  }
+
   // Buscar business_profile para obter nicho/setor de cada tenant
   const { data: businessProfiles } = await supabase
     .from('business_profile')
@@ -94,7 +107,7 @@ async function getOverview() {
   const companyNicheDataMap: Record<string, any> = {};
   for (const c of companies || []) {
     if (c.id) {
-      companyNameMap[c.id] = c.name || c.id.substring(0, 8);
+      companyNameMap[c.id] = c.name || userCompanyNameMap[c.id] || c.id.substring(0, 8);
       companyPlanMap[c.id] = c.plan || '';
       companyStatusMap[c.id] = c.subscription_status || '';
       companyCreatedMap[c.id] = c.created_at || '';
@@ -276,7 +289,7 @@ async function getOverview() {
 
     return {
       tenantId: t.tenantId,
-      companyName: companyNameMap[t.tenantId] || t.tenantId.substring(0, 8),
+      companyName: companyNameMap[t.tenantId] || userCompanyNameMap[t.tenantId] || t.tenantId.substring(0, 8),
       plan: companyPlanMap[t.tenantId] || '',
       subscriptionStatus: companyStatusMap[t.tenantId] || '',
       daysAsClient,
