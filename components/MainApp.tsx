@@ -1251,6 +1251,14 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
     // 2. OTIMIZAÇÃO: Salvar IMEDIATAMENTE sem aguardar análise de IA
     const status = 'Novo';
     
+    // Extrair campos extras de identificação (além de name, email, phone)
+    const extraPatientFields: Record<string, string> = {};
+    Object.entries(data.patient || {}).forEach(([key, val]) => {
+      if (!['name', 'email', 'phone'].includes(key) && val) {
+        extraPatientFields[key] = val as string;
+      }
+    });
+
     const { data: insertedLead, error: insertError } = await supabase.from('leads').insert([{
         form_id: publicForm.id,
         user_id: formUserId,
@@ -1261,7 +1269,9 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
         status: status,
         value: opportunityValue,
         form_source: publicForm.name,
-        answers: enrichedAnswers
+        answers: Object.keys(extraPatientFields).length > 0
+          ? { ...enrichedAnswers, _extra_fields: extraPatientFields }
+          : enrichedAnswers
     }]).select().single();
     
     if (insertError) {

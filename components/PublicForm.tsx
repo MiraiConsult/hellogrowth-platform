@@ -52,7 +52,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   const [gameData, setGameData] = useState<any>(null);
   const [loadingGame, setLoadingGame] = useState(false);
 
-  const [patientData, setPatientData] = useState({ name: '', email: '', phone: '' });
+  const [patientData, setPatientData] = useState<Record<string, string>>({ name: '', email: '', phone: '' });
   const [showIntro, setShowIntro] = useState(true);
   // Assinatura eletrônica
   const [showSignatureStep, setShowSignatureStep] = useState(false);
@@ -61,7 +61,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
 
   // Persistência de progresso via localStorage
   const STORAGE_KEY = `hg_form_progress_${form.id}`;
-  const [savedProgress, setSavedProgress] = useState<{ step: number; answers: Record<string, any>; patientData: { name: string; email: string; phone: string } } | null>(null);
+  const [savedProgress, setSavedProgress] = useState<{ step: number; answers: Record<string, any>; patientData: Record<string, string> } | null>(null);
   const [showResumePrompt, setShowResumePrompt] = useState(false);
 
   // Carregar progresso salvo ao montar o componente
@@ -95,7 +95,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
 
   const handleResume = () => {
     if (!savedProgress) return;
-    setPatientData(savedProgress.patientData || { name: '', email: '', phone: '' });
+    setPatientData(savedProgress.patientData || {});
     setAnswers(savedProgress.answers || {});
     setCurrentStep(savedProgress.step || 0);
     setShowIntro(false);
@@ -151,7 +151,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
   const handleStart = () => {
     const allRequiredFilled = enabledFields
       .filter(f => f.required)
-      .every(f => patientData[f.field].trim() !== '');
+      .every(f => (patientData[f.field as string] || '').trim() !== '');
     
     if (allRequiredFilled) {
       setShowIntro(false);
@@ -547,15 +547,21 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
               
               <div className="space-y-4 mb-8">
                 {enabledFields.map((field) => {
-                  const inputType = field.field === 'email' ? 'email' : field.field === 'phone' ? 'tel' : 'text';
-                  
+                  const fieldKey = field.field as string;
+
+                  // Determinar o tipo de input
+                  const getInputType = () => {
+                    if (field.inputType) return field.inputType;
+                    if (fieldKey === 'email') return 'email';
+                    if (fieldKey === 'phone') return 'tel';
+                    if (fieldKey === 'birthdate') return 'date';
+                    return 'text';
+                  };
+
                   // Máscara de telefone: (XX)XXXXX-XXXX
                   const handlePhoneChange = (value: string) => {
-                    // Remove tudo que não é número
                     const digits = value.replace(/\D/g, '');
-                    // Limitar a 11 dígitos
                     const limited = digits.substring(0, 11);
-                    // Aplicar máscara
                     let formatted = limited;
                     if (limited.length > 2) {
                       formatted = `(${limited.substring(0, 2)})${limited.substring(2)}`;
@@ -565,21 +571,45 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
                     if (limited.length > 7) {
                       formatted = `(${limited.substring(0, 2)})${limited.substring(2, 7)}-${limited.substring(7)}`;
                     }
-                    setPatientData({...patientData, [field.field]: formatted});
+                    setPatientData({...patientData, [fieldKey]: formatted});
                   };
 
+                  // Máscara de CPF: 000.000.000-00
+                  const handleCpfChange = (value: string) => {
+                    const digits = value.replace(/\D/g, '');
+                    const limited = digits.substring(0, 11);
+                    let formatted = limited;
+                    if (limited.length > 9) {
+                      formatted = `${limited.substring(0, 3)}.${limited.substring(3, 6)}.${limited.substring(6, 9)}-${limited.substring(9)}`;
+                    } else if (limited.length > 6) {
+                      formatted = `${limited.substring(0, 3)}.${limited.substring(3, 6)}.${limited.substring(6)}`;
+                    } else if (limited.length > 3) {
+                      formatted = `${limited.substring(0, 3)}.${limited.substring(3)}`;
+                    }
+                    setPatientData({...patientData, [fieldKey]: formatted});
+                  };
+
+                  const handleChange = (value: string) => {
+                    if (fieldKey === 'phone') { handlePhoneChange(value); return; }
+                    if (fieldKey === 'cpf') { handleCpfChange(value); return; }
+                    setPatientData({...patientData, [fieldKey]: value});
+                  };
+
+                  const currentValue = patientData[fieldKey] || '';
+                  const placeholder = fieldKey === 'phone' ? '(51)99999-9999' : field.placeholder;
+
                   return (
-                    <div key={field.field}>
+                    <div key={`${fieldKey}-${field.label}`}>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {field.label}{field.required && <span className="text-red-500 ml-1">*</span>}
                       </label>
-                      <input 
-                        type={inputType}
-                        value={patientData[field.field]}
-                        onChange={(e) => field.field === 'phone' ? handlePhoneChange(e.target.value) : setPatientData({...patientData, [field.field]: e.target.value})}
+                      <input
+                        type={getInputType()}
+                        value={currentValue}
+                        onChange={(e) => handleChange(e.target.value)}
                         className="w-full rounded-lg border-gray-300 shadow-sm focus:ring-primary-500 focus:border-primary-500 p-3 border bg-white text-gray-900 placeholder-gray-500"
                         style={{ backgroundColor: '#ffffff', color: '#111827' }}
-                        placeholder={field.field === 'phone' ? '(51)99999-9999' : field.placeholder}
+                        placeholder={placeholder}
                         required={field.required}
                       />
                     </div>
@@ -589,7 +619,7 @@ const PublicForm: React.FC<PublicFormProps> = ({ form, onClose, onSubmit, isPrev
 
               <button 
                 onClick={handleStart}
-                disabled={!enabledFields.filter(f => f.required).every(f => patientData[f.field].trim() !== '')}
+                disabled={!enabledFields.filter(f => f.required).every(f => (patientData[f.field as string] || '').trim() !== '')}
                 className="w-full py-4 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
               >
                 Iniciar Preenchimento <ArrowRight size={20} />

@@ -83,12 +83,15 @@ export interface NPSResponse {
   notes?: string;
 }
 
+export type InitialFieldType = 'name' | 'email' | 'phone' | 'cpf' | 'birthdate' | 'city' | 'state' | 'neighborhood' | 'address' | 'custom';
+
 export interface InitialField {
-  field: 'name' | 'email' | 'phone';
+  field: InitialFieldType | string;
   label: string;
   placeholder: string;
   required: boolean;
   enabled: boolean;
+  inputType?: 'text' | 'email' | 'tel' | 'date' | 'number';
 }
 
 export interface CampaignQuestion {

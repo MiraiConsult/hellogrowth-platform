@@ -891,6 +891,10 @@ Seja ESPECIFICO e baseie TUDO nos dados reais.
                 {selectedLead.email && (
                   <span className="flex items-center gap-1 text-sm text-gray-500"><Mail size={14} /> {selectedLead.email}</span>
                 )}
+                {/* Campos extras de identificação */}
+                {selectedLead.answers?._extra_fields && Object.entries(selectedLead.answers._extra_fields as Record<string, string>).map(([key, value]) => (
+                  value ? <span key={key} className="flex items-center gap-1 text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{value}</span> : null
+                ))}
                 <span className="flex items-center gap-1 text-sm text-gray-500">
                   <Calendar size={14} /> {new Date(selectedLead.date || Date.now()).toLocaleDateString('pt-BR')}
                 </span>
