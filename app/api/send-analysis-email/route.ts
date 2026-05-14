@@ -59,21 +59,6 @@ function buildAnalysisEmail(data: {
         </div>`).join('')
     : '<p style="color: #6b7280; font-size: 13px;">Nenhum produto identificado.</p>';
 
-  // Insights do cliente
-  const insightsHtml = aiAnalysis.client_insights && aiAnalysis.client_insights.length > 0
-    ? aiAnalysis.client_insights.map(i => `
-        <li style="color: #374151; font-size: 13px; margin-bottom: 6px; padding-left: 4px;">${i}</li>`).join('')
-    : '';
-
-  // Próximos passos
-  const nextStepsHtml = aiAnalysis.next_steps && aiAnalysis.next_steps.length > 0
-    ? aiAnalysis.next_steps.map((s, idx) => `
-        <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px;">
-          <span style="background: #10b981; color: white; border-radius: 50%; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;">${idx + 1}</span>
-          <p style="margin: 0; color: #374151; font-size: 13px; padding-top: 2px;">${s}</p>
-        </div>`).join('')
-    : '';
-
   // Badge de classificação
   const classMap: Record<string, { label: string; color: string; bg: string }> = {
     opportunity: { label: '🔥 Oportunidade', color: '#065f46', bg: '#d1fae5' },
@@ -81,7 +66,6 @@ function buildAnalysisEmail(data: {
     monitoring: { label: '👁️ Monitoramento', color: '#1e40af', bg: '#dbeafe' },
   };
   const cls = classMap[aiAnalysis.classification || 'monitoring'] || classMap.monitoring;
-  const confidencePct = aiAnalysis.confidence ? Math.round(aiAnalysis.confidence * 100) : 0;
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -102,7 +86,6 @@ function buildAnalysisEmail(data: {
         ${leadEmail ? `<div style="background: #f3f4f6; border-radius: 8px; padding: 8px 14px; font-size: 13px; color: #374151;">📧 ${leadEmail}</div>` : ''}
         ${leadPhone ? `<div style="background: #f3f4f6; border-radius: 8px; padding: 8px 14px; font-size: 13px; color: #374151;">📞 ${leadPhone}</div>` : ''}
         <div style="background: ${cls.bg}; border-radius: 8px; padding: 8px 14px; font-size: 13px; color: ${cls.color}; font-weight: 600;">${cls.label}</div>
-        ${confidencePct > 0 ? `<div style="background: #f3f4f6; border-radius: 8px; padding: 8px 14px; font-size: 13px; color: #374151;">Confiança: <strong>${confidencePct}%</strong></div>` : ''}
       </div>
     </div>
 
@@ -114,45 +97,15 @@ function buildAnalysisEmail(data: {
       </table>
     </div>
 
-    <!-- Análise da IA -->
-    ${aiAnalysis.reasoning ? `
-    <div style="padding: 24px 32px 0;">
-      <h2 style="margin: 0 0 12px; font-size: 15px; font-weight: 700; color: #111827; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">🧠 Análise da IA</h2>
-      <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.6; background: #f8fafc; padding: 14px; border-radius: 8px; border-left: 3px solid #10b981;">${aiAnalysis.reasoning}</p>
-    </div>` : ''}
-
-    <!-- Insights do Cliente -->
-    ${insightsHtml ? `
-    <div style="padding: 24px 32px 0;">
-      <h2 style="margin: 0 0 12px; font-size: 15px; font-weight: 700; color: #111827; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">💡 Insights do Cliente</h2>
-      <ul style="margin: 0; padding-left: 20px;">${insightsHtml}</ul>
-    </div>` : ''}
-
     <!-- Produtos Sugeridos -->
     <div style="padding: 24px 32px 0;">
       <h2 style="margin: 0 0 12px; font-size: 15px; font-weight: 700; color: #111827; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">🎯 Produtos/Serviços Sugeridos</h2>
       ${productsHtml}
     </div>
 
-    <!-- Script de Vendas -->
-    ${aiAnalysis.sales_script ? `
-    <div style="padding: 24px 32px 0;">
-      <h2 style="margin: 0 0 12px; font-size: 15px; font-weight: 700; color: #111827; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">🗣️ Script de Vendas</h2>
-      <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 16px;">
-        <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.7; white-space: pre-wrap;">${aiAnalysis.sales_script}</p>
-      </div>
-    </div>` : ''}
-
-    <!-- Próximos Passos -->
-    ${nextStepsHtml ? `
-    <div style="padding: 24px 32px 0;">
-      <h2 style="margin: 0 0 12px; font-size: 15px; font-weight: 700; color: #111827; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">✅ Próximos Passos</h2>
-      ${nextStepsHtml}
-    </div>` : ''}
-
     <!-- Botão Ver no Painel -->
     ${panelLink ? `
-    <div style="padding: 20px 32px 0; text-align: center;">
+    <div style="padding: 24px 32px 0; text-align: center;">
       <a href="${panelLink}" style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; font-size: 14px; font-weight: 700; text-decoration: none; padding: 13px 28px; border-radius: 8px; letter-spacing: 0.3px;">🔗 Ver Análise Completa no Painel</a>
     </div>` : ''}
 
