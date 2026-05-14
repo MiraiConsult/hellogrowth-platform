@@ -1353,31 +1353,8 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
       }
     }
     
-    // Disparar e-mail de análise direto (sem depender da IA) se o formulário tiver esse recurso ativado
-    if (insertedLead && formTenantId && publicForm.email_analysis_enabled) {
-      const rawRecipients = publicForm.email_analysis_recipients || '';
-      const emailRecipients = typeof rawRecipients === 'string'
-        ? rawRecipients.split(',').map((e: string) => e.trim()).filter(Boolean)
-        : Array.isArray(rawRecipients) ? rawRecipients : [];
-      if (emailRecipients.length > 0) {
-        const questionsForEmail = publicForm.questions.map((q: any) => ({ id: q.id, text: q.text || q.id }));
-        fetch('/api/send-analysis-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            recipients: emailRecipients,
-            leadName: data.patient?.name || 'Lead',
-            leadEmail: data.patient?.email || '',
-            leadPhone: data.patient?.phone || '',
-            formName: publicForm.name,
-            companyName: publicCompanyName || '',
-            answers: enrichedAnswers,
-            questions: questionsForEmail,
-            aiAnalysis: {},
-          }),
-        }).catch(err => console.error('[email-analysis] Erro ao disparar e-mail:', err));
-      }
-    }
+    // NOTA: O e-mail de análise agora é disparado DENTRO da API analyze-lead,
+    // após a IA concluir a análise, para garantir que os dados estejam completos.
 
     // Salvar assinatura eletrônica se o formulário tiver esse recurso ativado
     if (insertedLead && data.signatureData && (publicForm as any).signature_enabled) {
@@ -1418,11 +1395,24 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
 
     // Disparar análise de IA no SERVIDOR (server-side) — independente do browser do lead
     // O lead pode fechar a aba imediatamente após enviar o formulário
+    // O WhatsApp e o e-mail são disparados DENTRO da API analyze-lead, após a IA concluir
     if (insertedLead) {
       const whatsappAnalysisConfig = {
         enabled: !!(publicForm as any).whatsapp_analysis_enabled,
         recipients: (publicForm as any).whatsapp_analysis_recipients || '',
         formName: publicForm.name,
+        patientData: data.patient || {},
+      };
+      // Config de e-mail: enviada para a API analyze-lead disparar após a IA concluir
+      const rawEmailRecipients = publicForm.email_analysis_recipients || '';
+      const emailRecipients = typeof rawEmailRecipients === 'string'
+        ? rawEmailRecipients.split(',').map((e: string) => e.trim()).filter(Boolean)
+        : Array.isArray(rawEmailRecipients) ? rawEmailRecipients : [];
+      const emailAnalysisConfig = {
+        enabled: !!(publicForm as any).email_analysis_enabled && emailRecipients.length > 0,
+        recipients: emailRecipients,
+        formName: publicForm.name,
+        companyName: publicCompanyName || '',
         patientData: data.patient || {},
       };
       fetch('/api/analyze-lead', {
@@ -1434,6 +1424,7 @@ const MainApp: React.FC<MainAppProps> = ({ currentUser, onLogout, onUpdatePlan, 
           form: publicForm,
           answers: enrichedAnswers,
           whatsappConfig: whatsappAnalysisConfig,
+          emailAnalysisConfig,
         }),
       }).catch(err => console.error('[ai-analysis] Erro ao chamar API de análise:', err));
     }

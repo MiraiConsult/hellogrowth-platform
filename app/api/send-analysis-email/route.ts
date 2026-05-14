@@ -24,8 +24,9 @@ function buildAnalysisEmail(data: {
     classification?: string;
     confidence?: number;
   };
+  panelLink?: string;
 }): string {
-  const { leadName, leadEmail, leadPhone, formName, companyName, answers, questions, aiAnalysis } = data;
+  const { leadName, leadEmail, leadPhone, formName, companyName, answers, questions, aiAnalysis, panelLink } = data;
 
   // Montar lista de perguntas e respostas
   const qaRows = questions
@@ -143,6 +144,12 @@ function buildAnalysisEmail(data: {
       ${nextStepsHtml}
     </div>` : ''}
 
+    <!-- Botão Ver no Painel -->
+    ${panelLink ? `
+    <div style="padding: 20px 32px 0; text-align: center;">
+      <a href="${panelLink}" style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; font-size: 14px; font-weight: 700; text-decoration: none; padding: 13px 28px; border-radius: 8px; letter-spacing: 0.3px;">🔗 Ver Análise Completa no Painel</a>
+    </div>` : ''}
+
     <!-- Footer -->
     <div style="padding: 24px 32px 32px; margin-top: 24px; border-top: 1px solid #f3f4f6; text-align: center;">
       <p style="margin: 0; color: #9ca3af; font-size: 12px;">
@@ -173,6 +180,7 @@ export async function POST(request: NextRequest) {
       answers,          // Record<string, { value: any }>
       questions,        // Array<{ id: string; text: string }>
       aiAnalysis,       // objeto da análise de IA
+      panelLink,        // link direto para a análise no painel
     } = body;
 
     if (!recipients || recipients.length === 0) {
@@ -188,6 +196,7 @@ export async function POST(request: NextRequest) {
       answers: answers || {},
       questions: questions || [],
       aiAnalysis: aiAnalysis || {},
+      panelLink: panelLink || undefined,
     });
 
     const subject = `🔔 Novo Lead: ${leadName || 'Lead'} — ${formName || 'Formulário'}`;

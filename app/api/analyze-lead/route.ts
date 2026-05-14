@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://miraisaleshg-evolution-api.cixapq.easypanel.host';
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY!;
@@ -33,7 +33,7 @@ async function sendWhatsApp(phone: string, message: string) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { leadId, tenantId, form, answers, whatsappConfig } = body;
+    const { leadId, tenantId, form, answers, whatsappConfig, emailAnalysisConfig } = body;
 
     if (!leadId || !tenantId || !form || !answers) {
       return NextResponse.json({ ok: false, error: 'Parâmetros obrigatórios faltando.' }, { status: 400 });
@@ -284,6 +284,34 @@ Responda APENAS com JSON válido (sem markdown):
         for (const phone of waNumbers) {
           await sendWhatsApp(phone, waMessage);
         }
+      }
+    }
+
+    // Disparar e-mail de análise após a IA concluir (com dados completos)
+    if (emailAnalysisConfig?.enabled && emailAnalysisConfig.recipients?.length > 0) {
+      try {
+        const patient = emailAnalysisConfig.patientData || {};
+        const questionsForEmail = (form?.questions || []).map((q: any) => ({ id: q.id, text: q.text || q.id }));
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://hellogrowth.online';
+        const panelLink = `${appUrl}?lead=${leadId}`;
+        await fetch(`${appUrl}/api/send-analysis-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipients: emailAnalysisConfig.recipients,
+            leadName: patient.name || 'Lead',
+            leadEmail: patient.email || '',
+            leadPhone: patient.phone || '',
+            formName: emailAnalysisConfig.formName || form?.name || '',
+            companyName: emailAnalysisConfig.companyName || '',
+            answers,
+            questions: questionsForEmail,
+            aiAnalysis,
+            panelLink,
+          }),
+        });
+      } catch (emailErr) {
+        console.error('[analyze-lead] Erro ao disparar e-mail de análise:', emailErr);
       }
     }
 
