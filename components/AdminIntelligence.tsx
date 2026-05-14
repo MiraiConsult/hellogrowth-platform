@@ -1843,7 +1843,7 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
         )}
         {/* ── INTELIGÊNCIA DE MERCADO ── */}
         {activeSection === 'mercado' && (
-          <AdminMarketIntelligence tenants={tenants} isDark={isDark} />
+          <AdminMarketIntelligence isDark={isDark} />
         )}
       </div>
     </div>

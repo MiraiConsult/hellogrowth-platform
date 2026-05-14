@@ -136,6 +136,66 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts
   const [showProductPicker, setShowProductPicker] = useState(false);
   const [productPickerSearch, setProductPickerSearch] = useState('');
 
+  // AI Analysis: single lead analysis
+  const [isAnalyzingSingleLead, setIsAnalyzingSingleLead] = useState(false);
+  const [singleAnalysisResult, setSingleAnalysisResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const handleAnalyzeSingleLead = async (lead: Lead) => {
+    if (!supabase || !tenantId || isAnalyzingSingleLead) return;
+    setIsAnalyzingSingleLead(true);
+    setSingleAnalysisResult(null);
+    try {
+      const leadForm = forms?.find(f => f.id === lead.formId || f.name === lead.formSource);
+      const answersText = Object.entries(lead.answers || {})
+        .filter(([k]) => !k.startsWith('_'))
+        .map(([qId, ans]: [string, any]) => {
+          const questionText = leadForm ? (leadForm.questions.find((q: any) => q.id === qId)?.text || qId) : qId;
+          const answerValue = typeof ans === 'object' && ans !== null ? (Array.isArray(ans.value) ? ans.value.join(', ') : ans.value || JSON.stringify(ans)) : ans;
+          return `Pergunta: ${questionText}\nResposta: ${answerValue}`;
+        }).join('\n\n');
+      if (!answersText.trim()) {
+        setSingleAnalysisResult({ ok: false, message: 'Lead sem respostas para analisar.' });
+        return;
+      }
+      const [productsRes, profileRes] = await Promise.all([
+        supabase.from('products_services').select('*').eq('tenant_id', tenantId),
+        supabase.from('business_profile').select('*').eq('tenant_id', tenantId).single(),
+      ]);
+      const products = productsRes.data || [];
+      const businessProfile = profileRes.data;
+      let businessContext = '';
+      if (businessProfile) {
+        businessContext = `\n\nCONTEXTO DO NEGÓCIO:\n- Tipo: ${businessProfile.business_type || 'N/A'}\n- Descrição: ${businessProfile.business_description || 'N/A'}\n- Público-alvo: ${businessProfile.target_audience || 'N/A'}`;
+      }
+      const productsContext = products.length > 0
+        ? products.map((p: any) => `- **${p.name}** (R$ ${p.value})\n  Critérios: ${p.ai_criteria || p.ai_description || 'Sem critérios'}`).join('\n\n')
+        : 'Nenhum produto cadastrado';
+      const prompt = `Você é um consultor de vendas especializado. Analise as respostas do cliente e forneça uma análise completa de oportunidade de venda.${businessContext}\nRESPOSTAS DO CLIENTE:\n${answersText}\nPRODUTOS/SERVIÇOS DISPONÍVEIS:\n${productsContext}\n\nResponda APENAS com JSON válido (sem markdown):\n{\n  "recommended_products": [{"id": "product_id", "name": "Nome", "value": 0, "reason": "Razão"}],\n  "suggested_product": "Nome do produto principal",\n  "suggested_value": 0,\n  "classification": "opportunity|risk|monitoring",\n  "confidence": 0.85,\n  "reasoning": "Explicação detalhada",\n  "client_insights": ["Insight 1", "Insight 2"],\n  "sales_script": "Script de abordagem",\n  "next_steps": ["Ação 1", "Ação 2"]\n}`;
+      const response = await callGeminiAPI(prompt);
+      const cleanResponse = response.replace(/```json\n?|\n?```/g, '').trim();
+      const aiAnalysis = JSON.parse(cleanResponse);
+      let updatedValue = lead.value;
+      if (aiAnalysis.recommended_products?.length > 0) {
+        updatedValue = aiAnalysis.recommended_products.reduce((sum: number, p: any) => sum + (p.value || 0), 0);
+      } else if (aiAnalysis.suggested_value > 0) {
+        updatedValue = aiAnalysis.suggested_value;
+      }
+      const updatedAnswers = { ...lead.answers, _ai_analysis: aiAnalysis, _analyzing: false };
+      await supabase.from('leads').update({ value: updatedValue, answers: updatedAnswers }).eq('id', lead.id);
+      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, value: updatedValue, answers: updatedAnswers } : l));
+      if (selectedLead?.id === lead.id) {
+        setSelectedLead(prev => prev ? { ...prev, value: updatedValue, answers: updatedAnswers } : prev);
+        setDetailSection('ai');
+      }
+      setSingleAnalysisResult({ ok: true, message: 'Análise concluída com sucesso!' });
+    } catch (err: any) {
+      console.error('Erro ao analisar lead:', err);
+      setSingleAnalysisResult({ ok: false, message: 'Erro ao analisar. Tente novamente.' });
+    } finally {
+      setIsAnalyzingSingleLead(false);
+    }
+  };
+
   // AI Analysis: uses global state from MainApp via props
 
   // Scroll to bottom of notes when selected lead changes or notes update
@@ -1485,8 +1545,8 @@ Agora escreva a mensagem para ${firstName}:`;
                   </button>
                 )}
 
-                {/* Análise da IA - Botão seletor */}
-                {selectedLead.answers?._ai_analysis && (
+                {/* Análise da IA - Botão seletor / Analisar */}
+                {selectedLead.answers?._ai_analysis ? (
                   <button
                     onClick={() => setDetailSection(prev => prev === 'ai' ? null : 'ai')}
                     className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
@@ -1501,6 +1561,28 @@ Agora escreva a mensagem para ${firstName}:`;
                     </div>
                     <ArrowRight size={16} className="text-gray-400" />
                   </button>
+                ) : (
+                  <div className="space-y-1.5">
+                    <button
+                      onClick={() => handleAnalyzeSingleLead(selectedLead)}
+                      disabled={isAnalyzingSingleLead}
+                      className="w-full flex items-center justify-center gap-2 p-3 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-sm transition-colors disabled:opacity-60"
+                    >
+                      {isAnalyzingSingleLead
+                        ? <><Loader2 size={15} className="animate-spin" /> Analisando...</>
+                        : <><Zap size={15} /> Analisar com IA</>}
+                    </button>
+                    {singleAnalysisResult && (
+                      <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${
+                        singleAnalysisResult.ok
+                          ? 'bg-green-50 text-green-700 border border-green-200'
+                          : 'bg-red-50 text-red-700 border border-red-200'
+                      }`}>
+                        {singleAnalysisResult.ok ? <Check size={12} /> : <AlertCircle size={12} />}
+                        {singleAnalysisResult.message}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Anotações de Negociação - Botão seletor */}
@@ -1651,8 +1733,31 @@ Agora escreva a mensagem para ${firstName}:`;
                       )}
                     </div>
 
+                    {/* Reanalisar com IA */}
+                    <div className="mt-4 border-t border-gray-200 pt-4">
+                      <button
+                        onClick={() => handleAnalyzeSingleLead(selectedLead)}
+                        disabled={isAnalyzingSingleLead}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-sm transition-colors disabled:opacity-60"
+                      >
+                        {isAnalyzingSingleLead
+                          ? <><Loader2 size={14} className="animate-spin" /> Reanalisando...</>
+                          : <><RefreshCw size={14} /> Reanalisar com IA</>}
+                      </button>
+                      {singleAnalysisResult && (
+                        <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 mt-2 ${
+                          singleAnalysisResult.ok
+                            ? 'bg-green-50 text-green-700 border border-green-200'
+                            : 'bg-red-50 text-red-700 border border-red-200'
+                        }`}>
+                          {singleAnalysisResult.ok ? <Check size={12} /> : <AlertCircle size={12} />}
+                          {singleAnalysisResult.message}
+                        </div>
+                      )}
+                    </div>
+
                     {/* Bloco de reenvio de e-mail */}
-                    <div className="mt-6 border-t border-gray-200 pt-4">
+                    <div className="mt-4 border-t border-gray-200 pt-4">
                       <div className="flex items-center gap-2 mb-3">
                         <Mail size={15} className="text-blue-500" />
                         <span className="text-sm font-semibold text-gray-700">Reenviar análise por e-mail</span>
