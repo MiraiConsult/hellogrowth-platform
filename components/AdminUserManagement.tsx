@@ -642,7 +642,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
         showToast('success', `Cliente criado! Login: ${clientForm.email} / 12345`);
       }
       setEditModal(null);
-      setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '', city: '', state: '', niche: '', chairs: '', dentists: '', has_secretary: false });
+      setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '', city: '', state: '', niche: '', chairs: '', dentists: '', has_secretary: false, nicheData: {} });
       setNewClientTrialModel('none');
       setNewClientBoardId('');
       setNewClientStageId('');
@@ -1059,7 +1059,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
         <div className={`px-2 py-2 border-t ${isDark ? 'border-gray-800' : 'border-slate-100'} space-y-0.5`}>
           {activeTab === 'clients' && (
             <button
-              onClick={() => { setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '', city: '', state: '', niche: '', chairs: '', dentists: '', has_secretary: false }); setNewClientTrialModel('none'); setEditModal('new_client'); fetchKanbanBoardsAndStages(); }}
+              onClick={() => { setClientForm({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '', city: '', state: '', niche: '', chairs: '', dentists: '', has_secretary: false, nicheData: {} }); setNewClientTrialModel('none'); setEditModal('new_client'); fetchKanbanBoardsAndStages(); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors bg-emerald-600 hover:bg-emerald-500 text-white`}
             >
               <span className="shrink-0"><UserPlus size={18} /></span>

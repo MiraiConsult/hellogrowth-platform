@@ -78,16 +78,18 @@ async function getOverview() {
     .from('companies')
     .select('id, name, plan, subscription_status, created_at, city, state, niche, niche_data');
 
-  // Buscar users para fallback de company_name (alguns tenants antigos podem ter companies.name vazio)
+  // Buscar users para fallback de company_name e plan (alguns tenants antigos podem ter companies.name/plan vazio)
   const { data: usersForNames } = await supabase
     .from('users')
-    .select('tenant_id, company_name, name')
+    .select('tenant_id, company_name, name, plan')
     .neq('email', 'admin@hellogrowth.com');
-  // Mapa user.tenant_id -> company_name (para fallback)
+  // Mapa user.tenant_id -> company_name e plan (para fallback)
   const userCompanyNameMap: Record<string, string> = {};
+  const userPlanMap: Record<string, string> = {};
   for (const u of usersForNames || []) {
-    if (u.tenant_id && !userCompanyNameMap[u.tenant_id]) {
-      userCompanyNameMap[u.tenant_id] = u.company_name || u.name || '';
+    if (u.tenant_id) {
+      if (!userCompanyNameMap[u.tenant_id]) userCompanyNameMap[u.tenant_id] = u.company_name || u.name || '';
+      if (!userPlanMap[u.tenant_id] && u.plan) userPlanMap[u.tenant_id] = u.plan;
     }
   }
 
@@ -108,7 +110,7 @@ async function getOverview() {
   for (const c of companies || []) {
     if (c.id) {
       companyNameMap[c.id] = c.name || userCompanyNameMap[c.id] || c.id.substring(0, 8);
-      companyPlanMap[c.id] = c.plan || '';
+      companyPlanMap[c.id] = c.plan || userPlanMap[c.id] || '';
       companyStatusMap[c.id] = c.subscription_status || '';
       companyCreatedMap[c.id] = c.created_at || '';
       companyCityMap[c.id] = c.city || '';
@@ -290,7 +292,7 @@ async function getOverview() {
     return {
       tenantId: t.tenantId,
       companyName: companyNameMap[t.tenantId] || userCompanyNameMap[t.tenantId] || t.tenantId.substring(0, 8),
-      plan: companyPlanMap[t.tenantId] || '',
+      plan: companyPlanMap[t.tenantId] || userPlanMap[t.tenantId] || '',
       subscriptionStatus: companyStatusMap[t.tenantId] || '',
       daysAsClient,
       businessType: rawBusinessType,

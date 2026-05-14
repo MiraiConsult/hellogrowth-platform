@@ -116,6 +116,8 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
   const [isLoadingProductsAI, setIsLoadingProductsAI] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const [productTenantFilter, setProductTenantFilter] = useState('');
+  const [productSortField, setProductSortField] = useState<'name' | 'tenant' | 'value'>('value');
+  const [productSortDir, setProductSortDir] = useState<'asc' | 'desc'>('desc');
 
   // Clientes
   const [tenantAI, setTenantAI] = useState<Record<string, any>>({});
@@ -129,13 +131,35 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
   // Ordenação da tabela de ranking (visão geral)
   const [rankSortField, setRankSortField] = useState<'healthScore' | 'companyName' | 'nps' | 'responses' | 'leads' | 'pipeline' | 'trend' | 'plan'>('healthScore');
   const [rankSortDir, setRankSortDir] = useState<'asc' | 'desc'>('desc');
+  const [rankSearch, setRankSearch] = useState('');
+
+  // Busca e ordenação para Uso Real
+  const [usageSearch, setUsageSearch] = useState('');
+  const [usageSortField, setUsageSortField] = useState<'engagementScore' | 'companyName' | 'npsResponses' | 'leadsTotal' | 'daysSinceActivity'>('engagementScore');
+  const [usageSortDir, setUsageSortDir] = useState<'asc' | 'desc'>('desc');
+
+  // Busca e ordenação para Análise por Setor
+  const [sectorSearch, setSectorSearch] = useState('');
+  const [sectorSortField, setSectorSortField] = useState<'tenantCount' | 'sector' | 'avgNps' | 'totalLeads' | 'conversionRate' | 'totalPipeline'>('tenantCount');
+  const [sectorSortDir, setSectorSortDir] = useState<'asc' | 'desc'>('desc');
+
+  // Busca para Tendências
+  const [trendSearch, setTrendSearch] = useState('');
+
+  // Busca e ordenação para Custos IA
+  const [aiEndpointSearch, setAiEndpointSearch] = useState('');
+  const [aiEndpointSortField, setAiEndpointSortField] = useState('calls');
+  const [aiEndpointSortDir, setAiEndpointSortDir] = useState<'asc' | 'desc'>('desc');
+  const [aiClientSearch, setAiClientSearch] = useState('');
+  const [aiClientSortField, setAiClientSortField] = useState('calls');
+  const [aiClientSortDir, setAiClientSortDir] = useState<'asc' | 'desc'>('desc');
 
   const handleRankSort = (field: typeof rankSortField) => {
     if (rankSortField === field) setRankSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setRankSortField(field); setRankSortDir('desc'); }
   };
 
-  const rankSortedTenants = [...tenants].sort((a, b) => {
+  const rankSortedTenants = [...tenants].filter(t => !rankSearch || t.companyName?.toLowerCase().includes(rankSearch.toLowerCase())).sort((a, b) => {
     let va: any, vb: any;
     if (rankSortField === 'healthScore') { va = a.healthScore || 0; vb = b.healthScore || 0; }
     else if (rankSortField === 'companyName') { va = a.companyName || ''; vb = b.companyName || ''; }
@@ -314,9 +338,16 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
 
             {/* Ranking de clientes */}
             <div className={cardCls}>
-              <h3 className={`text-sm font-semibold ${t.text} mb-4 flex items-center gap-2`}>
-                <Award size={16} className="text-emerald-500" /> Ranking de Clientes por Health Score
-              </h3>
+              <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                <h3 className={`text-sm font-semibold ${t.text} flex items-center gap-2`}>
+                  <Award size={16} className="text-emerald-500" /> Ranking de Clientes por Health Score
+                  <span className={`text-xs font-normal ${t.textMuted}`}>{rankSortedTenants.length} clientes</span>
+                </h3>
+                <div className="relative">
+                  <Search size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
+                  <input type="text" placeholder="Buscar empresa..." value={rankSearch} onChange={e => setRankSearch(e.target.value)} className={`text-sm pl-8 pr-3 py-1.5 rounded-lg border ${t.input} w-44`} />
+                </div>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -507,24 +538,46 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
 
               {/* Tabela de uso real */}
               <div className={cardCls}>
-                <h3 className={`text-sm font-semibold ${t.text} mb-4`}>Detalhamento por Cliente</h3>
+                <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                  <h3 className={`text-sm font-semibold ${t.text}`}>Detalhamento por Cliente</h3>
+                  <div className="relative">
+                    <Search size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
+                    <input type="text" placeholder="Buscar empresa..." value={usageSearch} onChange={e => setUsageSearch(e.target.value)} className={`text-sm pl-8 pr-3 py-1.5 rounded-lg border ${t.input} w-44`} />
+                  </div>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className={`text-xs ${t.textMuted} border-b ${t.border}`}>
-                        <th className="text-left py-2.5 pr-3">Empresa</th>
-                        <th className="text-center py-2.5 px-2">Status</th>
-                        <th className="text-center py-2.5 px-2">Último Acesso</th>
-                        <th className="text-center py-2.5 px-2">NPS Resp.</th>
-                        <th className="text-center py-2.5 px-2">Leads</th>
-                        <th className="text-center py-2.5 px-2">Vendidos</th>
-                        <th className="text-center py-2.5 px-2">Campanhas</th>
-                        <th className="text-center py-2.5 px-2">MPD</th>
-                        <th className="text-left py-2.5 pl-2">Engajamento</th>
+                        {([
+                          { label: 'Empresa', field: 'companyName', align: 'left' },
+                          { label: 'Status', field: null, align: 'center' },
+                          { label: 'Último Acesso', field: 'daysSinceActivity', align: 'center' },
+                          { label: 'NPS Resp.', field: 'npsResponses', align: 'center' },
+                          { label: 'Leads', field: 'leadsTotal', align: 'center' },
+                          { label: 'Vendidos', field: null, align: 'center' },
+                          { label: 'Campanhas', field: null, align: 'center' },
+                          { label: 'MPD', field: null, align: 'center' },
+                          { label: 'Engajamento', field: 'engagementScore', align: 'left' },
+                        ] as { label: string; field: string | null; align: string }[]).map((col, ci) => (
+                          <th key={ci} onClick={() => col.field ? (usageSortField === col.field ? setUsageSortDir(d => d === 'asc' ? 'desc' : 'asc') : (setUsageSortField(col.field as any), setUsageSortDir('desc'))) : undefined}
+                            className={`py-2.5 px-2 font-semibold whitespace-nowrap ${col.align === 'left' ? 'text-left' : 'text-center'} ${col.field ? 'cursor-pointer select-none group hover:text-emerald-500 transition-colors' : ''} ${col.field && usageSortField === col.field ? 'text-emerald-500' : t.textMuted}`}>
+                            <span className={`inline-flex items-center gap-1 ${col.align === 'center' ? 'justify-center' : ''}`}>
+                              {col.label}
+                              {col.field && (usageSortField === col.field
+                                ? (usageSortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />)
+                                : <ChevronDown size={11} className="opacity-25 group-hover:opacity-60" />)}
+                            </span>
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className={`divide-y ${t.border}`}>
-                      {usageClients.map((client: any) => {
+                      {usageClients.filter((c: any) => !usageSearch || c.companyName?.toLowerCase().includes(usageSearch.toLowerCase())).sort((a: any, b: any) => {
+                        let va = a[usageSortField] ?? 0, vb = b[usageSortField] ?? 0;
+                        if (typeof va === 'string') return usageSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+                        return usageSortDir === 'asc' ? (va > vb ? 1 : va < vb ? -1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0);
+                      }).map((client: any) => {
                         const lvl = usageLevelColors[client.usageLevel];
                         const engColor = client.engagementScore >= 60 ? 'bg-emerald-500' : client.engagementScore >= 30 ? 'bg-yellow-500' : client.engagementScore > 0 ? 'bg-orange-500' : 'bg-red-500';
                         return (
@@ -621,24 +674,46 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
 
               {/* Tabela completa por setor */}
               <div className={cardCls}>
-                <h3 className={`text-sm font-semibold ${t.text} mb-4`}>Comparativo por Setor</h3>
+                <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                  <h3 className={`text-sm font-semibold ${t.text}`}>Comparativo por Setor</h3>
+                  <div className="relative">
+                    <Search size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
+                    <input type="text" placeholder="Buscar setor..." value={sectorSearch} onChange={e => setSectorSearch(e.target.value)} className={`text-sm pl-8 pr-3 py-1.5 rounded-lg border ${t.input} w-40`} />
+                  </div>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className={`text-xs ${t.textMuted} border-b ${t.border}`}>
-                        <th className="text-left py-2.5 pr-3">Setor</th>
-                        <th className="text-center py-2.5 px-2">Clientes</th>
-                        <th className="text-center py-2.5 px-2">NPS Médio</th>
-                        <th className="text-center py-2.5 px-2">Respostas</th>
-                        <th className="text-center py-2.5 px-2">Resp./Cliente</th>
-                        <th className="text-center py-2.5 px-2">Leads</th>
-                        <th className="text-center py-2.5 px-2">Vendidos</th>
-                        <th className="text-center py-2.5 px-2">Conversão</th>
-                        <th className="text-right py-2.5 pl-2">Pipeline</th>
+                        {([
+                          { label: 'Setor', field: 'sector', align: 'left' },
+                          { label: 'Clientes', field: 'tenantCount', align: 'center' },
+                          { label: 'NPS Médio', field: 'avgNps', align: 'center' },
+                          { label: 'Respostas', field: null, align: 'center' },
+                          { label: 'Resp./Cliente', field: null, align: 'center' },
+                          { label: 'Leads', field: 'totalLeads', align: 'center' },
+                          { label: 'Vendidos', field: null, align: 'center' },
+                          { label: 'Conversão', field: 'conversionRate', align: 'center' },
+                          { label: 'Pipeline', field: 'totalPipeline', align: 'right' },
+                        ] as { label: string; field: string | null; align: string }[]).map((col, ci) => (
+                          <th key={ci} onClick={() => col.field ? (sectorSortField === col.field ? setSectorSortDir(d => d === 'asc' ? 'desc' : 'asc') : (setSectorSortField(col.field as any), setSectorSortDir('desc'))) : undefined}
+                            className={`py-2.5 px-2 font-semibold whitespace-nowrap ${col.align === 'left' ? 'text-left' : col.align === 'right' ? 'text-right' : 'text-center'} ${col.field ? 'cursor-pointer select-none group hover:text-emerald-500 transition-colors' : ''} ${col.field && sectorSortField === col.field ? 'text-emerald-500' : t.textMuted}`}>
+                            <span className={`inline-flex items-center gap-1 ${col.align === 'center' ? 'justify-center' : col.align === 'right' ? 'justify-end' : ''}`}>
+                              {col.label}
+                              {col.field && (sectorSortField === col.field
+                                ? (sectorSortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />)
+                                : <ChevronDown size={11} className="opacity-25 group-hover:opacity-60" />)}
+                            </span>
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className={`divide-y ${t.border}`}>
-                      {sectors.map((sec, i) => (
+                      {sectors.filter(s => !sectorSearch || s.sector.toLowerCase().includes(sectorSearch.toLowerCase())).sort((a, b) => {
+                        let va: any = (a as any)[sectorSortField] ?? 0, vb: any = (b as any)[sectorSortField] ?? 0;
+                        if (typeof va === 'string') return sectorSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+                        return sectorSortDir === 'asc' ? (va > vb ? 1 : va < vb ? -1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0);
+                      }).map((sec, i) => (
                         <tr key={i} className={`${t.tableRow} transition-colors`}>
                           <td className={`py-3 pr-3 font-semibold ${t.text}`}>{sec.sector}</td>
                           <td className={`py-3 px-2 text-center ${t.textSub}`}>{sec.tenantCount}</td>
@@ -768,7 +843,13 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
 
                 {/* Tabela mensal */}
                 <div className={cardCls}>
-                  <h3 className={`text-sm font-semibold ${t.text} mb-4`}>Detalhamento Mensal</h3>
+                  <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                    <h3 className={`text-sm font-semibold ${t.text}`}>Detalhamento Mensal</h3>
+                    <div className="relative">
+                      <Search size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
+                      <input type="text" placeholder="Filtrar mês (ex: 2025-01)" value={trendSearch} onChange={e => setTrendSearch(e.target.value)} className={`text-sm pl-8 pr-3 py-1.5 rounded-lg border ${t.input} w-48`} />
+                    </div>
+                  </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -783,7 +864,7 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
                         </tr>
                       </thead>
                       <tbody className={`divide-y ${t.border}`}>
-                        {trendsData.trend?.slice(-8).reverse().map((m: any, i: number) => (
+                        {(trendsData.trend?.slice(-8).reverse() || []).filter((m: any) => !trendSearch || m.month?.includes(trendSearch)).map((m: any, i: number) => (
                           <tr key={i} className={`${t.tableRow} transition-colors`}>
                             <td className={`py-2.5 pr-4 font-medium ${t.text}`}>{m.month}</td>
                             <td className="py-2.5 px-3 text-center"><NpsGauge score={m.nps} size="sm" /></td>
@@ -1168,14 +1249,24 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
                     <table className="w-full text-sm">
                       <thead>
                         <tr className={`text-xs ${t.textMuted} border-b ${t.border}`}>
-                          <th className="text-left py-2 pr-4">Produto / Serviço</th>
-                          <th className="text-left py-2 px-3">Empresa</th>
-                          <th className="text-right py-2 px-3">Valor</th>
+                          <th className="text-left py-2 pr-4 cursor-pointer select-none group hover:text-emerald-500 transition-colors" onClick={() => { if (productSortField === 'name') setProductSortDir((d: string) => d === 'asc' ? 'desc' : 'asc'); else { setProductSortField('name'); setProductSortDir('asc'); } }}>
+                            <span className="inline-flex items-center gap-1">Produto / Serviço {productSortField === 'name' ? (productSortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />) : <ChevronDown size={11} className="opacity-25 group-hover:opacity-60" />}</span>
+                          </th>
+                          <th className="text-left py-2 px-3 cursor-pointer select-none group hover:text-emerald-500 transition-colors" onClick={() => { if (productSortField === 'tenant') setProductSortDir((d: string) => d === 'asc' ? 'desc' : 'asc'); else { setProductSortField('tenant'); setProductSortDir('asc'); } }}>
+                            <span className="inline-flex items-center gap-1">Empresa {productSortField === 'tenant' ? (productSortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />) : <ChevronDown size={11} className="opacity-25 group-hover:opacity-60" />}</span>
+                          </th>
+                          <th className="text-right py-2 px-3 cursor-pointer select-none group hover:text-emerald-500 transition-colors" onClick={() => { if (productSortField === 'value') setProductSortDir((d: string) => d === 'asc' ? 'desc' : 'asc'); else { setProductSortField('value'); setProductSortDir('desc'); } }}>
+                            <span className="inline-flex items-center gap-1 justify-end">Valor {productSortField === 'value' ? (productSortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />) : <ChevronDown size={11} className="opacity-25 group-hover:opacity-60" />}</span>
+                          </th>
                           <th className="text-left py-2 pl-3">Descrição</th>
                         </tr>
                       </thead>
                       <tbody className={`divide-y ${t.border}`}>
-                        {filteredProducts.slice(0, 50).map((p: any, i: number) => (
+                        {[...filteredProducts].sort((a: any, b: any) => {
+                          if (productSortField === 'value') return productSortDir === 'asc' ? (a.value || 0) - (b.value || 0) : (b.value || 0) - (a.value || 0);
+                          if (productSortField === 'tenant') return productSortDir === 'asc' ? (a.tenant || '').localeCompare(b.tenant || '') : (b.tenant || '').localeCompare(a.tenant || '');
+                          return productSortDir === 'asc' ? (a.name || '').localeCompare(b.name || '') : (b.name || '').localeCompare(a.name || '');
+                        }).slice(0, 50).map((p: any, i: number) => (
                           <tr key={i} className={`${t.tableRow} transition-colors`}>
                             <td className={`py-2.5 pr-4 font-medium ${t.text}`}>{p.name}</td>
                             <td className={`py-2.5 px-3 text-blue-500 text-xs font-medium`}>{p.tenant}</td>
@@ -1590,20 +1681,40 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
 
                 {/* Uso por Endpoint */}
                 <div className={`rounded-xl border ${t.card} p-5`}>
-                  <h3 className={`text-sm font-semibold mb-3 ${t.text}`}>Uso por Funcionalidade</h3>
+                  <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                    <h3 className={`text-sm font-semibold ${t.text}`}>Uso por Funcionalidade</h3>
+                    <div className="relative">
+                      <Search size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
+                      <input type="text" placeholder="Buscar endpoint..." value={aiEndpointSearch} onChange={e => setAiEndpointSearch(e.target.value)} className={`text-sm pl-8 pr-3 py-1.5 rounded-lg border ${t.input} w-44`} />
+                    </div>
+                  </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className={`border-b ${t.border}`}>
-                          <th className={`text-left py-2.5 px-3 ${t.label}`}>Endpoint</th>
-                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Chamadas</th>
-                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Tokens</th>
-                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Custo (USD)</th>
-                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Erros</th>
+                          {([
+                            { label: 'Endpoint', field: 'endpoint', align: 'left' },
+                            { label: 'Chamadas', field: 'calls', align: 'center' },
+                            { label: 'Tokens', field: 'tokens', align: 'center' },
+                            { label: 'Custo (USD)', field: 'cost', align: 'center' },
+                            { label: 'Erros', field: 'errors', align: 'center' },
+                          ] as { label: string; field: string; align: string }[]).map((col, ci) => (
+                            <th key={ci} onClick={() => aiEndpointSortField === col.field ? setAiEndpointSortDir((d: string) => d === 'asc' ? 'desc' : 'asc') : (setAiEndpointSortField(col.field), setAiEndpointSortDir('desc'))}
+                              className={`py-2.5 px-3 font-semibold cursor-pointer select-none group hover:text-emerald-500 transition-colors whitespace-nowrap ${col.align === 'left' ? 'text-left' : 'text-center'} ${aiEndpointSortField === col.field ? 'text-emerald-500' : t.label}`}>
+                              <span className={`inline-flex items-center gap-1 ${col.align === 'center' ? 'justify-center' : ''}`}>
+                                {col.label}
+                                {aiEndpointSortField === col.field ? (aiEndpointSortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />) : <ChevronDown size={11} className="opacity-25 group-hover:opacity-60" />}
+                              </span>
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {aiUsageData.endpointBreakdown?.map((ep: any, i: number) => (
+                        {[...(aiUsageData.endpointBreakdown || [])].filter((ep: any) => !aiEndpointSearch || ep.endpoint?.toLowerCase().includes(aiEndpointSearch.toLowerCase())).sort((a: any, b: any) => {
+                          const va = a[aiEndpointSortField] ?? 0, vb = b[aiEndpointSortField] ?? 0;
+                          if (typeof va === 'string') return aiEndpointSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+                          return aiEndpointSortDir === 'asc' ? (va > vb ? 1 : va < vb ? -1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0);
+                        }).map((ep: any, i: number) => (
                           <tr key={i} className={`border-b ${t.border} ${t.tableRow}`}>
                             <td className={`py-2.5 px-3 font-medium ${t.text}`}>{ep.endpoint}</td>
                             <td className={`text-center py-2.5 px-3 ${t.textSub}`}>{ep.calls}</td>
@@ -1619,19 +1730,39 @@ export default function AdminIntelligence({ isDark, tenants, globalStats, sector
 
                 {/* Uso por Cliente */}
                 <div className={`rounded-xl border ${t.card} p-5`}>
-                  <h3 className={`text-sm font-semibold mb-3 ${t.text}`}>Uso por Cliente</h3>
+                  <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                    <h3 className={`text-sm font-semibold ${t.text}`}>Uso por Cliente</h3>
+                    <div className="relative">
+                      <Search size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${t.textMuted}`} />
+                      <input type="text" placeholder="Buscar cliente..." value={aiClientSearch} onChange={e => setAiClientSearch(e.target.value)} className={`text-sm pl-8 pr-3 py-1.5 rounded-lg border ${t.input} w-44`} />
+                    </div>
+                  </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className={`border-b ${t.border}`}>
-                          <th className={`text-left py-2.5 px-3 ${t.label}`}>Cliente</th>
-                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Chamadas</th>
-                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Tokens</th>
-                          <th className={`text-center py-2.5 px-3 ${t.label}`}>Custo (USD)</th>
+                          {([
+                            { label: 'Cliente', field: 'name', align: 'left' },
+                            { label: 'Chamadas', field: 'calls', align: 'center' },
+                            { label: 'Tokens', field: 'tokens', align: 'center' },
+                            { label: 'Custo (USD)', field: 'cost', align: 'center' },
+                          ] as { label: string; field: string; align: string }[]).map((col, ci) => (
+                            <th key={ci} onClick={() => aiClientSortField === col.field ? setAiClientSortDir((d: string) => d === 'asc' ? 'desc' : 'asc') : (setAiClientSortField(col.field), setAiClientSortDir('desc'))}
+                              className={`py-2.5 px-3 font-semibold cursor-pointer select-none group hover:text-emerald-500 transition-colors whitespace-nowrap ${col.align === 'left' ? 'text-left' : 'text-center'} ${aiClientSortField === col.field ? 'text-emerald-500' : t.label}`}>
+                              <span className={`inline-flex items-center gap-1 ${col.align === 'center' ? 'justify-center' : ''}`}>
+                                {col.label}
+                                {aiClientSortField === col.field ? (aiClientSortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />) : <ChevronDown size={11} className="opacity-25 group-hover:opacity-60" />}
+                              </span>
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {aiUsageData.tenantBreakdown?.map((tb: any, i: number) => (
+                        {[...(aiUsageData.tenantBreakdown || [])].filter((tb: any) => !aiClientSearch || (tb.name || tb.tenantId || '').toLowerCase().includes(aiClientSearch.toLowerCase())).sort((a: any, b: any) => {
+                          const va = a[aiClientSortField] ?? 0, vb = b[aiClientSortField] ?? 0;
+                          if (typeof va === 'string') return aiClientSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+                          return aiClientSortDir === 'asc' ? (va > vb ? 1 : va < vb ? -1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0);
+                        }).map((tb: any, i: number) => (
                           <tr key={i} className={`border-b ${t.border} ${t.tableRow}`}>
                             <td className={`py-2.5 px-3 font-medium ${t.text}`}>{tb.name || tb.tenantId?.substring(0, 8) || 'Sistema'}</td>
                             <td className={`text-center py-2.5 px-3 ${t.textSub}`}>{tb.calls}</td>
