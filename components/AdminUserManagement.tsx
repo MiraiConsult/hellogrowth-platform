@@ -230,6 +230,52 @@ function PlanBadge({ plan }: { plan: string }) {
   return <span className={`px-2 py-0.5 rounded text-xs font-semibold ${cfg.color}`}>{cfg.label}</span>;
 }
 
+// ─── Profile Completeness ────────────────────────────────────────────────────
+
+const PROFILE_FIELDS: { key: string; label: string; weight: number }[] = [
+  { key: 'name',    label: 'Nome',      weight: 10 },
+  { key: 'email',   label: 'E-mail',    weight: 10 },
+  { key: 'phone',   label: 'Telefone',  weight: 10 },
+  { key: 'city',    label: 'Cidade',    weight: 15 },
+  { key: 'state',   label: 'Estado',    weight: 15 },
+  { key: 'niche',   label: 'Nicho',     weight: 20 },
+  { key: 'sdrName', label: 'SDR',       weight: 10 },
+  { key: 'csName',  label: 'CS',        weight: 10 },
+];
+
+function calcProfileCompleteness(client: Client): { pct: number; missing: string[] } {
+  let total = 0;
+  let earned = 0;
+  const missing: string[] = [];
+  for (const f of PROFILE_FIELDS) {
+    total += f.weight;
+    const val = (client as any)[f.key];
+    if (val && String(val).trim() !== '') {
+      earned += f.weight;
+    } else {
+      missing.push(f.label);
+    }
+  }
+  return { pct: Math.round((earned / total) * 100), missing };
+}
+
+function ProfileCompletenessCircle({ pct, size = 38 }: { pct: number; size?: number }) {
+  const r = (size - 6) / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = (pct / 100) * circ;
+  const color = pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+  return (
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} style={{ position: 'absolute', transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#374151" strokeWidth={4} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={4}
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" />
+      </svg>
+      <span style={{ color, fontSize: 9, fontWeight: 700, lineHeight: 1 }}>{pct}%</span>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onImpersonate }) => {
@@ -301,6 +347,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
   const [sendingLink, setSendingLink] = useState(false);
   const [reportModal, setReportModal] = useState<{ client: Client; usage: any } | null>(null);
   const [reportContent, setReportContent] = useState('');
+  const [showIncompleteReport, setShowIncompleteReport] = useState(false);
 
   // ── Form states ──
   const [clientForm, setClientForm] = useState({ name: '', email: '', phone: '', plan: 'trial', companyName: '', password: '', city: '', state: '', niche: '', chairs: '' as string | number, dentists: '' as string | number, has_secretary: false });
@@ -1247,6 +1294,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             <button onClick={fetchClients} className={`flex items-center gap-2 border ${t.btnSecondary} text-sm px-3 py-2 rounded-lg transition-colors`}>
               <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} /> Atualizar
             </button>
+            <button onClick={() => setShowIncompleteReport(true)} className="flex items-center gap-2 border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 text-sm px-3 py-2 rounded-lg transition-colors">
+              <AlertTriangle size={14} /> Cadastros Incompletos
+            </button>
             <span className={`text-xs ${t.textMuted} ml-auto`}>{clients.length} cliente{clients.length !== 1 ? 's' : ''}</span>
           </div>
         </div>
@@ -1275,6 +1325,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
                     { label: 'Status', field: 'consolidatedStatus', px: 'px-4' },
                     { label: 'Health', field: null, px: 'px-4' },
                     { label: 'Modelo', field: null, px: 'px-4' },
+                    { label: 'Perfil', field: null, px: 'px-4' },
                     { label: 'Empresas', field: null, px: 'px-4' },
                     { label: 'Cadastro', field: 'createdAt', px: 'px-4' },
                     { label: 'Último Acesso', field: 'lastLogin', px: 'px-4' },
@@ -1350,6 +1401,19 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
                         })()}
                       </td>
                       <td className="px-4 py-4"><ModelBadge model={client.consolidatedTrialModel} /></td>
+                      <td className="px-4 py-4">
+                        {(() => {
+                          const { pct, missing } = calcProfileCompleteness(client);
+                          return (
+                            <div className="flex items-center gap-2" title={missing.length > 0 ? `Faltando: ${missing.join(', ')}` : 'Perfil completo'}>
+                              <ProfileCompletenessCircle pct={pct} />
+                              {missing.length > 0 && (
+                                <span className="text-xs text-amber-500 font-medium hidden xl:block">{missing.length} campo{missing.length !== 1 ? 's' : ''}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-4"><span className={`text-sm ${t.textSub}`}>{client.companies.length} empresa{client.companies.length !== 1 ? 's' : ''}</span></td>
                       <td className="px-4 py-4"><span className={`text-xs ${t.textMuted}`}>{new Date(client.createdAt).toLocaleDateString('pt-BR')}</span></td>
                       <td className="px-4 py-4">
@@ -1621,6 +1685,107 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
       </main>
       )}
       {/* ── Modals ── */}
+
+      {/* Incomplete Profiles Report Modal */}
+      {showIncompleteReport && (() => {
+        const incompleteClients = clients
+          .map(c => ({ client: c, ...calcProfileCompleteness(c) }))
+          .filter(({ pct }) => pct < 100)
+          .sort((a, b) => a.pct - b.pct);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className={`${t.modalBg} border rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col`}>
+              {/* Header */}
+              <div className={`flex items-center justify-between px-6 py-4 border-b ${t.border} flex-shrink-0`}>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                    <AlertTriangle size={16} className="text-amber-500" />
+                  </div>
+                  <div>
+                    <h2 className={`text-base font-bold ${t.text}`}>Cadastros Incompletos</h2>
+                    <p className={`text-xs ${t.textMuted}`}>{incompleteClients.length} cliente{incompleteClients.length !== 1 ? 's' : ''} com perfil incompleto</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowIncompleteReport(false)} className={`p-1.5 ${t.textMuted} hover:${t.text} rounded-lg transition-colors`}>
+                  <X size={16} />
+                </button>
+              </div>
+              {/* Table */}
+              <div className="overflow-auto flex-1">
+                {incompleteClients.length === 0 ? (
+                  <div className={`flex flex-col items-center justify-center py-20 ${t.textMuted}`}>
+                    <CheckCircle size={40} className="mb-3 text-emerald-500 opacity-60" />
+                    <p className="font-medium">Todos os cadastros estão completos!</p>
+                  </div>
+                ) : (
+                  <table className="w-full">
+                    <thead>
+                      <tr className={`border-b ${t.border}`}>
+                        {['Cliente', 'Clínica / Empresa', 'Completude', 'Campos Faltando', 'SDR', 'CS'].map((h) => (
+                          <th key={h} className={`text-left text-xs font-semibold ${t.thead} uppercase tracking-wider px-5 py-3`}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${t.divider}`}>
+                      {incompleteClients.map(({ client, pct, missing }) => (
+                        <tr key={client.id} className={`${t.surfaceHover} transition-colors`}>
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border ${t.avatar}`}>
+                                {(client.name || '?')[0].toUpperCase()}
+                              </div>
+                              <div>
+                                <p className={`text-sm font-medium ${t.text}`}>{client.name}</p>
+                                <p className={`text-xs ${t.textMuted}`}>{client.email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3">
+                            <span className={`text-sm ${t.textSub}`}>{client.primaryCompany?.name || client.companyName || '—'}</span>
+                          </td>
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-2">
+                              <ProfileCompletenessCircle pct={pct} size={42} />
+                              <div className="w-20 h-1.5 rounded-full bg-gray-700 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all"
+                                  style={{ width: `${pct}%`, backgroundColor: pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444' }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3">
+                            <div className="flex flex-wrap gap-1">
+                              {missing.map(m => (
+                                <span key={m} className="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-500/15 text-amber-500 border border-amber-500/20">{m}</span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-5 py-3">
+                            <span className={`text-sm ${client.sdrName ? t.text : t.textMuted}`}>{client.sdrName || '—'}</span>
+                          </td>
+                          <td className="px-5 py-3">
+                            <span className={`text-sm ${client.csName ? t.text : t.textMuted}`}>{client.csName || '—'}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              {/* Footer */}
+              <div className={`px-6 py-3 border-t ${t.border} flex-shrink-0 flex items-center justify-between`}>
+                <p className={`text-xs ${t.textMuted}`}>
+                  Campos considerados: Nome (10%), E-mail (10%), Telefone (10%), Cidade (15%), Estado (15%), Nicho (20%), SDR (10%), CS (10%)
+                </p>
+                <button onClick={() => setShowIncompleteReport(false)} className={`text-xs px-3 py-1.5 rounded-lg border ${t.btnSecondary} transition-colors`}>
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Report Modal */}
       {reportModal && (
