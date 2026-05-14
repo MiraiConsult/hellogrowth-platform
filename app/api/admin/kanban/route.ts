@@ -195,15 +195,18 @@ export async function POST(req: NextRequest) {
 
     if (type === 'contact') {
       const { card_id, contact_date, contact_type, responsible, notes, next_contact_date } = data;
+      // Convert empty strings to null for date fields to avoid PostgreSQL type errors
+      const safeNextContactDate = next_contact_date && String(next_contact_date).trim() !== '' ? next_contact_date : null;
+      const safeContactDate = contact_date && String(contact_date).trim() !== '' ? contact_date : new Date().toISOString().split('T')[0];
       const { data: created, error } = await supabase
         .from('cs_contacts')
-        .insert([{ card_id, contact_date, contact_type, responsible, notes, next_contact_date }])
+        .insert([{ card_id, contact_date: safeContactDate, contact_type, responsible: responsible || null, notes: notes || null, next_contact_date: safeNextContactDate }])
         .select()
         .single();
       if (error) throw error;
       // Also update card's next_contact_date if provided
-      if (next_contact_date) {
-        await supabase.from('kanban_cards').update({ next_contact_date, updated_at: new Date().toISOString() }).eq('id', card_id);
+      if (safeNextContactDate) {
+        await supabase.from('kanban_cards').update({ next_contact_date: safeNextContactDate, updated_at: new Date().toISOString() }).eq('id', card_id);
       }
       return NextResponse.json({ data: created });
     }
@@ -243,9 +246,17 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (type === 'card') {
+      // Sanitize date fields: convert empty strings to null to avoid PostgreSQL type errors
+      const sanitizedUpdates = { ...updates };
+      if ('fup_date' in sanitizedUpdates) {
+        sanitizedUpdates.fup_date = sanitizedUpdates.fup_date && String(sanitizedUpdates.fup_date).trim() !== '' ? sanitizedUpdates.fup_date : null;
+      }
+      if ('next_contact_date' in sanitizedUpdates) {
+        sanitizedUpdates.next_contact_date = sanitizedUpdates.next_contact_date && String(sanitizedUpdates.next_contact_date).trim() !== '' ? sanitizedUpdates.next_contact_date : null;
+      }
       const { data, error } = await supabase
         .from('kanban_cards')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update({ ...sanitizedUpdates, updated_at: new Date().toISOString() })
         .eq('id', id)
         .select()
         .single();

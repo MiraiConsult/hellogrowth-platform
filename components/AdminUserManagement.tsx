@@ -604,7 +604,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onLogout, onI
             city: clientForm.city || null,
             state: clientForm.state || null,
             niche: clientForm.niche || null,
-            niche_data: Object.keys(clientForm.nicheData).length > 0 ? clientForm.nicheData : null,
+            nicheData: Object.keys(clientForm.nicheData).length > 0 ? clientForm.nicheData : null,
             ...(clientForm.password ? { password: clientForm.password } : {}),
           },
         }),

@@ -649,10 +649,11 @@ export default function AdminKanban({ isDark }: AdminKanbanProps) {
         body: JSON.stringify({ type: 'contact', card_id: detailCard.id, ...contactForm }),
       });
       const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Erro ao registrar contato');
       setDetailContacts(prev => [data.data, ...prev]);
       setContactForm(p => ({ ...p, notes: '' }));
       showToast('success', 'Contato registrado!');
-    } catch { showToast('error', 'Erro ao registrar contato'); }
+    } catch (e: any) { showToast('error', e.message || 'Erro ao registrar contato'); }
     finally { setSavingContact(false); }
   };
 
