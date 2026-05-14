@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Gerar link de visualização do termo
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://system.hellogrowth.online';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://hellogrowth.online';
     const termLink = `${baseUrl}/api/health/view-term?id=${sig.id}&tenant=${tenantId}`;
 
     // Montar mensagem com o termo e link

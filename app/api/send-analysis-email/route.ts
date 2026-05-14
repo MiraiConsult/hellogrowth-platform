@@ -30,16 +30,22 @@ function buildAnalysisEmail(data: {
 
   // Montar lista de perguntas e respostas
   const qaRows = questions
-    .filter(q => answers[q.id])
+    .filter(q => answers[q.id] !== undefined && answers[q.id] !== null)
     .map(q => {
       const ans = answers[q.id];
-      const value = Array.isArray(ans?.value) ? ans.value.join(', ') : (ans?.value || '—');
+      let value: string;
+      if (typeof ans === 'object' && ans !== null) {
+        value = Array.isArray(ans.value) ? ans.value.join(', ') : (ans.value != null ? String(ans.value) : '');
+      } else {
+        value = ans != null ? String(ans) : '';
+      }
+      if (!value || value === 'undefined') return '';
       return `
         <tr>
           <td style="padding: 10px 16px; border-bottom: 1px solid #f3f4f6; color: #6b7280; font-size: 13px; width: 40%; vertical-align: top;">${q.text}</td>
           <td style="padding: 10px 16px; border-bottom: 1px solid #f3f4f6; color: #111827; font-size: 13px; font-weight: 500;">${value}</td>
         </tr>`;
-    }).join('');
+    }).filter(Boolean).join('');
 
   // Montar produtos recomendados (sem valor)
   const productsHtml = aiAnalysis.recommended_products && aiAnalysis.recommended_products.length > 0

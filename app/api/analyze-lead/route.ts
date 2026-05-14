@@ -220,6 +220,7 @@ Responda APENAS com JSON válido (sem markdown):
       .eq('id', leadId);
 
     // Disparar WhatsApp se configurado
+    console.log('[analyze-lead] whatsappConfig.enabled:', whatsappConfig?.enabled, '| emailAnalysisConfig.enabled:', emailAnalysisConfig?.enabled);
     if (whatsappConfig?.enabled && whatsappConfig.recipients) {
       const waNumbers = whatsappConfig.recipients
         .split(',')
@@ -239,12 +240,20 @@ Responda APENAS com JSON válido (sem markdown):
 
         // Perguntas e respostas (excluindo campos internos)
         const qaLines: string[] = [];
-        if (form?.questions && answers) {
-          for (const q of form.questions) {
+        const formQuestions = form?.questions || [];
+        console.log('[analyze-lead] form.questions count:', formQuestions.length, '| answers keys:', Object.keys(answers).filter(k => !k.startsWith('_')).length);
+        if (formQuestions.length > 0 && answers) {
+          for (const q of formQuestions) {
             const ans = answers[q.id];
-            if (!ans) continue;
-            const value = Array.isArray(ans.value) ? ans.value.join(', ') : (ans.value || '');
-            if (!value) continue;
+            if (ans === undefined || ans === null) continue;
+            // Suporta tanto {value: ...} quanto valor direto (string/number)
+            let value: string;
+            if (typeof ans === 'object' && ans !== null) {
+              value = Array.isArray(ans.value) ? ans.value.join(', ') : (ans.value != null ? String(ans.value) : '');
+            } else {
+              value = String(ans);
+            }
+            if (!value || value === 'undefined') continue;
             qaLines.push(`• *${q.text || q.label || q.id}:* ${value}`);
           }
         }
