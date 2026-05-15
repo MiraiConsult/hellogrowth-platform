@@ -1546,7 +1546,7 @@ Agora escreva a mensagem para ${firstName}:`;
                 )}
 
                 {/* Análise da IA - Botão seletor / Analisar */}
-                {selectedLead.answers?._ai_analysis ? (
+                {selectedLead.answers?._ai_analysis?.reasoning ? (
                   <button
                     onClick={() => setDetailSection(prev => prev === 'ai' ? null : 'ai')}
                     className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
@@ -1688,7 +1688,7 @@ Agora escreva a mensagem para ${firstName}:`;
                 )}
 
                 {/* Conteúdo: Análise da IA */}
-                {detailSection === 'ai' && selectedLead.answers?._ai_analysis && (
+                {detailSection === 'ai' && selectedLead.answers?._ai_analysis?.reasoning && (
                   <div>
                     <div className="flex items-center gap-2 mb-4">
                       <Zap size={18} className="text-amber-600" />

@@ -58,6 +58,8 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [isReanalyzing, setIsReanalyzing] = useState(false);
   const [pendingUpdate, setPendingUpdate] = useState<any>(null);
+  const [isAnalyzingSingleLead, setIsAnalyzingSingleLead] = useState(false);
+  const [singleAnalysisResult, setSingleAnalysisResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   // Estados para reenvio de e-mail de análise
   const [isResendingEmail, setIsResendingEmail] = useState(false);
@@ -333,6 +335,71 @@ const FormReport: React.FC<FormReportProps> = ({ formId, forms, leads, onBack, s
       console.error('Erro ao salvar edições:', err);
     } finally {
       setIsSavingProducts(false);
+    }
+  };
+
+  // Função de análise inicial de um lead (quando análise automática falhou)
+  const handleAnalyzeSingleLeadFromReport = async () => {
+    if (!selectedLead || !supabase) return;
+    setIsAnalyzingSingleLead(true);
+    setSingleAnalysisResult(null);
+    try {
+      const answersText = selectedLead.answers
+        ? Object.entries(selectedLead.answers)
+            .filter(([k]) => !k.startsWith('_'))
+            .map(([qId, a]: [string, any]) => `${getQuestionText(qId)}: ${Array.isArray(a?.value) ? a.value.join(', ') : a?.value ?? a}`)
+            .join('\n')
+        : 'Sem respostas';
+      if (!answersText.trim() || answersText === 'Sem respostas') {
+        setSingleAnalysisResult({ ok: false, message: 'Lead sem respostas para analisar.' });
+        return;
+      }
+      const productsContext = products.length > 0
+        ? products.map(p => `- ${p.name} (R$ ${p.value})`).join('\n')
+        : 'Nenhum produto cadastrado';
+      const prompt = `Você é um consultor de vendas especializado. Analise as respostas do cliente e forneça uma análise completa de oportunidade de venda.
+
+CLIENTE: ${selectedLead.name}
+
+RESPOSTAS DO FORMULÁRIO:
+${answersText}
+
+PRODUTOS/SERVIÇOS DISPONÍVEIS:
+${productsContext}
+
+Retorne APENAS um JSON válido (sem markdown) com:
+{
+  "recommended_products": [{"id": "product_id", "name": "Nome", "value": 0, "reason": "Razão"}],
+  "suggested_product": "Nome do produto principal",
+  "suggested_value": 0,
+  "classification": "opportunity",
+  "confidence": 0.85,
+  "reasoning": "Explicação detalhada",
+  "client_insights": ["Insight 1", "Insight 2"],
+  "sales_script": "Script de abordagem",
+  "next_steps": ["Ação 1", "Ação 2"]
+}`;
+      const aiText = await callGeminiAPI(prompt);
+      const analysis = parseGeminiJSON(aiText);
+      const recProducts = analysis.recommended_products?.length > 0
+        ? analysis.recommended_products
+        : analysis.suggested_product
+          ? [{ id: 'original', name: analysis.suggested_product, value: analysis.suggested_value || 0 }]
+          : [];
+      const totalVal = recProducts.reduce((s: number, p: any) => s + (p.value || 0), 0) || analysis.suggested_value || selectedLead.value;
+      const updatedAnalysis = { ...analysis, recommended_products: recProducts, analyzed_at: new Date().toISOString() };
+      const updatedAnswers = { ...selectedLead.answers, _ai_analysis: updatedAnalysis };
+      await supabase.from('leads').update({ answers: updatedAnswers, value: totalVal }).eq('id', selectedLead.id);
+      if (onLeadUpdate) onLeadUpdate(selectedLead.id, { answers: updatedAnswers, value: totalVal });
+      setSelectedLead({ ...selectedLead, answers: updatedAnswers, value: totalVal });
+      setEditedProducts(recProducts);
+      setDetailSection('ai');
+      setSingleAnalysisResult({ ok: true, message: 'Análise concluída com sucesso!' });
+    } catch (err) {
+      console.error('Erro ao analisar lead:', err);
+      setSingleAnalysisResult({ ok: false, message: 'Erro ao analisar. Tente novamente.' });
+    } finally {
+      setIsAnalyzingSingleLead(false);
     }
   };
 
@@ -1001,21 +1068,45 @@ Seja ESPECIFICO e baseie TUDO nos dados reais.
                   <ArrowRight size={16} className="text-gray-400" />
                 </button>
 
-                {/* Botão: Análise da IA */}
-                <button
-                  onClick={() => setDetailSection(prev => prev === 'ai' ? null : 'ai')}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                    detailSection === 'ai'
-                      ? 'border-amber-300 bg-amber-50 text-amber-700'
-                      : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Zap size={16} className={detailSection === 'ai' ? 'text-amber-600' : 'text-gray-400'} />
-                    <span className="text-xs font-bold uppercase">Análise da IA</span>
+                {/* Botão: Análise da IA / Analisar com IA */}
+                {selectedLead.answers?._ai_analysis?.reasoning ? (
+                  <button
+                    onClick={() => setDetailSection(prev => prev === 'ai' ? null : 'ai')}
+                    className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                      detailSection === 'ai'
+                        ? 'border-amber-300 bg-amber-50 text-amber-700'
+                        : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Zap size={16} className={detailSection === 'ai' ? 'text-amber-600' : 'text-gray-400'} />
+                      <span className="text-xs font-bold uppercase">Análise da IA</span>
+                    </div>
+                    <ArrowRight size={16} className="text-gray-400" />
+                  </button>
+                ) : (
+                  <div className="space-y-1.5">
+                    <button
+                      onClick={handleAnalyzeSingleLeadFromReport}
+                      disabled={isAnalyzingSingleLead}
+                      className="w-full flex items-center justify-center gap-2 p-3 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-sm transition-colors disabled:opacity-60"
+                    >
+                      {isAnalyzingSingleLead
+                        ? <><Loader2 size={15} className="animate-spin" /> Analisando...</>
+                        : <><Zap size={15} /> Analisar com IA</>}
+                    </button>
+                    {singleAnalysisResult && (
+                      <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${
+                        singleAnalysisResult.ok
+                          ? 'bg-green-50 text-green-700 border border-green-200'
+                          : 'bg-red-50 text-red-700 border border-red-200'
+                      }`}>
+                        {singleAnalysisResult.ok ? <Check size={12} /> : <AlertCircle size={12} />}
+                        {singleAnalysisResult.message}
+                      </div>
+                    )}
                   </div>
-                  <ArrowRight size={16} className="text-gray-400" />
-                </button>
+                )}
 
                 {/* Botão: Anotações de Negociação */}
                 <button
