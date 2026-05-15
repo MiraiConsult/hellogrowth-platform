@@ -8,6 +8,9 @@ const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://miraisaleshg
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY!;
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'Mirai Sales HG';
 
+// Limite seguro de caracteres por mensagem WhatsApp (Evolution API)
+const MAX_MSG_LENGTH = 3800;
+
 async function sendWhatsAppMessage(phone: string, message: string): Promise<{ ok: boolean; error?: string }> {
   try {
     if (!EVOLUTION_API_KEY) {
@@ -32,6 +35,40 @@ async function sendWhatsAppMessage(phone: string, message: string): Promise<{ ok
   } catch (e: any) {
     return { ok: false, error: e.message };
   }
+}
+
+/**
+ * Divide uma mensagem longa em partes respeitando o limite de caracteres.
+ * Tenta quebrar em linhas para não cortar no meio de uma palavra.
+ */
+function splitMessage(message: string, maxLength: number = MAX_MSG_LENGTH): string[] {
+  if (message.length <= maxLength) return [message];
+
+  const parts: string[] = [];
+  const lines = message.split('\n');
+  let current = '';
+
+  for (const line of lines) {
+    const candidate = current ? `${current}\n${line}` : line;
+    if (candidate.length <= maxLength) {
+      current = candidate;
+    } else {
+      if (current) parts.push(current.trim());
+      // Se a linha sozinha é maior que o limite, corta na força
+      if (line.length > maxLength) {
+        let remaining = line;
+        while (remaining.length > maxLength) {
+          parts.push(remaining.slice(0, maxLength));
+          remaining = remaining.slice(maxLength);
+        }
+        current = remaining;
+      } else {
+        current = line;
+      }
+    }
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
 }
 
 function buildWhatsAppMessage(params: {
@@ -169,7 +206,7 @@ export async function POST(request: NextRequest) {
     const answers = lead.answers || {};
     const aiAnalysis = answers._ai_analysis || {};
 
-    const message = buildWhatsAppMessage({
+    const fullMessage = buildWhatsAppMessage({
       leadName: lead.name || 'Lead',
       leadPhone: lead.phone || '',
       formName: form?.name || 'Formulário',
@@ -178,23 +215,34 @@ export async function POST(request: NextRequest) {
       questions,
     });
 
-    const result = await sendWhatsAppMessage(recipientPhone, message);
+    // Dividir mensagem em partes se necessário (limite Evolution API ~4096 chars)
+    const parts = splitMessage(fullMessage, MAX_MSG_LENGTH);
 
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error || 'Erro ao enviar WhatsApp.' }, { status: 500 });
+    // Enviar todas as partes sequencialmente
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts.length > 1 ? `*(${i + 1}/${parts.length})*\n${parts[i]}` : parts[i];
+      const result = await sendWhatsAppMessage(recipientPhone, part);
+      if (!result.ok) {
+        console.error(`[resend-analysis-whatsapp] Erro ao enviar parte ${i + 1}/${parts.length}:`, result.error);
+        return NextResponse.json({ error: result.error || 'Erro ao enviar WhatsApp.' }, { status: 500 });
+      }
+      // Pequeno delay entre partes para não sobrecarregar
+      if (i < parts.length - 1) {
+        await new Promise(r => setTimeout(r, 800));
+      }
     }
 
     // Registrar no histórico do lead
     const now = new Date().toISOString();
     const existingMeta = lead.metadata || {};
     const wppHistory = existingMeta.whatsapp_resend_history || [];
-    wppHistory.push({ sentAt: now, phone: recipientPhone, resent: true });
+    wppHistory.push({ sentAt: now, phone: recipientPhone, resent: true, parts: parts.length });
     await supabase
       .from('leads')
       .update({ metadata: { ...existingMeta, whatsapp_resend_history: wppHistory } })
       .eq('id', leadId);
 
-    return NextResponse.json({ sent: true, phone: recipientPhone });
+    return NextResponse.json({ sent: true, phone: recipientPhone, parts: parts.length });
   } catch (e: any) {
     console.error('[resend-analysis-whatsapp] Erro:', e);
     return NextResponse.json({ error: e.message }, { status: 500 });
