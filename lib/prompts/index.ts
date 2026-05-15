@@ -57,6 +57,10 @@ export interface PromptContext {
     npsFormId?: string;
     npsFormName?: string;
   } | null;
+  // Conhecimento global do nicho (injetado pelo admin)
+  nicheKnowledge?: string;
+  // Modo do agente
+  agentMode?: 'full' | 'simple';
 }
 
 export function buildPrompt(ctx: PromptContext): string {
@@ -137,6 +141,9 @@ export function buildPrompt(ctx: PromptContext): string {
         playbookObjective: ctx.playbookObjective,
         // Objetivo da conversa
         conversationObjective: ctx.conversationObjective,
+        // Conhecimento do nicho
+        nicheKnowledge: ctx.nicheKnowledge,
+        agentMode: ctx.agentMode,
       });
 
     default:

@@ -67,6 +67,10 @@ export function buildPreSalePrompt(context: {
     npsFormId?: string;
     npsFormName?: string;
   } | null;
+  // Conhecimento global do nicho
+  nicheKnowledge?: string;
+  // Modo do agente
+  agentMode?: 'full' | 'simple';
 }): string {
   const firstName = context.contactName.split(' ')[0];
 
@@ -131,6 +135,17 @@ ${context.targetAudience ? `Público-alvo: ${context.targetAudience}` : ''}
 ${context.mainPainPoints ? `Dores que resolve: ${context.mainPainPoints}` : ''}`;
   }
 
+  // Texto do conhecimento do nicho (base global)
+  const nicheKnowledgeText = context.nicheKnowledge
+    ? `\n═══════════════════════════════════════\nCONHECIMENTO DO SEGMENTO\n═══════════════════════════════════════\n${context.nicheKnowledge}\n`
+    : '';
+
+  // Modo do agente
+  const isSimpleMode = context.agentMode === 'simple';
+  const agentModeInstructions = isSimpleMode
+    ? `\n═══════════════════════════════════════\nMODO DE OPERAÇÃO: SIMPLIFICADO\n═══════════════════════════════════════\nSeu foco é realizar tarefas operacionais: confirmar consultas, enviar links, coletar feedback.\nPara qualquer dúvida clínica, comercial complexa ou situação fora do roteiro, responda: "Vou chamar alguém da nossa equipe para te ajudar melhor 😊" e encerre a conversa (suggestedNextAction: escalate_human).\n`
+    : '';
+
   const toneInstructions: Record<string, string> = {
     'friendly_professional': 'Amigável mas profissional. Usa linguagem informal com respeito.',
     'warm_empathetic': 'Carinhosa e acolhedora. Demonstra empatia genuína e interesse pelo bem-estar.',
@@ -172,7 +187,7 @@ CONTEXTO TEMPORAL
 Agora é: ${context.currentDateTime || 'não disponível'}
 Dia da semana: ${context.currentDayOfWeek || 'não disponível'}
 ${businessProfileText}
-
+${nicheKnowledgeText}${agentModeInstructions}
 ═══════════════════════════════════════
 CATÁLOGO DE PRODUTOS/SERVIÇOS
 ═══════════════════════════════════════

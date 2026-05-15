@@ -79,6 +79,10 @@ export interface ConversationContext {
   } | null;
   // Prompt customizado (vem do banco se a clínica editou)
   customPrompt?: string;
+  // Conhecimento do nicho (base global injetada no prompt)
+  nicheKnowledge?: string;
+  // Modo do agente: 'full' (completo) | 'simple' (simplificado)
+  agentMode?: 'full' | 'simple';
 }
 
 export interface GeneratedMessage {
@@ -155,6 +159,9 @@ function buildSystemPrompt(ctx: ConversationContext): string {
     alreadyRequestedReferral: ctx.alreadyRequestedReferral,
     // Objetivo da conversa
     conversationObjective: ctx.conversationObjective,
+    // Conhecimento do nicho e modo do agente
+    nicheKnowledge: ctx.nicheKnowledge,
+    agentMode: ctx.agentMode,
   });
 }
 
@@ -556,6 +563,54 @@ export async function buildConversationContext(params: {
     .eq("flow_type", params.flowType)
     .single();
 
+  // ---- Buscar niche do tenant e conhecimento do nicho ----
+  let nicheKnowledge: string | undefined;
+  let agentMode: 'full' | 'simple' = 'full';
+
+  // Buscar niche do tenant
+  const { data: tenantUser } = await supabase
+    .from('users')
+    .select('niche')
+    .eq('tenant_id', params.tenantId)
+    .limit(1)
+    .single()
+    .catch(() => ({ data: null }));
+
+  const tenantNiche = (tenantUser as any)?.niche || company?.segment || null;
+
+  // Buscar configuração do modo do agente
+  const { data: agentConfig } = await supabase
+    .from('ai_agent_config')
+    .select('agent_mode')
+    .eq('tenant_id', params.tenantId)
+    .single()
+    .catch(() => ({ data: null }));
+
+  if (agentConfig?.agent_mode) {
+    agentMode = agentConfig.agent_mode as 'full' | 'simple';
+  }
+
+  // Buscar conhecimento do nicho (global)
+  if (tenantNiche) {
+    const { data: knowledgeSections } = await supabase
+      .from('ai_niche_knowledge')
+      .select('section_type, title, content')
+      .eq('niche_slug', tenantNiche)
+      .eq('agent_mode', agentMode)
+      .eq('is_active', true)
+      .order('position', { ascending: true })
+      .catch(() => ({ data: null }));
+
+    if (knowledgeSections && knowledgeSections.length > 0) {
+      const sections = (knowledgeSections as any[]).filter(s => s.content?.trim());
+      if (sections.length > 0) {
+        nicheKnowledge = sections
+          .map((s: any) => `[${s.title.toUpperCase()}]\n${s.content}`)
+          .join('\n\n');
+      }
+    }
+  }
+
   // ---- Buscar prompt customizado ativo no banco (se existir) ----
   let customPrompt: string | undefined;
   const { data: promptVersion } = await supabase
@@ -645,5 +700,8 @@ export async function buildConversationContext(params: {
     isFirstMessage: params.isFirstMessage,
     conversationObjective: params.conversationObjective || null,
     customPrompt,
+    // Conhecimento do nicho e modo do agente
+    nicheKnowledge,
+    agentMode,
   };
 }
