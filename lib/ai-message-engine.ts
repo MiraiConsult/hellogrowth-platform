@@ -590,24 +590,30 @@ export async function buildConversationContext(params: {
     agentMode = agentConfig.agent_mode as 'full' | 'simple';
   }
 
-  // Buscar conhecimento do nicho (global)
-  if (tenantNiche) {
-    const { data: knowledgeSections } = await supabase
-      .from('ai_niche_knowledge')
-      .select('section_type, title, content')
-      .eq('niche_slug', tenantNiche)
-      .eq('agent_mode', agentMode)
-      .eq('is_active', true)
-      .order('position', { ascending: true })
-      .catch(() => ({ data: null }));
+  // Buscar conhecimento do nicho + seções globais (__global__ aplica a todos os nichos)
+  const nicheSlugsToFetch: string[] = ['__global__'];
+  if (tenantNiche) nicheSlugsToFetch.push(tenantNiche);
 
-    if (knowledgeSections && knowledgeSections.length > 0) {
-      const sections = (knowledgeSections as any[]).filter(s => s.content?.trim());
-      if (sections.length > 0) {
-        nicheKnowledge = sections
-          .map((s: any) => `[${s.title.toUpperCase()}]\n${s.content}`)
-          .join('\n\n');
-      }
+  const { data: knowledgeSections } = await supabase
+    .from('ai_niche_knowledge')
+    .select('section_type, title, content, niche_slug, position')
+    .in('niche_slug', nicheSlugsToFetch)
+    .eq('agent_mode', agentMode)
+    .eq('is_active', true)
+    .order('position', { ascending: true })
+    .catch(() => ({ data: null }));
+
+  if (knowledgeSections && (knowledgeSections as any[]).length > 0) {
+    const sections = (knowledgeSections as any[]).filter(s => s.content?.trim());
+    if (sections.length > 0) {
+      // Seções globais primeiro (comportamento humano, regras gerais)
+      // Seções do nicho específico depois (conhecimento do segmento)
+      const globalSections = sections.filter((s: any) => s.niche_slug === '__global__');
+      const nicheSections = sections.filter((s: any) => s.niche_slug !== '__global__');
+      const orderedSections = [...globalSections, ...nicheSections];
+      nicheKnowledge = orderedSections
+        .map((s: any) => `[${s.title.toUpperCase()}]\n${s.content}`)
+        .join('\n\n');
     }
   }
 

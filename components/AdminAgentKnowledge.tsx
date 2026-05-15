@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronRight, RefreshCw, Send, Bot, User, Loader2,
   CheckCircle, AlertCircle, Zap, Settings, Eye, EyeOff, Copy, Check,
   ToggleLeft, ToggleRight, Info, Layers, FileText, HelpCircle, Shield,
-  Code2, Target, ChevronUp
+  Code2, Target, ChevronUp, Activity, Globe
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -45,7 +45,11 @@ const SECTION_TYPES = [
   { value: 'scripts', label: 'Scripts de Abordagem', icon: <FileText size={14} /> },
   { value: 'terms', label: 'Termos Técnicos', icon: <Code2 size={14} /> },
   { value: 'rules', label: 'Regras de Negócio', icon: <Target size={14} /> },
+  { value: 'behavior', label: 'Comportamento Humano', icon: <Activity size={14} /> },
 ];
+
+// Nicho global — seções que se aplicam a todos os nichos
+const GLOBAL_NICHE = { id: '__global__', name: '🌐 Global (todos os nichos)', slug: '__global__' };
 
 const FLOW_TYPES = [
   { value: 'pre_sale', label: 'Pré-Venda' },
@@ -122,10 +126,14 @@ export default function AdminAgentKnowledge({ isDark }: Props) {
     try {
       const res = await fetch('/api/admin/agent-knowledge?action=niches');
       const data = await res.json();
-      setNiches(data.niches || []);
-      if (data.niches?.length > 0 && !selectedNiche) {
-        setSelectedNiche(data.niches[0].slug);
-        setChatNiche(data.niches[0].slug);
+      // Adicionar nicho global no início da lista
+      const allNiches = [GLOBAL_NICHE, ...(data.niches || [])];
+      setNiches(allNiches);
+      if (allNiches.length > 0 && !selectedNiche) {
+        // Selecionar o primeiro nicho real (não global) por padrão
+        const firstReal = data.niches?.[0];
+        setSelectedNiche(firstReal?.slug || GLOBAL_NICHE.slug);
+        setChatNiche(firstReal?.slug || GLOBAL_NICHE.slug);
       }
     } catch (e) {
       console.error(e);
@@ -352,7 +360,9 @@ export default function AdminAgentKnowledge({ isDark }: Props) {
           >
             {niches.length === 0 && <option value="">Carregando...</option>}
             {niches.map(n => (
-              <option key={n.slug} value={n.slug}>{n.name}</option>
+              <option key={n.slug} value={n.slug}>
+                {n.slug === '__global__' ? '🌐 Global (todos os nichos)' : n.name}
+              </option>
             ))}
           </select>
         </div>
