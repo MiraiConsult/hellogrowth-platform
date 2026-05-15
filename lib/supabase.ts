@@ -8,13 +8,25 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-// Fetch com retry automático para lidar com ERR_CONNECTION_RESET intermitente
+// Detectar se estamos no browser (client-side) ou no servidor (server-side)
+const isBrowser = typeof window !== 'undefined';
+
+// No browser, usar proxy local para evitar ERR_CONNECTION_RESET
+// No servidor (API routes), chamar Supabase diretamente
+const getProxyUrl = (): string => {
+  if (!isBrowser) return supabaseUrl;
+  // No browser, rotear pelo proxy do Vercel
+  const origin = window.location.origin;
+  return `${origin}/api/supabase-proxy`;
+};
+
+// Fetch com retry automático para lidar com falhas intermitentes
 const fetchWithRetry = async (
   url: RequestInfo | URL,
   options?: RequestInit
 ): Promise<Response> => {
   const maxRetries = 3;
-  const baseDelay = 1000; // 1 segundo
+  const baseDelay = 1500;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -45,7 +57,7 @@ const fetchWithRetry = async (
   return fetch(url, { ...options, cache: 'no-store' });
 };
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(getProxyUrl(), supabaseAnonKey, {
   global: {
     fetch: fetchWithRetry,
   },
@@ -55,7 +67,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   realtime: {
     params: {
-      eventsPerSecond: 0, // Desabilitar realtime completamente
+      eventsPerSecond: 0,
     },
   },
 });
