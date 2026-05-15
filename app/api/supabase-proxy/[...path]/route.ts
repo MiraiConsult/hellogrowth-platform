@@ -11,13 +11,17 @@ async function proxyRequest(request: NextRequest, { params }: { params: { path: 
   const url = new URL(request.url);
   const targetUrl = `${SUPABASE_URL}/${path}${url.search}`;
 
-  // Forward all headers except host
+  // Forward all headers except host, connection and accept-encoding
+  // Remove accept-encoding to get uncompressed response from Supabase
   const headers = new Headers();
   request.headers.forEach((value, key) => {
-    if (key.toLowerCase() !== 'host' && key.toLowerCase() !== 'connection') {
+    const lower = key.toLowerCase();
+    if (lower !== 'host' && lower !== 'connection' && lower !== 'accept-encoding') {
       headers.set(key, value);
     }
   });
+  // Request uncompressed response from Supabase
+  headers.set('Accept-Encoding', 'identity');
 
   try {
     const fetchOptions: RequestInit = {
@@ -37,22 +41,35 @@ async function proxyRequest(request: NextRequest, { params }: { params: { path: 
 
     const response = await fetch(targetUrl, fetchOptions);
 
-    // Forward response headers
+    // Read the response as text to ensure we have decoded content
+    const responseText = await response.text();
+
+    // Build clean response headers — exclude encoding-related headers
     const responseHeaders = new Headers();
     response.headers.forEach((value, key) => {
-      if (key.toLowerCase() !== 'transfer-encoding' && key.toLowerCase() !== 'connection') {
+      const lower = key.toLowerCase();
+      if (
+        lower !== 'transfer-encoding' &&
+        lower !== 'connection' &&
+        lower !== 'content-encoding' &&
+        lower !== 'content-length'
+      ) {
         responseHeaders.set(key, value);
       }
     });
+
+    // Set correct content type
+    const contentType = response.headers.get('content-type');
+    if (contentType) {
+      responseHeaders.set('Content-Type', contentType);
+    }
 
     // Add CORS headers
     responseHeaders.set('Access-Control-Allow-Origin', '*');
     responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     responseHeaders.set('Access-Control-Allow-Headers', '*');
 
-    const responseBody = await response.arrayBuffer();
-
-    return new NextResponse(responseBody, {
+    return new NextResponse(responseText, {
       status: response.status,
       statusText: response.statusText,
       headers: responseHeaders,
