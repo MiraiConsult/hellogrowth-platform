@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { encodeWhatsAppMessage } from '@/lib/utils/whatsapp';
 import { useTenantId } from '@/hooks/useTenantId';
 import { Lead, Form } from '@/types';
-import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle, Settings, GripVertical, AlertTriangle, Bot, Check, AlertCircle, Search, ShieldCheck, PenLine } from 'lucide-react';
+import { MoreVertical, DollarSign, Calendar, Filter, Plus, X, User, Mail, FileText, Sparkles, Loader2, Briefcase, ArrowRight, CheckCircle, Phone, Save, History, BarChart3, TrendingUp, PieChart, Trash2, Eye, RefreshCw, Zap, ChevronDown, ChevronUp, Send, MessageSquare, Edit2, Package, StickyNote, PlusCircle, MinusCircle, Settings, GripVertical, AlertTriangle, Bot, Check, AlertCircle, Search, ShieldCheck, PenLine, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { callGeminiAPI } from '@/lib/gemini-client';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '@/lib/supabase';
@@ -76,13 +76,17 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts
 
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   
-  // Filter State
+  // Filter & Sort State
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState({
     name: '',
     minValue: '',
-    source: ''
+    maxValue: '',
+    source: '',
+    hasAnalysis: '' as '' | 'yes' | 'no',
   });
+  const [sortBy, setSortBy] = useState<'date' | 'value' | 'name' | 'source'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Create Lead State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -338,13 +342,25 @@ const Kanban: React.FC<KanbanProps> = ({ leads, setLeads, forms, catalogProducts
 
   // Realtime removido — atualização de leads agora é feita via polling/refresh manual
 
-  // Derived filtered leads
-  const filteredLeads = leads.filter(lead => {
-    if (filters.name && !lead.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
-    if (filters.minValue && lead.value < parseFloat(filters.minValue)) return false;
-    if (filters.source && lead.formSource !== filters.source) return false;
-    return true;
-  });
+  // Derived filtered + sorted leads
+  const filteredLeads = leads
+    .filter(lead => {
+      if (filters.name && !lead.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
+      if (filters.minValue && lead.value < parseFloat(filters.minValue)) return false;
+      if (filters.maxValue && lead.value > parseFloat(filters.maxValue)) return false;
+      if (filters.source && lead.formSource !== filters.source) return false;
+      if (filters.hasAnalysis === 'yes' && !lead.answers?._ai_analysis?.reasoning) return false;
+      if (filters.hasAnalysis === 'no' && !!lead.answers?._ai_analysis?.reasoning) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === 'value') cmp = a.value - b.value;
+      else if (sortBy === 'name') cmp = a.name.localeCompare(b.name, 'pt-BR');
+      else if (sortBy === 'source') cmp = (a.formSource || '').localeCompare(b.formSource || '', 'pt-BR');
+      else cmp = new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime();
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedLeadId(id);
@@ -764,10 +780,11 @@ Agora escreva a mensagem para ${firstName}:`;
 
   return (
     <div className="p-8 h-screen flex flex-col bg-gray-50 overflow-hidden relative">
-      <div className="mb-8">
+      <div className="mb-6">
         <div className="flex items-center gap-4 flex-wrap">
           <h1 className="text-2xl font-bold text-gray-900">Quadro de Oportunidades</h1>
           <div className="flex gap-3 relative items-center flex-wrap">
+
           {/* Barra de busca rápida por nome */}
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -784,6 +801,29 @@ Agora escreva a mensagem para ${firstName}:`;
               </button>
             )}
           </div>
+
+          {/* Ordenação */}
+          <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1.5">
+            <ArrowUpDown size={15} className="text-gray-400 flex-shrink-0" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'date' | 'value' | 'name' | 'source')}
+              className="text-sm text-gray-700 bg-transparent border-none focus:ring-0 focus:outline-none pr-1 cursor-pointer"
+            >
+              <option value="date">Data</option>
+              <option value="value">Valor</option>
+              <option value="name">Nome</option>
+              <option value="source">Formulário</option>
+            </select>
+            <button
+              onClick={() => setSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
+              className="text-gray-500 hover:text-primary-600 transition-colors ml-1"
+              title={sortOrder === 'asc' ? 'Crescente' : 'Decrescente'}
+            >
+              {sortOrder === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+            </button>
+          </div>
+
           <button 
             onClick={() => setShowDashboard(!showDashboard)}
             className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${showDashboard ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
@@ -793,52 +833,99 @@ Agora escreva a mensagem para ${firstName}:`;
           
           <button 
             onClick={() => setIsFilterOpen(!isFilterOpen)}
-            className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${isFilterOpen ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${
+              isFilterOpen || filters.source || filters.minValue || filters.maxValue || filters.hasAnalysis
+                ? 'bg-primary-50 border-primary-200 text-primary-700'
+                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
           >
-            <Filter size={18} /> Filtros
+            <Filter size={18} />
+            Filtros
+            {(filters.source || filters.minValue || filters.maxValue || filters.hasAnalysis) && (
+              <span className="ml-1 bg-primary-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                {[filters.source, filters.minValue, filters.maxValue, filters.hasAnalysis].filter(Boolean).length}
+              </span>
+            )}
           </button>
 
           {/* Filter Dropdown */}
           {isFilterOpen && (
-            <div className="absolute top-12 right-0 w-64 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-20 animate-in fade-in zoom-in-95">
-                <div className="flex justify-between items-center mb-3">
-                    <h4 className="font-bold text-gray-700 text-sm">Filtrar Leads</h4>
-                    <button onClick={() => setFilters({ name: '', minValue: '', source: '' })} className="text-xs text-primary-600 hover:underline">Limpar</button>
+            <div className="absolute top-12 right-0 w-72 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-20">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="font-bold text-gray-800 text-sm">Filtrar Oportunidades</h4>
+                <button
+                  onClick={() => setFilters({ name: '', minValue: '', maxValue: '', source: '', hasAnalysis: '' })}
+                  className="text-xs text-primary-600 hover:underline"
+                >
+                  Limpar tudo
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Formulário de origem */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Formulário</label>
+                  <select
+                    value={filters.source}
+                    onChange={(e) => setFilters({...filters, source: e.target.value})}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white"
+                  >
+                    <option value="">Todos os formulários</option>
+                    {sources.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
-                
-                <div className="space-y-3">
-                    <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Nome do Cliente</label>
-                        <input 
-                            type="text" 
-                            value={filters.name}
-                            onChange={(e) => setFilters({...filters, name: e.target.value})}
-                            className="w-full text-sm border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
-                            placeholder="Buscar por nome..."
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Origem</label>
-                        <select 
-                            value={filters.source}
-                            onChange={(e) => setFilters({...filters, source: e.target.value})}
-                            className="w-full text-sm border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
-                        >
-                            <option value="">Todas</option>
-                            {sources.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Valor Mínimo (R$)</label>
-                        <input 
-                            type="number" 
-                            value={filters.minValue}
-                            onChange={(e) => setFilters({...filters, minValue: e.target.value})}
-                            className="w-full text-sm border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
-                            placeholder="0,00"
-                        />
-                    </div>
+
+                {/* Faixa de valor */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Faixa de Valor (R$)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={filters.minValue}
+                      onChange={(e) => setFilters({...filters, minValue: e.target.value})}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="Mínimo"
+                      min="0"
+                    />
+                    <span className="text-gray-400 text-xs flex-shrink-0">até</span>
+                    <input
+                      type="number"
+                      value={filters.maxValue}
+                      onChange={(e) => setFilters({...filters, maxValue: e.target.value})}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="Máximo"
+                      min="0"
+                    />
+                  </div>
                 </div>
+
+                {/* Análise da IA */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Análise da IA</label>
+                  <div className="flex gap-2">
+                    {(['', 'yes', 'no'] as const).map((v) => (
+                      <button
+                        key={v}
+                        onClick={() => setFilters({...filters, hasAnalysis: v})}
+                        className={`flex-1 py-1.5 text-xs rounded-lg border font-medium transition-colors ${
+                          filters.hasAnalysis === v
+                            ? 'bg-primary-500 text-white border-primary-500'
+                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        {v === '' ? 'Todos' : v === 'yes' ? 'Com análise' : 'Sem análise'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Resumo dos filtros ativos */}
+              {filteredLeads.length !== leads.length && (
+                <p className="mt-4 text-xs text-gray-500 text-center border-t border-gray-100 pt-3">
+                  Exibindo <strong>{filteredLeads.length}</strong> de <strong>{leads.length}</strong> oportunidades
+                </p>
+              )}
             </div>
           )}
 
@@ -849,7 +936,6 @@ Agora escreva a mensagem para ${firstName}:`;
           >
             <Settings size={18} /> Etapas
           </button>
-
 
           <button 
             onClick={() => setIsCreateModalOpen(true)}
@@ -1081,8 +1167,35 @@ Agora escreva a mensagem para ${firstName}:`;
         </div>
       ) : (
         /* Kanban View */
-        <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
-          <div className="flex gap-6 h-full min-w-max">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Barra de status de filtros ativos */}
+          {(filters.source || filters.minValue || filters.maxValue || filters.hasAnalysis || filteredLeads.length !== leads.length) && (
+            <div className="flex items-center gap-3 mb-3 px-1 flex-wrap">
+              <span className="text-xs text-gray-500">
+                <strong className="text-gray-700">{filteredLeads.length}</strong> de <strong className="text-gray-700">{leads.length}</strong> oportunidades
+              </span>
+              {filters.source && (
+                <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2.5 py-0.5">
+                  Formulário: {filters.source}
+                  <button onClick={() => setFilters({...filters, source: ''})} className="ml-1 hover:text-blue-900"><X size={10} /></button>
+                </span>
+              )}
+              {(filters.minValue || filters.maxValue) && (
+                <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded-full px-2.5 py-0.5">
+                  Valor: {filters.minValue ? `R$ ${filters.minValue}` : ''}{filters.minValue && filters.maxValue ? ' – ' : ''}{filters.maxValue ? `R$ ${filters.maxValue}` : ''}
+                  <button onClick={() => setFilters({...filters, minValue: '', maxValue: ''})} className="ml-1 hover:text-green-900"><X size={10} /></button>
+                </span>
+              )}
+              {filters.hasAnalysis && (
+                <span className="inline-flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2.5 py-0.5">
+                  {filters.hasAnalysis === 'yes' ? 'Com análise IA' : 'Sem análise IA'}
+                  <button onClick={() => setFilters({...filters, hasAnalysis: ''})} className="ml-1 hover:text-amber-900"><X size={10} /></button>
+                </span>
+              )}
+            </div>
+          )}
+          <div className="flex gap-6 flex-1 overflow-x-auto overflow-y-hidden pb-4">
+            <div className="flex gap-6 h-full min-w-max">
             {stages.map((stage) => {
             const col = stage.name;
             const columnLeads = filteredLeads.filter((l) => l.status === col);
@@ -1167,8 +1280,13 @@ Agora escreva a mensagem para ${firstName}:`;
                           )}
                         </div>
                       </div>
-                      <p className="text-xs text-gray-500 mb-3">{lead.formSource}</p>
-                      
+                      <p className="text-xs text-gray-500 mb-2">{lead.formSource}</p>
+                      {lead.answers?._ai_analysis?.reasoning && !isAnalyzing && (
+                        <div className="mb-2 flex items-center gap-1 text-xs text-amber-600">
+                          <Zap size={11} className="flex-shrink-0" />
+                          <span>Análise pronta</span>
+                        </div>
+                      )}
                       {isAnalyzing && (
                         <div className="mb-3 flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
                           <Loader2 size={12} className="animate-spin" />
@@ -1199,6 +1317,7 @@ Agora escreva a mensagem para ${firstName}:`;
               </div>
             );
           })}
+          </div>
           </div>
         </div>
       )}
