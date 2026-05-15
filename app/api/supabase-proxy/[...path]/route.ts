@@ -41,9 +41,6 @@ async function proxyRequest(request: NextRequest, { params }: { params: { path: 
 
     const response = await fetch(targetUrl, fetchOptions);
 
-    // Read the response as text to ensure we have decoded content
-    const responseText = await response.text();
-
     // Build clean response headers — exclude encoding-related headers
     const responseHeaders = new Headers();
     response.headers.forEach((value, key) => {
@@ -68,6 +65,18 @@ async function proxyRequest(request: NextRequest, { params }: { params: { path: 
     responseHeaders.set('Access-Control-Allow-Origin', '*');
     responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     responseHeaders.set('Access-Control-Allow-Headers', '*');
+
+    // 204 No Content responses must have no body
+    if (response.status === 204 || response.status === 304) {
+      return new NextResponse(null, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: responseHeaders,
+      });
+    }
+
+    // Read the response as text to ensure we have decoded content
+    const responseText = await response.text();
 
     return new NextResponse(responseText, {
       status: response.status,
